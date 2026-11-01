@@ -1,4 +1,6 @@
 //! `cargo xtask <task>` — project automation that would otherwise live in shell scripts.
+mod bake;
+
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use std::process::Command;
@@ -16,6 +18,8 @@ enum Task {
     Ci,
     /// Format all crates.
     Fmt,
+    /// Build an anatomy pack (procedural by default; `--source` for an open-licence mesh).
+    BakeAnatomy(bake::BakeArgs),
 }
 
 fn run(args: &[&str]) -> Result<()> {
@@ -48,5 +52,6 @@ fn main() -> Result<()> {
             Ok(())
         }
         Task::Fmt => run(&["fmt", "--all"]),
+        Task::BakeAnatomy(args) => bake::run(&args),
     }
 }

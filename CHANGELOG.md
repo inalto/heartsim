@@ -2,6 +2,21 @@
 
 All notable changes to heartsim are documented here. Format: Keep a Changelog; versioning: SemVer.
 
+## [Unreleased] — M2 (2026-11-01)
+### Added
+- `heartsim-geometry` anatomy pipeline (brief B02): implicit-surface modelling with a marching-tetrahedra polygoniser
+  (`implicit`), exact hash-grid k-NN (`spatial::HashGrid`, now also behind `CellCloud`), procedural idealised four-chamber
+  heart (`procedural::idealised_heart`: truncated-ellipsoid ventricles with septum, spherical atria with septum and
+  appendage, great-vessel stubs, valve rings; ~17.5 k cells on a 2.3 mm lattice with transmural depth, ±60° helix fibres,
+  21 labelled regions, SA/AV node, His, bundle branches and fascicles as cell polylines, 22 landmarks, PMJ seed sets per
+  fascicle, AHA 17 segments → coronary territories), procedural superellipsoid torso with the 10 standard + V3R/V4R/V7–V9
+  electrode sites in the heart frame, vertex→cell hoods with inverse-distance weights, and the versioned, checksummed
+  anatomy-pack format with `AnatomyPack::{procedural, save, load}` (`docs/anatomy-pack.md`).
+- `assets/anatomy/default/`: the baked procedural pack (10 MB, loads in ≈ 60 ms) with its `LICENSE`.
+- `cargo xtask bake-anatomy` (procedural path done; real-mesh path for the Strocchi/Rodero CC BY 4.0 cohort scaffolded
+  with format detection and a stage plan) and `heartsim-cli anatomy-info <pack>`.
+- Acceptance tests in `crates/heartsim-geometry/tests/anatomy_pack.rs`.
+
 ## [Unreleased] — M1 (2026-10-31)
 ### Added
 - `heartsim-sim` timing engine (brief B01): grouped `TimingParams` (`sinus`, `av`, `his_purkinje`, `escape`, `foci`,

@@ -1,0 +1,156 @@
+PackManifest(
+    format_version: 1,
+    name: "default",
+    source: "procedural idealised heart (heartsim-geometry 0.1.0, voxel 2.5 mm, spacing 2.3 mm)",
+    licence: "MIT OR Apache-2.0",
+    frame: "millimetres; origin = ventricular centroid; +x = patient\'s left, +y = cranial, +z = anterior",
+    cell_spacing_mm: 2.3,
+    cell_count: 17565,
+    meshes: [MeshEntry(
+        name: "lv",
+        file: "mesh_lv.glb",
+        kind: Myocardium,
+        vertices: 19082,
+        triangles: 38160,
+    ), MeshEntry(
+        name: "rv",
+        file: "mesh_rv.glb",
+        kind: Myocardium,
+        vertices: 15362,
+        triangles: 30760,
+    ), MeshEntry(
+        name: "ra",
+        file: "mesh_ra.glb",
+        kind: Myocardium,
+        vertices: 8888,
+        triangles: 17892,
+    ), MeshEntry(
+        name: "la",
+        file: "mesh_la.glb",
+        kind: Myocardium,
+        vertices: 9424,
+        triangles: 18964,
+    ), MeshEntry(
+        name: "aorta",
+        file: "mesh_aorta.glb",
+        kind: Vessel,
+        vertices: 5640,
+        triangles: 11276,
+    ), MeshEntry(
+        name: "pulmonary_artery",
+        file: "mesh_pulmonary_artery.glb",
+        kind: Vessel,
+        vertices: 5310,
+        triangles: 10616,
+    ), MeshEntry(
+        name: "svc",
+        file: "mesh_svc.glb",
+        kind: Vessel,
+        vertices: 1930,
+        triangles: 3856,
+    ), MeshEntry(
+        name: "ivc",
+        file: "mesh_ivc.glb",
+        kind: Vessel,
+        vertices: 2012,
+        triangles: 4020,
+    ), MeshEntry(
+        name: "pulmonary_veins",
+        file: "mesh_pulmonary_veins.glb",
+        kind: Vessel,
+        vertices: 3002,
+        triangles: 5996,
+    ), MeshEntry(
+        name: "valve_rings",
+        file: "mesh_valve_rings.glb",
+        kind: Valve,
+        vertices: 1592,
+        triangles: 3176,
+    )],
+    files: {
+        "LICENSE": FileEntry(
+            bytes: 463,
+            crc32: 3587929274,
+        ),
+        "cells.bin": FileEntry(
+            bytes: 509397,
+            crc32: 1819327322,
+        ),
+        "electrodes.ron": FileEntry(
+            bytes: 803,
+            crc32: 803446972,
+        ),
+        "hoods/la.bin": FileEntry(
+            bytes: 603152,
+            crc32: 1352098176,
+        ),
+        "hoods/lv.bin": FileEntry(
+            bytes: 1221264,
+            crc32: 3540439336,
+        ),
+        "hoods/ra.bin": FileEntry(
+            bytes: 568848,
+            crc32: 1458035446,
+        ),
+        "hoods/rv.bin": FileEntry(
+            bytes: 983184,
+            crc32: 2935135707,
+        ),
+        "landmarks.ron": FileEntry(
+            bytes: 4308,
+            crc32: 4264264999,
+        ),
+        "mesh_aorta.glb": FileEntry(
+            bytes: 271520,
+            crc32: 3156349225,
+        ),
+        "mesh_ivc.glb": FileEntry(
+            bytes: 97376,
+            crc32: 1183988496,
+        ),
+        "mesh_la.glb": FileEntry(
+            bytes: 454592,
+            crc32: 593304340,
+        ),
+        "mesh_lv.glb": FileEntry(
+            bytes: 916740,
+            crc32: 3554423585,
+        ),
+        "mesh_pulmonary_artery.glb": FileEntry(
+            bytes: 255704,
+            crc32: 2224143614,
+        ),
+        "mesh_pulmonary_veins.glb": FileEntry(
+            bytes: 144868,
+            crc32: 2279207881,
+        ),
+        "mesh_ra.glb": FileEntry(
+            bytes: 428860,
+            crc32: 303601917,
+        ),
+        "mesh_rv.glb": FileEntry(
+            bytes: 738660,
+            crc32: 3584257124,
+        ),
+        "mesh_svc.glb": FileEntry(
+            bytes: 93432,
+            crc32: 1069929641,
+        ),
+        "mesh_valve_rings.glb": FileEntry(
+            bytes: 77180,
+            crc32: 2494138001,
+        ),
+        "neighbours.bin": FileEntry(
+            bytes: 1686256,
+            crc32: 950780590,
+        ),
+        "segments.bin": FileEntry(
+            bytes: 17577,
+            crc32: 2705238897,
+        ),
+        "torso.glb": FileEntry(
+            bytes: 884000,
+            crc32: 3228771750,
+        ),
+    },
+)

@@ -8,6 +8,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+heartsim-geometry.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 

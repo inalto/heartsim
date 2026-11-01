@@ -104,9 +104,12 @@ scenario picker, presets. Keyboard: space pause, ←/→ scrub, 1–9 views. i18
 
 ## 7. Files and formats
 * `assets/scenarios/*.ron` — `core::Scenario` (versioned).
-* `assets/anatomy/<pack>/` — `mesh_*.glb` (render), `cells.bin` (positions f32×3, fibres f32×3, region u8, depth f32),
-  `neighbours.bin`, `hoods/<mesh>.bin` (8 × u32 per vertex), `landmarks.ron`, `electrodes.ron`, `torso.glb`, `LICENSE`.
-  Built by `cargo xtask bake-anatomy` from the source mesh (Strocchi/Rodero cohort or Fritz/Gerach, CC BY) — see brief B2.
+* `assets/anatomy/<pack>/` — `manifest.ron` (format version, provenance, per-file CRC-32), `mesh_*.glb` (render),
+  `cells.bin` (positions f32×3, fibres f32×3, region u8, depth f32), `neighbours.bin` (8 × index/distance/alignment),
+  `segments.bin` (AHA segment u8), `hoods/<mesh>.bin` (8 × u32 cell + 8 × f32 weight per vertex), `landmarks.ron`
+  (named cells + PMJ seed sets), `electrodes.ron`, `torso.glb`, `LICENSE`. Loader: `heartsim_geometry::AnatomyPack`.
+  Built by `cargo xtask bake-anatomy` (procedural by default; `--source` for the Strocchi/Rodero cohort, CC BY) —
+  see `docs/anatomy-pack.md` and brief B2.
 * Exports: CSV (`t_ms, I..V6`), WFDB (header + 16-bit), PNG, PDF (printpdf), RON.
 * Settings: `directories` config dir, `settings.ron`.
 

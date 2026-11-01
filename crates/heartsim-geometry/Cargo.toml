@@ -13,11 +13,10 @@ glam.workspace = true
 bytemuck.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-gltf = { workspace = true, optional = true }
-
-[features]
-default = ["gltf"]
-gltf = ["dep:gltf"]
+ron.workspace = true
+serde_json.workspace = true
+crc32fast.workspace = true
+gltf.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
