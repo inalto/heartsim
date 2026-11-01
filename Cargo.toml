@@ -1,0 +1,109 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/inalto/heartsim"
+authors = ["heartsim contributors"]
+keywords = ["ecg", "cardiac", "electrophysiology", "simulation", "medical-education"]
+categories = ["science", "simulation", "visualization"]
+
+[workspace.dependencies]
+# --- internal crates ---------------------------------------------------------
+heartsim-core = { path = "crates/heartsim-core" }
+heartsim-geometry = { path = "crates/heartsim-geometry" }
+heartsim-sim = { path = "crates/heartsim-sim" }
+heartsim-ecg = { path = "crates/heartsim-ecg" }
+heartsim-render = { path = "crates/heartsim-render" }
+heartsim-ui = { path = "crates/heartsim-ui" }
+
+# --- GPU / windowing / GUI (versions verified on crates.io 2026-10-31) ---------
+wgpu = { version = "30.0.1", default-features = false, features = ["wgsl", "vulkan", "metal", "dx12", "gles", "webgpu", "webgl"] }
+eframe = { version = "0.37.0", default-features = false, features = ["wgpu", "default_fonts", "persistence", "x11", "wayland", "accesskit"] }
+egui = "0.37.0"
+egui-wgpu = "0.37.0"
+egui_extras = { version = "0.37.0", features = ["image", "svg"] }
+egui_plot = "0.38.0"
+egui_tiles = "0.18.0"
+egui-notify = "0.24.0"
+rfd = "0.17.2"
+
+# --- math / geometry / simulation ---------------------------------------------
+glam = { version = "0.34.1", features = ["bytemuck", "serde"] }
+bytemuck = { version = "1.25.2", features = ["derive"] }
+encase = { version = "0.13.0", features = ["glam"] }
+nalgebra = "0.35.0"
+parry3d = "0.31.1"
+kiddo = "6.3.0"
+rayon = "1.12.0"
+wide = "1.7.1"
+sprs = "0.11.6"
+gltf = { version = "1.4.1", features = ["names", "utils"] }
+
+# --- audio -------------------------------------------------------------------
+kira = "0.12.6"
+
+# --- data / io ---------------------------------------------------------------
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+ron = "0.12.3"
+toml = "1.1.8"
+csv = "1.4.0"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+printpdf = "0.12.8"
+directories = "6.0.0"
+
+# --- app plumbing ------------------------------------------------------------
+anyhow = "1.0.104"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+clap = { version = "4.6.7", features = ["derive"] }
+pollster = "1.0.1"
+
+# --- dev / test --------------------------------------------------------------
+proptest = "1.12.0"
+insta = { version = "1.49.0", features = ["csv", "json", "ron"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
+approx = "0.5.1"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+too_many_lines = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+similar_names = "allow"
+many_single_char_names = "allow"
+doc_markdown = "allow"
+
+[profile.dev]
+opt-level = 1            # simulation code is unusable at opt-level 0
+
+[profile.dev.package."*"]
+opt-level = 3            # dependencies (wgpu, egui, image decoders) always optimised
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
+panic = "unwind"
+
+[profile.bench]
+inherits = "release"
+debug = true

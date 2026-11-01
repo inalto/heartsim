@@ -1,0 +1,23 @@
+[package]
+name = "heartsim-cli"
+description = "Headless heartsim: run scenarios, export ECG CSV, benchmark."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "heartsim-cli"
+path = "src/main.rs"
+
+[dependencies]
+heartsim-core.workspace = true
+heartsim-sim.workspace = true
+heartsim-ecg.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+csv.workspace = true
+
+[lints]
+workspace = true

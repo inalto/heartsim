@@ -1,0 +1,32 @@
+[package]
+name = "heartsim-app"
+description = "heartsim desktop application (eframe/egui + wgpu)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+default-run = "heartsim"
+
+[[bin]]
+name = "heartsim"
+path = "src/main.rs"
+
+[dependencies]
+heartsim-core.workspace = true
+heartsim-geometry.workspace = true
+heartsim-sim.workspace = true
+heartsim-ecg.workspace = true
+heartsim-render.workspace = true
+heartsim-ui.workspace = true
+eframe.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+glam.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

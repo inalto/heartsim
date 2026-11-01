@@ -1,0 +1,22 @@
+[package]
+name = "heartsim-ui"
+description = "egui widgets for heartsim: ECG strip, 3-D viewport, parameter panels."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+heartsim-core.workspace = true
+heartsim-geometry.workspace = true
+heartsim-sim.workspace = true
+heartsim-ecg.workspace = true
+heartsim-render.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+glam.workspace = true
+
+[lints]
+workspace = true

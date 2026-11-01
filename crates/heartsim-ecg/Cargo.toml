@@ -1,0 +1,21 @@
+[package]
+name = "heartsim-ecg"
+description = "ECG signal layer: Tier-0 synthesis, lead vectors, ring buffers, decimation, filters, interval detection."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+heartsim-core.workspace = true
+heartsim-sim.workspace = true
+glam.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "heartsim-sim"
+description = "Simulation engines for heartsim: conduction-system timing, eikonal activation, AP templates, reaction-diffusion."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+heartsim-core.workspace = true
+heartsim-geometry.workspace = true
+glam.workspace = true
+serde.workspace = true
+rayon = { workspace = true, optional = true }
+
+[features]
+default = ["parallel"]
+parallel = ["dep:rayon"]
+# gpu = ["dep:wgpu"]   # Tier-2 compute path, see docs/briefs/
+
+[dev-dependencies]
+approx.workspace = true
+criterion.workspace = true
+
+[lints]
+workspace = true

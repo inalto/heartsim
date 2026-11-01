@@ -1,0 +1,24 @@
+# Proprietary third-party program under analysis and data extracted from it — never commit
+/epicardio/
+/epicardio-extracted/
+
+# Documentation and research files — not tracked for now
+/docs/
+*.docx
+/CLAUDE.md
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Build outputs
+/dist/
+/assets/generated/
