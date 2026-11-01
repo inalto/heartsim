@@ -22,3 +22,6 @@ Thumbs.db
 # Build outputs
 /dist/
 /assets/generated/
+
+# Claude Code worktrees for parallel sessions
+/.claude/worktrees/
