@@ -2,10 +2,8 @@
 /epicardio/
 /epicardio-extracted/
 
-# Documentation and research files — not tracked for now
-/docs/
+# Source documents kept locally (converted copies live in docs/research/)
 *.docx
-/CLAUDE.md
 
 # Rust
 /target/
