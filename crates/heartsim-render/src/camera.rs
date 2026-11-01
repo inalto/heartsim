@@ -40,6 +40,10 @@ pub struct OrbitCamera {
     pub fov_y: f32,
     pub near: f32,
     pub far: f32,
+    /// Closest the user can zoom (same units as `distance`).
+    pub min_distance: f32,
+    /// Farthest the user can zoom out.
+    pub max_distance: f32,
 }
 
 impl Default for OrbitCamera {
@@ -52,6 +56,8 @@ impl Default for OrbitCamera {
             fov_y: 45f32.to_radians(),
             near: 0.05,
             far: 100.0,
+            min_distance: 0.2,
+            max_distance: 50.0,
         }
     }
 }
@@ -83,7 +89,40 @@ impl OrbitCamera {
         self.pitch = (self.pitch + dy * 0.01).clamp(-1.5, 1.5);
     }
     pub fn zoom(&mut self, scroll: f32) {
-        self.distance = (self.distance * (1.0 - scroll * 0.1)).clamp(0.2, 50.0);
+        self.distance = (self.distance * (1.0 - scroll * 0.1)).clamp(self.min_distance, self.max_distance);
+    }
+
+    /// Aim at the box `(lo, hi)` from a distance that shows all of it, and scale the clip planes
+    /// and zoom limits to the scene so millimetre-sized anatomy and unit test spheres both work.
+    pub fn frame(&mut self, lo: Vec3, hi: Vec3) {
+        self.target = (lo + hi) * 0.5;
+        self.distance = ((hi - lo).length() * 1.4).max(1e-3);
+        self.near = self.distance * 0.01;
+        self.far = self.distance * 20.0;
+        self.min_distance = self.distance * 0.05;
+        self.max_distance = self.distance * 10.0;
+    }
+
+    /// Unit vectors (right, up, backward) of the camera frame in world space. Backward points from
+    /// the target towards the eye.
+    #[must_use]
+    pub fn basis(&self) -> (Vec3, Vec3, Vec3) {
+        let back = (self.eye() - self.target).normalize();
+        let right = Vec3::Y.cross(back).normalize();
+        (right, back.cross(right), back)
+    }
+
+    /// Project a world point to widget-relative coordinates `(u, v, depth)`: `u`, `v` in 0–1 with
+    /// `v` growing downwards (egui convention), `depth` the 0–1 NDC depth. `None` when the point is
+    /// behind the camera.
+    #[must_use]
+    pub fn project(&self, world: Vec3, aspect: f32) -> Option<(f32, f32, f32)> {
+        let c = self.view_projection(aspect) * world.extend(1.0);
+        if c.w <= 1e-6 {
+            return None;
+        }
+        let ndc = c.truncate() / c.w;
+        Some((ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5, ndc.z))
     }
     /// Preset clinical views: anterior (AP), LAO, RAO, cranial, caudal — angles in degrees.
     pub fn preset(&mut self, name: &str) {
@@ -116,6 +155,27 @@ mod tests {
         assert!(
             (v.z + 5.0).abs() < 1e-5,
             "target is 5 units in front of the camera (−Z)"
+        );
+    }
+
+    #[test]
+    fn project_centre_and_behind() {
+        let c = OrbitCamera::default();
+        let (u, v, d) = c.project(c.target, 1.0).expect("in front");
+        assert!((u - 0.5).abs() < 1e-4 && (v - 0.5).abs() < 1e-4 && (0.0..1.0).contains(&d));
+        let behind = c.eye() + (c.eye() - c.target);
+        assert!(c.project(behind, 1.0).is_none());
+    }
+
+    #[test]
+    fn frame_scales_clip_planes_for_millimetre_scenes() {
+        let mut c = OrbitCamera::default();
+        c.frame(Vec3::splat(-100.0), Vec3::splat(100.0));
+        assert!(c.far > c.distance * 2.0 && c.near < c.distance);
+        c.zoom(-100.0);
+        assert!(
+            c.distance <= c.max_distance && c.distance > 50.0,
+            "zoom limits follow the scene"
         );
     }
 
