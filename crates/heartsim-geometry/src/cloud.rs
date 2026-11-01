@@ -1,9 +1,9 @@
 //! Simulation cell cloud with k-nearest-neighbour graph.
 
+use crate::spatial::HashGrid;
 use glam::Vec3;
 use heartsim_core::Region;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 pub const K_NEIGHBOURS: usize = 8;
 
@@ -60,83 +60,65 @@ impl CellCloud {
         cloud
     }
 
+    /// Recompute the k-NN graph (exact, via a uniform hash grid). Fibre alignment is the |cos| of
+    /// the angle between each edge and the source cell's fibre.
     pub fn rebuild_neighbours(&mut self) {
-        // Uniform hash grid: cell size = typical spacing estimate; search the 27 surrounding bins,
-        // widening if fewer than K candidates were found (sparse regions).
         let n = self.positions.len();
         let empty = Neighbour {
             index: u32::MAX,
             distance_mm: f32::INFINITY,
             fibre_alignment: 0.0,
         };
-        if n < 2 {
-            self.neighbours = vec![[empty; K_NEIGHBOURS]; n];
-            return;
-        }
-        let (lo, hi) = self.positions.iter().fold(
-            (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
-            |(l, h), p| (l.min(*p), h.max(*p)),
-        );
-        let extent = (hi - lo).max(Vec3::splat(1e-3));
-        let volume = extent.x * extent.y * extent.z;
-        let spacing = (volume / n as f32).cbrt().max(1e-3) * 1.5;
-        let key = |p: Vec3| -> (i32, i32, i32) {
-            let q = (p - lo) / spacing;
-            (q.x as i32, q.y as i32, q.z as i32)
-        };
-        let mut grid: HashMap<(i32, i32, i32), Vec<u32>> = HashMap::with_capacity(n / 2 + 1);
-        for (i, p) in self.positions.iter().enumerate() {
-            grid.entry(key(*p)).or_default().push(i as u32);
-        }
+        let grid = HashGrid::with_auto_cell(&self.positions);
         let mut out = Vec::with_capacity(n);
-        let mut cand: Vec<(f32, u32)> = Vec::new();
+        let mut found = Vec::with_capacity(K_NEIGHBOURS);
         for i in 0..n {
             let p = self.positions[i];
             let f = self.fibres[i];
-            let (kx, ky, kz) = key(p);
-            let mut radius = 1;
-            loop {
-                cand.clear();
-                for dx in -radius..=radius {
-                    for dy in -radius..=radius {
-                        for dz in -radius..=radius {
-                            if let Some(bin) = grid.get(&(kx + dx, ky + dy, kz + dz)) {
-                                for &j in bin {
-                                    if j as usize != i {
-                                        cand.push((self.positions[j as usize].distance_squared(p), j));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // enough candidates and the K-th is inside the guaranteed-complete sphere?
-                let complete_r2 = (radius as f32 * spacing).powi(2);
-                if cand.len() >= K_NEIGHBOURS {
-                    cand.select_nth_unstable_by(K_NEIGHBOURS - 1, |a, b| a.0.total_cmp(&b.0));
-                    if cand[K_NEIGHBOURS - 1].0 <= complete_r2 || radius > 8 {
-                        break;
-                    }
-                } else if radius > 8 {
-                    break;
-                }
-                radius += 1;
-            }
-            cand.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+            grid.knn(p, K_NEIGHBOURS, Some(i as u32), &mut found);
             let mut nb = [empty; K_NEIGHBOURS];
-            for (k, (d2, j)) in cand.iter().take(K_NEIGHBOURS).enumerate() {
+            for (k, (dist, j)) in found.iter().enumerate() {
                 let d = self.positions[*j as usize] - p;
-                let dist = d2.sqrt();
-                let align = if dist > 0.0 { (d / dist).dot(f).abs() } else { 1.0 };
+                let align = if *dist > 0.0 {
+                    (d / *dist).dot(f).abs()
+                } else {
+                    1.0
+                };
                 nb[k] = Neighbour {
                     index: *j,
-                    distance_mm: dist,
+                    distance_mm: *dist,
                     fibre_alignment: align,
                 };
             }
             out.push(nb);
         }
         self.neighbours = out;
+    }
+
+    /// Mean distance to the nearest neighbour (a proxy for the sampling spacing).
+    #[must_use]
+    pub fn mean_nearest_distance_mm(&self) -> f32 {
+        let valid: Vec<f32> = self
+            .neighbours
+            .iter()
+            .map(|nb| nb[0].distance_mm)
+            .filter(|d| d.is_finite())
+            .collect();
+        if valid.is_empty() {
+            0.0
+        } else {
+            valid.iter().sum::<f32>() / valid.len() as f32
+        }
+    }
+
+    /// Number of cells per region, in `Region::ALL` order (regions with zero cells omitted).
+    #[must_use]
+    pub fn region_counts(&self) -> Vec<(Region, usize)> {
+        Region::ALL
+            .iter()
+            .map(|r| (*r, self.regions.iter().filter(|x| *x == r).count()))
+            .filter(|(_, n)| *n > 0)
+            .collect()
     }
 
     /// Nearest cell to a point (for picking, stimulation, ablation).

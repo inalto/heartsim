@@ -1,4 +1,5 @@
 //! `cargo xtask <task>` — project automation that would otherwise live in shell scripts.
+mod bake;
 mod icons;
 mod release;
 
@@ -34,6 +35,8 @@ enum Task {
     ReleaseCheck(ReleaseCheckArgs),
     /// Print the CHANGELOG section for the workspace version (the GitHub Release body).
     ReleaseNotes(ReleaseNotesArgs),
+    /// Build an anatomy pack (procedural by default; `--source` for an open-licence mesh).
+    BakeAnatomy(bake::BakeArgs),
 }
 
 #[derive(Args, Debug)]
@@ -142,5 +145,6 @@ fn main() -> Result<()> {
             println!("{notes}");
             Ok(())
         }
+        Task::BakeAnatomy(args) => bake::run(&args),
     }
 }

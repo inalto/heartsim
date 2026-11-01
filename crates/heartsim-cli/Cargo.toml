@@ -13,11 +13,13 @@ path = "src/main.rs"
 
 [dependencies]
 heartsim-core.workspace = true
+heartsim-geometry.workspace = true
 heartsim-sim.workspace = true
 heartsim-ecg.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 csv.workspace = true
+glam.workspace = true
 
 [lints]
 workspace = true
