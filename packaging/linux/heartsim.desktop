@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name={{name}}
+GenericName=Cardiac electrophysiology simulator
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}} {{exec_arg}}
+Icon={{icon}}
+Terminal=false
+Categories=Education;Science;MedicalSoftware;
+Keywords=ECG;EKG;heart;cardiology;arrhythmia;electrophysiology;
+StartupWMClass=heartsim
+{{#if mime_type}}
+MimeType={{mime_type}}
+{{/if}}

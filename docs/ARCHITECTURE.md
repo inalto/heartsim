@@ -123,9 +123,67 @@ scenario picker, presets. Keyboard: space pause, ←/→ scrub, 1–9 views. i18
 * Runner: `cargo nextest`; `cargo xtask ci` mirrors CI.
 
 ## 9. Packaging and CI
-GitHub Actions (`.github/workflows/ci.yml`): fmt/clippy/deny on Linux; tests on ubuntu-22.04, windows-2025, macos-15; MSRV check;
-wasm32 check of pure crates. Release (`release.yml`, brief B12): tag → cargo-packager (MSI+NSIS, .dmg universal via lipo + rcodesign
-notarisation, AppImage+.deb) → GitHub Release with SHA256 and `THIRD_PARTY_LICENSES.html` (cargo-about).
+GitHub Actions (`.github/workflows/ci.yml`): fmt/clippy/deny on Linux; actionlint over the workflows; tests on ubuntu-22.04,
+windows-2025, macos-15; MSRV check; wasm32 check of pure crates.
+
+### 9.1 Release pipeline (`release.yml`, brief B12)
+Tag `vX.Y.Z` → `preflight` (`cargo xtask release-check --tag vX.Y.Z --require-tools`) → three native build jobs → `release`, which
+attaches everything to a **draft** GitHub Release (publish it by hand after checking). A manual run (`workflow_dispatch`) is the
+dry run: same builds, signing and smoke tests, artefacts kept 7 days, no release.
+
+| job | runner | artefacts | smoke test |
+|---|---|---|---|
+| `linux` | ubuntu-22.04 (glibc 2.35) | `heartsim_X_amd64.deb`, `heartsim_X_x86_64.AppImage` | clean `ubuntu:22.04` container: `apt install ./*.deb` (proves the `depends` list resolves) and AppImage, each running `heartsim --version`; `desktop-file-validate` |
+| `windows` | windows-2025 | `HeartSim_X_x64_en-US.msi`, `HeartSim_X_x64-setup.exe` (NSIS, per-user) | PE subsystem is GUI (no console), no `VCRUNTIME140` import (static CRT via `.cargo/config.toml`); silent MSI and NSIS install → `--version` → uninstall |
+| `macos` | macos-15 | `HeartSim_X_universal.dmg` | arm64 + x86_64 built with `MACOSX_DEPLOYMENT_TARGET=12.0`, merged with `lipo`; dmg mounted, `lipo -archs`, `--version`, Info.plist (min OS 12.0, `NSHighResolutionCapable`), `codesign --verify`; with secrets also `stapler validate` and `spctl` |
+| `release` | ubuntu-22.04 | `SHA256SUMS`, `THIRD_PARTY_LICENSES.html` (cargo-about), CHANGELOG section as release notes | – |
+
+Packaging is configured in `Packager.toml` (cargo-packager 0.11.8): product metadata, icons, `.heartsim.ron` file association, the
+`.desktop` template and shared-mime-info XML (`packaging/linux/`), `Info.plist` extras and hardened-runtime entitlements
+(`packaging/macos/`). Icons are rasterised from `assets/icon.svg` by `cargo xtask icons` (PNG sizes, `icon.ico`, `icon.icns`);
+`cargo xtask prepare-packaging` (the packager's `beforePackagingCommand`) also writes `THIRD_PARTY_LICENSES.html`, so locally
+`cargo build --release -p heartsim-app && cargo packager` works once `cargo-packager` and `cargo-about` are installed. The macOS
+`.dmg` is built with `hdiutil` instead of cargo-packager's AppleScript-based dmg, which needs a Finder session that CI runners lack.
+
+`cargo xtask release-check [--tag vX.Y.Z] [--allow-unreleased] [--require-tools]` fails unless the workspace version, every
+literal crate version, `Packager.toml`, the git tag and a non-empty `## [X.Y.Z]` CHANGELOG section agree, the version is
+installer-safe (WiX needs a numeric-only pre-release such as `0.2.0-1`, not `-rc.1`), then runs `cargo deny check` and a dry
+`cargo about generate`. **Release procedure:** bump `[workspace.package].version` and `Packager.toml`, rename the CHANGELOG
+`[Unreleased]` heading to `[X.Y.Z] — date`, run `cargo xtask release-check`, tag `vX.Y.Z`, push the tag, review the draft.
+
+### 9.2 Secrets (repository → Settings → Secrets and variables → Actions)
+Every signing step is skipped, and the build still succeeds, when its secrets are absent (unsigned MSI/NSIS; ad-hoc-signed,
+un-notarised dmg that Gatekeeper warns about). Nothing is required to build.
+
+| secret | used by | content |
+|---|---|---|
+| `WINDOWS_CERT_PFX_BASE64` | windows | Authenticode code-signing certificate + key as `.pfx`, base64 (`base64 -w0 cert.pfx`) |
+| `WINDOWS_CERT_PASSWORD` | windows | password of that `.pfx` |
+| `APPLE_CERT_P12_BASE64` | macos | "Developer ID Application" certificate + key exported as `.p12`, base64 |
+| `APPLE_CERT_PASSWORD` | macos | password of that `.p12` |
+| `APPLE_API_KEY_P8_BASE64` | macos | App Store Connect API key (`AuthKey_XXXX.p8`), base64 — role *Developer* is enough for notarisation |
+| `APPLE_API_KEY_ID` | macos | the key's 10-character ID |
+| `APPLE_API_ISSUER_ID` | macos | the issuer UUID shown on the App Store Connect *Keys* page |
+
+macOS signing runs from `rcodesign` 0.29.0 (apple-codesign; downloaded and checked against a pinned SHA-256) rather than Xcode's
+`codesign`, so no keychain is created on the runner: `rcodesign sign --code-signature-flags runtime` with
+`packaging/macos/entitlements.plist` (deliberately empty — no JIT, no plug-ins, no microphone), then `notary-submit --wait --staple`
+for the `.app` and again for the `.dmg`. Apple Silicon requires a valid signature to run at all, hence the ad-hoc fallback.
+Windows signing uses `signtool` from the runner's Windows SDK (`packaging/windows/sign.ps1`, DigiCert timestamp unless
+`WINDOWS_TIMESTAMP_URL` is set) on `heartsim.exe` before packaging and on both installers after. An EV or Azure Trusted Signing
+certificate is better against SmartScreen; swap the body of `sign.ps1` and keep the call sites.
+
+### 9.3 Known limits
+* **`.heartsim.ron` association.** Windows and macOS match the last dot-separated extension only, so the compound suffix cannot be
+  registered reliably there (registering plain `.ron` would hijack every RON file). It works on Linux through the shared-mime-info
+  glob `*.heartsim.ron`. Moving to a unique single extension (e.g. `.hsim`) would make it work everywhere; it needs a
+  `core::Scenario` file-format decision, so it is left open.
+* **`--version` on Windows.** The release exe uses the GUI subsystem (no console window), so `heartsim --version` prints only when
+  stdout is redirected (`heartsim --version > v.txt`); the smoke test does exactly that.
+* **Clean-container AppImage test.** Only `libgl1` and `libvulkan1` are installed in the container, mirroring the AppImage
+  excludelist; anything else the binary links at load time must come from the bundle. Window creation (dlopen of
+  libxkbcommon / wayland / X11) is not exercised on CI — there is no display.
+* The macOS dmg has no custom background/window layout.
 
 ## 10. Risks and mitigations
 | risk | mitigation |

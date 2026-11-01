@@ -4,6 +4,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased] — M1 (2026-10-31)
 ### Added
+- Packaging and release CI (brief B12): `Packager.toml` (cargo-packager) with app icon (`assets/icon.svg` → PNG/ICO/ICNS via
+  `cargo xtask icons`), `.desktop` entry, `.heartsim.ron` association, macOS `Info.plist` extras and hardened-runtime
+  entitlements; `.github/workflows/release.yml` (MSI + NSIS, notarised universal `.dmg`, AppImage + `.deb`, `SHA256SUMS`,
+  cargo-about `THIRD_PARTY_LICENSES.html`, draft GitHub Release, per-artefact `--version` smoke tests); actionlint job in CI;
+  `cargo xtask release-check | release-notes | licenses | prepare-packaging | version`; `heartsim --version`.
 - `heartsim-sim` timing engine (brief B01): grouped `TimingParams` (`sinus`, `av`, `his_purkinje`, `escape`, `foci`,
   `accessory`, `pacer`) with documented units/ranges and RON round-trip; sinus pauses, SA exit block, sick sinus,
   overdrive suppression; ectopic foci (PAC/PVC, bigeminy/trigeminy, couplets/runs, parasystole); dual AV-nodal pathways with

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Entitlements applied with the hardened runtime (`rcodesign sign --code-signature-flags runtime`).
+     The app is a plain native binary: Metal shader compilation, CoreAudio output and file dialogs need no
+     entitlement, there is no JIT (no allow-jit / allow-unsigned-executable-memory) and no third-party plug-in
+     loading (no disable-library-validation). Only the exceptions actually required belong here; add
+     `com.apple.security.device.audio-input` only if microphone capture is ever introduced. -->
+<plist version="1.0">
+<dict/>
+</plist>

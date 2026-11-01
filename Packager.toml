@@ -1,0 +1,81 @@
+# cargo-packager configuration for the `heartsim` desktop app (cargo-packager 0.11.x, `cargo install cargo-packager --locked`).
+# Keys are the camelCase names from the upstream JSON schema; unknown keys are rejected by the tool.
+# Run `cargo build --release -p heartsim-app` first, then `cargo packager --release` (formats default per host OS).
+# `version` is checked against the workspace and CHANGELOG by `cargo xtask release-check`.
+name = "heartsim"
+productName = "HeartSim"
+version = "0.1.0"
+identifier = "com.inalto.heartsim"
+description = "3-D heart electrophysiology and 12-lead ECG simulator for medical education."
+longDescription = """
+HeartSim simulates cardiac impulse formation and conduction in a 3-D heart model and derives a live 12-lead ECG from it, \
+so students can see how rhythms, blocks, ectopy and pacing produce the traces they read on paper."""
+homepage = "https://github.com/inalto/heartsim"
+authors = ["heartsim contributors"]
+publisher = "heartsim contributors"
+copyright = "Copyright (c) heartsim contributors. MIT OR Apache-2.0."
+licenseFile = "LICENSE-MIT"
+category = "Education"
+
+outDir = "dist"
+binariesDir = "target/release"
+binaries = [{ path = "heartsim", main = true }]
+
+# Generates assets/generated/icons/* (from assets/icon.svg) and THIRD_PARTY_LICENSES.html (cargo-about).
+beforePackagingCommand = "cargo xtask prepare-packaging"
+icons = [
+    "assets/generated/icons/*.png",
+    "assets/generated/icons/icon.ico",
+    "assets/generated/icons/icon.icns",
+]
+
+# The cargo-about licence report travels with the app (MIT/Apache/BSD attribution requirement).
+resources = [{ src = "THIRD_PARTY_LICENSES.html", target = "THIRD_PARTY_LICENSES.html" }]
+
+# Windows and macOS associate by the last dot-separated extension only, so the compound `.heartsim.ron` suffix is
+# registered but only matches reliably through the shared-mime-info glob shipped for Linux
+# (packaging/linux/heartsim-scenario.xml). See docs/ARCHITECTURE.md §9.
+[[fileAssociations]]
+extensions = ["heartsim.ron"]
+mimeType = "application/x-heartsim-scenario+ron"
+name = "HeartSim scenario"
+description = "HeartSim scenario file"
+role = "editor"
+
+[linux]
+generateDesktopEntry = true
+
+[deb]
+desktopTemplate = "packaging/linux/heartsim.desktop"
+section = "science"
+priority = "optional"
+# Runtime libraries wgpu/winit/cpal dlopen or link. Names resolve on Ubuntu 22.04+ and Debian 12+.
+depends = [
+    "libasound2 | libasound2t64",
+    "libudev1",
+    "libxkbcommon0",
+    "libwayland-client0",
+    "libvulkan1",
+    "libgl1",
+    "shared-mime-info",
+]
+
+[deb.files]
+"packaging/linux/heartsim-scenario.xml" = "usr/share/mime/packages/heartsim-scenario.xml"
+
+# AppImage reuses the .deb data tree (desktop file, icons, mime XML) and lets linuxdeploy bundle linked libraries.
+[appimage.files]
+"packaging/linux/heartsim-scenario.xml" = "usr/share/mime/packages/heartsim-scenario.xml"
+
+[macos]
+minimumSystemVersion = "12.0"
+infoPlistPath = "packaging/macos/Info.plist"
+entitlements = "packaging/macos/entitlements.plist"
+
+[nsis]
+installMode = "currentUser"
+compression = "lzma"
+languages = ["English"]
+
+[wix]
+languages = ["en-US"]
