@@ -8,7 +8,7 @@ teaching notes, "confused with", and expected interval ranges; add golden CSV sn
 
 ## Read first
 `crates/heartsim-core/src/scenario.rs`, `crates/heartsim-sim/src/timing.rs` (+ B1 params), `crates/heartsim-ecg/src/synth.rs`,
-`docs/REQUIREMENTS.md` F-07, `docs/reverse-engineering/pathology-recipes.md` (**for the list of conditions and which knobs each
+`docs/REQUIREMENTS.md` F-07, the private pathology notes (not published) (**for the list of conditions and which knobs each
 touches only — do not copy numbers**), standard textbook ranges (cite: e.g. Goldberger's Clinical Electrocardiography, Life in the
 Fast Lane ECG library) for the expected intervals.
 

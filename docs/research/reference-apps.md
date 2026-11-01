@@ -282,49 +282,6 @@ generating action potential wavefront and ECG/EGM signals in real time";
 future: VVUQ validation for in-silico device testing, patient-specific
 diagnosis support, drug-effect modelling.
 
-**Inferred from identifiers in the local desktop binary (Assembly-CSharp.dll
-strings; no code was decompiled):**
-
-- Separate simulation regions/classes: `SimA` (atria), `SimAV` (AV node),
-  `SimCT` (conduction tree), `SimV` (ventricles), `SimP` (Purkinje?), with
-  per-region `depolarizeCell*`, `cell2cell*`, `paceCell*`, `ablateCell`,
-  `blockCell`; per-region APD and CV modifiers (`APDModA/AV/CT/PUR/V`,
-  `CVModA/PUR/V`), endo/epi APD (`APDendo`, `APDepi`), restitution/memory
-  (`calcRestAPD`, `calcRestCV`, `calcMemAPD`, "Cell Memory", "Rest. APD B/C",
-  "Rest CV B/C", "Base APD DI Min/Max"), "Dep. Thresh. (mV)", "Sim. Step (ms)",
-  "Cell Density", "Purkinje Range L/R/LA/LP", bundle start/fire cells
-  (`RBstart`, `LABstart`, `LPBstart`).
-- ECG/EGM generation: electrodes are objects placed on a torso
-  (`placeLeads`, `dragLead`, `dropLead`, `readLeadPositionsFromMarkers`,
-  `resetLeadsBody`, V1/V2 misplacement checks `leadV1mispF`), per-cell
-  distances to electrodes (`calcLeadDistances`, "Cell-Lead Dist",
-  `cellDistF`, `cellDistPow`, `cellDensF`, `cellDensPow`, `ecgLeadDistance`,
-  `ecgLeadRatios`), standard and precordial lead vectors
-  (`setStandardLeadVectors`, `setPrecordialLeadVectors`), 12-lead computation
-  (`calcGECG12`, `calcGECG13s`, `calcGEGM13e`, `calcGCSP14`, `calcSignal`,
-  `calcSingleGraph`), electrical heart vector (`calcEHV`, `ehvLine`,
-  `ehvpDottedLine1..5` = projections of the heart vector onto lead axes),
-  catheter bipoles (`calcBipolarAP`, `calcEGMCellBase`), ECG filter and noise
-  (`ecgFilterP`, `ecgNoiseAmp`, `ecgNoiseTh`, "EGM Filter"), voltage scaling
-  ("mm/mV", `ecgVSF`), speed (12.5/25/50/100/200 mm/s), "S-L scaling".
-  The most plausible reading is a distance-weighted sum of cell membrane
-  potentials (or their temporal derivative) per electrode, with power-law
-  attenuation and a density weighting, in an unbounded homogeneous medium –
-  i.e. no finite torso volume conductor. **This is an inference**; the vendor
-  does not document the forward model.
-- Mechanics/haemodynamics in the current build: `ContractCell`, `ContractVb`,
-  "LV Contraction", "RV Contraction", "F Contraction", "Contraction Dur",
-  `calcLVEF` (EDV/ESV), blood-flow particles ("Bloodflow DT", `bloodflowL/R`),
-  "Respiration Rate (bpm)" and respiration wave (baseline wander), "mmHg/s".
-- Maps: "Isochronal Map" (`isoMap*`), "Voltage Map" (`voltMap*`, recorded
-  over a window), "Depo Wave Hood" / "Repo Wave Hood" (wavefront surfaces),
-  fibre map (`fibreIcon`), AP colour map with user-set voltage range.
-- Unity packages present: InputSystem, TextMeshPro, Timeline, Burst,
-  Mathematics, Collections, AI Navigation, **Unity InferenceEngine (Sentis)**
-  + DirectML, Unity Services (Analytics, Purchasing 4.4.0), Newtonsoft.Json.
-  The presence of an inference engine is consistent with the "neural cellular
-  automata / can be trained" marketing wording but its actual use is
-  unverified.
 
 ### 2.5 Heart Simulator app (EHS2) – Google Play / App Store listing (verified)
 
@@ -1161,9 +1118,6 @@ Answer checking: `lagetyp(a, international, lang) === answerString`; correct
 - https://apps.apple.com/pl/app/virtualcsp/id6739589166 (404)
 - https://core.ac.uk/download/357358791.pdf (returned HTML, not the PDF)
 - https://pubmed.ncbi.nlm.nih.gov/?term=Epicardio+simulation+ECG+interpretation (no Epicardio paper found)
-- Local build inspected (strings only, no decompilation):
-  /home/alain/heartsim/epicardio/EpicardioSimulation_README.txt,
-  /home/alain/heartsim/epicardio/EpicardioSimulation_Data/{app.info, boot.config, globalgamemanagers, ScriptingAssemblies.json, Managed/Assembly-CSharp.dll}
 
 ### Cardiac Rhythm Simulator
 - https://cardiacrhythmsim.com/

@@ -6,7 +6,7 @@ Markdown-based guided tutorials whose pages can drive the simulator (load scenar
 highlight a tool, ask a question), with progress tracking; and a timeline editor to author scenario `TimedAction`s visually.
 
 ## Read first
-`crates/heartsim-core/src/scenario.rs` (`Action`, `TimedAction`), `docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §1 "Education"
+`crates/heartsim-core/src/scenario.rs` (`Action`, `TimedAction`), the private reference-product analysis notes (not published) §1 "Education"
 (index lines, knowledge checks, tutor vs self-study), `docs/research/reference-apps.md` §6 P1-7/8.
 
 ## Scope

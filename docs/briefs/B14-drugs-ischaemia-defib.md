@@ -7,7 +7,7 @@ probability — all driven through `Action`s so they work in timelines and tutor
 
 ## Read first
 `docs/research/electrophysiology-and-ecg-models.md` §3.5 (ST elevation/depression recipe, electrolyte/QT table), §2.5.1 (AV-node
-effects), `docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §4 items 12–14, `crates/heartsim-core/src/scenario.rs`.
+effects), the private reference-product analysis notes (not published) §4 items 12–14, `crates/heartsim-core/src/scenario.rs`.
 
 ## Scope
 1. `Drug` table (data file `assets/drugs.ron`): adenosine (AV ERP ↑↑ for 10 s), verapamil/diltiazem (AV CV ↓, ERP ↑), digoxin

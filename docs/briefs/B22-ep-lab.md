@@ -7,7 +7,7 @@ stimulation from any electrode pair, AH/HV/CL/PPI measurements, entrainment, ERP
 CTI line, accessory pathway) with persistent effects.
 
 ## Read first
-`docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §1 "Cardiac EP mode", §4 items 9–11, §5 EGMs; `docs/REQUIREMENTS.md` F-16, F-33;
+the private reference-product analysis notes (not published) §1 "Cardiac EP mode", §4 items 9–11, §5 EGMs; `docs/REQUIREMENTS.md` F-16, F-33;
 `docs/research/electrophysiology-and-ecg-models.md` §3.1 (local potentials).
 
 ## Scope

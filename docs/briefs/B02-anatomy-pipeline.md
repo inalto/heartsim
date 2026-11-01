@@ -10,7 +10,7 @@ stubs) so every other brief can proceed.
 ## Read first
 `docs/research/electrophysiology-and-ecg-models.md` §5.1 (meshes + licences: Strocchi/Rodero cohort CC BY 4.0, Fritz/Gerach,
 BodyParts3D CC BY-SA), §5.3 (Bayer LDRB fibre rule, default angles α 40°/−50°), §5.4 (Costabal fractal Purkinje tree);
-`docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §3 (what a working cell cloud looks like: ~4 k atrial + ~10 k ventricular
+the private reference-product analysis notes (not published) §3 (what a working cell cloud looks like: ~4 k atrial + ~10 k ventricular
 cells, 8-NN with distance and fibre cosine, transmural depth, vertex→cell hoods, landmarks, electrode frame); `crates/heartsim-geometry`.
 
 ## Scope

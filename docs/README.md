@@ -10,8 +10,6 @@
 | [research/reference-apps.md](research/reference-apps.md) | Feature inventory and UX analysis of Epicardio EHS2, cardiacrhythmsim.com, ecgaxistrainer, Epicardio WebGL | product |
 | [research/electrophysiology-and-ecg-models.md](research/electrophysiology-and-ecg-models.md) | The science: cell models, eikonal activation, conduction system, ECG forward problem, meshes, numerics | sim implementers |
 | [research/rust-stack.md](research/rust-stack.md) | Crate-by-crate evaluation of rendering, GUI, compute, audio, packaging, CI | implementers |
-| [reverse-engineering/EPICARDIO-ANALYSIS.md](reverse-engineering/EPICARDIO-ANALYSIS.md) | How the Epicardio Unity app works internally (engine, data model, ECG, features) and what we keep/improve | architects |
-| reverse-engineering/*.txt, pathology-recipes.md | Raw dumps: C# types, scene hierarchy, asset inventory, per-pathology parameter diffs | reference |
 
-Legal reminder: `epicardio/` and `epicardio-extracted/` are proprietary, analysed for understanding only, git-ignored, never to be
-copied into the product.
+Legal note: heartsim is an independent implementation built from the published literature. It contains no code, data or assets from any
+third-party simulator.

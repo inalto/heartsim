@@ -8,7 +8,7 @@ per step.
 
 ## Read first
 `crates/heartsim-sim/src/timing.rs` (current engine + tests), `docs/research/electrophysiology-and-ecg-models.md` §2.5 (AV node
-recovery curve, dual pathways, WPW, foci, pacemakers, refractoriness), `docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §4 items 1–4
+recovery curve, dual pathways, WPW, foci, pacemakers, refractoriness), the private reference-product analysis notes (not published) §4 items 1–4
 and 9–10 (what the reference product parameterises), `docs/ARCHITECTURE.md` §4.1.
 
 ## Scope

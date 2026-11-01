@@ -1,7 +1,7 @@
 # heartsim — technical architecture
 
 Status: v0.1 (2026-10-31). Companion to `REQUIREMENTS.md`. Research backing: `research/rust-stack.md`,
-`research/electrophysiology-and-ecg-models.md`, `reverse-engineering/EPICARDIO-ANALYSIS.md`.
+`research/electrophysiology-and-ecg-models.md`, the private reference-product analysis notes (not published).
 
 ## 1. Principles
 1. **One state, two views.** Beat timing and tissue state are computed once per fixed step; the ECG strip, the colour map, the heart

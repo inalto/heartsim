@@ -9,7 +9,7 @@ step so that (a) the heart colour map shows a physiological wavefront and (b) th
 ## Read first
 `docs/ARCHITECTURE.md` §4.2; `docs/research/electrophysiology-and-ecg-models.md` §2.2 (eikonal, Pezzuto 2017, Wallman 2012),
 §2.5.2/2.5.5 (BBB, refractoriness, aberrancy), §3.5 (how P/QRS/T morphology arises — APD gradients), §6 (budgets);
-`docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §4 (the reference product's parameters: APD epi/endo, CV per region, restitution
+the private reference-product analysis notes (not published) §4 (the reference product's parameters: APD epi/endo, CV per region, restitution
 coefficients, Purkinje range, hood smoothing). `crates/heartsim-sim/src/{engine.rs,ap.rs,timing.rs}`.
 
 ## Scope

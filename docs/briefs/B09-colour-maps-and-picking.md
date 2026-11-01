@@ -7,7 +7,7 @@ outline, click-to-stimulate, synchronised scrubbing with the strip, anatomy laye
 
 ## Read first
 `crates/heartsim-app/src/app.rs`, `crates/heartsim-ui/src/viewport.rs`, B3/B5/B6/B7 outputs, `docs/ARCHITECTURE.md` §3 and §5,
-`docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §6 (hood colouring, iso/voltage maps).
+the private reference-product analysis notes (not published) §6 (hood colouring, iso/voltage maps).
 
 ## Scope
 1. Hood mapping: `scalars[v] = Σ_k w_vk · vm[cell_vk]` per render mesh (rayon), uploaded each frame; isochrone mode uses activation

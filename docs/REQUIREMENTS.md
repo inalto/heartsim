@@ -1,6 +1,6 @@
 # heartsim — product requirements
 
-Status: v0.1 (2026-10-31). Sources: user brief; `docs/reverse-engineering/EPICARDIO-ANALYSIS.md`; `docs/research/reference-apps.md`
+Status: v0.1 (2026-10-31). Sources: user brief; the private reference-product analysis notes (not published); `docs/research/reference-apps.md`
 §6 (feature superset); `docs/research/electrophysiology-and-ecg-models.md`; `docs/research/user-deep-research-takeaways.md`.
 
 ## 1. Vision

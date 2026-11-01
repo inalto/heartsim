@@ -29,7 +29,7 @@ Linux needs `libxkbcommon-dev libwayland-dev libasound2-dev` (Debian/Ubuntu name
 
 ## Layout
 `crates/heartsim-{core,geometry,sim,ecg,render,ui,app,cli}` (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); `assets/` scenarios
-and locales; `docs/` requirements, architecture, roadmap, research and reverse-engineering notes; `xtask/` automation.
+and locales; `docs/` requirements, architecture, roadmap, and research notes; `xtask/` automation.
 
 ## Contributing
 Read [CLAUDE.md](CLAUDE.md) (also the human contributor guide): layering rules, determinism, licensing, and the definition of done.

@@ -8,7 +8,7 @@ realistic timing cycles, capture thresholds and sensing, so learners see pacing 
 pseudo-fusion, undersensing/oversensing, and the paced morphology that corresponds to the lead site.
 
 ## Read first
-`docs/research/electrophysiology-and-ecg-models.md` §2.5.4 (pacemaker timing cycles), `docs/reverse-engineering/EPICARDIO-ANALYSIS.md`
+`docs/research/electrophysiology-and-ecg-models.md` §2.5.4 (pacemaker timing cycles), the private reference-product analysis notes (not published)
 §1 "Pacing" (what the reference exposes: rate, output, sensitivity, AV delay, modes, wires), B1 `PacerConfig`.
 
 ## Scope

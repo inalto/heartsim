@@ -8,7 +8,7 @@ morphologies (Q waves, R/S progression across V1–V6, ST shifts, T polarity) fo
 ## Read first
 `docs/ARCHITECTURE.md` §4.4; `docs/research/electrophysiology-and-ecg-models.md` §3.1–3.4 (Gima–Rudy pseudo-ECG, equivalent double
 layer, lead-field, WCT and augmented leads, electrode coordinates), §3.5 (what produces each wave; ST via injury current);
-`docs/reverse-engineering/EPICARDIO-ANALYSIS.md` §5 (reference product: 1/r^p weighting with p = 3 and per-population gains);
+the private reference-product analysis notes (not published) §5 (reference product: 1/r^p weighting with p = 3 and per-population gains);
 `crates/heartsim-core/src/lead.rs`.
 
 ## Scope

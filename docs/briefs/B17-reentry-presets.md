@@ -7,7 +7,7 @@ AF; automatic Tier 1 ↔ Tier 2 switching; defibrillation/ablation/drug effects 
 
 ## Read first
 B16 engine API, `docs/research/electrophysiology-and-ecg-models.md` §3.5 (fibrillatory baseline, flutter waves), §4.3,
-`docs/reverse-engineering/pathology-recipes.md` (which knobs the reference touches for AF/AFL/VT/VF — concepts only).
+the private pathology notes (not published) (which knobs the reference touches for AF/AFL/VT/VF — concepts only).
 
 ## Scope
 1. Scenario fields: `tier: ReactionDiffusion`, initiation protocol (S1–S2 site/timing, or pre-seeded spiral state file), tissue
