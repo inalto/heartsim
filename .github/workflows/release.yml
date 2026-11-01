@@ -200,8 +200,11 @@ jobs:
           lipo -create -output target/universal-apple-darwin/release/heartsim \
             target/aarch64-apple-darwin/release/heartsim target/x86_64-apple-darwin/release/heartsim
           lipo -archs target/universal-apple-darwin/release/heartsim
+          # cargo-packager reads `binariesDir` from Packager.toml (target/release); put the universal binary there.
+          mkdir -p target/release
+          cp target/universal-apple-darwin/release/heartsim target/release/heartsim
       - name: Bundle HeartSim.app
-        run: cargo packager --formats app --binaries-dir target/universal-apple-darwin/release --out-dir dist/macos --verbose
+        run: cargo packager --formats app --out-dir dist/macos --verbose
       - name: Install rcodesign
         if: env.HAS_APPLE_SIGNING == 'true'
         run: |
