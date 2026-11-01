@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- shared-mime-info registration so `*.heartsim.ron` (a compound extension) maps to HeartSim. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-heartsim-scenario+ron">
+    <comment>HeartSim scenario file</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.heartsim.ron" weight="75"/>
+    <icon name="heartsim"/>
+  </mime-type>
+</mime-info>

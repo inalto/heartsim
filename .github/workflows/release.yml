@@ -1,0 +1,323 @@
+name: Release
+
+# Tag `vX.Y.Z` (must equal the workspace version and have a CHANGELOG section) -> installers on a *draft* GitHub Release.
+# Run manually (workflow_dispatch) for a dry run: every artefact is built, signed if secrets exist, smoke-tested and
+# kept as a workflow artefact for 7 days, but no release is created.
+# Required secrets are listed in docs/ARCHITECTURE.md §9; every signing step is skipped when its secrets are absent.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PACKAGER_VERSION: 0.11.8
+  # rcodesign (apple-codesign) release asset, pinned by digest: apple-codesign-0.29.0-macos-universal.tar.gz
+  RCODESIGN_VERSION: 0.29.0
+  RCODESIGN_SHA256: d98372d5524226ccf9dc0eda03d4e4f5826182dabb2fc3f2bd303ed9113a748d
+
+jobs:
+  preflight:
+    name: release-check
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-about
+      - name: Version, CHANGELOG, tag, cargo-deny and licence report
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            args=(--tag "$GITHUB_REF_NAME")
+          else
+            args=(--allow-unreleased)
+          fi
+          cargo xtask release-check --require-tools "${args[@]}"
+      - name: Read version
+        id: meta
+        run: |
+          version="$(cargo -q xtask version)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+  linux:
+    name: Linux (.deb, AppImage)
+    needs: preflight
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      # linuxdeploy / appimagetool are AppImages themselves; run them without FUSE.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - name: Build and packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev libfuse2 file desktop-file-utils
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Install cargo-packager
+        run: command -v cargo-packager || cargo install cargo-packager --locked --version "$CARGO_PACKAGER_VERSION"
+      - name: Build release binary
+        run: cargo build --release --locked -p heartsim-app --bin heartsim
+      - name: Package .deb and AppImage
+        run: cargo packager --formats deb,appimage --verbose
+      - name: Validate desktop entry
+        run: |
+          dpkg-deb -x dist/heartsim_*.deb extracted
+          desktop-file-validate extracted/usr/share/applications/*.desktop
+      - name: Smoke test .deb in a clean Ubuntu 22.04 container (dependencies must resolve)
+        run: |
+          docker run --rm -e VERSION -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -euo pipefail -c '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/heartsim_*.deb
+            test "$(heartsim --version)" = "heartsim $VERSION"
+            echo "deb ok: $(heartsim --version)"'
+      - name: Smoke test AppImage in a clean Ubuntu 22.04 container
+        run: |
+          docker run --rm -e VERSION -e APPIMAGE_EXTRACT_AND_RUN -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -euo pipefail -c '
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgl1 libvulkan1
+            appimage=$(ls /dist/*.AppImage)
+            test "$($appimage --version)" = "heartsim $VERSION"
+            echo "AppImage ok: $($appimage --version)"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.deb
+            dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Windows (MSI, NSIS)
+    needs: preflight
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Install cargo-packager
+        run: command -v cargo-packager || cargo install cargo-packager --locked --version "$CARGO_PACKAGER_VERSION"
+      - name: Build release binary (static MSVC runtime via .cargo/config.toml)
+        run: cargo build --release --locked -p heartsim-app --bin heartsim
+      - name: Check GUI subsystem and static CRT
+        shell: pwsh
+        run: ./packaging/windows/check-exe.ps1 target/release/heartsim.exe
+      - name: Import code-signing certificate
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          "WINDOWS_PFX_PATH=$pfx" >> $env:GITHUB_ENV
+      - name: Sign heartsim.exe
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: ./packaging/windows/sign.ps1 target/release/heartsim.exe
+      - name: Package MSI and NSIS
+        run: cargo packager --formats wix,nsis --verbose
+      - name: Sign installers
+        if: env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $files = Get-ChildItem dist -File | Where-Object { $_.Extension -eq '.msi' -or $_.Name -like '*-setup.exe' } | ForEach-Object FullName
+          ./packaging/windows/sign.ps1 @files
+      - name: Smoke test MSI (silent install, --version, uninstall)
+        shell: pwsh
+        run: ./packaging/windows/smoke.ps1 -Installer (Get-ChildItem dist/*.msi | Select-Object -First 1).FullName -Version $env:VERSION
+      - name: Smoke test NSIS (silent install, --version, uninstall)
+        shell: pwsh
+        run: ./packaging/windows/smoke.ps1 -Installer (Get-ChildItem dist/*-setup.exe | Select-Object -First 1).FullName -Version $env:VERSION
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.msi
+            dist/*-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS (universal .dmg)
+    needs: preflight
+    runs-on: macos-15
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_API_KEY_P8_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain and both macOS targets
+        run: |
+          rustup toolchain install --profile minimal
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - name: Install cargo-packager
+        run: command -v cargo-packager || cargo install cargo-packager --locked --version "$CARGO_PACKAGER_VERSION"
+      - name: Build arm64 and x86_64 and merge with lipo
+        run: |
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked --target "$target" -p heartsim-app --bin heartsim
+          done
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/heartsim \
+            target/aarch64-apple-darwin/release/heartsim target/x86_64-apple-darwin/release/heartsim
+          lipo -archs target/universal-apple-darwin/release/heartsim
+      - name: Bundle HeartSim.app
+        run: cargo packager --formats app --binaries-dir target/universal-apple-darwin/release --out-dir dist/macos --verbose
+      - name: Install rcodesign
+        if: env.HAS_APPLE_SIGNING == 'true'
+        run: |
+          url="https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/apple-codesign-${RCODESIGN_VERSION}-macos-universal.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/rcodesign.tar.gz" "$url"
+          echo "${RCODESIGN_SHA256}  $RUNNER_TEMP/rcodesign.tar.gz" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/rcodesign"
+          tar -xzf "$RUNNER_TEMP/rcodesign.tar.gz" -C "$RUNNER_TEMP/rcodesign"
+          bin="$(find "$RUNNER_TEMP/rcodesign" -name rcodesign -type f | head -n 1)"
+          test -n "$bin"
+          dirname "$bin" >> "$GITHUB_PATH"
+      - name: Import Developer ID certificate and App Store Connect API key
+        if: env.HAS_APPLE_SIGNING == 'true'
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          umask 077
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_CERT_PASSWORD" > "$RUNNER_TEMP/developer-id.pass"
+          echo "$APPLE_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          rcodesign encode-app-store-connect-api-key -o "$RUNNER_TEMP/asc-api-key.json" \
+            "$APPLE_API_ISSUER_ID" "$APPLE_API_KEY_ID" "$RUNNER_TEMP/AuthKey.p8"
+          rm "$RUNNER_TEMP/AuthKey.p8"
+      - name: Sign (hardened runtime) and notarise HeartSim.app
+        if: env.HAS_APPLE_SIGNING == 'true'
+        run: |
+          rcodesign sign --p12-file "$RUNNER_TEMP/developer-id.p12" --p12-password-file "$RUNNER_TEMP/developer-id.pass" \
+            --code-signature-flags runtime --entitlements-xml-file packaging/macos/entitlements.plist \
+            dist/macos/HeartSim.app
+          rcodesign notary-submit --api-key-file "$RUNNER_TEMP/asc-api-key.json" --wait --staple dist/macos/HeartSim.app
+      - name: Ad-hoc sign (no Apple secrets; Gatekeeper will warn)
+        if: env.HAS_APPLE_SIGNING != 'true'
+        run: codesign --force --deep --sign - dist/macos/HeartSim.app
+      - name: Build .dmg
+        run: |
+          stage="$(mktemp -d)"
+          ditto dist/macos/HeartSim.app "$stage/HeartSim.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname "HeartSim $VERSION" -srcfolder "$stage" -fs HFS+ -format UDZO -ov \
+            "dist/macos/HeartSim_${VERSION}_universal.dmg"
+      - name: Sign and notarise .dmg
+        if: env.HAS_APPLE_SIGNING == 'true'
+        run: |
+          rcodesign sign --p12-file "$RUNNER_TEMP/developer-id.p12" --p12-password-file "$RUNNER_TEMP/developer-id.pass" \
+            "dist/macos/HeartSim_${VERSION}_universal.dmg"
+          rcodesign notary-submit --api-key-file "$RUNNER_TEMP/asc-api-key.json" --wait --staple \
+            "dist/macos/HeartSim_${VERSION}_universal.dmg"
+      - name: Smoke test .dmg (mount, universal slices, --version)
+        run: |
+          dmg="dist/macos/HeartSim_${VERSION}_universal.dmg"
+          mnt="$RUNNER_TEMP/dmg-mount"
+          mkdir -p "$mnt"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mnt"
+          trap 'hdiutil detach "$mnt" -force' EXIT
+          bin="$mnt/HeartSim.app/Contents/MacOS/heartsim"
+          archs="$(lipo -archs "$bin")"
+          echo "archs: $archs"
+          [[ "$archs" == *arm64* && "$archs" == *x86_64* ]]
+          test "$("$bin" --version)" = "heartsim $VERSION"
+          codesign --verify --deep --strict --verbose=2 "$mnt/HeartSim.app"
+          plist="$mnt/HeartSim.app/Contents/Info.plist"
+          test "$(plutil -extract LSMinimumSystemVersion raw "$plist")" = "12.0"
+          test "$(plutil -extract NSHighResolutionCapable raw "$plist")" = "true"
+          test "$(plutil -extract CFBundleShortVersionString raw "$plist")" = "$VERSION"
+      - name: Verify notarisation ticket and Gatekeeper assessment
+        if: env.HAS_APPLE_SIGNING == 'true'
+        run: |
+          xcrun stapler validate "dist/macos/HeartSim_${VERSION}_universal.dmg"
+          xcrun stapler validate dist/macos/HeartSim.app
+          spctl --assess --type execute --verbose dist/macos/HeartSim.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/macos/*.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Draft GitHub Release
+    needs: [preflight, linux, windows, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Third-party licence report, release notes and checksums
+        run: |
+          cargo xtask licenses
+          mv THIRD_PARTY_LICENSES.html dist/
+          cargo -q xtask release-notes > release-notes.md
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
+      - name: Create or update the draft release
+        run: |
+          flags=(--draft --verify-tag --title "HeartSim $VERSION" --notes-file release-notes.md)
+          if [[ "$PRERELEASE" == "true" ]]; then flags+=(--prerelease); fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* "${flags[@]}"
+          fi

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- heartsim application icon. Original artwork by the heartsim authors, MIT OR Apache-2.0. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2a41"/>
+      <stop offset="1" stop-color="#0b1320"/>
+    </linearGradient>
+    <linearGradient id="heart" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff5a6a"/>
+      <stop offset="1" stop-color="#c0182f"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="200" ry="200" fill="url(#bg)"/>
+  <path fill="url(#heart)"
+        d="M512 810 C300 650 196 528 196 392 C196 288 272 214 360 214 C430 214 485 256 512 316
+           C539 256 594 214 664 214 C752 214 828 288 828 392 C828 528 724 650 512 810 Z"/>
+  <path fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"
+        d="M128 536 H356 L414 436 L478 700 L548 400 L598 536 H896"/>
+</svg>

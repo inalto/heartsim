@@ -8,6 +8,7 @@ used; those folders are proprietary, git-ignored, and exist only for study.**
 |---|---|---|---|---|
 | Procedural icosphere / idealised heart | generated at runtime | heartsim | MIT OR Apache-2.0 | placeholder geometry (B2) |
 | Scenario files | `assets/scenarios/*.ron` | heartsim authors, parameters from cited literature | MIT OR Apache-2.0 | |
+| Application icon | `assets/icon.svg` (+ generated PNG/ICO/ICNS in `assets/generated/icons/`) | heartsim authors, original artwork | MIT OR Apache-2.0 | |
 | Default fonts | eframe `default_fonts` (Ubuntu-Light, NotoEmoji, Hack) | egui project | UFL / OFL / MIT | bundled by eframe |
 
 Planned (see briefs B2, B18, B43): Strocchi et al. 2020 four-chamber cohort (Zenodo, CC BY 4.0), Fritz/Gerach four-chamber model

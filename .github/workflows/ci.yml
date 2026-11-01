@@ -28,6 +28,15 @@ jobs:
         with:
           command: check
 
+  actionlint:
+    name: actionlint (workflows)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+
   test:
     name: test (${{ matrix.os }})
     needs: check

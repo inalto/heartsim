@@ -1,7 +1,13 @@
 //! `cargo xtask <task>` — project automation that would otherwise live in shell scripts.
+mod icons;
+mod release;
+
 use anyhow::{Context, Result, bail};
-use clap::{Parser, Subcommand};
-use std::process::Command;
+use clap::{Args, Parser, Subcommand};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 #[derive(Parser, Debug)]
 #[command(about = "heartsim developer tasks")]
@@ -16,6 +22,38 @@ enum Task {
     Ci,
     /// Format all crates.
     Fmt,
+    /// Render `assets/icon.svg` into PNG/ICO/ICNS under `assets/generated/icons/` for cargo-packager.
+    Icons,
+    /// Write `THIRD_PARTY_LICENSES.html` with cargo-about (needs `cargo install cargo-about --locked`).
+    Licenses,
+    /// Everything cargo-packager needs beforehand: icons and the licence report (its `beforePackagingCommand`).
+    PreparePackaging,
+    /// Print the workspace version.
+    Version,
+    /// Verify workspace, Packager.toml, CHANGELOG and tag agree, then run `cargo deny` and the licence report.
+    ReleaseCheck(ReleaseCheckArgs),
+    /// Print the CHANGELOG section for the workspace version (the GitHub Release body).
+    ReleaseNotes(ReleaseNotesArgs),
+}
+
+#[derive(Args, Debug)]
+struct ReleaseCheckArgs {
+    /// Git tag being released, e.g. `v0.2.0` (`refs/tags/v0.2.0` is accepted).
+    #[arg(long)]
+    tag: Option<String>,
+    /// Accept an `[Unreleased]` CHANGELOG section instead of `[X.Y.Z]` (workflow dry runs).
+    #[arg(long)]
+    allow_unreleased: bool,
+    /// Fail when `cargo-deny` or `cargo-about` is missing instead of skipping that step.
+    #[arg(long)]
+    require_tools: bool,
+}
+
+#[derive(Args, Debug)]
+struct ReleaseNotesArgs {
+    /// Accept an `[Unreleased]` CHANGELOG section instead of `[X.Y.Z]`.
+    #[arg(long)]
+    allow_unreleased: bool,
 }
 
 fn run(args: &[&str]) -> Result<()> {
@@ -28,6 +66,22 @@ fn run(args: &[&str]) -> Result<()> {
         bail!("`cargo {}` failed", args.join(" "));
     }
     Ok(())
+}
+
+fn licenses(root: &Path) -> Result<()> {
+    let out = root.join("THIRD_PARTY_LICENSES.html");
+    run(&[
+        "about",
+        "generate",
+        "about.hbs",
+        "--output-file",
+        &out.to_string_lossy(),
+    ])
+}
+
+/// Repository root: xtask lives one level below it.
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
 fn main() -> Result<()> {
@@ -48,5 +102,45 @@ fn main() -> Result<()> {
             Ok(())
         }
         Task::Fmt => run(&["fmt", "--all"]),
+        Task::Icons => {
+            let root = repo_root();
+            icons::run(
+                &root.join("assets/icon.svg"),
+                &root.join("assets/generated/icons"),
+            )
+        }
+        Task::Licenses => licenses(&repo_root()),
+        Task::PreparePackaging => {
+            let root = repo_root();
+            icons::run(
+                &root.join("assets/icon.svg"),
+                &root.join("assets/generated/icons"),
+            )?;
+            licenses(&root)
+        }
+        Task::Version => {
+            println!("{}", release::gather(&repo_root(), None, true)?.workspace_version);
+            Ok(())
+        }
+        Task::ReleaseCheck(args) => release::release_check(
+            &repo_root(),
+            &release::CheckOptions {
+                tag: args.tag,
+                allow_unreleased: args.allow_unreleased,
+                require_tools: args.require_tools,
+            },
+        ),
+        Task::ReleaseNotes(args) => {
+            let inputs = release::gather(&repo_root(), None, args.allow_unreleased)?;
+            let Some(notes) = release::changelog_section(
+                &inputs.changelog,
+                &inputs.workspace_version,
+                args.allow_unreleased,
+            ) else {
+                bail!("CHANGELOG.md has no section for {}", inputs.workspace_version);
+            };
+            println!("{notes}");
+            Ok(())
+        }
     }
 }

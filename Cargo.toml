@@ -14,13 +14,13 @@ keywords = ["ecg", "cardiac", "electrophysiology", "simulation", "medical-educat
 categories = ["science", "simulation", "visualization"]
 
 [workspace.dependencies]
-# --- internal crates ---------------------------------------------------------
-heartsim-core = { path = "crates/heartsim-core" }
-heartsim-geometry = { path = "crates/heartsim-geometry" }
-heartsim-sim = { path = "crates/heartsim-sim" }
-heartsim-ecg = { path = "crates/heartsim-ecg" }
-heartsim-render = { path = "crates/heartsim-render" }
-heartsim-ui = { path = "crates/heartsim-ui" }
+# --- internal crates (versions must equal [workspace.package].version; checked by `cargo xtask release-check`) ---
+heartsim-core = { path = "crates/heartsim-core", version = "0.1.0" }
+heartsim-geometry = { path = "crates/heartsim-geometry", version = "0.1.0" }
+heartsim-sim = { path = "crates/heartsim-sim", version = "0.1.0" }
+heartsim-ecg = { path = "crates/heartsim-ecg", version = "0.1.0" }
+heartsim-render = { path = "crates/heartsim-render", version = "0.1.0" }
+heartsim-ui = { path = "crates/heartsim-ui", version = "0.1.0" }
 
 # --- GPU / windowing / GUI (versions verified on crates.io 2026-10-31) ---------
 wgpu = { version = "30.0.1", default-features = false, features = ["wgsl", "vulkan", "metal", "dx12", "gles", "webgpu", "webgl"] }
@@ -57,6 +57,10 @@ csv = "1.4.0"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 printpdf = "0.12.8"
 directories = "6.0.0"
+
+# --- build tooling (xtask only) ----------------------------------------------
+# Text, system fonts and raster images are off: the icon is pure vector paths.
+resvg = { version = "0.49.0", default-features = false }
 
 # --- app plumbing ------------------------------------------------------------
 anyhow = "1.0.104"
