@@ -1,0 +1,9 @@
+# Keep text files LF in the repository on every platform.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.glb binary
+*.bin binary
+
+# Anatomy packs are checksummed byte-for-byte: never convert line endings in them (must come last to win).
+assets/anatomy/** -text
