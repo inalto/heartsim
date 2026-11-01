@@ -62,6 +62,47 @@ pub fn estimate_frontal_axis(lead_i: &[f32], lead_avf: &[f32], sample_rate_hz: f
     Some(FrontalAxis::from_i_avf(ai, af))
 }
 
+/// Frontal axis from the net (area) deflection of leads I and aVF inside the given sample
+/// windows (inclusive `(start, end)` pairs). The isoelectric reference of each lead is the median of
+/// the samples outside every window, so a wandering baseline does not rotate the axis. Returns
+/// `None` when the net area is negligible (e.g. an equiphasic complex or no windows).
+#[must_use]
+pub fn net_area_axis(lead_i: &[f32], lead_avf: &[f32], windows: &[(usize, usize)]) -> Option<FrontalAxis> {
+    let n = lead_i.len().min(lead_avf.len());
+    if n == 0 || windows.is_empty() {
+        return None;
+    }
+    let mut inside = vec![false; n];
+    for &(a, b) in windows {
+        if a < n {
+            inside[a..=b.min(n - 1)].iter_mut().for_each(|f| *f = true);
+        }
+    }
+    let baseline = |x: &[f32]| {
+        let mut rest: Vec<f32> = x[..n]
+            .iter()
+            .zip(&inside)
+            .filter(|(_, q)| !**q)
+            .map(|(v, _)| *v)
+            .collect();
+        if rest.is_empty() {
+            return 0.0;
+        }
+        rest.sort_by(f32::total_cmp);
+        rest[rest.len() / 2]
+    };
+    let (bi, bf) = (baseline(lead_i), baseline(lead_avf));
+    let (mut ai, mut af) = (0.0_f64, 0.0_f64);
+    for (k, _) in inside.iter().enumerate().filter(|(_, q)| **q) {
+        ai += f64::from(lead_i[k] - bi);
+        af += f64::from(lead_avf[k] - bf);
+    }
+    if ai.hypot(af) < 1e-6 {
+        return None;
+    }
+    Some(FrontalAxis::from_i_avf(ai, af))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
