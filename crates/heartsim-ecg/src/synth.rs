@@ -4,7 +4,7 @@
 
 use crate::leadvec::LeadVectors;
 use glam::DVec3;
-use heartsim_core::{LEAD_COUNT, Lead, Millis, Region, TwelveLead};
+use heartsim_core::{FrontalAxis, LEAD_COUNT, Lead, Millis, Region, TwelveLead};
 use heartsim_sim::{Event, EventKind};
 use serde::{Deserialize, Serialize};
 
@@ -167,6 +167,31 @@ impl GaussianSynth {
             true
         });
         TwelveLead(self.leads.project(dipole))
+    }
+
+    /// Mean frontal QRS axis implied by the configured waves, degrees on the hexaxial circle.
+    ///
+    /// It is the direction of the summed Q+R+S area vectors (amplitude × width), i.e. the net
+    /// ventricular depolarisation dipole. This is the quantity an observer estimates from the
+    /// net QRS deflections in leads I and aVF, so a measured axis must agree with it.
+    #[must_use]
+    pub fn qrs_axis_deg(&self) -> f64 {
+        let (mut x, mut y) = (0.0, 0.0);
+        for w in self
+            .ventricular
+            .iter()
+            .filter(|w| matches!(w.name, "Q" | "R" | "S"))
+        {
+            let spec = WaveSpec {
+                axis_deg: w.axis_deg + self.axis_shift_deg,
+                ..*w
+            };
+            let d = spec.direction();
+            let area = spec.amplitude * spec.width_ms;
+            x += d.x * area;
+            y += -d.y * area;
+        }
+        FrontalAxis::normalise(y.atan2(x).to_degrees())
     }
 
     #[must_use]

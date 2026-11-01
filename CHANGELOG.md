@@ -4,6 +4,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Tabbed application: Simulator, 12-Lead ECG, Axis Trainer, Axis Quiz and Help.
+- 12-lead page with three layouts (12 x 1, 6 x 2, clinical 3 x 4 plus rhythm strip) and a live hexaxial axis circle with per-lead QRS polarity.
+- `heartsim_ecg::estimate_frontal_axis`: measures the QRS axis from leads I and aVF, and `GaussianSynth::qrs_axis_deg` gives the axis implied by the waves.
+
 ## [0.2.0] — 2026-11-01
 First tagged release: M0 foundation plus briefs B01 (timing engine), B02 (anatomy pipeline) and B12 (packaging).
 
