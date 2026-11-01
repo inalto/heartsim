@@ -83,18 +83,24 @@ fn is_installer_safe_semver(v: &str) -> bool {
 /// Body of the changelog section whose heading is `## [<version>]` (any text after the bracket is ignored,
 /// so `## [0.2.0] — 2026-11-20` matches). With `allow_unreleased`, the first `## [Unreleased]` also matches.
 pub fn changelog_section(changelog: &str, version: &str, allow_unreleased: bool) -> Option<String> {
-    let mut lines = changelog.lines();
     let heading_name = |line: &str| -> Option<String> {
         let rest = line.strip_prefix("## [")?;
         Some(rest.split_once(']')?.0.to_owned())
     };
-    let found = lines.by_ref().find(|line| {
-        heading_name(line)
-            .is_some_and(|n| n == version || (allow_unreleased && n.eq_ignore_ascii_case("unreleased")))
-    });
-    found?;
-    let body: Vec<&str> = lines.take_while(|l| !l.starts_with("## ")).collect();
-    Some(body.join("\n").trim().to_owned())
+    // The exact version always wins; `[Unreleased]` is only a fallback for dry runs.
+    let section = |wanted: &dyn Fn(&str) -> bool| -> Option<String> {
+        let mut lines = changelog.lines();
+        lines
+            .by_ref()
+            .find(|line| heading_name(line).is_some_and(|n| wanted(&n)))?;
+        let body: Vec<&str> = lines.take_while(|l| !l.starts_with("## ")).collect();
+        Some(body.join("\n").trim().to_owned())
+    };
+    section(&|n| n == version).or_else(|| {
+        allow_unreleased
+            .then(|| section(&|n| n.eq_ignore_ascii_case("unreleased")))
+            .flatten()
+    })
 }
 
 /// Read the repository state rooted at `root` into [`ReleaseInputs`].
@@ -307,6 +313,17 @@ mod tests {
     fn section_extraction_stops_at_next_heading() {
         let body = changelog_section(&good().changelog, "0.2.0", false).unwrap();
         assert_eq!(body, "### Added\n- thing");
+    }
+
+    #[test]
+    fn exact_version_section_beats_empty_unreleased() {
+        let log = "# Changelog\n\n## [Unreleased]\n\n## [1.2.0] — 2026-01-01\n### Added\n- thing\n\n## [1.1.0]\n- old\n";
+        assert_eq!(
+            changelog_section(log, "1.2.0", true).as_deref(),
+            Some("### Added\n- thing")
+        );
+        assert_eq!(changelog_section(log, "1.3.0", true).as_deref(), Some(""));
+        assert_eq!(changelog_section(log, "1.3.0", false), None);
     }
 
     #[test]
