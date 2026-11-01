@@ -11,5 +11,5 @@ pub mod ap;
 pub mod engine;
 pub mod timing;
 
-pub use engine::{CellState, Engine, Event, EventKind};
-pub use timing::{TimingEngine, TimingParams};
+pub use engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+pub use timing::{ActionError, LadderSample, TimingEngine, TimingParams};

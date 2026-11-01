@@ -118,20 +118,20 @@ impl eframe::App for HeartSimApp {
                     self.paused = !self.paused;
                 }
                 ui.separator();
-                let mut bpm = self.engine.params.sinus_rate_bpm;
+                let mut bpm = self.engine.params.sinus.rate_bpm;
                 if ui
                     .add(egui::Slider::new(&mut bpm, 30.0..=200.0).text("SA rate bpm"))
                     .changed()
                 {
-                    self.engine.params.sinus_rate_bpm = bpm;
+                    self.engine.params.sinus.rate_bpm = bpm;
                 }
-                ui.checkbox(&mut self.engine.params.av_block, "AV block");
-                let mut ratio = self.engine.params.mobitz2_ratio;
+                ui.checkbox(&mut self.engine.params.av.complete_block, "AV block");
+                let mut ratio = self.engine.params.av.mobitz2_ratio;
                 if ui
                     .add(egui::Slider::new(&mut ratio, 0..=6).text("Mobitz II n"))
                     .changed()
                 {
-                    self.engine.params.mobitz2_ratio = ratio;
+                    self.engine.params.av.mobitz2_ratio = ratio;
                 }
                 ui.add(
                     egui::Slider::new(&mut self.synth.axis_shift_deg, -120.0..=120.0).text("axis shift °"),

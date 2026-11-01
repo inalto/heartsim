@@ -46,11 +46,10 @@ fn main() -> Result<()> {
             axis_shift,
             out,
         } => {
-            let mut eng = TimingEngine::new(TimingParams {
-                sinus_rate_bpm: bpm,
-                av_block,
-                ..Default::default()
-            });
+            let mut params = TimingParams::default();
+            params.sinus.rate_bpm = bpm;
+            params.av.complete_block = av_block;
+            let mut eng = TimingEngine::new(params);
             let mut synth = GaussianSynth::textbook();
             synth.axis_shift_deg = axis_shift;
             let mut w = csv::Writer::from_path(&out)?;

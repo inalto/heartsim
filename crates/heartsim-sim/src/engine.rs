@@ -23,7 +23,7 @@ impl CellState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EventKind {
     /// A pacemaker region fired spontaneously.
     Automatic,
@@ -35,13 +35,75 @@ pub enum EventKind {
     Blocked,
 }
 
+/// Where an impulse originated. Conducted events carry the origin of the impulse they
+/// propagate, so a ladder diagram can colour a whole beat by its source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Origin {
+    /// Sinoatrial node.
+    Sinus,
+    /// Ectopic focus number `id` in `TimingParams::foci`.
+    Focus(u8),
+    /// Impulse travelled over the accessory (Kent) bundle: pre-excited ventricular activation
+    /// or retrograde atrial activation in AVRT.
+    AccessoryPathway,
+    /// A beat sustained by a re-entrant loop (AVNRT / AVRT echo and every later cycle).
+    Reentry,
+    /// Junctional or ventricular escape pacemaker.
+    Escape,
+    /// Artificial pacemaker channel (`0` = atrial, `1` = ventricular).
+    Pacer(u8),
+    /// Programmed stimulus or user click (`Action::Stimulate`, `Action::PacingTrain`).
+    External,
+}
+
+/// Coarse anatomical level of an event, i.e. the row of a ladder diagram.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Chamber {
+    Atrium,
+    /// AV node, His bundle, bundle branches, fascicles, Purkinje and accessory pathway.
+    AvJunction,
+    Ventricle,
+}
+
+impl Chamber {
+    /// Every [`Region`] maps to exactly one chamber; pathological tissue tags default to
+    /// `Ventricle` (scar, border zone and ischaemia are ventricular in this product).
+    #[must_use]
+    pub fn of(region: Region) -> Self {
+        if region.is_atrial() {
+            Chamber::Atrium
+        } else if region.is_conduction_system() || region == Region::AccessoryPathway {
+            Chamber::AvJunction
+        } else {
+            Chamber::Ventricle
+        }
+    }
+}
+
 /// Discrete events emitted by engines — the audit trail the UI uses for beeps, markers and
-/// ladder diagrams (a "laddergram" view is a P1 feature).
+/// ladder diagrams. `region` is the precise structure, `chamber` the ladder row and `origin`
+/// the source of the impulse being propagated.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     pub at: Millis,
     pub region: Region,
     pub kind: EventKind,
+    pub origin: Origin,
+    pub chamber: Chamber,
+}
+
+impl Event {
+    /// Build an event, deriving `chamber` from `region`.
+    #[must_use]
+    pub fn new(at: Millis, region: Region, kind: EventKind, origin: Origin) -> Self {
+        Self {
+            at,
+            region,
+            kind,
+            origin,
+            chamber: Chamber::of(region),
+        }
+    }
 }
 
 /// Every engine tier implements this. Engines must be deterministic given the same inputs and
