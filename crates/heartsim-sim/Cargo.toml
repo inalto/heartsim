@@ -21,6 +21,7 @@ parallel = ["dep:rayon"]
 
 [dev-dependencies]
 approx.workspace = true
+ron.workspace = true
 criterion.workspace = true
 
 [lints]
