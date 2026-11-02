@@ -39,6 +39,37 @@ impl ApTemplate {
         Self { samples }
     }
 
+    /// His–Purkinje shape: like the ventricular one with a longer, flatter plateau (Purkinje
+    /// fibres have the longest APD of the heart; the APD itself comes from the region).
+    #[must_use]
+    pub fn purkinje(n: usize) -> Self {
+        let samples = (0..n)
+            .map(|i| {
+                let phi = i as f32 / n as f32;
+                let upstroke = 1.0 - (-phi * 100.0).exp();
+                let plateau = 1.0 - (phi / 0.94).powi(10).min(1.0);
+                let notch = 0.9 + 0.1 * (1.0 - (phi * 10.0).min(1.0));
+                (upstroke * plateau * notch).clamp(0.0, 1.0)
+            })
+            .collect();
+        Self { samples }
+    }
+
+    /// Nodal (SA / AV node) shape: slow Ca²⁺-driven upstroke over ≈ 10 % of the cycle, no
+    /// plateau, gradual repolarisation.
+    #[must_use]
+    pub fn nodal(n: usize) -> Self {
+        let samples = (0..n)
+            .map(|i| {
+                let phi = i as f32 / n as f32;
+                let upstroke = 1.0 - (-phi * 12.0).exp();
+                let decay = (1.0 - phi).powf(1.2);
+                (0.8 * upstroke * decay).clamp(0.0, 1.0)
+            })
+            .collect();
+        Self { samples }
+    }
+
     /// Linear interpolation at phase φ (clamped; φ ≥ 1 → 0).
     #[must_use]
     pub fn at(&self, phase: f32) -> f32 {
@@ -84,5 +115,16 @@ mod tests {
         assert!(t.at(0.999) < 0.05);
         assert_eq!(t.at(1.0), 0.0);
         assert!(t.repolarisation_phase() > 0.8);
+    }
+
+    #[test]
+    fn nodal_upstroke_is_slow_and_purkinje_plateau_long() {
+        let v = ApTemplate::ventricular(256);
+        let n = ApTemplate::nodal(256);
+        let p = ApTemplate::purkinje(256);
+        assert!(n.at(0.02) < 0.5 * v.at(0.02), "nodal upstroke slower");
+        assert!(n.at(0.15) > 0.5);
+        assert!(p.repolarisation_phase() >= v.repolarisation_phase());
+        assert!(p.at(0.999) < 0.05);
     }
 }

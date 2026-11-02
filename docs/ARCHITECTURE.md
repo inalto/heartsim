@@ -67,6 +67,13 @@ suppression, pacemaker channels (sense/pace timers, blanking, PVARP, upper-rate)
 * V_m: `vm[j](t) = template_region(phase)` with `phase = (t − t_act[j]) / APD_j`, `APD_j = APD(region, depth, DI, drugs, ischaemia)`.
 * Cost: Dijkstra 50 k nodes × 8 edges ≈ 5–15 ms once per beat (spread across steps or on a worker thread); per-step V_m update
   O(N) ≈ 0.1 ms. CPU only.
+* Implementation (`sim::tier1`, brief B3): one shared lazily-advanced Dijkstra for all fronts (first front to reach a cell
+  wins → collisions annihilate). The graph is a radius neighbourhood (≈ 2.3 spacings, 56 neighbours on a lattice; the 8-NN
+  graph has up to 70 % metrication error), atria and ventricles insulated, conduction-system cells driven by timing events
+  only. The Purkinje tree is a thin fast endocardial layer (1.4 m/s) used only by fronts of its own bundle, so BBB widens the
+  QRS through myocardium. Calibrated on the default pack: P ≈ 105 ms (atrial CVs × 1.7 for the spherical atria), QRS ≈ 80 ms,
+  LBBB ≈ 150 ms, RBBB ≈ 170 ms (wider than the clinical 120–150 ms: no retrograde Purkinje engagement), LAFB ≈ 85 ms. Measured on a 2013 Xeon VM: 17.5 k cells ≈ 23 ms Dijkstra per beat, 50 k cells ≈ 95 ms (42 edges/cell —
+  `EikonalParams::neighbourhood_factor` 1.5 halves it at ≈ 2× the metrication error); V_m update 50 k cells ≈ 0.06 ms.
 
 ### 4.3 Tier 2 — reaction–diffusion
 Masked voxel grid (64³ default, 2 mm) built from the cell cloud; Aliev–Panfilov (`k=8, a=0.15, ε0=0.002, μ1=0.2, μ2=0.3`) with
