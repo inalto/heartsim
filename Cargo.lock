@@ -1828,6 +1828,8 @@ dependencies = [
  "glam",
  "heartsim-core",
  "heartsim-geometry",
+ "image",
+ "pollster",
  "wgpu",
 ]
 
