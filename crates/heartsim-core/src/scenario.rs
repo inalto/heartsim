@@ -162,6 +162,10 @@ pub struct Scenario {
     /// Optional electrode overrides (default positions come from the anatomy pack).
     #[serde(default)]
     pub electrodes_mm: BTreeMap<Electrode, [f64; 3]>,
+    /// Additional unipolar chest electrodes that are switched on, by name (`V3R`, `V4R`, `V7`,
+    /// `V8`, `V9`), heart frame mm. Each adds one lead (`φ − WCT`) to the recording.
+    #[serde(default)]
+    pub extra_electrodes_mm: BTreeMap<String, [f64; 3]>,
     /// Deterministic seed for noise, ectopy timing, fibrillation initiation.
     #[serde(default)]
     pub seed: u64,
@@ -195,6 +199,7 @@ impl Scenario {
             ablated_cells: Vec::new(),
             timeline: Vec::new(),
             electrodes_mm: BTreeMap::new(),
+            extra_electrodes_mm: BTreeMap::new(),
             seed: 42,
             notes: None,
             confused_with: Vec::new(),

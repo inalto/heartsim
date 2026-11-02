@@ -23,8 +23,18 @@ pub struct Viewport3d {
 impl Viewport3d {
     /// Allocate the widget, gather interaction and queue the paint callback.
     pub fn ui(ui: &mut Ui, size: egui::Vec2) -> egui::Response {
+        Self::ui_with_orbit(ui, size, true)
+    }
+
+    /// [`Viewport3d::ui`], with dragging orbiting the camera only when `orbit` is set (off while
+    /// the user drags an object in the scene, e.g. an electrode).
+    pub fn ui_with_orbit(ui: &mut Ui, size: egui::Vec2, orbit: bool) -> egui::Response {
         let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
-        let drag = response.drag_delta();
+        let drag = if orbit {
+            response.drag_delta()
+        } else {
+            egui::Vec2::ZERO
+        };
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
         let hovered = response.hovered();
         let ppp = ui.ctx().pixels_per_point();

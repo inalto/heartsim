@@ -12,12 +12,18 @@
 //! * [`scenario`] — running a scenario file on the timing engine + Tier-0 synthesiser and checking
 //!   it against its expected findings.
 //! * [`filter`] — simple first-order IIR filters (baseline high-pass, low-pass) and noise.
+//! * [`placement`] — electrode placement: positions, presets, misplacement exercises, landmark
+//!   snapping, and the lead vectors / forward-model rows a placement implies (B10).
+//! * [`misplacement`] — detecting cable reversals and displaced electrodes by comparing the
+//!   derived leads with the standard placement (B10).
 
 pub mod analysis;
 pub mod axis_est;
 pub mod filter;
 pub mod forward;
 pub mod leadvec;
+pub mod misplacement;
+pub mod placement;
 pub mod ring;
 pub mod scenario;
 pub mod synth;
@@ -32,6 +38,10 @@ pub use forward::{
     WaveGains, WeightStats,
 };
 pub use leadvec::LeadVectors;
+pub use misplacement::{DetectorConfig, Finding, detect_misplacement};
+pub use placement::{
+    Cable, DipoleSolver, Exercise, ExtraLead, Limb, Placement, Preset, Snapped, Tier0Field, TorsoSurface,
+};
 pub use ring::{LeadRing, MinMax};
 pub use scenario::{Recording, Tier0Error, Tier0Scenario};
 pub use synth::{GaussianSynth, MorphologyOverrides, Template, WaveOverride, WaveSpec};

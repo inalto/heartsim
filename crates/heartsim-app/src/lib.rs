@@ -2,6 +2,7 @@
 //! native window so the same `HeartSimApp` can be mounted in the web build.
 
 pub mod app;
+pub mod electrode_tab;
 pub mod heart_view;
 pub mod snapshot_ring;
 pub use app::HeartSimApp;
