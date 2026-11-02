@@ -88,6 +88,18 @@ mapping each cell's template phase to `(u, v)`.
   the same `W` interface.
 * Electrode moves → recompute the affected row only (cheap). Lead derivation in `core::lead`.
 * Per-wave gain knobs (P, QRS, T) kept for pedagogy but default to 1.
+* Implementation (`ecg::forward`, brief B5): volumetric clouds use the exact infinite-medium dipole form
+  `φ_e = −k Σ vol·∇V_m·(r_e − x)/|r_e − x|³`, with `∇V_m` the least-squares gradient over k-NN neighbours of the same
+  electrical compartment (atria / AV junction / ventricles insulated, scar silent). The gradient is linear in V_m, so it folds
+  into `W` and uniform V_m gives exactly 0. Cells with an `A·n` surface patch use the EDL form instead (`SourceModel`);
+  `SurfacePatches::boundary_of` builds closed boundary patches for comparison. Limb electrodes default to Einthoven's
+  idealisation: far field of the heart vector at hexaxial −150°/−30°/+90°, `φ = p·d̂/R²`, with `R` = 125 mm calibrated so
+  that limb and chest amplitudes match. `LimbPlacement::Sites` uses the pack's Mason–Likar sites. With `k` = 5 mV the default
+  sinus beat has R(II) ≈ 1.15 mV, S(V1) ≈ 1.4 mV and R(V5) ≈ 0.9 mV. Per-wave gains and the per-cell rest offset
+  `o + (1 − o)·V_m` (ischaemic injury current, B14) are folded into the weights. Measured with 52 k cells: `sample` ≈ 0.12 ms, `move_electrode` ≈ 0.7 ms.
+  The transmural APD gradient was widened to endo 345 / epi 285 ms (septum uniform 315 ms, since both of its faces are
+  endocardium). With the old 30 ms gradient, LV repolarisation was transmurally uniform and the T wave was discordant.
+  Known activation-driven gaps (B3): sinus axis ≈ −2°, R amplitude peaks in V2–V3, LAFB/LPFB shift the axis only −14°/−1°.
 * Signal chain: 500 Hz sampling → optional filters → rings. Interval detection (Pan–Tompkins-style QRS, P/T search windows) feeds
   read-outs and quizzes.
 

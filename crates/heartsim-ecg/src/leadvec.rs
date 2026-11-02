@@ -6,7 +6,7 @@
 //! (i.e. towards the feet) so that +90° = aVF (inferior), matching clinical convention.
 //!
 //! Precordial vectors are approximate Frank/Dower-style directions tilted towards the chest wall;
-//! Tier 1 replaces them with the exact 1/r² (or lead-field) weights from electrode positions.
+//! Tier 1 replaces them with the forward model's weights from electrode positions (`forward`).
 
 use glam::DVec3;
 use heartsim_core::{LEAD_COUNT, Lead};

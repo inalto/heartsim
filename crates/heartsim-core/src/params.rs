@@ -184,16 +184,24 @@ impl Default for Parameters {
         ] {
             set(r, purk);
         }
+        // Transmural APD gradient (endo 345 → epi 285 ms, mid-wall 315 ms). It must exceed the
+        // endo→epi activation time (≈ 25 ms across the LV free wall at the cross-fibre CV) for the
+        // epicardium to repolarise first and the T wave to be concordant (research §3.5; within
+        // the transmural dispersion measured in wedge preparations by Yan & Antzelevitch 1998;
+        // calibrated with the forward model, brief B05).
         let vent = RegionParams {
-            apd_endo_ms: Some(330.0),
-            ..RegionParams::working_myocardium(300.0, 0.6)
+            apd_endo_ms: Some(345.0),
+            ..RegionParams::working_myocardium(285.0, 0.6)
         };
         set(R::RightVentricle, vent);
         set(R::LeftVentricle, vent);
+        // Both septal faces are endocardium (depth 0 = LV side, 1 = RV side), so the septum gets
+        // no endo→epi blend: a uniform mid-wall APD.
         set(
             R::VentricularSeptum,
             RegionParams {
-                apd_ms: 290.0,
+                apd_ms: 315.0,
+                apd_endo_ms: None,
                 ..vent
             },
         );

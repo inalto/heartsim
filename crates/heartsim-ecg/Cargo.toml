@@ -9,13 +9,25 @@ repository.workspace = true
 
 [dependencies]
 heartsim-core.workspace = true
+heartsim-geometry.workspace = true
 heartsim-sim.workspace = true
 glam.workspace = true
 serde.workspace = true
+rayon = { workspace = true, optional = true }
+
+[features]
+default = ["parallel"]
+parallel = ["dep:rayon"]
 
 [dev-dependencies]
 approx.workspace = true
 proptest.workspace = true
+criterion.workspace = true
+ron.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "forward"
+harness = false
