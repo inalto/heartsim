@@ -2,6 +2,7 @@
 //! native window so the same `HeartSimApp` can be mounted in the web build.
 
 pub mod app;
+pub mod heart_view;
 pub use app::HeartSimApp;
 
 /// The line printed by `heartsim --version`; installers' smoke tests assert on the `heartsim <semver>` prefix.

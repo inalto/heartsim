@@ -54,6 +54,45 @@ pub fn conduction_lut() -> [[u8; 4]; 256] {
     [[26, 230, 191, 255]; 256]
 }
 
+/// Colour-blind-safe voltage map (cividis-like: dark blue → grey → yellow). It varies
+/// monotonically in lightness and avoids the red–green axis, so rest and depolarised tissue stay
+/// distinguishable under deuteranopia and protanopia (Nuñez et al. 2018, *PLoS ONE* 13:e0199239).
+#[must_use]
+pub fn voltage_colour_blind_lut() -> [[u8; 4]; 256] {
+    // Control points of the cividis ramp (sRGB), linearly interpolated.
+    const STOPS: [[f32; 3]; 5] = [
+        [0.000, 0.135, 0.304],
+        [0.268, 0.302, 0.420],
+        [0.488, 0.482, 0.471],
+        [0.738, 0.682, 0.418],
+        [0.995, 0.906, 0.144],
+    ];
+    let mut out = [[0u8; 4]; 256];
+    for (i, px) in out.iter_mut().enumerate() {
+        let x = i as f32 / 255.0 * (STOPS.len() - 1) as f32;
+        let k = (x.floor() as usize).min(STOPS.len() - 2);
+        let f = x - k as f32;
+        let c = |j: usize| STOPS[k][j] + (STOPS[k + 1][j] - STOPS[k][j]) * f;
+        *px = [
+            (c(0) * 255.0).round() as u8,
+            (c(1) * 255.0).round() as u8,
+            (c(2) * 255.0).round() as u8,
+            255,
+        ];
+    }
+    out
+}
+
+/// Which family of colour maps the scene uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum LutStyle {
+    /// Textbook maps (blue → yellow → red voltage).
+    #[default]
+    Classic,
+    /// Maps that stay readable with red–green colour-vision deficiency.
+    ColourBlindSafe,
+}
+
 /// Identifies one row of the LUT texture. The discriminant is the row index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -82,6 +121,16 @@ impl LutId {
             Self::Conduction => conduction_lut(),
         }
     }
+
+    /// Contents of this row in `style`. The isochrone and APD ramps avoid red–green
+    /// discrimination already, so only the voltage map has a colour-blind variant.
+    #[must_use]
+    pub fn table(self, style: LutStyle) -> [[u8; 4]; 256] {
+        match (self, style) {
+            (Self::Voltage, LutStyle::ColourBlindSafe) => voltage_colour_blind_lut(),
+            _ => self.default_table(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -94,6 +143,22 @@ mod tests {
             assert!(id.default_table().iter().all(|px| px[3] == 255));
             assert!((id as u32) < LUT_ROWS);
         }
+    }
+
+    #[test]
+    fn colour_blind_voltage_is_monotonic_in_lightness_and_has_no_red_green_swap() {
+        let t = voltage_colour_blind_lut();
+        let luma =
+            |p: [u8; 4]| 0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]);
+        for w in t.windows(2) {
+            assert!(luma(w[1]) >= luma(w[0]) - 0.5, "lightness never decreases");
+        }
+        assert!(
+            t[0][2] > t[0][0] && t[255][0] > t[255][2],
+            "blue at rest, yellow at peak"
+        );
+        assert_eq!(LutId::Voltage.table(LutStyle::Classic), voltage_lut());
+        assert_eq!(LutId::Apd.table(LutStyle::ColourBlindSafe), apd_lut());
     }
 
     #[test]

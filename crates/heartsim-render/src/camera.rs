@@ -28,6 +28,76 @@ pub fn perspective_rh_zo(fov_y: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
     )
 }
 
+/// Standard radiographic / anatomical viewing directions. Names follow the angiography convention:
+/// the projection is named after the side of the patient the camera (image intensifier) is on, so
+/// in LAO the camera sits at the patient's left-anterior side (+x, +z in the heart frame).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CameraPreset {
+    /// Anterior–posterior: camera in front of the chest; the patient's left is on screen right.
+    Ap,
+    /// Posterior–anterior: camera behind the patient.
+    Pa,
+    /// Left anterior oblique 45°: septum seen end-on, separates left and right ventricles.
+    Lao,
+    /// Right anterior oblique 45°: shows the AV groove and the long axis of the LV.
+    Rao,
+    /// Left lateral (LAO 90°).
+    Left,
+    /// Cranial tilt 60°: camera above, looking caudally.
+    Cranial,
+    /// Caudal tilt 60°: camera below, looking cranially.
+    Caudal,
+}
+
+impl CameraPreset {
+    /// Every preset, in toolbar order.
+    pub const ALL: [CameraPreset; 7] = [
+        CameraPreset::Ap,
+        CameraPreset::Pa,
+        CameraPreset::Lao,
+        CameraPreset::Rao,
+        CameraPreset::Left,
+        CameraPreset::Cranial,
+        CameraPreset::Caudal,
+    ];
+
+    /// Short button label.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            CameraPreset::Ap => "AP",
+            CameraPreset::Pa => "PA",
+            CameraPreset::Lao => "LAO",
+            CameraPreset::Rao => "RAO",
+            CameraPreset::Left => "Left",
+            CameraPreset::Cranial => "Cranial",
+            CameraPreset::Caudal => "Caudal",
+        }
+    }
+
+    /// Camera (yaw, pitch) in degrees for [`OrbitCamera`]: yaw is the azimuth from +z towards +x
+    /// (patient's left), pitch the elevation towards +y (cranial).
+    #[must_use]
+    pub fn yaw_pitch_deg(self) -> (f32, f32) {
+        match self {
+            CameraPreset::Ap => (0.0, 0.0),
+            CameraPreset::Pa => (180.0, 0.0),
+            CameraPreset::Lao => (45.0, 0.0),
+            CameraPreset::Rao => (-45.0, 0.0),
+            CameraPreset::Left => (90.0, 0.0),
+            CameraPreset::Cranial => (0.0, 60.0),
+            CameraPreset::Caudal => (0.0, -60.0),
+        }
+    }
+}
+
+/// Camera yaw (degrees) for an oblique angle on the LAO–RAO axis in the transverse plane:
+/// negative = LAO (towards the patient's left), positive = RAO, 0 = AP.
+#[must_use]
+pub fn oblique_yaw_deg(lao_rao_deg: f32) -> f32 {
+    -lao_rao_deg
+}
+
 /// Orbit camera around a target: the standard interaction for anatomy viewers.
 #[derive(Debug, Clone, Copy)]
 pub struct OrbitCamera {
@@ -124,19 +194,27 @@ impl OrbitCamera {
         let ndc = c.truncate() / c.w;
         Some((ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5, ndc.z))
     }
-    /// Preset clinical views: anterior (AP), LAO, RAO, cranial, caudal — angles in degrees.
+    /// Preset clinical views by name (`ap`, `pa`, `lao`, `rao`, `left_lateral`, `cranial`,
+    /// `caudal`); unknown names are ignored. See [`CameraPreset`].
     pub fn preset(&mut self, name: &str) {
-        let (yaw, pitch) = match name {
-            "ap" => (0.0, 0.0),
-            "lao" => (-45.0, 0.0),
-            "rao" => (45.0, 0.0),
-            "left_lateral" => (-90.0, 0.0),
-            "cranial" => (0.0, 60.0),
-            "caudal" => (0.0, -60.0),
+        let p = match name {
+            "ap" => CameraPreset::Ap,
+            "pa" => CameraPreset::Pa,
+            "lao" => CameraPreset::Lao,
+            "rao" => CameraPreset::Rao,
+            "left_lateral" | "left" => CameraPreset::Left,
+            "cranial" => CameraPreset::Cranial,
+            "caudal" => CameraPreset::Caudal,
             _ => return,
         };
-        self.yaw = (yaw as f32).to_radians();
-        self.pitch = (pitch as f32).to_radians();
+        self.apply_preset(p);
+    }
+
+    /// Turn the camera to `preset`, keeping target and distance.
+    pub fn apply_preset(&mut self, preset: CameraPreset) {
+        let (yaw, pitch) = preset.yaw_pitch_deg();
+        self.yaw = yaw.to_radians();
+        self.pitch = pitch.to_radians();
     }
 }
 
@@ -184,7 +262,17 @@ mod tests {
         let mut c = OrbitCamera::default();
         assert!((c.eye().length() - c.distance).abs() < 1e-5);
         c.preset("lao");
-        assert!(c.eye().x < 0.0, "LAO looks from the patient's left-anterior side");
+        assert!(
+            c.eye().x > 0.0 && c.eye().z > 0.0,
+            "LAO looks from the patient's left-anterior side (+x = patient's left)"
+        );
+        c.preset("rao");
+        assert!(c.eye().x < 0.0 && c.eye().z > 0.0);
+        c.apply_preset(CameraPreset::Pa);
+        assert!(c.eye().z < 0.0);
+        c.yaw = oblique_yaw_deg(-90.0).to_radians();
+        c.pitch = 0.0;
+        assert!(c.eye().x > 0.99 * c.distance, "LAO 90 is the left lateral view");
         c.preset("cranial");
         assert!(c.eye().y > 0.0);
     }

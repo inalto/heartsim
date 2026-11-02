@@ -76,6 +76,7 @@ proptest = "1.12.0"
 insta = { version = "1.49.0", features = ["csv", "json", "ron"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 approx = "0.5.1"
+egui_kittest = "0.37.0"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
