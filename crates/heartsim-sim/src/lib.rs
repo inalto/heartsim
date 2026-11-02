@@ -5,11 +5,15 @@
 //!   conduction and refractoriness, escape pacemakers). It is the *single source of truth* for
 //!   beat timing so that the ECG strip and the 3D activation always agree.
 //! * [`ap`] — action-potential templates (shape × APD) shared by Tier 0/1.
-//! * Eikonal activation and reaction–diffusion live in briefs B3/B5 and are not yet implemented.
+//! * [`tier1`] — Tier-1 anisotropic graph-eikonal activation on the cell cloud with AP
+//!   templates, driven by timing events ([`Tier1Engine`] couples the two).
+//! * Reaction–diffusion (Tier 2) lives in brief B16 and is not yet implemented.
 
 pub mod ap;
 pub mod engine;
+pub mod tier1;
 pub mod timing;
 
 pub use engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+pub use tier1::{EikonalEngine, EikonalParams, SeedMap, Tier1Engine};
 pub use timing::{ActionError, LadderSample, TimingEngine, TimingParams};
