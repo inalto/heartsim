@@ -1,12 +1,19 @@
 //! egui widgets. Keep them stateless where possible (state lives in the app model) so they can
 //! be tested with `egui_kittest` and reused in the WASM build.
 
+pub mod annotations;
 pub mod axis_dial;
+pub mod calipers;
+pub mod ecg_view;
+pub mod snapshot;
 pub mod strip;
 pub mod twelve_lead;
 pub mod viewport;
 
+pub use annotations::{EcgAnnotations, interval_readout};
 pub use axis_dial::{AxisDialStyle, axis_dial, lead_polarity};
-pub use strip::{StripStyle, ecg_strip};
-pub use twelve_lead::{TwelveLeadLayout, lead_column, twelve_lead_page};
+pub use calipers::{Caliper, CaliperReading, CaliperSet, Playback};
+pub use ecg_view::EcgView;
+pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
+pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};
 pub use viewport::{Viewport3d, ViewportResources};

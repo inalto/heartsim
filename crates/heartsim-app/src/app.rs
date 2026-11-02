@@ -5,9 +5,11 @@ use heartsim_geometry::primitives::icosphere;
 use heartsim_render::SceneRenderer;
 use heartsim_sim::{Engine, TimingEngine, TimingParams};
 use heartsim_ui::{
-    AxisDialStyle, StripStyle, TwelveLeadLayout, Viewport3d, ViewportResources, axis_dial, ecg_strip,
-    lead_column, lead_polarity, twelve_lead_page,
+    AxisDialStyle, EcgView, LeadOrder, TwelveLeadLayout, Viewport3d, ViewportResources, axis_dial,
+    lead_column, lead_polarity,
 };
+
+use crate::snapshot_ring::SnapshotRing;
 
 const SAMPLE_RATE_HZ: f32 = 500.0;
 
@@ -22,8 +24,10 @@ pub struct HeartSimApp {
     rings: Vec<LeadRing>,
     sample_accumulator: f64,
     selected_lead: Lead,
-    strip_style: StripStyle,
-    paused: bool,
+    /// Strip/12-lead display state: paper, pause + scrub, calipers, wave labels (B7).
+    ecg: EcgView,
+    /// Viewport scalars at 10 Hz for the last 60 s, shown at the scrub cursor while paused.
+    history: SnapshotRing<Vec<f32>>,
     last_v_activation: Millis,
     vertex_count: usize,
     tab: Tab,
@@ -110,12 +114,12 @@ impl HeartSimApp {
             engine: TimingEngine::new(TimingParams::default()),
             synth: GaussianSynth::textbook(),
             rings: (0..LEAD_COUNT)
-                .map(|_| LeadRing::new((SAMPLE_RATE_HZ * 30.0) as usize, SAMPLE_RATE_HZ))
+                .map(|_| LeadRing::new((SAMPLE_RATE_HZ * 60.0) as usize, SAMPLE_RATE_HZ))
                 .collect(),
             sample_accumulator: 0.0,
             selected_lead: Lead::II,
-            strip_style: StripStyle::default(),
-            paused: false,
+            ecg: EcgView::new(),
+            history: SnapshotRing::standard(),
             last_v_activation: Millis(-1000.0),
             vertex_count,
             tab: Tab::Simulator,
@@ -158,6 +162,19 @@ impl HeartSimApp {
         vec![v; self.vertex_count]
     }
 
+    /// Viewport scalars: live (recorded into the history), or the snapshot at the scrub cursor.
+    fn view_scalars(&mut self) -> Vec<f32> {
+        let now = self.engine.now();
+        if self.ecg.scrub_offset_ms() > 0.0
+            && let Some(s) = self.history.at(Millis(now.0 - self.ecg.scrub_offset_ms()))
+        {
+            return s.clone();
+        }
+        let s = self.activation_scalars();
+        self.history.record(now, || s.clone());
+        s
+    }
+
     /// QRS axis measured from the last few seconds of leads I and aVF, if there are complexes.
     fn measured_axis(&self) -> Option<f64> {
         let n = (SAMPLE_RATE_HZ * 3.0) as usize;
@@ -176,8 +193,11 @@ impl HeartSimApp {
 
     fn rhythm_controls(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            if ui.button(if self.paused { "Run" } else { "Pause" }).clicked() {
-                self.paused = !self.paused;
+            if ui
+                .button(if self.ecg.is_paused() { "Run" } else { "Pause" })
+                .clicked()
+            {
+                self.ecg.toggle_pause();
             }
             let mut bpm = self.engine.params.sinus.rate_bpm;
             if ui
@@ -205,8 +225,7 @@ impl HeartSimApp {
     }
 
     fn paper_controls(&mut self, ui: &mut egui::Ui) {
-        ui.add(egui::Slider::new(&mut self.strip_style.mm_per_s, 12.5..=50.0).text("mm/s"));
-        ui.add(egui::Slider::new(&mut self.strip_style.mm_per_mv, 2.5..=20.0).text("mm/mV"));
+        self.ecg.controls(ui, &self.rings);
     }
 
     fn live_axis_panel(&mut self, ui: &mut egui::Ui) {
@@ -227,6 +246,8 @@ impl HeartSimApp {
                 }
             });
         }
+        ui.separator();
+        self.ecg.readout(ui);
     }
 
     fn simulator_tab(&mut self, ui: &mut egui::Ui) {
@@ -238,17 +259,10 @@ impl HeartSimApp {
                     for l in Lead::ALL {
                         ui.selectable_value(&mut self.selected_lead, l, l.label());
                     }
-                    ui.separator();
-                    self.paper_controls(ui);
                 });
+                self.paper_controls(ui);
                 let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-                ecg_strip(
-                    ui,
-                    rect,
-                    &self.rings[self.selected_lead as usize],
-                    &self.strip_style,
-                    self.selected_lead.label(),
-                );
+                self.ecg.strip(ui, rect, &self.rings, self.selected_lead);
                 ui.allocate_rect(rect, egui::Sense::hover());
             });
         egui::Panel::right("axis")
@@ -272,15 +286,29 @@ impl HeartSimApp {
                     ui.selectable_value(&mut self.layout, l, l.label());
                 }
                 ui.separator();
-                self.paper_controls(ui);
+                for o in [LeadOrder::Standard, LeadOrder::Cabrera] {
+                    ui.selectable_value(&mut self.ecg.order, o, o.label());
+                }
+                ui.separator();
+                if ui.button("Save PNG").clicked() {
+                    let path =
+                        std::path::PathBuf::from(format!("heartsim-12lead-{:.0}.png", self.engine.now().0));
+                    let ppp = ui.ctx().pixels_per_point();
+                    self.ecg.export_page_png(&self.rings, self.layout, ppp, &path);
+                }
+                if let Some(msg) = &self.ecg.last_export {
+                    ui.weak(msg);
+                }
             });
+            self.paper_controls(ui);
         });
         egui::Panel::right("axis")
             .default_size(280.0)
             .show(ui, |ui| self.live_axis_panel(ui));
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            twelve_lead_page(ui, rect, &self.rings, &self.strip_style, self.layout);
+            self.ecg.page(ui, rect, &self.rings, self.layout);
+            ui.allocate_rect(rect, egui::Sense::hover());
         });
     }
 
@@ -313,7 +341,7 @@ impl HeartSimApp {
         });
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            lead_column(ui, rect, &self.rings, &self.strip_style, &LIMB);
+            lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
         });
     }
 
@@ -386,7 +414,7 @@ impl HeartSimApp {
         });
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            lead_column(ui, rect, &self.rings, &self.strip_style, &LIMB);
+            lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
         });
     }
 
@@ -415,11 +443,12 @@ impl eframe::App for HeartSimApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
-        if !self.paused {
+        if !self.ecg.is_paused() {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
+        self.ecg.update(&self.rings);
         if let Some(rs) = frame.wgpu_render_state.as_ref() {
-            let scalars = self.activation_scalars();
+            let scalars = self.view_scalars();
             if let Some(res) = rs
                 .renderer
                 .write()
