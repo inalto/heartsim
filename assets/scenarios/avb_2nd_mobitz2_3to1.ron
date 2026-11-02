@@ -1,0 +1,25 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avb_2nd_mobitz2_3to1",
+    title: "High-grade AV block (Mobitz II, 3:1) with RBBB",
+    description: "Infranodal block: only one of every three P waves is conducted, with a constant PR and a wide (RBBB) QRS; ventricular rate about 32 bpm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("All-or-none failure below the AV node (His bundle / bundle branches): conducted beats have a constant, often normal PR;\nnon-conducted P waves appear without warning. Two or more consecutive blocked P waves (3:1) = high-grade AV block.\nInfranodal disease usually shows a bundle-branch block as well. Pacing indication; atropine does not help.\nDifferential: 2:1 Wenckebach (look at the PR around longer runs), blocked PACs (premature P).\n\nSources:\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library.\n- Surawicz B et al. AHA/ACCF/HRS recommendations for the standardization and interpretation of the ECG, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240."),
+    confused_with: ["avb_2nd_mobitz1", "avb_3rd_junctional", "sinus_brady_45"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (25.0, 45.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((120.0, 170.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 96.0),
+        av: AvParams(mobitz2_ratio: 3, mobitz2_conducted: 1),
+        his_purkinje: HisPurkinjeParams(rbb: BundleEdge(delay_ms: 30.0, blocked: true, block_above_rate_bpm: 0.0)),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 25.0),
+    ),
+)

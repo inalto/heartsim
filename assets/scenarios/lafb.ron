@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "lafb",
+    title: "Left anterior fascicular block",
+    description: "Sinus rhythm with marked left axis deviation (about -60 degrees): qR in I and aVL, rS in II, III and aVF; QRS stays narrow.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Criteria (AHA/ACCF/HRS 2009): frontal axis -45 to -90 degrees; qR in aVL with R peak time >= 45 ms; rS in II, III, aVF;\nQRS < 120 ms. The anterosuperior LV is activated last, through the posterior fascicle, pulling the axis up and left.\nExclude other causes of left axis deviation: inferior MI (Q waves in II, III, aVF), WPW, LV hypertrophy, RV pacing.\n\nSources:\n- Surawicz B et al. AHA/ACCF/HRS recommendations for the standardization and interpretation of the ECG, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["lpfb", "bifascicular", "inferior myocardial infarction"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 119.0)),
+        axis_deg: Some((-90.0, -45.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        his_purkinje: HisPurkinjeParams(laf: BundleEdge(delay_ms: 15.0, blocked: true, block_above_rate_bpm: 0.0)),
+    ),
+)

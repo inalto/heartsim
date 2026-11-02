@@ -1,0 +1,24 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avb_3rd_junctional",
+    title: "Complete AV block with junctional escape",
+    description: "P waves at 80 bpm and narrow QRS complexes at 45 bpm march independently (AV dissociation).",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("No atrial impulse reaches the ventricles. The PP and RR are each regular but unrelated; PR varies randomly.\nA junctional escape (40-60 bpm, narrow QRS) indicates a block at the AV-node level with a stable escape.\nDifferential: isorhythmic AV dissociation (atrial and ventricular rates nearly equal, some P waves conduct), Mobitz II.\n\nSources:\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["avb_3rd_ventricular", "avb_2nd_mobitz2_3to1", "junctional_rhythm"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (40.0, 60.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+        av: AvParams(complete_block: true),
+        escape: EscapeParams(junctional_bpm: 45.0, ventricular_bpm: 30.0),
+    ),
+)

@@ -14,6 +14,7 @@ heartsim-sim.workspace = true
 glam.workspace = true
 serde.workspace = true
 rayon = { workspace = true, optional = true }
+ron.workspace = true
 
 [features]
 default = ["parallel"]
@@ -23,7 +24,7 @@ parallel = ["dep:rayon"]
 approx.workspace = true
 proptest.workspace = true
 criterion.workspace = true
-ron.workspace = true
+insta.workspace = true
 
 [lints]
 workspace = true

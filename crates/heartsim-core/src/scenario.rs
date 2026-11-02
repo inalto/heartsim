@@ -102,26 +102,83 @@ pub struct TimedAction {
     pub action: Action,
 }
 
+/// A closed range `(lo, hi)` of an expected measurement.
+pub type Range = (f64, f64);
+
+/// What the B4 analyser must measure on the scenario's ECG once the rhythm has settled — the
+/// textbook diagnostic criteria of the rhythm, so a regression in an engine, the synthesiser or
+/// the analyser shows up as a scenario that no longer "looks like" its diagnosis.
+/// `None` = not a criterion of this rhythm (e.g. PR in complete AV block).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExpectedFindings {
+    /// Ventricular rate, beats/min.
+    pub hr_bpm: Range,
+    /// PR interval (P onset → QRS onset), ms.
+    #[serde(default)]
+    pub pr_ms: Option<Range>,
+    /// QRS duration, ms.
+    #[serde(default)]
+    pub qrs_ms: Option<Range>,
+    /// Frontal QRS axis, degrees. `lo > hi` wraps through ±180° (e.g. `(150, -90)`).
+    #[serde(default)]
+    pub axis_deg: Option<Range>,
+}
+
+impl ExpectedFindings {
+    /// `true` if `deg` lies on the arc from `lo` to `hi` (counter-clockwise on the hexaxial
+    /// circle, i.e. increasing angle), so ranges through ±180° work.
+    #[must_use]
+    pub fn axis_contains(range: Range, deg: f64) -> bool {
+        let n = |d: f64| (d % 360.0 + 360.0) % 360.0;
+        let width = n(range.1 - range.0);
+        n(deg - range.0) <= width
+    }
+}
+
+/// A complete scenario. Fields marked `#[serde(default)]` may be omitted from the file, so a
+/// rhythm preset only states what differs from the healthy default.
+///
+/// Engine-specific sections (`timing` for `heartsim_sim::TimingParams`, `morphology` for the
+/// Tier-0 synthesiser) live in the same file; this crate cannot name their types (layering) and
+/// ignores them, `heartsim_sim` / `heartsim_ecg` read them from the same text.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Scenario {
     pub format_version: u32,
-    /// Stable id, e.g. "sinus_normal", "lbbb", "af".
+    /// Stable id, e.g. "sinus_normal", "lbbb", "af". Equals the file stem.
     pub id: String,
     pub title: String,
     pub description: String,
     pub tier: EngineTier,
     /// Anatomy pack id (mesh + cell cloud + landmarks), see `heartsim-geometry`.
+    #[serde(default = "default_anatomy")]
     pub anatomy: String,
+    #[serde(default)]
     pub parameters: Parameters,
     /// Cells rendered non-excitable at t = 0 (scar / previous ablation), by index.
+    #[serde(default)]
     pub ablated_cells: Vec<u32>,
+    #[serde(default)]
     pub timeline: Vec<TimedAction>,
     /// Optional electrode overrides (default positions come from the anatomy pack).
+    #[serde(default)]
     pub electrodes_mm: BTreeMap<Electrode, [f64; 3]>,
     /// Deterministic seed for noise, ectopy timing, fibrillation initiation.
+    #[serde(default)]
     pub seed: u64,
     /// Teaching text and quiz hooks (markdown), optional.
+    #[serde(default)]
     pub notes: Option<String>,
+    /// Ids or names of the rhythms a learner most often mistakes this one for (teaching
+    /// differential), e.g. `["avb_2nd_mobitz2_3to1", "blocked PACs"]`.
+    #[serde(default)]
+    pub confused_with: Vec<String>,
+    /// Textbook measurement ranges the rhythm must satisfy (golden tests, quiz answers).
+    #[serde(default)]
+    pub expected: Option<ExpectedFindings>,
+}
+
+fn default_anatomy() -> String {
+    "default".into()
 }
 
 impl Scenario {
@@ -140,6 +197,8 @@ impl Scenario {
             electrodes_mm: BTreeMap::new(),
             seed: 42,
             notes: None,
+            confused_with: Vec::new(),
+            expected: None,
         }
     }
 
@@ -191,6 +250,31 @@ mod tests {
         let text = s.to_ron().unwrap();
         let back = Scenario::from_ron(&text).unwrap();
         assert_eq!(s, back);
+    }
+
+    #[test]
+    fn minimal_file_uses_defaults_and_ignores_engine_sections() {
+        let text = r#"Scenario(
+            format_version: 1,
+            id: "x",
+            title: "X",
+            description: "d",
+            tier: Template,
+            timing: TimingParams(sinus: SinusParams(rate_bpm: 45.0), foci: [Focus(region: LeftVentricle)]),
+            confused_with: ["a", "b"],
+            expected: Some(ExpectedFindings(hr_bpm: (40.0, 50.0), axis_deg: Some((150.0, -90.0)))),
+        )"#;
+        let s = Scenario::from_ron(text).unwrap();
+        assert_eq!(s.anatomy, "default");
+        assert_eq!(s.parameters, Parameters::default());
+        assert_eq!(s.confused_with.len(), 2);
+        let e = s.expected.unwrap();
+        assert_eq!(e.pr_ms, None);
+        assert!(ExpectedFindings::axis_contains(e.axis_deg.unwrap(), 180.0));
+        assert!(ExpectedFindings::axis_contains(e.axis_deg.unwrap(), -120.0));
+        assert!(!ExpectedFindings::axis_contains(e.axis_deg.unwrap(), 0.0));
+        assert!(ExpectedFindings::axis_contains((-30.0, 90.0), 60.0));
+        assert!(!ExpectedFindings::axis_contains((-30.0, 90.0), 120.0));
     }
 
     #[test]

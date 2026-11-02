@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "aivr",
+    title: "Accelerated idioventricular rhythm",
+    description: "A left-ventricular focus at 75 bpm outpaces the 60 bpm sinus node: wide QRS, dissociated P waves, occasional capture beats.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("AIVR: >= 3 wide ventricular complexes at 50-110 bpm (faster than a ventricular escape, slower than VT).\nClassic after reperfusion of an acute MI; usually benign and self-limiting. Because the rates are close, sinus P waves wander\nthrough the rhythm and sometimes capture (narrow beat) or fuse with the ventricular beat.\nDifferential: slow VT (> 110 bpm), idioventricular escape (< 40 bpm), sinus rhythm with BBB (P before every QRS).\n\nSources:\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["idioventricular", "ventricular tachycardia", "lbbb"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (55.0, 110.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 60.0),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 75.0),
+    ),
+)

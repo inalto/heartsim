@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avb_1st",
+    title: "First-degree AV block",
+    description: "Sinus rhythm at 70 bpm with every P conducted after a constant PR of about 230 ms.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Slowed AV-nodal conduction: PR > 200 ms, constant, every P conducted (strictly a delay, not a block).\nCauses: high vagal tone, AV-nodal drugs (beta-blockers, verapamil, digoxin), inferior MI, degenerative disease.\nPitfall: a very long PR can bury the P in the preceding T wave and mimic a junctional rhythm.\n\nSources:\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Shrier A, Dubarsky H, Rosengarten M, Guevara MR, Nattel S, Glass L. Prediction of complex atrioventricular conduction rhythms in humans with use of the atrioventricular nodal recovery curve. Circulation 1987;76:1196-1205."),
+    confused_with: ["avb_2nd_mobitz1", "junctional_rhythm", "sinus_normal"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((205.0, 300.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        av: AvParams(fast: AvPathway(min_ms: 150.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 100.0, blocked: false)),
+    ),
+)

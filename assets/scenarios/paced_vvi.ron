@@ -1,0 +1,25 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "paced_vvi",
+    title: "VVI pacing at 60 ppm in complete heart block",
+    description: "Complete AV block; a right-ventricular-apex pacemaker in VVI mode paces every beat at 60 ppm while sinus P waves march through independently.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("VVI (NBG code): pace the ventricle, sense the ventricle, inhibit on a sensed beat. Each paced beat starts with a stimulus artefact\nfollowed by a wide LBBB-like QRS with superior axis (RV apex activates the heart from the bottom up) and discordant T.\nThe atria are not tracked, so P waves are dissociated (loss of AV synchrony; pacemaker syndrome).\nDifferential: idioventricular / ventricular escape rhythm (no spikes), LBBB (P before each QRS), DDD pacing (P-synchronous).\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["paced_ddd", "avb_3rd_ventricular", "lbbb"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (57.0, 63.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        av: AvParams(complete_block: true),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 30.0),
+        pacer: Some(PacerConfig(mode: Vvi, lower_rate_bpm: 60.0)),
+    ),
+)

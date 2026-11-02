@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avb_2nd_mobitz1",
+    title: "Second-degree AV block, Mobitz I (Wenckebach)",
+    description: "Atrial rate 110 bpm; the PR lengthens beat by beat until a P is not conducted, then the cycle restarts.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Decremental AV-nodal conduction (Shrier recovery curve): each P arrives earlier in the node's recovery, so the PR grows by\nsmaller and smaller increments, the RR shortens, and a P is finally blocked. The pause is shorter than two PP intervals.\nGroup beating (3:2, 4:3 ...). Usually nodal and benign; narrow QRS. Compare the PR before and after the pause.\n(The PR is not a fixed criterion here - it changes every beat by design.)\n\nSources:\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.\n- Shrier A, Dubarsky H, Rosengarten M, Guevara MR, Nattel S, Glass L. Prediction of complex atrioventricular conduction rhythms in humans with use of the atrioventricular nodal recovery curve. Circulation 1987;76:1196-1205.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["avb_2nd_mobitz2_3to1", "avb_1st", "blocked PAC"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 105.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 110.0),
+        av: AvParams(fast: AvPathway(min_ms: 110.0, recovery_amplitude_ms: 200.0, recovery_tau_ms: 150.0, erp_ms: 300.0, blocked: false)),
+    ),
+)

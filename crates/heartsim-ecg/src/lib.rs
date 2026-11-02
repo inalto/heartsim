@@ -9,6 +9,8 @@
 //! * [`ring`] — fixed-size ring buffers and per-pixel-column min/max decimation for the strip.
 //! * [`axis_est`] — measuring the frontal QRS axis from recorded leads I and aVF.
 //! * [`analysis`] — QRS/P/T detection, intervals, QTc, axes, wave marks and the heart vector.
+//! * [`scenario`] — running a scenario file on the timing engine + Tier-0 synthesiser and checking
+//!   it against its expected findings.
 //! * [`filter`] — simple first-order IIR filters (baseline high-pass, low-pass) and noise.
 
 pub mod analysis;
@@ -17,6 +19,7 @@ pub mod filter;
 pub mod forward;
 pub mod leadvec;
 pub mod ring;
+pub mod scenario;
 pub mod synth;
 
 pub use analysis::{
@@ -30,4 +33,5 @@ pub use forward::{
 };
 pub use leadvec::LeadVectors;
 pub use ring::{LeadRing, MinMax};
-pub use synth::{GaussianSynth, WaveSpec};
+pub use scenario::{Recording, Tier0Error, Tier0Scenario};
+pub use synth::{GaussianSynth, MorphologyOverrides, Template, WaveOverride, WaveSpec};

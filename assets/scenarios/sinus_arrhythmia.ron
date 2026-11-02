@@ -1,0 +1,22 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "sinus_arrhythmia",
+    title: "Respiratory sinus arrhythmia",
+    description: "Sinus rhythm whose rate rises with inspiration and falls with expiration (RR varies about +-12 % over a 5 s breath).",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Phasic variation of the sinus cycle with respiration (vagal tone falls during inspiration). P morphology and PR stay constant;\nonly the PP/RR intervals change, smoothly and cyclically. Normal in the young; loss of it is a marker of autonomic neuropathy.\nDifferential: PACs (a premature P with a different shape) and sinoatrial exit block (pauses that are exact multiples of the PP).\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["pac_frequent", "sa_exit_block", "atrial fibrillation"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0, respiration_depth: 0.12, respiration_rate_bpm: 12.0),
+    ),
+)

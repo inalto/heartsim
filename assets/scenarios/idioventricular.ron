@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "idioventricular",
+    title: "Idioventricular rhythm",
+    description: "Sinus node and junction silent; a left-ventricular escape focus drives the heart at 35 bpm with wide QRS and no P waves.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Ventricular escape rhythm 20-40 bpm: regular, wide (>= 120 ms) QRS with discordant T, no atrial activity.\nAppears when both the sinus node and the AV junction fail (sinus arrest, drugs, hyperkalaemia, dying heart).\nDifferential: complete AV block with ventricular escape (P waves present, dissociated), AIVR (50-110 bpm), slow VT.\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library.\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482."),
+    confused_with: ["avb_3rd_ventricular", "aivr", "hyperkalaemia"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (25.0, 40.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 60.0, pause_every_n: 1, pause_ms: 600000.0),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 35.0),
+    ),
+)
