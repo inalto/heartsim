@@ -1881,6 +1881,7 @@ dependencies = [
  "heartsim-geometry",
  "heartsim-render",
  "heartsim-sim",
+ "image",
  "wgpu",
 ]
 

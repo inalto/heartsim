@@ -8,6 +8,10 @@ pub struct LeadRing {
     buf: Vec<f32>,
     head: usize,
     len: usize,
+    /// Samples pushed since creation: the absolute index of the next sample. Gives the strip a
+    /// time base (sample `k` was taken at `k / sample_rate_hz` s) that survives wrap-around.
+    #[serde(default)]
+    total: u64,
     pub sample_rate_hz: f32,
 }
 
@@ -18,6 +22,7 @@ impl LeadRing {
             buf: vec![0.0; capacity.max(1)],
             head: 0,
             len: 0,
+            total: 0,
             sample_rate_hz,
         }
     }
@@ -37,6 +42,43 @@ impl LeadRing {
         self.buf[self.head] = v;
         self.head = (self.head + 1) % self.buf.len();
         self.len = (self.len + 1).min(self.buf.len());
+        self.total += 1;
+    }
+    /// Number of samples ever pushed (not reset by [`LeadRing::clear`], so time never runs
+    /// backwards). The newest sample has absolute index `pushed() - 1`.
+    #[must_use]
+    pub fn pushed(&self) -> u64 {
+        self.total
+    }
+    /// Absolute index of the oldest sample still held.
+    #[must_use]
+    pub fn oldest_index(&self) -> u64 {
+        self.total - self.len as u64
+    }
+    /// Sample with absolute index `abs`, if it is still held.
+    #[must_use]
+    pub fn at(&self, abs: u64) -> Option<f32> {
+        if abs >= self.total {
+            return None;
+        }
+        self.recent((self.total - 1 - abs) as usize)
+    }
+    /// Copy the samples with absolute indices in `start..end` (oldest first) into `out`, clamped
+    /// to what is held. Returns the absolute index of the first sample written.
+    pub fn range(&self, start: u64, end: u64, out: &mut Vec<f32>) -> u64 {
+        out.clear();
+        let start = start.max(self.oldest_index());
+        let end = end.min(self.total);
+        if start < end {
+            // Two contiguous slices at most: up to the end of the buffer, then from its start.
+            let cap = self.buf.len();
+            let n = (end - start) as usize;
+            let first = (self.head + cap - (self.total - start) as usize) % cap;
+            let run = n.min(cap - first);
+            out.extend_from_slice(&self.buf[first..first + run]);
+            out.extend_from_slice(&self.buf[..n - run]);
+        }
+        start
     }
     pub fn clear(&mut self) {
         self.head = 0;
@@ -111,6 +153,16 @@ mod tests {
         let mut out = Vec::new();
         assert_eq!(r.latest(2, &mut out), 2);
         assert_eq!(out, vec![4.0, 5.0]);
+        assert_eq!(r.pushed(), 6);
+        assert_eq!(r.oldest_index(), 2);
+        assert_eq!(r.at(3), Some(3.0));
+        assert_eq!(r.at(1), None);
+        assert_eq!(r.range(0, 5, &mut out), 2);
+        assert_eq!(out, vec![2.0, 3.0, 4.0]);
+        assert_eq!(r.range(3, 9, &mut out), 3);
+        assert_eq!(out, vec![3.0, 4.0, 5.0]);
+        assert_eq!(r.range(4, 4, &mut out), 4);
+        assert_eq!(out, Vec::<f32>::new());
     }
 
     proptest! {

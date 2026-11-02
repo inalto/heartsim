@@ -8,6 +8,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - Tabbed application: Simulator, 12-Lead ECG, Axis Trainer, Axis Quiz and Help.
 - 12-lead page with three layouts (12 x 1, 6 x 2, clinical 3 x 4 plus rhythm strip) and a live hexaxial axis circle with per-lead QRS polarity.
 - `heartsim_ecg::estimate_frontal_axis`: measures the QRS axis from leads I and aVF, and `GaussianSynth::qrs_axis_deg` gives the axis implied by the waves.
+- Clinical strip and 12-lead pages (brief B07): sweep 12.5–200 mm/s, gain 5/10/20 mm/mV, screen calibration, grid toggle,
+  monitor colours, scrolling and sweep-bar modes, Cabrera lead order, consecutive-segment time base on multi-column pages;
+  60 s history with pause and drag-to-scrub (3-D view follows via a 10 Hz `SnapshotRing`); draggable calipers with
+  Δt/bpm/ΔV read-out, snapping, shift-click to add, arrow-key nudge; P/R/T labels and PR/RR brackets from the B4 analyser;
+  HR/PR/QRS/QT/QTc/axis read-out panel; PNG snapshot of the 12-lead page.
 
 ## [0.2.0] — 2026-11-01
 First tagged release: M0 foundation plus briefs B01 (timing engine), B02 (anatomy pipeline) and B12 (packaging).
