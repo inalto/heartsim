@@ -1,0 +1,25 @@
+// Pacing preset (brief B13). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; device behaviour follows the NBG timing cycles (Bernstein 2002).
+Scenario(
+    format_version: 1,
+    id: "paced_t_wave_oversensing",
+    title: "VVI T-wave oversensing",
+    description: "Complete heart block paced VVI at 60 ppm with the ventricular sensitivity at 1 mV, below the 1.5 mV T wave on the lead: every paced T wave is counted as a beat and restarts the lower-rate timer, so the paced rate falls to about 46 ppm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Oversensing: the device counts signals that are not depolarisations of its chamber (T waves, far-field P or R waves, myopotentials,\nlead fractures) and is inhibited. Here each paced T wave, about 300 ms after the spike and outside the 250 ms ventricular refractory\nperiod, resets the 1000 ms lower-rate interval: the spike-to-spike interval becomes 1300 ms, longer than programmed, with no\nintrinsic beat to explain the pause. Fix: raise the sensitivity number (less sensitive) above the T-wave amplitude or lengthen the\nventricular refractory period.\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Ellenbogen KA, Wilkoff BL, Kay GN, Lau CP, Auricchio A. Clinical Cardiac Pacing, Defibrillation and Resynchronization Therapy, 5th ed. Elsevier 2017.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["paced_vvi", "paced_loss_of_capture", "sa_exit_block"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (42.0, 50.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        av: AvParams(complete_block: true),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 30.0),
+        pacer: Some(PacerConfig(mode: Vvi, lower_rate_bpm: 60.0, ventricular_sensitivity_mv: 1.0)),
+    ),
+)

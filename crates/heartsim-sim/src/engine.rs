@@ -50,7 +50,8 @@ pub enum Origin {
     Reentry,
     /// Junctional or ventricular escape pacemaker.
     Escape,
-    /// Artificial pacemaker channel (`0` = atrial, `1` = ventricular).
+    /// Artificial pacemaker channel (`timing::PacerChannel`: `0` = atrial, `1` = (right)
+    /// ventricular, `2` = left-ventricular lead of a biventricular device).
     Pacer(u8),
     /// Programmed stimulus or user click (`Action::Stimulate`, `Action::PacingTrain`).
     External,

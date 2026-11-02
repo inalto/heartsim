@@ -1,0 +1,33 @@
+// Pacing preset (brief B13). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; device behaviour follows the NBG timing cycles (Bernstein 2002).
+Scenario(
+    format_version: 1,
+    id: "paced_pmt",
+    title: "Pacemaker-mediated tachycardia, terminated by PVARP extension",
+    description: "DDD 60/120 with intact retrograde (VA) conduction: a single PVC conducts back to the atria, the retrograde P falls outside the 250 ms PVARP, is tracked, and the loop runs at the 120 ppm upper rate until the device's PMT algorithm extends PVARP to 400 ms for one cycle; sinus tracking then resumes.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Pacemaker-mediated (endless-loop) tachycardia: the device is the antegrade limb and the AV node the retrograde limb of a macro-re-entry.\nTrigger: anything that separates atrial and ventricular activation (PVC, loss of atrial capture or sensing). The retrograde P\n(negative in II, III, aVF) arrives 275 ms after the ventricular event, outside PVARP; the device tracks it and paces the ventricle at the\nupper rate interval, which conducts back again. Recognition: regular wide paced rhythm exactly at the upper rate with retrograde P waves.\nTermination: magnet (asynchronous pacing), longer PVARP, or the device's PMT intervention (after 8 upper-rate cycles PVARP is extended\nfor one cycle, so the retrograde P is not tracked).\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Ellenbogen KA, Wilkoff BL, Kay GN, Lau CP, Auricchio A. Clinical Cardiac Pacing, Defibrillation and Resynchronization Therapy, 5th ed. Elsevier 2017.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["paced_ddd", "avnrt_150", "sinus_tachy_130"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 78.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        av: AvParams(retrograde_fast: true, retrograde_delay_ms: 240.0),
+        foci: [Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 450.0, every_n_beats: 3, count: 1, run_cycle_ms: 400.0), max_fires: 1)],
+        pacer: Some(PacerConfig(
+            mode: Ddd,
+            lower_rate_bpm: 60.0,
+            upper_rate_bpm: 120.0,
+            av_delay_ms: 150.0,
+            pvarp_ms: 250.0,
+            pmt_intervention: true,
+            pmt_pvarp_ms: 400.0,
+        )),
+    ),
+)

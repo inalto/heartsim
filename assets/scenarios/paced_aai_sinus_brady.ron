@@ -1,0 +1,24 @@
+// Pacing preset (brief B13). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; device behaviour follows the NBG timing cycles (Bernstein 2002).
+Scenario(
+    format_version: 1,
+    id: "paced_aai_sinus_brady",
+    title: "AAI pacing at 60 ppm for sinus bradycardia",
+    description: "Sinus bradycardia at 40 bpm with intact AV conduction; an RA-appendage lead in AAI mode paces the atrium at 60 ppm and every paced P conducts.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("AAI (NBG): pace the atrium, sense the atrium, inhibit on a sensed P. Each beat is an atrial spike followed by a P wave of normal axis\n(RA appendage is close to the sinus node), a normal PR and a narrow, normally conducted QRS. Sinus P waves faster than the lower rate inhibit the device.\nOnly suitable when AV conduction is intact (sick sinus syndrome without AV block).\nDifferential: sinus rhythm (no spikes), VVI pacing (spike before a wide QRS), DDD pacing (two spikes).\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Ellenbogen KA, Wilkoff BL, Kay GN, Lau CP, Auricchio A. Clinical Cardiac Pacing, Defibrillation and Resynchronization Therapy, 5th ed. Elsevier 2017.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["sinus_brady_45", "paced_vvi", "paced_ddd"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (57.0, 63.0),
+        pr_ms: Some((120.0, 220.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 40.0),
+        escape: EscapeParams(junctional_bpm: 35.0, ventricular_bpm: 25.0),
+        pacer: Some(PacerConfig(mode: Aai, lower_rate_bpm: 60.0)),
+    ),
+)

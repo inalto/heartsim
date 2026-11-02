@@ -20,6 +20,6 @@ Scenario(
         sinus: SinusParams(rate_bpm: 75.0),
         av: AvParams(complete_block: true),
         escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 30.0),
-        pacer: Some(PacerConfig(mode: Ddd, lower_rate_bpm: 60.0, upper_rate_bpm: 120.0, av_delay_ms: 150.0)),
+        pacer: Some(PacerConfig(mode: Ddd, lower_rate_bpm: 60.0, upper_rate_bpm: 130.0, av_delay_ms: 150.0)),
     ),
 )

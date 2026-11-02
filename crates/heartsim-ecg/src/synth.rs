@@ -10,6 +10,7 @@
 use crate::leadvec::LeadVectors;
 use glam::DVec3;
 use heartsim_core::{FrontalAxis, LEAD_COUNT, Lead, Millis, Region, TwelveLead};
+use heartsim_sim::timing::{MarkerKind, PacerMarker};
 use heartsim_sim::{Event, EventKind, Origin};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -135,8 +136,13 @@ pub enum Template {
     /// Beat arising in the right ventricle / RV apex (PVC, escape, RV pacing): LBBB-like,
     /// superior axis.
     EctopicRv,
-    /// Pacing stimulus artefact (< 2 ms), added in front of every captured paced beat.
+    /// Pacing stimulus artefact (< 2 ms), added at every pacemaker output (captured or not)
+    /// and every programmed stimulus.
     Spike,
+    /// Biventricular (CRT) paced QRS–T: the RV-apex and LV-lateral fronts fuse, so the QRS is
+    /// narrower than RV pacing, with a dominant R in V1 and a negative lead I (right-superior
+    /// axis); T discordant (Barold & Herweg, *Cardiol J* 2011;18:610–628).
+    Biventricular,
 }
 
 /// Rotation of the QRS forces in left anterior fascicular block, degrees: the unopposed
@@ -194,6 +200,11 @@ pub fn template_waves(t: Template) -> Vec<WaveSpec> {
             wave("T", -0.5, 55.0, 330.0, -65.0, -0.8),
         ],
         Template::Spike => vec![wave("spike", 2.0, 0.6, 0.0, -60.0, -0.5)],
+        Template::Biventricular => vec![
+            wave("R", 1.2, 12.0, 40.0, -150.0, 0.7),
+            wave("R2", 0.8, 12.0, 72.0, -110.0, 0.6),
+            wave("T", -0.4, 55.0, 320.0, -130.0, 0.6),
+        ],
     }
 }
 
@@ -284,6 +295,9 @@ const BLOCK_LPF: u8 = 8;
 
 /// Ventricular activations closer than this belong to the same beat (fusion fronts), ms.
 const SAME_BEAT_MS: f64 = 150.0;
+/// A conducted front arriving this long after a captured pace finds the ventricles mostly
+/// activated by the paced front (pseudo-fusion on the surface ECG), ms.
+const PACED_CAPTURE_MS: f64 = 30.0;
 
 /// Event-driven 12-lead synthesiser.
 #[derive(Debug, Clone)]
@@ -306,6 +320,10 @@ pub struct GaussianSynth {
     branch_blocks: u8,
     last_beat_ms: Option<f64>,
     last_rr_ms: Option<f64>,
+    /// Last paced ventricular beat: time and pacer channel (biventricular fusion).
+    last_paced_v: Option<(Millis, u8)>,
+    /// Time of the last captured ventricular pace, ms.
+    last_pace_ms: Option<f64>,
 }
 
 impl GaussianSynth {
@@ -322,6 +340,7 @@ impl GaussianSynth {
             Template::EctopicLv,
             Template::EctopicRv,
             Template::Spike,
+            Template::Biventricular,
         ]
         .into_iter()
         .map(|t| (t, template_waves(t)))
@@ -338,6 +357,8 @@ impl GaussianSynth {
             branch_blocks: 0,
             last_beat_ms: None,
             last_rr_ms: None,
+            last_paced_v: None,
+            last_pace_ms: None,
         }
     }
 
@@ -455,6 +476,15 @@ impl GaussianSynth {
                 };
                 self.spawn(d, ev.at, 0.0, 1.0);
             }
+            // Intrinsic conduction reaching ventricles a paced front has already largely
+            // captured adds nothing visible (true fusion only when the two start together).
+            (EventKind::Conducted, _)
+                if self
+                    .last_pace_ms
+                    .is_some_and(|p| (PACED_CAPTURE_MS..SAME_BEAT_MS).contains(&(t - p))) =>
+            {
+                self.branch_blocks = 0;
+            }
             (EventKind::Conducted, _) => {
                 let b = std::mem::take(&mut self.branch_blocks);
                 let lbbb = b & BLOCK_LBB != 0 || b & (BLOCK_LAF | BLOCK_LPF) == BLOCK_LAF | BLOCK_LPF;
@@ -476,11 +506,41 @@ impl GaussianSynth {
                 };
                 self.spawn(tpl, ev.at, rotation, width);
             }
+            (EventKind::Stimulus, Origin::Pacer(ch)) => {
+                self.spawn(Template::Spike, ev.at, 0.0, 1.0);
+                if self.last_pace_ms.is_none_or(|p| t - p >= SAME_BEAT_MS) {
+                    self.last_pace_ms = Some(t);
+                }
+                match self.last_paced_v {
+                    // second lead of a biventricular pace: the two fronts make one fused beat
+                    Some((t0, other)) if other != ch && t - t0.0 < SAME_BEAT_MS => {
+                        self.active
+                            .retain(|w| w.t0 != t0 || !matches!(w.spec.name, "R" | "R2" | "T"));
+                        self.spawn(Template::Biventricular, t0, 0.0, 1.0);
+                        self.last_paced_v = None;
+                    }
+                    _ => {
+                        self.spawn(ectopic, ev.at, 0.0, 1.0);
+                        self.last_paced_v = Some((ev.at, ch));
+                    }
+                }
+            }
             (EventKind::Stimulus, _) => {
                 self.spawn(Template::Spike, ev.at, 0.0, 1.0);
                 self.spawn(ectopic, ev.at, 0.0, 1.0);
             }
             _ => self.spawn(ectopic, ev.at, 0.0, 1.0),
+        }
+    }
+
+    /// Feed the pacemaker marker channel: a stimulus that did not capture still leaves its
+    /// spike on the ECG (captured paces get theirs from the `Stimulus` event, which also
+    /// starts the paced beat).
+    pub fn on_pacer_markers(&mut self, markers: &[PacerMarker]) {
+        for m in markers {
+            if m.kind == (MarkerKind::Pace { captured: false }) {
+                self.spawn(Template::Spike, m.at, 0.0, 1.0);
+            }
         }
     }
 

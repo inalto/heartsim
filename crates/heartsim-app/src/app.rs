@@ -11,6 +11,8 @@ use heartsim_ui::{
 
 use crate::snapshot_ring::SnapshotRing;
 
+mod pacing;
+
 const SAMPLE_RATE_HZ: f32 = 500.0;
 
 /// The vertical slice: timing engine → Tier-0 synth → ring buffers → strip, plus a placeholder
@@ -35,6 +37,8 @@ pub struct HeartSimApp {
     quiz: Quiz,
     /// The anatomy-pack heart (B9); `None` falls back to the placeholder sphere.
     heart: Option<crate::heart_view::HeartView>,
+    /// Pacemaker window, strip spike marks and lead markers (B13).
+    pacing: pacing::Pacing,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -140,6 +144,7 @@ impl HeartSimApp {
                 ..Quiz::default()
             },
             heart,
+            pacing: pacing::Pacing::default(),
         }
     }
 
@@ -158,6 +163,7 @@ impl HeartSimApp {
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, self.clock.dt, self.engine.now());
             }
+            self.pacing_step();
             self.sample_accumulator += self.clock.dt.0;
             while self.sample_accumulator >= sample_period_ms {
                 self.sample_accumulator -= sample_period_ms;
@@ -236,6 +242,7 @@ impl HeartSimApp {
                     .logarithmic(true)
                     .text("speed"),
             );
+            ui.toggle_value(&mut self.pacing.open, "Pacemaker");
         });
     }
 
@@ -277,7 +284,8 @@ impl HeartSimApp {
                 });
                 self.paper_controls(ui);
                 let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-                self.ecg.strip(ui, rect, &self.rings, self.selected_lead);
+                let window = self.ecg.strip(ui, rect, &self.rings, self.selected_lead);
+                self.pacing.marks.draw(ui.painter(), &window);
                 ui.allocate_rect(rect, egui::Sense::hover());
             });
         egui::Panel::right("axis")
@@ -496,6 +504,7 @@ impl eframe::App for HeartSimApp {
             egui::Panel::top("rhythm").show(ui, |ui| self.rhythm_controls(ui));
         }
 
+        self.pacing_window(&ctx);
         match self.tab {
             Tab::Simulator => self.simulator_tab(ui),
             Tab::TwelveLead => self.twelve_lead_tab(ui),

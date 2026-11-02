@@ -43,14 +43,14 @@ pub mod params;
 /// Timing event → seed cells ([`SeedMap`]).
 pub mod seeds;
 
-pub use coupled::Tier1Engine;
+pub use coupled::{LEAD_FIELD_RADIUS_MM, LeadProbe, Tier1Engine};
 pub use graph::{CellKind, Graph};
 pub use params::EikonalParams;
-pub use seeds::{SeedMap, resolve_site, side_index};
+pub use seeds::{SeedMap, lead_cells, resolve_site, side_index};
 
 use crate::ap::ApTemplate;
 use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
-use crate::timing::{ActionError, HisPurkinjeParams, Side};
+use crate::timing::{ActionError, HisPurkinjeParams, PacerConfig, Side};
 use glam::Vec3;
 use heartsim_core::{Action, Millis, Parameters, Region, RegionParams, StimSite};
 use heartsim_geometry::CellCloud;
@@ -209,6 +209,7 @@ enum SeedSet {
     Lpf,
     AtrialLead,
     VentricularLead,
+    LvLead,
     VentricularEscape,
     ApAtrial(usize),
     ApVentricular(usize),
@@ -510,6 +511,18 @@ impl EikonalEngine {
         }
     }
 
+    /// Place the pacemaker leads at the sites of `cfg` (atrial, ventricular and, for a
+    /// biventricular device, LV lead; brief B13). A His-bundle lead seeds nothing itself: the
+    /// timing engine routes its stimulus through the His bundle and the fascicles.
+    pub fn set_pacer_leads(&mut self, cfg: &PacerConfig) {
+        let cloud = Arc::clone(&self.cloud);
+        self.seeds.atrial_lead = lead_cells(&cloud, cfg.atrial_lead.site);
+        self.seeds.ventricular_lead = lead_cells(&cloud, cfg.ventricular_lead.site);
+        if let Some(lv) = &cfg.lv_lead {
+            self.seeds.lv_lead = lead_cells(&cloud, lv.site);
+        }
+    }
+
     /// Per-cell APD multipliers (ischaemia, drugs — brief B14). Applied at the next activation.
     pub fn apd_scale_mut(&mut self) -> &mut [f32] {
         &mut self.apd_scale
@@ -617,6 +630,7 @@ impl EikonalEngine {
             SeedSet::Lpf => &s.lpf,
             SeedSet::AtrialLead => &s.atrial_lead,
             SeedSet::VentricularLead => &s.ventricular_lead,
+            SeedSet::LvLead => &s.lv_lead,
             SeedSet::VentricularEscape => &s.ventricular_escape,
             SeedSet::ApAtrial(i) => &s.ap_atrial[i],
             SeedSet::ApVentricular(i) => &s.ap_ventricular[i],
@@ -718,6 +732,7 @@ impl EikonalEngine {
                 SeedSet::ApVentricular(usize::from(e.region == Region::RightVentricle))
             }
             (EventKind::Conducted, _) | (EventKind::Stimulus, Origin::External) => return,
+            (EventKind::Stimulus, Origin::Pacer(2)) => SeedSet::LvLead,
             (EventKind::Stimulus, Origin::Pacer(_)) => SeedSet::VentricularLead,
             (_, Origin::Focus(id)) => self.focus_or_chamber(id, e.region),
             (_, Origin::Escape) if e.region != Region::RightVentricle => SeedSet::VentricularEscape,

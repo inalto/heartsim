@@ -1,0 +1,31 @@
+// Pacing preset (brief B13). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; device behaviour follows the NBG timing cycles (Bernstein 2002).
+Scenario(
+    format_version: 1,
+    id: "paced_biv",
+    title: "Biventricular pacing (CRT) in LBBB",
+    description: "Sinus rhythm at 70 bpm with left bundle-branch block; a CRT-P device in DDD 60/130 tracks each P and paces the LV lateral wall (via the coronary sinus) 20 ms before the RV apex after a 120 ms AV delay.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Cardiac resynchronisation: in LBBB the LV lateral wall activates last; pacing it together with the RV restores near-simultaneous\nactivation. The paced QRS is narrower than RV-apex or LBBB QRS, typically with a dominant R in V1 and a negative (QS or rS) lead I: the\nfront from the LV lateral lead travels right and anterior. Loss of the R in V1 or a return to an LBBB-like QRS suggests loss of LV capture.\nThe AV delay is short so that every beat is fully paced (CRT only works at ~100 % biventricular pacing).\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Ellenbogen KA, Wilkoff BL, Kay GN, Lau CP, Auricchio A. Clinical Cardiac Pacing, Defibrillation and Resynchronization Therapy, 5th ed. Elsevier 2017.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["paced_ddd", "lbbb", "rbbb"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (67.0, 73.0),
+        pr_ms: None,
+        qrs_ms: Some((100.0, 160.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        his_purkinje: HisPurkinjeParams(lbb: BundleEdge(delay_ms: 10.0, blocked: true, block_above_rate_bpm: 0.0)),
+        pacer: Some(PacerConfig(
+            mode: Ddd,
+            lower_rate_bpm: 60.0,
+            upper_rate_bpm: 130.0,
+            av_delay_ms: 120.0,
+            lv_lead: Some(LeadParams(site: LvLateral)),
+            vv_delay_ms: -20.0,
+        )),
+    ),
+)

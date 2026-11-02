@@ -24,7 +24,7 @@ a 20° anterior tilt. Electrodes are stored in the same frame, so the forward mo
 | `neighbours.bin` | `HSNB` v1: `n`, `k = 8`, then per cell `k × (index u32, distance_mm f32, fibre_alignment f32)` nearest first | little-endian |
 | `segments.bin` | `HSSG` v1: `n`, AHA 17-segment index `u8` per cell (0 = not in the LV model); coronary territory = `Territory::for_cell(region, segment)` | little-endian |
 | `hoods/<name>.bin` | `HSHD` v1: vertex count, `k = 8`, per vertex `k × u32` cell indices then `k × f32` inverse-distance weights (sum 1) — one file per `Myocardium` mesh | little-endian |
-| `landmarks.ron` | `Landmarks { points: name → cell, sets: name → [cell] }`; points include `sa_node, av_node, his, rbb, lbb, laf, lpf, rbb_terminal, rv_apex, rvot, rv_free_wall, lv_apex, lv_lateral, lv_posterior, lv_anterior, lv_septal, cs_os, cs_distal, bachmann, ra_lateral, la_roof, laa`; sets `rbb`, `laf`, `lpf` are the PMJ seed cells per fascicle | RON |
+| `landmarks.ron` | `Landmarks { points: name → cell, sets: name → [cell] }`; points include `sa_node, av_node, his, rbb, lbb, laf, lpf, rbb_terminal, rv_apex, rvot, rv_free_wall, lv_apex, lv_lateral, lv_posterior, lv_anterior, lv_septal, cs_os, cs_distal, bachmann, ra_lateral, la_roof, laa`; sets `rbb`, `laf`, `lpf` are the PMJ seed cells per fascicle; optional pacing-lead points `raa` (RA appendage, else `ra_lateral`) and `rv_septum` (else the RV cell nearest `lv_septal`), see `LeadSite::landmarks` | RON |
 | `electrodes.ron` | `ElectrodeSet`: `RA LA LL RL V1…V6` plus `V3R V4R V7 V8 V9`, heart frame | RON |
 
 Loading verifies the format version, each file's size and CRC-32, and the cross-file counts (cells ↔ neighbours

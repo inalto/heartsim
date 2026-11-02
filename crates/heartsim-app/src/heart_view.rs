@@ -15,9 +15,10 @@ use glam::Vec3;
 use heartsim_core::{Action, Millis, Parameters, Region, StimSite};
 use heartsim_geometry::{AnatomyPack, Hood, MeshKind, Territory};
 use heartsim_render::{
-    ClipPlane, Contour, LayerDesc, LayerId, LutId, LutStyle, ScalarMode, SceneRenderer, map_hoods,
-    oblique_yaw_deg,
+    ClipPlane, Contour, GlyphInstance, GlyphSetId, LayerDesc, LayerId, LutId, LutStyle, ScalarMode,
+    SceneRenderer, map_hoods, oblique_yaw_deg,
 };
+use heartsim_sim::timing::PacerConfig;
 use heartsim_sim::{EikonalEngine, EikonalParams, Engine, Event, EventKind, TimingEngine, TimingParams};
 use heartsim_ui::{
     AnatomyPanelState, CameraCommand, Viewport3d, ViewportResources, anatomy_panel, colour_bar,
@@ -165,6 +166,10 @@ pub struct HeartView {
     /// Half the diagonal of the heart's bounding box, mm (cut-plane travel).
     radius_mm: f32,
     render_state: Option<egui_wgpu::RenderState>,
+    /// Pacemaker lead markers (B13): which channels have a lead, the glyph set and its spheres.
+    pacer_channels: [bool; 3],
+    lead_set: Option<GlyphSetId>,
+    lead_glyphs: Vec<GlyphInstance>,
 }
 
 impl std::fmt::Debug for HeartView {
@@ -332,6 +337,9 @@ impl HeartView {
             status: None,
             radius_mm: 1.0,
             render_state: None,
+            pacer_channels: [false; 3],
+            lead_set: None,
+            lead_glyphs: Vec::new(),
         }
     }
 
@@ -339,6 +347,45 @@ impl HeartView {
     #[must_use]
     pub fn engine(&self) -> &EikonalEngine {
         &self.engine
+    }
+
+    /// Put the pacemaker leads at the sites of `cfg` (B13); only the channels its mode uses are
+    /// marked on the heart.
+    pub fn set_pacer_leads(&mut self, cfg: &PacerConfig) {
+        self.engine.set_pacer_leads(cfg);
+        let m = cfg.mode;
+        let v = m.paces_ventricle() || m.senses_ventricle();
+        self.pacer_channels = [
+            m.paces_atrium() || m.senses_atrium(),
+            v,
+            v && cfg.lv_lead.is_some(),
+        ];
+    }
+
+    /// Lead-tip cells per pacer channel (index = `PacerChannel`).
+    #[must_use]
+    pub fn lead_tip_cells(&self) -> [Vec<u32>; 3] {
+        let s = self.engine.seeds();
+        [
+            s.atrial_lead.clone(),
+            s.ventricular_lead.clone(),
+            s.lv_lead.clone(),
+        ]
+    }
+
+    /// Lead-tip positions (heart mm) of the channels in use.
+    #[must_use]
+    pub fn lead_tips(&self) -> [Option<Vec3>; 3] {
+        let cells = self.lead_tip_cells();
+        std::array::from_fn(|i| {
+            let c = *cells[i].first()?;
+            self.pacer_channels[i].then(|| self.engine.cloud().positions[c as usize])
+        })
+    }
+
+    /// Lead markers to draw this frame.
+    pub fn set_lead_glyphs(&mut self, glyphs: Vec<GlyphInstance>) {
+        self.lead_glyphs = glyphs;
     }
 
     /// Current colour window `(min, max)` of `mode`, in its unit.
@@ -569,6 +616,9 @@ impl HeartView {
         };
         let scene = &mut res.scene;
         self.sync_scene(scene, &rs.queue, dt);
+        if let Some(id) = self.lead_set {
+            scene.set_spheres(&rs.device, &rs.queue, id, &self.lead_glyphs);
+        }
 
         let uv = |p: egui::Pos2| {
             (
@@ -638,6 +688,7 @@ impl HeartView {
             }
             l.id = Some(id);
         }
+        self.lead_set = Some(scene.add_glyph_set("Pacing leads"));
         scene.frame_scene();
         let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
         for m in &self.pack_meshes {
