@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use heartsim_core::{Lead, Millis, Scenario};
-use heartsim_ecg::GaussianSynth;
+use heartsim_ecg::{GaussianSynth, Tier0Scenario};
 use heartsim_geometry::{AnatomyPack, K_NEIGHBOURS};
 use heartsim_sim::{Engine, TimingEngine, TimingParams};
 use std::path::{Path, PathBuf};
@@ -35,12 +35,71 @@ enum Cmd {
         #[arg(short, long)]
         out: PathBuf,
     },
+    /// Load every `*.ron` scenario in a directory, check ids, teaching content and differentials,
+    /// run each for 20 s on the timing engine + Tier-0 synthesiser and compare the B4 analysis of
+    /// the last 10 s with the file's `expected` block. Fails if any scenario fails.
+    ValidateScenarios {
+        /// Scenario directory (e.g. `assets/scenarios`).
+        dir: PathBuf,
+    },
     /// Load an anatomy pack and print counts, bounds, per-region cells, k-NN statistics, landmarks
     /// and electrodes.
     AnatomyInfo {
         /// Pack directory (contains `manifest.ron`).
         pack: PathBuf,
     },
+}
+
+fn validate_scenarios(dir: &Path) -> Result<()> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "ron"))
+        .collect();
+    files.sort();
+    let mut ids = std::collections::BTreeSet::new();
+    let mut failed = 0usize;
+    for path in &files {
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+        let mut problems = Vec::new();
+        let text = std::fs::read_to_string(path)?;
+        match Tier0Scenario::from_ron(&text) {
+            Err(e) => problems.push(e.to_string()),
+            Ok(s) => {
+                if s.scenario.id != stem {
+                    problems.push(format!("id `{}` differs from the file name", s.scenario.id));
+                }
+                if !ids.insert(s.scenario.id.clone()) {
+                    problems.push(format!("duplicate id `{}`", s.scenario.id));
+                }
+                problems.extend(s.content_problems());
+                match s.validate_run() {
+                    Err(e) => problems.push(e.to_string()),
+                    Ok((a, v)) => {
+                        let f = |x: Option<f64>| x.map_or_else(|| "-".to_string(), |x| format!("{x:.0}"));
+                        println!(
+                            "{stem:32} HR {:>4} PR {:>4} QRS {:>4} axis {:>4}",
+                            f(a.hr_bpm),
+                            f(a.pr_ms),
+                            f(a.qrs_ms),
+                            f(a.qrs_axis.map(|x| x.degrees))
+                        );
+                        problems.extend(v);
+                    }
+                }
+            }
+        }
+        if !problems.is_empty() {
+            failed += 1;
+            for p in &problems {
+                println!("  FAIL {stem}: {p}");
+            }
+        }
+    }
+    println!("{} scenarios, {failed} failed", files.len());
+    if failed > 0 {
+        anyhow::bail!("{failed} of {} scenarios failed validation", files.len());
+    }
+    Ok(())
 }
 
 fn anatomy_info(dir: &Path) -> Result<()> {
@@ -196,6 +255,7 @@ fn main() -> Result<()> {
             eprintln!("wrote {}", out.display());
         }
         Cmd::AnatomyInfo { pack } => anatomy_info(&pack)?,
+        Cmd::ValidateScenarios { dir } => validate_scenarios(&dir)?,
     }
     Ok(())
 }

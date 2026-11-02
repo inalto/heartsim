@@ -12,10 +12,12 @@ heartsim-core.workspace = true
 heartsim-sim.workspace = true
 glam.workspace = true
 serde.workspace = true
+ron.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
 proptest.workspace = true
+insta.workspace = true
 
 [lints]
 workspace = true

@@ -594,6 +594,19 @@ mod tests {
     }
 
     #[test]
+    fn mobitz2_high_grade_conducts_one_in_three() {
+        let mut p = TimingParams::default();
+        p.av.mobitz2_ratio = 3;
+        p.av.mobitz2_conducted = 1;
+        p.escape.junctional_bpm = 0.0;
+        p.escape.ventricular_bpm = 0.0;
+        let evs = run(p, 30.0);
+        let p = count(&evs, Region::RightAtrium, EventKind::Automatic);
+        let v = count(&evs, Region::LeftVentricle, EventKind::Conducted);
+        assert!((v as f64 / p as f64 - 1.0 / 3.0).abs() < 0.05, "P={p} V={v}");
+    }
+
+    #[test]
     fn deterministic() {
         let a = run(TimingParams::default(), 5.0);
         let b = run(TimingParams::default(), 5.0);

@@ -1,0 +1,24 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "junctional_rhythm",
+    title: "Junctional rhythm with retrograde P",
+    description: "The AV junction paces the heart at 50 bpm; narrow QRS, each followed by an inverted (retrograde) P wave in II, III and aVF.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Junctional escape rhythm 40-60 bpm (accelerated 60-100, tachycardia > 100). The QRS is narrow; the P wave, if seen, is\nretrograde (negative in the inferior leads) and may precede (short PR < 120 ms), hide in, or follow the QRS - here it follows, in the ST segment.\nThe retrograde atrial activation resets the slower sinus node, which therefore never emerges.\nDifferential: sinus bradycardia (upright P before QRS), 1st-degree AV block with P in the T, AVNRT (fast).\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library.\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574."),
+    confused_with: ["sinus_brady_45", "avb_3rd_junctional", "avb_1st"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (40.0, 60.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 40.0),
+        av: AvParams(retrograde_fast: true, retrograde_delay_ms: 140.0),
+        escape: EscapeParams(junctional_bpm: 50.0, ventricular_bpm: 30.0),
+    ),
+)

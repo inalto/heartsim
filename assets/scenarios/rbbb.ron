@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "rbbb",
+    title: "Right bundle-branch block",
+    description: "Sinus rhythm at 75 bpm; the right ventricle is activated late from the left: rsR' in V1, wide S in I and V6, QRS about 130 ms.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Criteria (AHA/ACCF/HRS 2009): QRS >= 120 ms; rsr', rsR' or rSR' in V1-V2; S wave in I and V6 longer than R or > 40 ms;\nnormal R peak time in V5-V6. Initial forces are normal (septum and LV), so the axis is not changed by RBBB alone.\nT waves are inverted in V1-V3 (secondary). Differential: Brugada pattern, WPW with left-sided pathway, RV hypertrophy.\n\nSources:\n- Surawicz B et al. AHA/ACCF/HRS recommendations for the standardization and interpretation of the ECG, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["lbbb", "wpw_left_lateral", "Brugada pattern", "right ventricular hypertrophy"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((120.0, 170.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        his_purkinje: HisPurkinjeParams(rbb: BundleEdge(delay_ms: 30.0, blocked: true, block_above_rate_bpm: 0.0)),
+    ),
+)

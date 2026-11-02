@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "wpw_left_lateral",
+    title: "WPW pattern, left lateral accessory pathway",
+    description: "Sinus rhythm with ventricular pre-excitation: short PR, delta wave (negative in I and aVL, positive in V1), widened QRS.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The Kent bundle bypasses the AV node, so part of the left ventricle is activated early and slowly through myocardium\n(delta wave) before the His-Purkinje front fuses with it. Criteria: PR < 120 ms, QRS > 110-120 ms with slurred upstroke,\nsecondary ST-T changes. A left lateral pathway gives a positive delta in V1 (type A) and a negative delta in I/aVL,\nwhich can mimic a lateral infarct; the negative delta in II/III/aVF of posteroseptal pathways mimics inferior MI.\nPre-excitation plus symptoms of tachycardia = WPW syndrome (see avrt_orthodromic).\nLeft lateral pathways are far from the sinus node, so their pre-excitation is the least marked and the PR the longest (here about 110 ms).\n\nSources:\n- Surawicz B et al. AHA/ACCF/HRS recommendations for the standardization and interpretation of the ECG, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["rbbb", "lbbb", "lateral myocardial infarction"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((60.0, 120.0)),
+        qrs_ms: Some((110.0, 180.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        accessory: Some(AccessoryPathway(delay_ms: 65.0, erp_ms: 300.0, antegrade: true, retrograde: true, ventricular_side: Left, atrial_side: Left)),
+    ),
+)

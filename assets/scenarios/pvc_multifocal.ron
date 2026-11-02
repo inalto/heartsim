@@ -1,0 +1,26 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "pvc_multifocal",
+    title: "Multifocal premature ventricular contractions",
+    description: "Sinus rhythm with PVCs from two foci: right-ventricular (LBBB-like, superior axis) and left-ventricular (RBBB-like) complexes.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("PVCs of more than one morphology come from more than one focus (or exit). A left-ventricular focus gives an RBBB-like PVC\n(positive in V1), a right-ventricular focus an LBBB-like PVC (negative in V1). Multifocal ectopy suggests diffuse disease,\nischaemia, electrolyte disturbance or digoxin toxicity. Differential: fusion beats, aberrantly conducted PACs, multifocal atrial tachycardia.\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["pvc_bigeminy", "pac_frequent", "fusion beats"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 110.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [
+            Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 560.0, every_n_beats: 4, count: 1, run_cycle_ms: 400.0)),
+            Focus(region: RightVentricle, mode: Coupled(coupling_ms: 520.0, every_n_beats: 5, count: 1, run_cycle_ms: 400.0)),
+        ],
+    ),
+)

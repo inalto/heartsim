@@ -254,9 +254,16 @@ impl TimingEngine {
         // Mobitz II: infranodal all-or-none drop.
         let ratio = self.params.av.mobitz2_ratio;
         if ratio > 1 {
+            let conducted = match self.params.av.mobitz2_conducted {
+                0 => ratio - 1,
+                n => n.min(ratio - 1),
+            };
             self.his_beats_since_drop += 1;
-            if self.his_beats_since_drop >= ratio {
+            let position = self.his_beats_since_drop;
+            if position >= ratio {
                 self.his_beats_since_drop = 0;
+            }
+            if position > conducted {
                 self.schedule(out, Pending::HisBlocked { origin });
                 return;
             }

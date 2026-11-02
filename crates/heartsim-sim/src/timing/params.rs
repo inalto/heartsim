@@ -45,6 +45,24 @@ pub struct TimingParams {
     pub pacer: Option<PacerConfig>,
 }
 
+/// The `timing` section of a scenario file (`assets/scenarios/*.ron`). The struct is named
+/// `Scenario` so it reads the same text as `heartsim_core::Scenario`; every other field of the
+/// file is ignored here.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename = "Scenario")]
+struct TimingSection {
+    #[serde(default)]
+    timing: TimingParams,
+}
+
+impl TimingParams {
+    /// Timing parameters of a scenario file; the healthy default when the file has no
+    /// `timing` section.
+    pub fn from_scenario_ron(text: &str) -> Result<Self, ron::error::SpannedError> {
+        Ok(ron::from_str::<TimingSection>(text)?.timing)
+    }
+}
+
 impl Default for TimingParams {
     fn default() -> Self {
         Self {
@@ -201,6 +219,9 @@ pub struct AvParams {
     /// Mobitz II (infranodal all-or-none drop): conduct `n − 1` of every `n` beats that reach
     /// the His bundle. 0 or 1 = off; 2 = 2:1, 3 = 3:2 … (ratio of atrial to His events).
     pub mobitz2_ratio: u32,
+    /// Beats conducted per Mobitz II cycle of `mobitz2_ratio` beats; the rest are dropped.
+    /// 0 = `mobitz2_ratio − 1` (classic n:n−1). `1` with ratio 3 gives high-grade 3:1 block.
+    pub mobitz2_conducted: u32,
 }
 
 impl Default for AvParams {
@@ -215,6 +236,7 @@ impl Default for AvParams {
             concealment_fraction: 0.5,
             complete_block: false,
             mobitz2_ratio: 0,
+            mobitz2_conducted: 0,
         }
     }
 }

@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "sinus_arrest_junctional_escape",
+    title: "Sinus arrest with junctional escape",
+    description: "Every 5th sinus cycle the node stops for 3 s; the AV junction escapes at 45 bpm with narrow QRS complexes and no P wave.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Sinus arrest: a pause that is not a multiple of the PP interval (here 3 s, the threshold usually called significant).\nThe junction (40-60 bpm) rescues the rhythm: narrow QRS without a preceding P, at the junctional escape interval after the last beat.\nDifferential: SA exit block (pause = exact multiple of PP), blocked PAC (look for a premature P on the preceding T), Mobitz II (P without QRS).\n\nSources:\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["sa_exit_block", "avb_2nd_mobitz2_3to1", "blocked PAC"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (40.0, 80.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0, pause_every_n: 5, pause_ms: 3000.0),
+        escape: EscapeParams(junctional_bpm: 45.0, ventricular_bpm: 30.0),
+    ),
+)

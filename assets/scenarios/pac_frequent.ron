@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "pac_frequent",
+    title: "Frequent premature atrial contractions (trigeminy)",
+    description: "Every third beat is a premature atrial contraction: an early P with a different shape, a normal QRS and a non-compensatory pause.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A PAC is an early P wave of different morphology followed by a normally conducted QRS (or by none if the AV node is still refractory).\nIt resets the sinus node, so the pause after it is less than compensatory (PP around the PAC < 2 PP).\nDifferential: sinus arrhythmia (gradual change, same P shape), PVC (wide QRS, no premature P, compensatory pause), junctional premature beats.\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["pvc_bigeminy", "sinus_arrhythmia", "sa_exit_block"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 110.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [Focus(region: RightAtrium, mode: Coupled(coupling_ms: 480.0, every_n_beats: 2, count: 1, run_cycle_ms: 400.0))],
+    ),
+)

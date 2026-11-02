@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "lbbb",
+    title: "Left bundle-branch block",
+    description: "Sinus rhythm at 75 bpm; the left ventricle is activated late through the septum from the right: QRS about 140 ms, QS in V1, broad notched R in I and V6.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Criteria (AHA/ACCF/HRS 2009): QRS >= 120 ms; broad notched or slurred R in I, aVL, V5-V6; absent q in I, V5-V6;\nrS or QS in V1-V2; ST-T discordant to the QRS. Septal activation runs right-to-left, so the normal septal q disappears.\nNew LBBB with symptoms: think ischaemia (Sgarbossa criteria). Mimics: RV pacing, LV hypertrophy with strain, WPW (right-sided).\n\nSources:\n- Surawicz B et al. AHA/ACCF/HRS recommendations for the standardization and interpretation of the ECG, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Durrer D et al. Total excitation of the isolated human heart. Circulation 1970;41:899-912."),
+    confused_with: ["rbbb", "paced_vvi", "wpw_left_lateral", "left ventricular hypertrophy"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 220.0)),
+        qrs_ms: Some((120.0, 180.0)),
+        axis_deg: Some((-45.0, 60.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        his_purkinje: HisPurkinjeParams(lbb: BundleEdge(delay_ms: 10.0, blocked: true, block_above_rate_bpm: 0.0)),
+    ),
+)

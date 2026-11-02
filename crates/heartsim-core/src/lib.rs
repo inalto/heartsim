@@ -16,5 +16,5 @@ pub use axis::{AxisClass, FrontalAxis};
 pub use lead::{ELECTRODE_COUNT, Electrode, ElectrodePotentials, LEAD_COUNT, Lead, TwelveLead};
 pub use params::{GlobalParams, Parameters, RegionParams};
 pub use region::Region;
-pub use scenario::{Action, EngineTier, Scenario, StimSite, TimedAction};
+pub use scenario::{Action, EngineTier, ExpectedFindings, Scenario, StimSite, TimedAction};
 pub use time::{Millis, SimClock};

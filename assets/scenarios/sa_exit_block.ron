@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "sa_exit_block",
+    title: "Sinoatrial exit block (2nd degree, type II)",
+    description: "Every 3rd sinus impulse fails to leave the node: a pause of exactly two PP intervals without a P wave.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The sinus clock keeps running but an impulse does not reach the atria, so the pause is an exact multiple of the PP interval.\nDistinguish from sinus arrest (pause unrelated to the PP) and from a non-conducted PAC (premature P hidden in the T wave before the pause).\nThe junctional escape (set to 35 bpm here) is slower than the pause, so no escape beat interrupts it.\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library.\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482."),
+    confused_with: ["sinus_arrest_junctional_escape", "sinus_arrhythmia", "blocked PAC"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (45.0, 75.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0, exit_block_ratio: 3),
+        escape: EscapeParams(junctional_bpm: 35.0, ventricular_bpm: 25.0),
+    ),
+)

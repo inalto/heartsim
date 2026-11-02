@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "sinus_tachy_130",
+    title: "Sinus tachycardia, 130 bpm",
+    description: "Sinus rhythm at 130 bpm: normal P before each QRS, short TP segment, QT shortened by the rate.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Sinus rhythm above 100 bpm. P waves keep their sinus axis; at high rates they approach the preceding T wave.\nSympathetic drive shortens repolarisation beyond the rate effect, so the T wave is set earlier and narrower here, keeping the P clear of it.\nLook for the cause (fever, hypovolaemia, pain, anaemia, thyrotoxicosis, PE) - it is a response, not a primary arrhythmia.\nDifferential: atrial flutter with 2:1 block (rate fixed near 150, flutter waves in II/III/aVF) and AVNRT (abrupt onset, no visible P).\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["avnrt_150", "avrt_orthodromic", "atrial flutter with 2:1 block"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (101.0, 150.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 130.0),
+    ),
+    morphology: MorphologyOverrides(waves: [WaveOverride(template: Normal, wave: "T", offset_ms: Some(250.0), width_ms: Some(40.0))]),
+)

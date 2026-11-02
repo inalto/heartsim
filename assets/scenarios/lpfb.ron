@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "lpfb",
+    title: "Left posterior fascicular block",
+    description: "Sinus rhythm with right axis deviation (about +120 degrees): rS in I and aVL, qR in II, III and aVF; QRS narrow.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Criteria (AHA/ACCF/HRS 2009): frontal axis +90 to +180 degrees in adults; rS in I and aVL; qR in III and aVF; QRS < 120 ms.\nA diagnosis of exclusion: rule out right ventricular hypertrophy, lateral MI, vertical heart, limb-lead reversal and PE first.\nRare in isolation (the posterior fascicle is short, thick and doubly perfused).\n\nSources:\n- Surawicz B et al. AHA/ACCF/HRS recommendations for the standardization and interpretation of the ECG, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["lafb", "right ventricular hypertrophy", "limb lead reversal"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 119.0)),
+        axis_deg: Some((90.0, 180.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        his_purkinje: HisPurkinjeParams(lpf: BundleEdge(delay_ms: 15.0, blocked: true, block_above_rate_bpm: 0.0)),
+    ),
+)

@@ -1,0 +1,24 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avb_3rd_ventricular",
+    title: "Complete AV block with ventricular escape",
+    description: "P waves at 80 bpm, wide ventricular escape complexes at 35 bpm, no relation between them.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Complete infranodal block: the only rescue is a ventricular (Purkinje) escape at 20-40 bpm with a wide, bizarre QRS\nand discordant T. Haemodynamically unstable - temporary pacing.\nCompare with complete block plus junctional escape (narrow QRS, 40-60 bpm) and with idioventricular rhythm (no P waves at all).\n\nSources:\n- Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["avb_3rd_junctional", "idioventricular", "paced_vvi"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (25.0, 40.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+        av: AvParams(complete_block: true),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 35.0),
+    ),
+)

@@ -1,0 +1,33 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avnrt_150",
+    title: "Typical AV-nodal re-entrant tachycardia (slow-fast)",
+    description: "A single premature atrial beat at 3 s blocks in the fast pathway, conducts down the slow one and starts a regular 150 bpm narrow-complex tachycardia.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Dual AV-nodal physiology: the fast pathway has a long refractory period, the slow pathway a short one. A PAC blocked in the\nfast pathway conducts slowly (jump in PR), then returns up the fast pathway: atria and ventricles are activated almost\nsimultaneously, so the retrograde P hides in or just after the QRS (pseudo-r' in V1, pseudo-S in II; RP < 70 ms) - it adds a few ms to the measured QRS.\nTerminated by vagal manoeuvres or adenosine (transient AV-nodal block).\nDifferential: orthodromic AVRT (RP > 70 ms), atrial flutter 2:1, sinus tachycardia (P before QRS, gradual onset).\n\nSources:\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["avrt_orthodromic", "sinus_tachy_130", "atrial flutter with 2:1 block"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (140.0, 170.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 120.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timeline: [
+        TimedAction(at: 3000.0, action: Stimulate(site: Landmark("ra_appendage"), strength: 1.0, duration_ms: 2.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        av: AvParams(
+            fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 250.0, blocked: false),
+            slow: AvPathway(min_ms: 218.0, recovery_amplitude_ms: 100.0, recovery_tau_ms: 100.0, erp_ms: 30.0, blocked: false),
+            dual_pathways: true,
+            retrograde_fast: true,
+            retrograde_delay_ms: 50.0,
+            reentry_delay_ms: 50.0,
+        ),
+    ),
+)

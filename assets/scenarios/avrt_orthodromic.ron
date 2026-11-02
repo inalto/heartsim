@@ -1,0 +1,26 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "avrt_orthodromic",
+    title: "Orthodromic AV re-entrant tachycardia (concealed pathway)",
+    description: "A premature atrial beat starts a circus movement down the AV node and back up a concealed left-sided accessory pathway: narrow QRS at about 200 bpm with a retrograde P 70 ms after each QRS.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The commonest WPW-syndrome tachycardia: antegrade over the AV node and His-Purkinje system (narrow QRS), retrograde over\nthe accessory pathway. The atria are activated after the ventricles through the pathway, so a retrograde P sits in the ST\nsegment with RP > 70 ms (longer than in typical AVNRT). A concealed pathway conducts only retrogradely, so the resting ECG\nshows no delta wave. Rate 150-250 bpm; QRS alternans is common. Adenosine or vagal manoeuvres terminate it.\n\nSources:\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["avnrt_150", "sinus_tachy_130", "atrial flutter with 2:1 block"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (150.0, 250.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timeline: [
+        TimedAction(at: 2980.0, action: Stimulate(site: Landmark("ra_appendage"), strength: 1.0, duration_ms: 2.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        accessory: Some(AccessoryPathway(delay_ms: 70.0, erp_ms: 250.0, antegrade: false, retrograde: true, ventricular_side: Left, atrial_side: Left)),
+    ),
+)

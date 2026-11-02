@@ -1,0 +1,23 @@
+// Tier-0 rhythm preset (brief B11). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the sources in `notes`.
+Scenario(
+    format_version: 1,
+    id: "pvc_bigeminy",
+    title: "Ventricular bigeminy",
+    description: "Every sinus beat is followed by a premature ventricular contraction (wide, no P, discordant T) and a full compensatory pause.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A PVC is a premature, wide (>= 120 ms) QRS without a preceding P, with ST-T opposite to the main QRS deflection.\nIts retrograde concealed conduction blocks the next sinus P in the AV node, so the sinus rhythm is undisturbed: compensatory pause\n(normal-PVC-normal = 2 PP). Bigeminy = every other beat. Pulse deficit: the PVC may not produce a palpable pulse.\nDifferential: PACs with aberrant conduction (premature P), escape beats (late, not premature).\n\nSources:\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.\n- Burns E, Buttner R. Life in the Fast Lane ECG Library, litfl.com/ecg-library."),
+    confused_with: ["pac_frequent", "pvc_multifocal", "aberrant conduction"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 95.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 600.0, every_n_beats: 1, count: 1, run_cycle_ms: 400.0))],
+    ),
+)
