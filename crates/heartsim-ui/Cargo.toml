@@ -19,5 +19,10 @@ wgpu.workspace = true
 glam.workspace = true
 image.workspace = true
 
+[dev-dependencies]
+egui_kittest.workspace = true
+# egui's bundled fonts, so headless kittest harnesses can lay out text
+egui = { workspace = true, features = ["default_fonts"] }
+
 [lints]
 workspace = true

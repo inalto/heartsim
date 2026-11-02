@@ -33,6 +33,8 @@ pub struct HeartSimApp {
     tab: Tab,
     layout: TwelveLeadLayout,
     quiz: Quiz,
+    /// The anatomy-pack heart (B9); `None` falls back to the placeholder sphere.
+    heart: Option<crate::heart_view::HeartView>,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -103,7 +105,16 @@ impl HeartSimApp {
         let mut sphere = icosphere(4);
         sphere.recompute_normals();
         let vertex_count = sphere.vertex_count();
-        scene.set_mesh(&rs.device, &sphere);
+        let heart = crate::heart_view::HeartView::load_default(&TimingParams::default())
+            .inspect_err(|e| tracing::warn!("no anatomy pack, showing a sphere: {e:#}"))
+            .ok()
+            .map(|mut h| {
+                h.install(rs, &mut scene);
+                h
+            });
+        if heart.is_none() {
+            scene.set_mesh(&rs.device, &sphere);
+        }
         rs.renderer.write().callback_resources.insert(ViewportResources {
             scene,
             pending_scalars: None,
@@ -128,6 +139,7 @@ impl HeartSimApp {
                 rng: 0x9E37_79B9_7F4A_7C15,
                 ..Quiz::default()
             },
+            heart,
         }
     }
 
@@ -143,6 +155,9 @@ impl HeartSimApp {
                 }
             }
             self.synth.on_events(&events);
+            if let Some(h) = &mut self.heart {
+                h.on_step(&events, self.clock.dt, self.engine.now());
+            }
             self.sample_accumulator += self.clock.dt.0;
             while self.sample_accumulator >= sample_period_ms {
                 self.sample_accumulator -= sample_period_ms;
@@ -268,9 +283,18 @@ impl HeartSimApp {
         egui::Panel::right("axis")
             .default_size(280.0)
             .show(ui, |ui| self.live_axis_panel(ui));
+        if let Some(h) = &mut self.heart {
+            egui::Panel::left("heart").default_size(280.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| h.controls(ui))
+            });
+        }
         egui::CentralPanel::default().show(ui, |ui| {
-            let size = ui.available_size();
-            Viewport3d::ui(ui, size);
+            if let Some(h) = &mut self.heart {
+                h.viewport(ui, &mut self.engine);
+            } else {
+                let size = ui.available_size();
+                Viewport3d::ui(ui, size);
+            }
         });
     }
 
@@ -447,7 +471,7 @@ impl eframe::App for HeartSimApp {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
         self.ecg.update(&self.rings);
-        if let Some(rs) = frame.wgpu_render_state.as_ref() {
+        if let Some(rs) = frame.wgpu_render_state.as_ref().filter(|_| self.heart.is_none()) {
             let scalars = self.view_scalars();
             if let Some(res) = rs
                 .renderer
