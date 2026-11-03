@@ -39,6 +39,8 @@ pub struct HeartSimApp {
     heart: Option<crate::heart_view::HeartView>,
     /// Pacemaker window, strip spike marks and lead markers (B13).
     pacing: pacing::Pacing,
+    /// Electrode placement editor (B10); its placement sets the synthesiser's lead vectors.
+    electrodes: crate::electrode_tab::ElectrodeTab,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -50,15 +52,17 @@ enum Tab {
     TwelveLead,
     AxisTrainer,
     Quiz,
+    Electrodes,
     Help,
 }
 
 impl Tab {
-    const ALL: [Tab; 5] = [
+    const ALL: [Tab; 6] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::AxisTrainer,
         Tab::Quiz,
+        Tab::Electrodes,
         Tab::Help,
     ];
 
@@ -68,6 +72,7 @@ impl Tab {
             Tab::TwelveLead => "12-Lead ECG",
             Tab::AxisTrainer => "Axis Trainer",
             Tab::Quiz => "Axis Quiz",
+            Tab::Electrodes => "Electrodes",
             Tab::Help => "Help",
         }
     }
@@ -145,6 +150,10 @@ impl HeartSimApp {
             },
             heart,
             pacing: pacing::Pacing::default(),
+            electrodes: crate::electrode_tab::ElectrodeTab::load_default(
+                SAMPLE_RATE_HZ,
+                (SAMPLE_RATE_HZ * 60.0) as usize,
+            ),
         }
     }
 
@@ -479,6 +488,10 @@ impl eframe::App for HeartSimApp {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
         self.ecg.update(&self.rings);
+        self.electrodes.update(&self.rings, &mut self.synth);
+        if self.tab != Tab::Electrodes {
+            self.electrodes.deactivate(frame.wgpu_render_state.as_ref());
+        }
         if let Some(rs) = frame.wgpu_render_state.as_ref().filter(|_| self.heart.is_none()) {
             let scalars = self.view_scalars();
             if let Some(res) = rs
@@ -500,7 +513,10 @@ impl eframe::App for HeartSimApp {
                 }
             });
         });
-        if matches!(self.tab, Tab::Simulator | Tab::TwelveLead | Tab::AxisTrainer) {
+        if matches!(
+            self.tab,
+            Tab::Simulator | Tab::TwelveLead | Tab::AxisTrainer | Tab::Electrodes
+        ) {
             egui::Panel::top("rhythm").show(ui, |ui| self.rhythm_controls(ui));
         }
 
@@ -510,6 +526,10 @@ impl eframe::App for HeartSimApp {
             Tab::TwelveLead => self.twelve_lead_tab(ui),
             Tab::AxisTrainer => self.axis_trainer_tab(ui),
             Tab::Quiz => self.quiz_tab(ui),
+            Tab::Electrodes => {
+                self.electrodes
+                    .ui(ui, frame.wgpu_render_state.as_ref(), &self.rings, &self.ecg.style);
+            }
             Tab::Help => Self::help_tab(ui),
         }
 

@@ -25,7 +25,9 @@
 //! Either way the model is a precomputed matrix `W [9 signal electrodes × n cells]` (row-major
 //! f32) and a sample is one matrix–vector product. Limb electrodes default to Einthoven's
 //! idealised distal-limb positions ([`LimbPlacement`]); RL is the reference and carries no signal;
-//! the Wilson terminal is subtracted by [`ElectrodePotentials::to_leads`].
+//! the Wilson terminal is subtracted by [`ElectrodePotentials::to_leads`]. Extra unipolar chest
+//! electrodes (V3R, V4R, V7–V9; brief B10) add rows after the nine signal rows
+//! ([`ForwardModel::set_extra_electrodes`], [`ForwardModel::sample_extras`]).
 //!
 //! **Determinism.** Column chunks are reduced in a fixed order, so results do not depend on the
 //! number of threads; there is no I/O and no clock.
@@ -339,12 +341,14 @@ pub struct ForwardModel {
     far_field: [Option<Vec3>; ELECTRODE_COUNT],
     /// Heart-vector weights: `p = Σ_j dipole_w[j]·V_j`, mV·mm².
     dipole_w: Vec<Vec3>,
-    /// Physical weights, `ROWS × n`.
+    /// Extra point electrodes (name, site mm): rows `ROWS..` of `w`.
+    extras: Vec<(String, Vec3)>,
+    /// Physical weights, `(ROWS + extras) × n`.
     w: Vec<f32>,
     /// `w` with per-wave gains and rest offsets folded in.
     w_eff: Vec<f32>,
-    /// Constant potential from the rest offsets, mV.
-    offset_mv: [f64; ROWS],
+    /// Constant potential from the rest offsets per row, mV.
+    offset_mv: Vec<f64>,
     rest_offset: Vec<f32>,
     phase: VentricularPhase,
 }
@@ -400,9 +404,10 @@ impl ForwardModel {
             sites,
             far_field,
             dipole_w: Vec::new(),
+            extras: Vec::new(),
             w: vec![0.0; ROWS * n],
             w_eff: vec![0.0; ROWS * n],
-            offset_mv: [0.0; ROWS],
+            offset_mv: vec![0.0; ROWS],
             rest_offset: vec![0.0; n],
             phase: VentricularPhase::default(),
             kind,
@@ -503,19 +508,30 @@ impl ForwardModel {
         }
     }
 
+    /// Site and far-field lead vector of a row: a signal electrode, or an extra point electrode.
+    fn row_site(&self, row: usize) -> (Vec3, Option<Vec3>) {
+        match SIGNAL_ELECTRODES.get(row) {
+            Some(&e) => (self.sites[e as usize], self.far_field[e as usize]),
+            None => (self.extras[row - ROWS].1, None),
+        }
+    }
+
+    fn row_count(&self) -> usize {
+        ROWS + self.extras.len()
+    }
+
     /// Recompute the physical weights of one row from its electrode's current site, and bake it
     /// (as `rebake_row` would) in the same pass.
     fn compute_row(&mut self, row: usize) {
-        let electrode = SIGNAL_ELECTRODES[row] as usize;
+        let (site, far_field) = self.row_site(row);
         let n = self.n;
         let mut w = std::mem::take(&mut self.w);
         let mut eff = std::mem::take(&mut self.w_eff);
         let rows = (&mut w[row * n..(row + 1) * n], &mut eff[row * n..(row + 1) * n]);
         let gain = |j: usize| self.column_gain(j);
-        let constant = if let Some(lead) = self.far_field[electrode] {
+        let constant = if let Some(lead) = far_field {
             fill_row(rows, &self.rest_offset, gain, |j| self.dipole_w[j].dot(lead))
         } else {
-            let site = self.sites[electrode];
             let k = self.opts.gain_mv;
             let vol = self.cell_volume_mm3;
             // u_i = vol · (r_e − x_i)/|r_e − x_i|^p: the dipole kernel at each volume cell.
@@ -587,8 +603,8 @@ impl ForwardModel {
     }
 
     fn rebake_all(&mut self) {
-        self.w_eff.resize(ROWS * self.n, 0.0);
-        for row in 0..ROWS {
+        self.w_eff.resize(self.row_count() * self.n, 0.0);
+        for row in 0..self.row_count() {
             self.rebake_row(row);
         }
     }
@@ -632,6 +648,29 @@ impl ForwardModel {
         sum.as_vec3()
     }
 
+    /// Potentials (mV, before the Wilson terminal is subtracted) of the extra electrodes, in the
+    /// order of [`ForwardModel::extra_electrodes`]. Cost: one `extras × n` product.
+    #[must_use]
+    pub fn sample_extras(&self, vm: &[f32]) -> Vec<f64> {
+        assert_eq!(vm.len(), self.n, "V_m has one value per cell");
+        let n = self.n;
+        (ROWS..self.row_count())
+            .map(|row| {
+                // fixed chunk order, as in `sample`
+                (0..n.div_ceil(SAMPLE_CHUNK))
+                    .map(|c| {
+                        let cols = c * SAMPLE_CHUNK..((c + 1) * SAMPLE_CHUNK).min(n);
+                        f64::from(dot(
+                            &self.w_eff[row * n + cols.start..row * n + cols.end],
+                            &vm[cols],
+                        ))
+                    })
+                    .sum::<f64>()
+                    + self.offset_mv[row]
+            })
+            .collect()
+    }
+
     /// [`ForwardModel::sample`] of an engine state, after switching the ventricular gain phase
     /// from it (only matters when `gains.qrs ≠ gains.t`).
     pub fn sample_state(&mut self, state: &CellState, now_ms: f64) -> ElectrodePotentials {
@@ -668,6 +707,55 @@ impl ForwardModel {
         if let Some(row) = signal_row(e) {
             self.compute_row(row);
         }
+    }
+
+    /// Put a limb electrode back on its distal limb: a far-field electrode at hexaxial angle
+    /// `hexaxial_deg` (−150° right arm, −30° left arm, +90° legs) and the effective distance of
+    /// the Einthoven placement (its default when the model was built with torso limb sites).
+    /// The legs join the trunk at the pelvis, so both leg electrodes see the same far field.
+    pub fn place_on_limb(&mut self, e: Electrode, hexaxial_deg: f32) {
+        let r = match self.opts.limbs {
+            LimbPlacement::Einthoven { lead_distance_mm } => lead_distance_mm,
+            LimbPlacement::Sites => match LimbPlacement::default() {
+                LimbPlacement::Einthoven { lead_distance_mm } => lead_distance_mm,
+                LimbPlacement::Sites => 125.0,
+            },
+        };
+        let a = hexaxial_deg.to_radians();
+        let dir = Vec3::new(a.cos(), -a.sin(), 0.0);
+        let centre = centroid_of(&self.positions, &self.ventricular_cells);
+        self.sites[e as usize] = centre + dir * r;
+        self.far_field[e as usize] = Some(dir / (r * r));
+        if let Some(row) = signal_row(e) {
+            self.compute_row(row);
+        }
+    }
+
+    /// Replace the extra point electrodes (name, site mm); each gets its own row of `W`.
+    pub fn set_extra_electrodes(&mut self, extras: &[(String, Vec3)]) {
+        if self.extras.as_slice() == extras {
+            return;
+        }
+        self.extras = extras.to_vec();
+        let rows = self.row_count();
+        self.w.resize(rows * self.n, 0.0);
+        self.w_eff.resize(rows * self.n, 0.0);
+        self.offset_mv.resize(rows, 0.0);
+        for row in ROWS..rows {
+            self.compute_row(row);
+        }
+    }
+
+    /// The extra electrodes, in row order.
+    #[must_use]
+    pub fn extra_electrodes(&self) -> &[(String, Vec3)] {
+        &self.extras
+    }
+
+    /// Whether an electrode is a far-field (distal-limb) electrode.
+    #[must_use]
+    pub fn is_far_field(&self, e: Electrode) -> bool {
+        self.far_field[e as usize].is_some()
     }
 
     /// Exchange two electrodes' sites (a cable swap): rows are swapped, nothing is recomputed.
@@ -839,23 +927,24 @@ fn electrode_sites(
     Ok((sites, far))
 }
 
-/// Centroid of `cells` (all cells when empty).
-fn centroid(cloud: &CellCloud, cells: &[u32]) -> Vec3 {
-    let (sum, n) = if cells.is_empty() {
-        (
-            cloud.positions.iter().map(|p| p.as_dvec3()).sum::<DVec3>(),
-            cloud.len(),
-        )
+/// Centroid of the `cells` among `positions` (all when empty).
+fn centroid_of(positions: &[Vec3], cells: &[u32]) -> Vec3 {
+    let sum: DVec3 = if cells.is_empty() {
+        positions.iter().map(|p| p.as_dvec3()).sum()
     } else {
-        (
-            cells
-                .iter()
-                .map(|&i| cloud.positions[i as usize].as_dvec3())
-                .sum::<DVec3>(),
-            cells.len(),
-        )
+        cells.iter().map(|&i| positions[i as usize].as_dvec3()).sum()
+    };
+    let n = if cells.is_empty() {
+        positions.len()
+    } else {
+        cells.len()
     };
     (sum / n.max(1) as f64).as_vec3()
+}
+
+/// Centroid of `cells` (all cells when empty).
+fn centroid(cloud: &CellCloud, cells: &[u32]) -> Vec3 {
+    centroid_of(&cloud.positions, cells)
 }
 
 /// Typical cell spacing, mm.
