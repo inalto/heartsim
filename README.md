@@ -10,6 +10,13 @@ open-source ECG axis trainer, and is built as a clean-room, open-source implemen
 
 ![M0 vertical slice](docs/images/m0-vertical-slice.png)
 
+More screenshots: [sinus beat on the heart](docs/images/simulator-sinus.png),
+[LBBB with the heart-vector arrow, scrubbed](docs/images/simulator-lbbb-vector.png),
+[vectorcardiogram](docs/images/heart-vector-lbbb.png), [WPW](docs/images/simulator-wpw.png),
+[Wenckebach 12-lead](docs/images/twelve-lead-mobitz1.png), [rhythm quiz](docs/images/rhythm-quiz.png). They are regenerated
+headless with `HEARTSIM_SCREENSHOT_DIR=docs/images VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+WGPU_BACKEND=vulkan WINIT_UNIX_BACKEND=x11 xvfb-run -a -s "-screen 0 1280x800x24" cargo run -p heartsim-app`.
+
 ## Status
 M0 foundation (2026-10-31): workspace, core types, timing engine (SA/AV/His/escape, AV recovery curve, Mobitz II), Tier-0 12-lead
 synthesiser, ECG ring buffers with min/max decimation, offscreen wgpu viewport, eframe app with a live strip, CLI export.

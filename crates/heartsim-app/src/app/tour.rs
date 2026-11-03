@@ -1,0 +1,204 @@
+//! Screenshot tour for the documentation: with `HEARTSIM_SCREENSHOT_DIR=<dir>` the app walks
+//! through a fixed list of tabs and scenarios, runs each for a few simulated seconds, pauses with
+//! the strip cursor shortly after a QRS onset (so the scrubbed heart shows the activation wave),
+//! saves a PNG of the window and quits. Runs are 12 s or more: the strip can only be scrubbed
+//! once it holds more than one screen (10 s). Used headless with xvfb + lavapipe (see `docs/images/`).
+
+use super::{HeartSimApp, Tab};
+use eframe::egui;
+use heartsim_sim::Engine as _;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+/// One screenshot.
+#[derive(Debug, Clone, Copy)]
+struct Step {
+    file: &'static str,
+    tab: Tab,
+    scenario: &'static str,
+    /// Simulated seconds to run before pausing.
+    run_s: f64,
+    /// Where the strip cursor goes: ms after the last ventricular activation.
+    after_qrs_ms: f64,
+    vector: bool,
+    quiz: bool,
+}
+
+const STEPS: [Step; 6] = [
+    Step {
+        file: "simulator-sinus.png",
+        tab: Tab::Simulator,
+        scenario: "sinus_normal",
+        run_s: 12.0,
+        after_qrs_ms: 45.0,
+        vector: false,
+        quiz: false,
+    },
+    Step {
+        file: "simulator-lbbb-vector.png",
+        tab: Tab::Simulator,
+        scenario: "lbbb",
+        run_s: 12.0,
+        after_qrs_ms: 70.0,
+        vector: true,
+        quiz: false,
+    },
+    Step {
+        file: "heart-vector-lbbb.png",
+        tab: Tab::HeartVector,
+        scenario: "lbbb",
+        run_s: 12.0,
+        after_qrs_ms: 70.0,
+        vector: true,
+        quiz: false,
+    },
+    Step {
+        file: "simulator-wpw.png",
+        tab: Tab::Simulator,
+        scenario: "wpw_left_lateral",
+        run_s: 12.0,
+        after_qrs_ms: 30.0,
+        vector: false,
+        quiz: false,
+    },
+    Step {
+        file: "twelve-lead-mobitz1.png",
+        tab: Tab::TwelveLead,
+        scenario: "avb_2nd_mobitz1",
+        run_s: 13.0,
+        after_qrs_ms: 300.0,
+        vector: false,
+        quiz: false,
+    },
+    Step {
+        file: "rhythm-quiz.png",
+        tab: Tab::RhythmQuiz,
+        scenario: "sinus_normal",
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        vector: false,
+        quiz: true,
+    },
+];
+
+#[derive(Debug)]
+enum Phase {
+    Setup,
+    Running,
+    /// Frames left to render before the capture.
+    Settle(u32),
+    Capturing(Arc<Mutex<Option<anyhow::Result<()>>>>),
+}
+
+/// Tour progress.
+#[derive(Debug)]
+pub(super) struct Tour {
+    dir: PathBuf,
+    step: usize,
+    phase: Phase,
+}
+
+impl Tour {
+    /// A tour if `HEARTSIM_SCREENSHOT_DIR` is set.
+    pub(super) fn from_env() -> Option<Self> {
+        let dir = PathBuf::from(std::env::var_os("HEARTSIM_SCREENSHOT_DIR")?);
+        Some(Self {
+            dir,
+            step: 0,
+            phase: Phase::Setup,
+        })
+    }
+}
+
+fn save_png(img: &egui::ColorImage, path: &std::path::Path) -> anyhow::Result<()> {
+    let [w, h] = img.size;
+    let bytes: Vec<u8> = img
+        .pixels
+        .iter()
+        .flat_map(egui::Color32::to_srgba_unmultiplied)
+        .collect();
+    let rgba = image::RgbaImage::from_raw(w as u32, h as u32, bytes)
+        .ok_or_else(|| anyhow::anyhow!("screenshot buffer size"))?;
+    rgba.save(path)?;
+    Ok(())
+}
+
+impl HeartSimApp {
+    /// Advance the screenshot tour by one frame (no-op without one).
+    pub(super) fn drive_tour(&mut self, ctx: &egui::Context) {
+        let Some(mut tour) = self.tour.take() else {
+            return;
+        };
+        let Some(step) = STEPS.get(tour.step).copied() else {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        };
+        match &tour.phase {
+            Phase::Setup => {
+                // the X pointer rests mid-window under xvfb: keep its hover read-out out of the shots
+                ctx.all_styles_mut(|s| s.interaction.tooltip_delay = f32::INFINITY);
+                if let Some(i) = self.library.index_of(step.scenario) {
+                    self.load_scenario(i);
+                }
+                self.tab = step.tab;
+                self.vector.arrow = step.vector;
+                self.vector.show_loop = step.vector;
+                if let Some(h) = &mut self.heart {
+                    let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                    self.vector.set_see_through(step.vector, &mut alphas);
+                }
+                if step.quiz {
+                    self.rhythm_quiz.next_question(&self.library);
+                    if let Some(q) = &self.rhythm_quiz.question {
+                        let wrong = q
+                            .options
+                            .iter()
+                            .copied()
+                            .find(|&i| i != q.answer)
+                            .unwrap_or(q.answer);
+                        self.rhythm_quiz.answer(wrong);
+                    }
+                }
+                tour.phase = Phase::Running;
+            }
+            Phase::Running => {
+                if self.engine.now().0 >= step.run_s * 1000.0 {
+                    self.ecg.toggle_pause();
+                    let back = self.engine.now().0 - (self.last_v_activation.0 + step.after_qrs_ms);
+                    if step.after_qrs_ms > 0.0 && back > 0.0 {
+                        self.ecg.playback.set_scrub_ms(back, back);
+                    }
+                    tour.phase = Phase::Settle(8);
+                }
+            }
+            Phase::Settle(n) => {
+                tour.phase = if *n == 0 {
+                    let slot = Arc::new(Mutex::new(None));
+                    let out = Arc::clone(&slot);
+                    let path = tour.dir.join(step.file);
+                    ctx.request_screenshot(move |img| {
+                        let r = save_png(&img, &path);
+                        if let Ok(mut s) = out.lock() {
+                            *s = Some(r);
+                        }
+                    });
+                    Phase::Capturing(slot)
+                } else {
+                    Phase::Settle(n - 1)
+                };
+            }
+            Phase::Capturing(slot) => {
+                let done = slot.lock().ok().and_then(|mut s| s.take());
+                if let Some(r) = done {
+                    match r {
+                        Ok(()) => tracing::info!("saved {}", tour.dir.join(step.file).display()),
+                        Err(e) => tracing::error!("{}: {e:#}", step.file),
+                    }
+                    tour.step += 1;
+                    tour.phase = Phase::Setup;
+                }
+            }
+        }
+        self.tour = Some(tour);
+    }
+}

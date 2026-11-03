@@ -170,6 +170,8 @@ pub struct HeartView {
     pacer_channels: [bool; 3],
     lead_set: Option<GlyphSetId>,
     lead_glyphs: Vec<GlyphInstance>,
+    /// Per-cell values to show instead of the live engine state (scrubbing a paused strip).
+    scrub_cells: Option<Vec<f32>>,
 }
 
 impl std::fmt::Debug for HeartView {
@@ -340,6 +342,7 @@ impl HeartView {
             pacer_channels: [false; 3],
             lead_set: None,
             lead_glyphs: Vec::new(),
+            scrub_cells: None,
         }
     }
 
@@ -439,9 +442,49 @@ impl HeartView {
         }
     }
 
-    /// Recompute every hooded layer's vertex scalars from engine state.
-    pub fn update_scalars(&mut self) {
+    /// Per-cell values of the current colour mode from live engine state (what the history
+    /// records for scrubbing).
+    pub fn cell_values(&mut self) -> &[f32] {
         self.fill_per_cell();
+        &self.per_cell
+    }
+
+    /// Show `cells` (per-cell values of the current mode, e.g. a history snapshot) instead of
+    /// the live state; `None` returns to live.
+    pub fn set_scrub_cells(&mut self, cells: Option<&[f32]>) {
+        match (cells, &mut self.scrub_cells) {
+            (Some(c), Some(buf)) => {
+                buf.clear();
+                buf.extend_from_slice(c);
+            }
+            (Some(c), slot) => *slot = Some(c.to_vec()),
+            (None, slot) => *slot = None,
+        }
+    }
+
+    /// Re-time the 3-D engine for a newly loaded scenario: His–Purkinje delays and accessory
+    /// pathway from `timing`, tissue restored, clock back to zero.
+    pub fn retime(&mut self, timing: &TimingParams) {
+        self.engine.set_his_purkinje(timing.his_purkinje.clone());
+        self.engine.set_accessory(
+            timing
+                .accessory
+                .as_ref()
+                .map(|ap| (ap.ventricular_side, ap.atrial_side)),
+        );
+        self.engine.reset();
+        self.beat_start_ms = 0.0;
+        self.now_ms = 0.0;
+        self.scrub_cells = None;
+        self.status = None;
+    }
+
+    /// Recompute every hooded layer's vertex scalars from engine state (or the scrub snapshot).
+    pub fn update_scalars(&mut self) {
+        match &self.scrub_cells {
+            Some(c) if c.len() == self.per_cell.len() => self.per_cell.copy_from_slice(c),
+            _ => self.fill_per_cell(),
+        }
         for l in &mut self.layers {
             if let Some(h) = &l.hoods {
                 map_hoods(h, &self.per_cell, &mut l.scalars);

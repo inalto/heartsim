@@ -3,8 +3,12 @@
 
 pub mod app;
 pub mod electrode_tab;
+pub mod heart_history;
 pub mod heart_view;
+pub mod rhythm_quiz;
+pub mod scenarios;
 pub mod snapshot_ring;
+pub mod vector_overlay;
 pub use app::HeartSimApp;
 
 /// The line printed by `heartsim --version`; installers' smoke tests assert on the `heartsim <semver>` prefix.

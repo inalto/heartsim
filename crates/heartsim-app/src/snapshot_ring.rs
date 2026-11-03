@@ -55,6 +55,16 @@ impl<T> SnapshotRing<T> {
         self.entries.get(i.saturating_sub(1)).map(|(_, v)| v)
     }
 
+    /// The snapshots bracketing `t` with their times: the latest at or before `t` and the next
+    /// one (the same one twice at either end of the history), for interpolation.
+    #[must_use]
+    pub fn around(&self, t: Millis) -> Option<((Millis, &T), (Millis, &T))> {
+        let i = self.entries.partition_point(|(s, _)| s.0 <= t.0);
+        let a = self.entries.get(i.saturating_sub(1))?;
+        let b = self.entries.get(i).unwrap_or(a);
+        Some(((a.0, &a.1), (b.0, &b.1)))
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
