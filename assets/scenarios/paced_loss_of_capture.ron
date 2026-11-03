@@ -1,0 +1,30 @@
+// Pacing preset (brief B13). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; device behaviour follows the NBG timing cycles (Bernstein 2002).
+Scenario(
+    format_version: 1,
+    id: "paced_loss_of_capture",
+    title: "VVI loss of capture from a rising threshold (exit block)",
+    description: "Complete heart block paced VVI at 60 ppm; the RV capture threshold rises past the 5 mA output after about 8 s, so spikes continue without QRS complexes and a 30 bpm ventricular escape takes over.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Loss of capture: a pacing spike that is not followed by a depolarisation (no QRS after a ventricular spike, no P after an atrial spike)\nalthough the tissue is excitable. Here the RV-apex threshold drifts up (exit block: fibrosis at the electrode-tissue interface in the weeks\nafter implantation, also hyperkalaemia, class IC drugs, lead micro-dislodgement) until the programmed output no longer captures.\nThe escape beats are sensed (VVI inhibits), so spikes fall 1 s after each escape beat and capture nothing. Fix: raise the output to at\nleast twice the threshold; check electrolytes and lead position. Contrast: a spike that falls in the refractory period is functional\nnon-capture, not loss of capture.\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Ellenbogen KA, Wilkoff BL, Kay GN, Lau CP, Auricchio A. Clinical Cardiac Pacing, Defibrillation and Resynchronization Therapy, 5th ed. Elsevier 2017.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["paced_vvi", "paced_undersensing", "avb_3rd_ventricular"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (27.0, 33.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        av: AvParams(complete_block: true),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 30.0),
+        pacer: Some(PacerConfig(
+            mode: Vvi,
+            lower_rate_bpm: 60.0,
+            ventricular_output_ma: 5.0,
+            ventricular_lead: LeadParams(site: RvApex, threshold_ma: Some(1.0), threshold_drift_ma_per_min: 30.0, threshold_max_ma: 8.0),
+        )),
+    ),
+)

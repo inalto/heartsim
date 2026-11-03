@@ -5,7 +5,7 @@
 //! event is a table lookup.
 
 use super::graph::CellKind;
-use crate::timing::Side;
+use crate::timing::{LeadSite, Side};
 use glam::Vec3;
 use heartsim_core::{Region, StimSite};
 use heartsim_geometry::CellCloud;
@@ -48,6 +48,9 @@ pub struct SeedMap {
     pub atrial_lead: Vec<u32>,
     /// Ventricular lead tip (RV apex by default).
     pub ventricular_lead: Vec<u32>,
+    /// LV lead tip of a biventricular device (`Origin::Pacer(2)`; LV lateral by default).
+    #[serde(default)]
+    pub lv_lead: Vec<u32>,
     /// Accessory-pathway insertions on the AV ring, indexed `[Left, Right]`.
     pub ap_atrial: [Vec<u32>; 2],
     /// Ventricular insertions (basal LV lateral / RV free wall), `[Left, Right]`.
@@ -73,6 +76,26 @@ pub fn resolve_site(cloud: &CellCloud, site: &StimSite) -> Option<u32> {
         StimSite::Cell(i) => ((*i as usize) < cloud.len()).then_some(*i),
         StimSite::Point(p) => cloud.nearest(Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)),
     }
+}
+
+/// Lead-tip cell of a pacing `site`: the first of the site's landmarks the pack has. A septal RV
+/// lead without an `rv_septum` landmark sits on the right-ventricular cell nearest `lv_septal`
+/// (the other face of the septum). Empty when the pack has none of them.
+#[must_use]
+pub fn lead_cells(cloud: &CellCloud, site: LeadSite) -> Vec<u32> {
+    for name in site.landmarks() {
+        let Some(&c) = cloud.landmarks.get(*name) else {
+            continue;
+        };
+        if site == LeadSite::RvSeptum && *name == "lv_septal" {
+            let p = cloud.positions[c as usize];
+            return nearest_where(cloud, p, |i| cloud.regions[i] == Region::RightVentricle)
+                .into_iter()
+                .collect();
+        }
+        return vec![c];
+    }
+    Vec::new()
 }
 
 fn landmark(cloud: &CellCloud, name: &str) -> Vec<u32> {
@@ -195,7 +218,7 @@ impl SeedMap {
         let ap_a_left = atrial_near(&ap_v_left, Region::LeftAtrium);
         let ap_a_right = atrial_near(&ap_v_right, Region::RightAtrium);
 
-        let rv_apex = landmark(cloud, "rv_apex");
+        let rv_apex = lead_cells(cloud, LeadSite::RvApex);
         let ra_lateral = landmark(cloud, "ra_lateral");
         Self {
             sinus,
@@ -203,13 +226,14 @@ impl SeedMap {
             rbb: pmj("rbb"),
             laf: pmj("laf"),
             lpf: pmj("lpf"),
-            right_atrium: ra_lateral.clone(),
+            right_atrium: ra_lateral,
             left_atrium: landmark(cloud, "la_roof"),
             right_ventricle: rv_apex.clone(),
             left_ventricle: landmark(cloud, "lv_lateral"),
             ventricular_escape: landmark(cloud, "lv_septal"),
-            atrial_lead: ra_lateral,
+            atrial_lead: lead_cells(cloud, LeadSite::RaAppendage),
             ventricular_lead: rv_apex,
+            lv_lead: lead_cells(cloud, LeadSite::LvLateral),
             ap_atrial: [ap_a_left, ap_a_right],
             ap_ventricular: [ap_v_left, ap_v_right],
             foci: Vec::new(),

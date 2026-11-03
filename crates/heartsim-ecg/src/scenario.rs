@@ -118,6 +118,7 @@ impl Tier0Scenario {
             eng.step(Millis(STEP_MS));
             let evs = eng.drain_events();
             synth.on_events(&evs);
+            synth.on_pacer_markers(&eng.drain_pacer_markers());
             events.extend(evs);
             let s = synth.sample(eng.now());
             for (buf, v) in leads.iter_mut().zip(s.0) {

@@ -28,9 +28,11 @@ pub mod pacer;
 pub mod params;
 
 pub use ladder::{LadderDirection, LadderSample};
+pub use pacer::{MarkerKind, PacerMarker, T_WAVE_DELAY_MS};
 pub use params::{
     AccessoryPathway, AvParams, AvPathway, BundleEdge, EscapeParams, Focus, FocusMode, FocusRegion,
-    HisPurkinjeParams, PacerConfig, PacerMode, Side, SinusParams, TimingParams,
+    HisPurkinjeParams, LeadParams, LeadSite, PMT_DETECT_CYCLES, PacerChannel, PacerConfig, PacerMode,
+    PacerPreset, Side, SinusParams, TimingParams,
 };
 
 use crate::engine::{CellState, Engine, Event, EventKind, Origin};
@@ -57,6 +59,8 @@ pub(crate) enum VentVia {
     Focus,
     Escape,
     Pacer,
+    /// LV lead of a biventricular device: a front distinct from the RV pace, so the two fuse.
+    PacerLv,
     External,
 }
 
@@ -234,6 +238,10 @@ pub struct TimingEngine {
     // --- foci / pacer ---
     foci: Vec<FocusState>,
     pacer: Pacer,
+    /// Pacemaker marker channel since the last drain (paces with capture, senses).
+    markers: Vec<PacerMarker>,
+    /// Electrogram amplitude per pacer channel measured on the mesh (Tier 1), mV.
+    measured_amplitude_mv: [Option<f64>; 3],
 }
 
 impl TimingEngine {
@@ -264,6 +272,8 @@ impl TimingEngine {
             ap_last_use: None,
             foci: vec![FocusState::default(); n_foci],
             pacer: Pacer::default(),
+            markers: Vec::with_capacity(16),
+            measured_amplitude_mv: [None; 3],
         };
         e.reset();
         e
@@ -272,6 +282,31 @@ impl TimingEngine {
     /// Ladder-diagram samples produced since the last call (see [`ladder`]).
     pub fn drain_ladder(&mut self) -> Vec<LadderSample> {
         std::mem::take(&mut self.ladder)
+    }
+
+    /// Pacemaker marker-channel entries since the last call: every stimulus (with its capture
+    /// result) and every sensed signal. Pace markers are the stimulus sites the strip and the
+    /// heart view show; they align with the `Origin::Pacer` events of the same step.
+    pub fn drain_pacer_markers(&mut self) -> Vec<PacerMarker> {
+        std::mem::take(&mut self.markers)
+    }
+
+    /// Marker-channel entries since the last drain, without taking them.
+    #[must_use]
+    pub fn pacer_markers(&self) -> &[PacerMarker] {
+        &self.markers
+    }
+
+    /// Set the intrinsic electrogram amplitude the lead of `channel` sees, mV (`None` = the
+    /// lead's parameter). Tier 1 measures it from the local V_m upstrokes at the lead tip.
+    pub fn set_measured_amplitude_mv(&mut self, channel: PacerChannel, mv: Option<f64>) {
+        self.measured_amplitude_mv[channel as usize] = mv;
+    }
+
+    /// Electrogram amplitudes measured on the mesh, per channel (index = `PacerChannel`).
+    #[must_use]
+    pub fn measured_amplitudes_mv(&self) -> [Option<f64>; 3] {
+        self.measured_amplitude_mv
     }
 
     /// Events produced since the last drain, without taking them.
@@ -513,6 +548,7 @@ impl Engine for TimingEngine {
         self.foci.clear();
         self.foci.resize(self.params.foci.len(), FocusState::default());
         self.pacer.reset(0.0);
+        self.markers.clear();
         self.schedule(200.0, Pending::Sinus);
         self.schedule_automatic_foci(0.0);
     }

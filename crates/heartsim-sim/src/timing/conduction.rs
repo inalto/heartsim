@@ -4,10 +4,11 @@
 //! schedules the downstream consequences, so the queue stays chronological.
 
 use super::ladder::LadderSample;
-use super::params::{AvPathway, FocusMode, FocusRegion};
+use super::pacer::{MarkerKind, PacerMarker};
+use super::params::{AvPathway, FocusMode, FocusRegion, LeadSite, PacerChannel, PacerConfig};
 use super::{AtrialVia, Edge, HisVia, Pending, StimTarget, TimingEngine, VentVia};
 use crate::engine::{Chamber, EventKind, Origin};
-use heartsim_core::Region;
+use heartsim_core::{Millis, Region};
 
 /// Shrier recovery curve: conduction time for recovery time `rt` (ms), `None` if blocked.
 /// `erp_bonus_ms` is the transient drug effect added to the pathway's ERP.
@@ -492,37 +493,77 @@ impl TimingEngine {
     // --- pacemaker ----------------------------------------------------------------------------
 
     pub(crate) fn run_pacer(&mut self) {
-        let Some(cfg) = self.params.pacer.clone() else {
+        let Some(cfg) = self.params.pacer.take() else {
             return;
         };
         let now = self.now;
-        let req = self.pacer.update(&cfg, now, &self.events[self.step_start..]);
-        if req.atrium {
-            if cfg.output_capture {
-                self.activate_atrium(
-                    now,
-                    cfg.atrial_lead,
-                    EventKind::Stimulus,
-                    Origin::Pacer(0),
-                    AtrialVia::Pacer,
-                );
-            } else {
-                self.emit(now, cfg.atrial_lead, EventKind::Blocked, Origin::Pacer(0));
+        let amplitude = PacerChannel::ALL.map(|ch| self.lead_amplitude_mv(&cfg, ch));
+        let req = self.pacer.update(
+            &cfg,
+            now,
+            &self.events[self.step_start..],
+            amplitude,
+            &mut self.markers,
+        );
+        for (wanted, ch) in [
+            (req.atrium, PacerChannel::Atrial),
+            (req.ventricle, PacerChannel::Ventricular),
+            (req.lv, PacerChannel::LeftVentricular),
+        ] {
+            if wanted {
+                self.deliver_pace(&cfg, ch, now);
             }
         }
-        if req.ventricle {
-            if cfg.output_capture {
-                self.activate_ventricle(
-                    now,
-                    cfg.ventricular_lead,
-                    EventKind::Stimulus,
-                    Origin::Pacer(1),
-                    VentVia::Pacer,
-                );
+        self.params.pacer = Some(cfg);
+    }
+
+    /// One stimulus on `channel` at `t`: captures if the output reaches the lead's threshold and
+    /// the tissue is excitable. Logs the pace marker either way.
+    fn deliver_pace(&mut self, cfg: &PacerConfig, channel: PacerChannel, t: f64) {
+        let Some(lead) = cfg.lead(channel) else {
+            return;
+        };
+        let origin = Origin::Pacer(channel.index());
+        let region = lead.site.region();
+        let above_threshold = cfg.output_capture && cfg.output_ma(channel) >= lead.threshold_at(t);
+        let captured = if !above_threshold {
+            self.emit(t, region, EventKind::Blocked, origin);
+            false
+        } else if lead.site.is_atrial() {
+            self.activate_atrium(t, region, EventKind::Stimulus, origin, AtrialVia::Pacer)
+        } else if lead.site == LeadSite::HisBundle {
+            // Selective His capture: the impulse enters the conduction system and reaches the
+            // ventricles over the bundle branches (narrow QRS). The bundle must be excitable.
+            if since(self.last_his_fired, t) < self.params.his_purkinje.erp_ms {
+                self.emit(t, region, EventKind::Blocked, origin);
+                false
             } else {
-                self.emit(now, cfg.ventricular_lead, EventKind::Blocked, Origin::Pacer(1));
+                self.emit(t, region, EventKind::Stimulus, origin);
+                self.on_his(t, origin, HisVia::Junctional);
+                true
             }
-        }
+        } else {
+            let via = if channel == PacerChannel::LeftVentricular {
+                VentVia::PacerLv
+            } else {
+                VentVia::Pacer
+            };
+            self.activate_ventricle(t, region, EventKind::Stimulus, origin, via)
+        };
+        self.pacer.paced(channel, t, captured);
+        self.markers.push(PacerMarker {
+            at: Millis(t),
+            channel,
+            kind: MarkerKind::Pace { captured },
+        });
+    }
+
+    /// Electrogram amplitude the lead of `channel` sees for an intrinsic event, mV: measured on
+    /// the mesh when Tier 1 supplied it, the lead's parameter otherwise.
+    fn lead_amplitude_mv(&self, cfg: &PacerConfig, channel: PacerChannel) -> f64 {
+        self.measured_amplitude_mv[channel as usize]
+            .or_else(|| cfg.lead(channel).map(super::params::LeadParams::intrinsic))
+            .unwrap_or(0.0)
     }
 
     // --- ectopic foci -------------------------------------------------------------------------

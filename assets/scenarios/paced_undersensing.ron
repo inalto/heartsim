@@ -1,0 +1,23 @@
+// Pacing preset (brief B13). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; device behaviour follows the NBG timing cycles (Bernstein 2002).
+Scenario(
+    format_version: 1,
+    id: "paced_undersensing",
+    title: "VVI undersensing with competition",
+    description: "Sinus rhythm at 75 bpm with normal conduction; the VVI device (60 ppm) is programmed to 12 mV sensitivity, above the 10 mV R wave at the lead, so it never sees the QRS and paces at its own rate in competition with the sinus rhythm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Undersensing: the device fails to see intrinsic activity and paces when it should be inhibited. Spikes appear at the lower-rate\ninterval regardless of the native QRS: some capture (paced beats, fusion), some fall in the refractory period just after a native QRS\n(functional non-capture, not loss of capture), some land on the T wave (R-on-T risk). Causes: sensitivity number set too high, low\nelectrogram amplitude (infarct or scar at the lead tip, lead dislodgement), magnet / asynchronous mode. Fix: lower the sensitivity\nnumber (more sensitive) below the measured R-wave amplitude.\n\nSources:\n- Bernstein AD et al. The revised NASPE/BPEG generic code for antibradycardia, adaptive-rate, and multisite pacing. PACE 2002;25:260-264.\n- Ellenbogen KA, Wilkoff BL, Kay GN, Lau CP, Auricchio A. Clinical Cardiac Pacing, Defibrillation and Resynchronization Therapy, 5th ed. Elsevier 2017.\n- Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017."),
+    confused_with: ["paced_loss_of_capture", "paced_vvi", "pvc_bigeminy"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        pacer: Some(PacerConfig(mode: Vvi, lower_rate_bpm: 60.0, ventricular_sensitivity_mv: 12.0)),
+    ),
+)
