@@ -1,0 +1,142 @@
+// heartsim tutorial: the frontal-plane QRS axis. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-app/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "cardiac_axis",
+    title: "Cardiac axis",
+    summary: "What the electrical axis is, how to estimate it from leads I and aVF, and what left and right axis deviation look like.",
+    pages: [
+        Page(
+            title: "What is the axis?",
+            markdown: r#"
+While the ventricles depolarise, millions of cells add up to one **electrical vector** that changes
+direction from moment to moment. Averaged over the QRS complex it points in one main direction:
+the **mean QRS axis**.
+
+The six limb leads look at the heart in the **frontal plane** from six directions, 30° apart
+(the *hexaxial* reference system shown on the circle):
+
+| Lead | Angle |
+|------|-------|
+| I    | 0°    |
+| II   | +60°  |
+| III  | +120° |
+| aVF  | +90°  |
+| aVL  | −30°  |
+| aVR  | −150° |
+
+A lead records an upright QRS when the axis points towards its positive pole, and a negative QRS
+when the axis points away from it. The normal adult axis lies between **−30° and +90°**.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(AxisTrainer)),
+                Ui(SetQrsAxis(60.0)),
+            ],
+        ),
+        Page(
+            title: "Leads I and aVF",
+            markdown: r#"
+Leads I (0°) and aVF (+90°) are at right angles, so together they divide the circle into four
+quadrants. Look at the net direction of the QRS in each:
+
+* **I up, aVF up**: between 0° and +90°, a normal axis.
+* **I up, aVF down**: between 0° and −90°. Look at lead II to decide: if II is also mainly
+  negative, the axis is beyond −30° (**left axis deviation**).
+* **I down, aVF up**: between +90° and 180°, **right axis deviation**.
+* **I down, aVF down**: between −90° and 180°, an **extreme** ("north-west") axis.
+
+Drag on the circle to rotate the axis and watch leads I and aVF change.
+"#,
+            actions: [
+                Ui(SetQrsAxis(60.0)),
+            ],
+            check: Some(Question(
+                prompt: "Lead I is mainly positive and aVF mainly negative. Where does the axis lie?",
+                choices: [
+                    "Between 0° and −90°",
+                    "Between 0° and +90°",
+                    "Between +90° and 180°",
+                    "Between −90° and 180° (extreme)",
+                ],
+                answer: 0,
+                explanation: "Positive in I means towards 0°; negative in aVF means away from +90°, so the axis is in the upper-right quadrant of the circle, 0° to −90°. Lead II then separates normal (down to −30°) from left deviation.",
+            )),
+        ),
+        Page(
+            title: "Left axis deviation",
+            markdown: r#"
+The axis is now at **−60°**. Lead I is positive, aVF and lead II are negative.
+
+A lead whose QRS is as positive as it is negative (**equiphasic**) lies at right angles to the
+axis. This gives a second, finer method: find the most equiphasic limb lead and choose the
+perpendicular direction that matches lead I.
+
+Left axis deviation is typical of **left anterior fascicular block**; it is also seen with
+inferior myocardial infarction and some forms of ventricular pre-excitation and pacing.
+"#,
+            actions: [
+                Ui(SetQrsAxis(-60.0)),
+            ],
+            check: Some(Question(
+                prompt: "With the axis at −60°, which limb lead is closest to equiphasic?",
+                choices: ["I", "aVR", "aVF", "III"],
+                answer: 1,
+                explanation: "aVR lies at −150°, exactly 90° away from −60°, so the axis projects onto it as zero.",
+            )),
+        ),
+        Page(
+            title: "Right axis deviation",
+            markdown: r#"
+The axis is now at **+120°**. Lead I is negative and aVF positive.
+
+Right axis deviation can be normal in children and in tall, slim adults. Otherwise it suggests
+**right ventricular hypertrophy** or strain, lateral myocardial infarction, or **left posterior
+fascicular block**.
+"#,
+            actions: [
+                Ui(SetQrsAxis(120.0)),
+            ],
+            check: Some(Question(
+                prompt: "At +120°, which limb lead shows the largest upright QRS?",
+                choices: ["I", "II", "III", "aVL"],
+                answer: 2,
+                explanation: "Lead III looks at the heart from +120°, so the axis points straight at its positive pole.",
+            )),
+        ),
+        Page(
+            title: "The axis in a real conduction problem",
+            markdown: r#"
+The simulator now runs **left anterior fascicular block**. The anterior fascicle of the left bundle
+no longer conducts, so the upper-left part of the left ventricle is activated late, through the
+posterior fascicle. The late activation pulls the mean vector upward and to the left.
+
+Look at the twelve leads: small q and tall R waves in I and aVL, small r and deep S waves in II,
+III and aVF. The QRS is only slightly wider than normal.
+"#,
+            actions: [
+                Ui(LoadScenario("lafb")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which axis is typical of left anterior fascicular block?",
+                choices: ["+60° to +90°", "−45° to −90°", "+90° to +180°", "0° to +30°"],
+                answer: 1,
+                explanation: "LAFB shifts the axis to −45° or beyond.",
+            )),
+        ),
+        Page(
+            title: "Practise",
+            markdown: r#"
+The **Axis Quiz** tab hides a random axis behind a set of limb leads: read the leads, click your
+answer on the circle and compare. Aim for an error under 15°.
+
+Press **Finish** to close the tutorial.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(AxisQuiz)),
+            ],
+        ),
+    ],
+)

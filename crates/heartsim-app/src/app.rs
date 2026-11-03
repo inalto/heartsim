@@ -5,7 +5,7 @@ use heartsim_geometry::primitives::icosphere;
 use heartsim_render::SceneRenderer;
 use heartsim_sim::{Engine, TimingEngine, TimingParams};
 use heartsim_ui::{
-    AxisDialStyle, EcgView, LeadOrder, TwelveLeadLayout, Viewport3d, ViewportResources, axis_dial,
+    AxisDialStyle, EcgView, LeadOrder, TwelveLeadLayout, Viewport3d, ViewportResources, axis_dial, highlight,
     lead_column, lead_polarity,
 };
 
@@ -17,6 +17,7 @@ use crate::vector_overlay::VectorOverlay;
 
 mod scenario_control;
 mod tour;
+mod tutorials;
 mod vector_tab;
 
 /// eframe storage key of the rhythm-quiz score.
@@ -63,6 +64,9 @@ pub struct HeartSimApp {
     rhythm_quiz: RhythmQuiz,
     /// Documentation screenshot run (`HEARTSIM_SCREENSHOT_DIR`).
     tour: Option<tour::Tour>,
+    /// Guided tutorials (B15) and the scenario timeline editor.
+    tutorials: crate::tutorial_ui::Tutorials,
+    timeline_tab: tutorials::TimelineTab,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -77,11 +81,12 @@ enum Tab {
     Quiz,
     Electrodes,
     RhythmQuiz,
+    Tutorials,
     Help,
 }
 
 impl Tab {
-    const ALL: [Tab; 8] = [
+    const ALL: [Tab; 9] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -89,6 +94,7 @@ impl Tab {
         Tab::Quiz,
         Tab::Electrodes,
         Tab::RhythmQuiz,
+        Tab::Tutorials,
         Tab::Help,
     ];
 
@@ -101,6 +107,7 @@ impl Tab {
             Tab::Quiz => "Axis Quiz",
             Tab::Electrodes => "Electrodes",
             Tab::RhythmQuiz => "Rhythm Quiz",
+            Tab::Tutorials => "Tutorials",
             Tab::Help => "Help",
         }
     }
@@ -195,6 +202,8 @@ impl HeartSimApp {
             vector,
             rhythm_quiz,
             tour: tour::Tour::from_env(),
+            tutorials: crate::tutorial_ui::Tutorials::load_default(),
+            timeline_tab: tutorials::TimelineTab::default(),
         }
     }
 
@@ -270,10 +279,9 @@ impl HeartSimApp {
                 self.load_scenario(i);
             }
             ui.separator();
-            if ui
-                .button(if self.ecg.is_paused() { "Run" } else { "Pause" })
-                .clicked()
-            {
+            let pause = ui.button(if self.ecg.is_paused() { "Run" } else { "Pause" });
+            highlight::mark(&pause, "pause");
+            if pause.clicked() {
                 self.ecg.toggle_pause();
             }
             let mut bpm = self.engine.params.sinus.rate_bpm;
@@ -293,12 +301,13 @@ impl HeartSimApp {
             }
             ui.add(egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0).text("axis shift °"));
             ui.add(egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0).text("QRS width"));
-            ui.add(
+            let speed = ui.add(
                 egui::Slider::new(&mut self.clock.speed, 0.05..=2.0)
                     .logarithmic(true)
                     .text("speed"),
             );
-            ui.toggle_value(&mut self.pacing.open, "Pacemaker");
+            highlight::mark(&speed, "speed");
+            highlight::mark(&ui.toggle_value(&mut self.pacing.open, "Pacemaker"), "pacemaker");
         });
     }
 
@@ -333,15 +342,17 @@ impl HeartSimApp {
             .resizable(true)
             .default_size(200.0)
             .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
+                let leads = ui.horizontal_wrapped(|ui| {
                     for l in Lead::ALL {
                         ui.selectable_value(&mut self.selected_lead, l, l.label());
                     }
                 });
+                highlight::mark(&leads.response, "lead_selector");
                 self.paper_controls(ui);
                 let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
                 let window = self.ecg.strip(ui, rect, &self.rings, self.selected_lead);
                 self.pacing.marks.draw(ui.painter(), &window);
+                self.draw_timeline_marks(ui.painter(), &window);
                 ui.allocate_rect(rect, egui::Sense::hover());
             });
         egui::Panel::right("axis")
@@ -524,6 +535,7 @@ impl HeartSimApp {
                 ui.label("Axis Trainer: drag on the circle to rotate the axis and watch every limb lead change.");
                 ui.label("Heart Vector: the cardiac dipole at the strip cursor and its loop over the last beat, on the frontal and horizontal planes.");
                 ui.label("Axis Quiz: a hidden axis is dialled in; read the leads and click your answer.");
+                ui.label("Tutorials: guided lessons that drive the simulator page by page, and an editor for a rhythm's timeline of interventions.");
                 ui.label("Rhythm Quiz: name the rhythm on a strip from the scenario library; the choices include the rhythms it is most often mistaken for.");
                 ui.separator();
                 ui.strong("Rhythms and scrubbing");
@@ -581,6 +593,7 @@ impl eframe::App for HeartSimApp {
         }
 
         self.pacing_window(&ctx);
+        self.tutorial_frame(ui);
         match self.tab {
             Tab::Simulator => self.simulator_tab(ui),
             Tab::TwelveLead => self.twelve_lead_tab(ui),
@@ -597,6 +610,7 @@ impl eframe::App for HeartSimApp {
                     self.tab = Tab::Simulator;
                 }
             }
+            Tab::Tutorials => self.tutorials_tab(ui),
             Tab::Help => Self::help_tab(ui),
         }
 

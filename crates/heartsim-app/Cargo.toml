@@ -26,6 +26,10 @@ wgpu.workspace = true
 glam.workspace = true
 image.workspace = true
 anyhow.workspace = true
+serde.workspace = true
+ron.workspace = true
+directories.workspace = true
+egui_commonmark.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

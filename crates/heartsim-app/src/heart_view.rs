@@ -635,9 +635,16 @@ impl HeartView {
             }
         });
         ui.separator();
-        if let Some(c) = anatomy_panel(ui, &mut self.panel) {
+        let r = ui.scope(|ui| anatomy_panel(ui, &mut self.panel));
+        heartsim_ui::highlight::mark(&r.response, "camera_views");
+        if let Some(c) = r.inner {
             self.camera_command = Some(c);
         }
+    }
+
+    /// Move the camera on the next frame (tutorial pages, the screenshot tour).
+    pub fn command_camera(&mut self, command: CameraCommand) {
+        self.camera_command = Some(command);
     }
 
     /// The 3-D viewport with picking, hover read-out and labels. Uploads this frame's scalars

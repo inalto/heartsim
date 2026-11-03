@@ -31,6 +31,8 @@ egui_extras = { version = "0.37.0", features = ["image", "svg"] }
 egui_plot = "0.38.0"
 egui_tiles = "0.18.0"
 egui-notify = "0.24.0"
+# Markdown for tutorial pages; no image loading or regex (pages are text only)
+egui_commonmark = { version = "0.26.0", default-features = false, features = ["pulldown_cmark"] }
 rfd = "0.17.2"
 
 # --- math / geometry / simulation ---------------------------------------------
