@@ -10,6 +10,7 @@ pub mod ecg_view;
 pub mod snapshot;
 pub mod strip;
 pub mod twelve_lead;
+pub mod vector_view;
 pub mod viewport;
 
 pub use anatomy_panel::{AnatomyPanelState, CameraCommand, LayerToggle, anatomy_panel};
@@ -20,4 +21,5 @@ pub use colour_bar::{colour_bar, lut_colour};
 pub use ecg_view::EcgView;
 pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
 pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};
+pub use vector_view::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};
 pub use viewport::{Viewport3d, ViewportResources};

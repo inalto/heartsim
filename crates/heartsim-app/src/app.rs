@@ -9,7 +9,18 @@ use heartsim_ui::{
     lead_column, lead_polarity,
 };
 
+use crate::heart_history::HeartHistory;
+use crate::rhythm_quiz::RhythmQuiz;
+use crate::scenarios::{ScenarioLibrary, Timeline, scenario_picker};
 use crate::snapshot_ring::SnapshotRing;
+use crate::vector_overlay::VectorOverlay;
+
+mod scenario_control;
+mod tour;
+mod vector_tab;
+
+/// eframe storage key of the rhythm-quiz score.
+const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
 
 const SAMPLE_RATE_HZ: f32 = 500.0;
 
@@ -35,6 +46,17 @@ pub struct HeartSimApp {
     quiz: Quiz,
     /// The anatomy-pack heart (B9); `None` falls back to the placeholder sphere.
     heart: Option<crate::heart_view::HeartView>,
+    /// Rhythm presets (B11), the loaded one (`None` = slider settings) and its timeline.
+    library: ScenarioLibrary,
+    scenario: Option<usize>,
+    timeline: Timeline,
+    /// The heart's colour map over the last minute, shown at the strip cursor while scrubbing.
+    heart_history: HeartHistory,
+    /// Heart-vector arrow and loop in the 3-D view.
+    vector: VectorOverlay,
+    rhythm_quiz: RhythmQuiz,
+    /// Documentation screenshot run (`HEARTSIM_SCREENSHOT_DIR`).
+    tour: Option<tour::Tour>,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -44,17 +66,21 @@ const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lea
 enum Tab {
     Simulator,
     TwelveLead,
+    HeartVector,
     AxisTrainer,
     Quiz,
+    RhythmQuiz,
     Help,
 }
 
 impl Tab {
-    const ALL: [Tab; 5] = [
+    const ALL: [Tab; 7] = [
         Tab::Simulator,
         Tab::TwelveLead,
+        Tab::HeartVector,
         Tab::AxisTrainer,
         Tab::Quiz,
+        Tab::RhythmQuiz,
         Tab::Help,
     ];
 
@@ -62,8 +88,10 @@ impl Tab {
         match self {
             Tab::Simulator => "Simulator",
             Tab::TwelveLead => "12-Lead ECG",
+            Tab::HeartVector => "Heart Vector",
             Tab::AxisTrainer => "Axis Trainer",
             Tab::Quiz => "Axis Quiz",
+            Tab::RhythmQuiz => "Rhythm Quiz",
             Tab::Help => "Help",
         }
     }
@@ -119,6 +147,12 @@ impl HeartSimApp {
             scene,
             pending_scalars: None,
         });
+        let mut vector = VectorOverlay::new();
+        vector.install(rs);
+        let mut rhythm_quiz = RhythmQuiz::default();
+        if let Some(score) = cc.storage.and_then(|s| s.get_string(RHYTHM_QUIZ_SCORE_KEY)) {
+            rhythm_quiz.restore_score(&score);
+        }
 
         Self {
             clock: SimClock::new(Millis(1.0)),
@@ -140,6 +174,13 @@ impl HeartSimApp {
                 ..Quiz::default()
             },
             heart,
+            library: ScenarioLibrary::load_default(),
+            scenario: None,
+            timeline: Timeline::default(),
+            heart_history: HeartHistory::new(),
+            vector,
+            rhythm_quiz,
+            tour: tour::Tour::from_env(),
         }
     }
 
@@ -147,6 +188,7 @@ impl HeartSimApp {
         let steps = self.clock.advance(frame_dt);
         let sample_period_ms = 1000.0 / f64::from(SAMPLE_RATE_HZ);
         for _ in 0..steps {
+            self.apply_timeline();
             self.engine.step(self.clock.dt);
             let events = self.engine.drain_events();
             for e in &events {
@@ -158,6 +200,7 @@ impl HeartSimApp {
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, self.clock.dt, self.engine.now());
             }
+            self.record_heart_history();
             self.sample_accumulator += self.clock.dt.0;
             while self.sample_accumulator >= sample_period_ms {
                 self.sample_accumulator -= sample_period_ms;
@@ -208,6 +251,10 @@ impl HeartSimApp {
 
     fn rhythm_controls(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
+            if let Some(i) = scenario_picker(ui, &self.library, self.scenario) {
+                self.load_scenario(i);
+            }
+            ui.separator();
             if ui
                 .button(if self.ecg.is_paused() { "Run" } else { "Pause" })
                 .clicked()
@@ -285,9 +332,15 @@ impl HeartSimApp {
             .show(ui, |ui| self.live_axis_panel(ui));
         if let Some(h) = &mut self.heart {
             egui::Panel::left("heart").default_size(280.0).show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| h.controls(ui))
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    h.controls(ui);
+                    ui.separator();
+                    let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                    self.vector.controls(ui, &mut alphas);
+                });
             });
         }
+        self.sync_vector_overlay();
         egui::CentralPanel::default().show(ui, |ui| {
             if let Some(h) = &mut self.heart {
                 h.viewport(ui, &mut self.engine);
@@ -452,7 +505,12 @@ impl HeartSimApp {
                 ui.label("Simulator: the heart model with one selectable lead and the live axis.");
                 ui.label("12-Lead ECG: all twelve leads at once (12 × 1, 6 × 2 or the clinical 3 × 4 with rhythm strip) next to the axis circle.");
                 ui.label("Axis Trainer: drag on the circle to rotate the axis and watch every limb lead change.");
+                ui.label("Heart Vector: the cardiac dipole at the strip cursor and its loop over the last beat, on the frontal and horizontal planes.");
                 ui.label("Axis Quiz: a hidden axis is dialled in; read the leads and click your answer.");
+                ui.label("Rhythm Quiz: name the rhythm on a strip from the scenario library; the choices include the rhythms it is most often mistaken for.");
+                ui.separator();
+                ui.strong("Rhythms and scrubbing");
+                ui.label("Pick a rhythm from the Rhythm list above the strip: the ECG and the 3-D heart both run from it. Pause and drag the 's back' slider: the heart, the heart-vector arrow and the strip all show the same instant.");
                 ui.separator();
                 ui.strong("Finding the axis");
                 ui.label("Normal axis is −30° to +90°. Lead I and aVF both positive: normal. I positive, aVF negative: left deviation (beyond −30° when II is also negative). I negative, aVF positive: right deviation. Both negative: extreme axis. The equiphasic limb lead is perpendicular to the axis.");
@@ -471,6 +529,8 @@ impl eframe::App for HeartSimApp {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
         self.ecg.update(&self.rings);
+        self.sync_scrub();
+        self.drive_tour(&ctx);
         if let Some(rs) = frame.wgpu_render_state.as_ref().filter(|_| self.heart.is_none()) {
             let scalars = self.view_scalars();
             if let Some(res) = rs
@@ -492,18 +552,32 @@ impl eframe::App for HeartSimApp {
                 }
             });
         });
-        if matches!(self.tab, Tab::Simulator | Tab::TwelveLead | Tab::AxisTrainer) {
+        if matches!(
+            self.tab,
+            Tab::Simulator | Tab::TwelveLead | Tab::HeartVector | Tab::AxisTrainer
+        ) {
             egui::Panel::top("rhythm").show(ui, |ui| self.rhythm_controls(ui));
         }
 
         match self.tab {
             Tab::Simulator => self.simulator_tab(ui),
             Tab::TwelveLead => self.twelve_lead_tab(ui),
+            Tab::HeartVector => self.vector_tab(ui),
             Tab::AxisTrainer => self.axis_trainer_tab(ui),
             Tab::Quiz => self.quiz_tab(ui),
+            Tab::RhythmQuiz => {
+                if let Some(i) = self.rhythm_quiz.ui(ui, &self.library, &self.ecg.style) {
+                    self.load_scenario(i);
+                    self.tab = Tab::Simulator;
+                }
+            }
             Tab::Help => Self::help_tab(ui),
         }
 
         ctx.request_repaint();
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(RHYTHM_QUIZ_SCORE_KEY, self.rhythm_quiz.score_string());
     }
 }
