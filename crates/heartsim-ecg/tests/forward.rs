@@ -293,13 +293,17 @@ fn sinus_beat_waves() {
     }
 }
 
-/// Brief B05 literally asks for the R *amplitude* to grow V1 → V5. In the default pack the early
-/// anterior QRS forces (fast endocardial layer of B3 activating the anterior LV and RV walls at
-/// once) and the 41 mm V2–heart distance make R peak in V2–V3 (measured R: V1 0.9, V2 1.7,
-/// V3 ≈ 1.7, V4 ≈ 1.2, V5 0.9 mV). The fix lies in the activation sequence, not the forward
-/// model; see the B05 completion report.
+/// Brief B05 literally asks for the R *amplitude* to grow V1 → V5. In the default pack R peaks in
+/// V2–V3 (measured R: V1 0.9, V2 1.7, V3 1.7, V4 1.2, V5 0.9 mV) because of the electrode
+/// geometry, not the activation sequence: the nearest heart cell is 41 mm from V2 but 63, 87 and
+/// 101 mm from V4, V5 and V6, so the RV and anterior LV walls under V1–V3 dominate. With the same
+/// activation and every precordial electrode moved to 40 mm from the heart, R grows V1 → V6 but
+/// for a dip at V4 (1.1, 1.7, 2.2, 1.9, 2.2, 2.3 mV). No activation variant tried (Purkinje CV
+/// 1–3 m/s, depth 0.15–0.45, base coverage 0.8–1.0, RBB delay 30–50 ms, isolated fascicle
+/// territories) lifted R(V5) above 0.9 mV or brought R(V2) below 1.1 mV. Fix in the pack's
+/// electrode sites.
 #[test]
-#[ignore = "activation-driven: R amplitude peaks in V2–V3 with the B3 fast endocardial layer"]
+#[ignore = "electrode geometry: V5/V6 are 87/101 mm from the heart, V2 41 mm (see doc comment)"]
 fn r_wave_amplitude_progression() {
     let rec = sinus();
     let r: Vec<f64> = [Lead::V1, Lead::V2, Lead::V3, Lead::V4, Lead::V5]
@@ -407,11 +411,17 @@ fn qrs_axis(rec: &Recording) -> f64 {
 }
 
 /// Brief B05 asks for LAFB ≤ −45° and LPFB ≥ +90°. The forward model's limb leads are exact
-/// hexaxial projections of the heart vector, but the B3 activation gives a sinus axis of ≈ −2°,
-/// LAFB ≈ −14° and LPFB ≈ −3°: both fascicles share one fast LV endocardial layer, so blocking
-/// one barely changes the sequence. See the B05 completion report.
+/// hexaxial projections of the heart vector; the activation gives a sinus axis of ≈ −2°, LAFB
+/// ≈ −14° and LPFB ≈ −3°. Blocking a fascicle does delay its territory by 25–30 ms, but in the
+/// default pack the territories face the wrong way for the frontal plane: the LAF and LPF PMJ sets
+/// sit anterosuperior (centroid (5, 10, 19) mm) and posteroinferior ((9, −18, −13) mm), and the
+/// LV lateral wall faces left-superior (the procedural heart is tilted by a minimal rotation,
+/// with no roll about its long axis). Isolating the territories (no Purkinje cross-conduction)
+/// moves both axes the wrong way, and moving the PMJ patches to anterolateral / inferoposterior
+/// LV sites keeps both within 20° of sinus. Fix in the pack's heart orientation and fascicle
+/// sites.
 #[test]
-#[ignore = "activation-driven: fascicular blocks barely move the axis with the shared B3 LV layer"]
+#[ignore = "pack geometry: fascicle territories face anterior/posterior (see doc comment)"]
 fn fascicular_block_axes() {
     let mut lafb = TimingParams::default();
     lafb.his_purkinje.laf.blocked = true;
