@@ -10,9 +10,9 @@
 //!
 //! — the travel time of an elliptic front whose speed is `CV_long` along the fibre and
 //! `ρ·CV_long` across it (ρ = `anisotropy_ratio`), so a planar wave across the fibres moves at
-//! exactly `ρ·CV_long`. All fronts share one binary-heap Dijkstra; a cell is settled by the first
-//! front to reach it, which is what makes colliding fronts annihilate. The heap is advanced
-//! lazily, only up to the present, so a beat's front appears progressively and its cost (≈ one
+//! exactly `ρ·CV_long`. All fronts share one Dijkstra (on a bucketed priority queue); a cell is
+//! settled by the first front to reach it, which is what makes colliding fronts annihilate. The
+//! queue is advanced lazily, only up to the present, so a beat's front appears progressively and its cost (≈ one
 //! Dijkstra per beat) is spread over the steps of that beat.
 //!
 //! **Refractoriness and restitution** (research §2.5.5). A cell accepts an activation at `t`
@@ -32,14 +32,17 @@
 //! bundles) are driven by timing events, never by neighbours: the timing engine owns those
 //! delays, and the mesh cannot open a second AV path.
 //!
-//! **Determinism.** Fixed-order graph, `f64` arrival times, ties broken by cell index; the V_m
-//! update is per-cell (parallel with the `parallel` feature, still bit-identical).
+//! **Determinism.** Fixed-order graph, `f64` arrival times, a total order on pending arrivals
+//! (time, then cell index). With the `parallel` feature the edge scan of each batch of mutually
+//! independent fronts and the V_m update run on rayon; settling stays in queue order, so results
+//! are bit-identical on any number of threads.
 
 mod coupled;
 /// Radius-neighbourhood propagation graph.
 pub mod graph;
 /// Tier-1 settings ([`EikonalParams`]).
 pub mod params;
+mod queue;
 /// Timing event → seed cells ([`SeedMap`]).
 pub mod seeds;
 
@@ -54,8 +57,8 @@ use crate::timing::{ActionError, HisPurkinjeParams, Side};
 use glam::Vec3;
 use heartsim_core::{Action, Millis, Parameters, Region, RegionParams, StimSite};
 use heartsim_geometry::CellCloud;
-use std::cmp::Ordering;
-use std::collections::{BTreeMap, BinaryHeap};
+use queue::{Front, FrontQueue};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 const TEMPLATE_SAMPLES: usize = 256;
@@ -105,40 +108,6 @@ impl Shape {
             r if r.is_atrial() || r == Region::AccessoryPathway => Shape::Atrial,
             _ => Shape::Ventricular,
         }
-    }
-}
-
-/// A pending arrival in the shared Dijkstra heap.
-#[derive(Debug, Clone, Copy)]
-struct Front {
-    at: f64,
-    cell: u32,
-    /// Fast endocardial layer this front may use (`0` = none).
-    layer: u8,
-    /// Probe the front started in (it does not trigger that probe again).
-    src_probe: u8,
-    origin: Origin,
-}
-
-impl PartialEq for Front {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
-    }
-}
-impl Eq for Front {}
-impl PartialOrd for Front {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for Front {
-    /// Reversed so that `BinaryHeap` pops the earliest arrival; ties by lower cell index.
-    fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .at
-            .total_cmp(&self.at)
-            .then_with(|| other.cell.cmp(&self.cell))
-            .then_with(|| other.layer.cmp(&self.layer))
     }
 }
 
@@ -199,6 +168,100 @@ struct CvRest {
 /// Restitution terms below this are dropped (saves an `exp` per relaxation in steady rhythm).
 const RESTITUTION_EPSILON: f64 = 1e-4;
 
+/// Fronts per parallel work item of a batch.
+const BATCH_CHUNK: usize = 64;
+/// Whether batches are worth scanning in parallel: the batched path costs more than settling
+/// front by front on a single thread (both give identical results).
+fn parallel_batches() -> bool {
+    #[cfg(feature = "parallel")]
+    {
+        rayon::current_num_threads() > 1
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        false
+    }
+}
+
+/// Batch position meaning "none".
+const NOT_IN_BATCH: u32 = u32::MAX;
+
+/// An arrival found while scanning a batch: front index in the batch, graph edge, arrival time
+/// (`NaN` = the target changed earlier in the same batch, re-evaluate in order).
+#[derive(Debug, Clone, Copy)]
+struct Candidate {
+    front: u32,
+    edge: u32,
+    arrive: f64,
+}
+
+/// The state an edge relaxation reads (shared by the sequential and the parallel paths).
+#[derive(Clone, Copy)]
+struct RelaxView<'a> {
+    hot: &'a [Hot],
+    edges: &'a [HotEdge],
+    fast_tau_ms: &'a [f32],
+    offsets: &'a [u32],
+    cv_rest: &'a [CvRest; REGIONS],
+    min_factor: f64,
+    slowest: f64,
+}
+
+impl RelaxView<'_> {
+    /// Arrival of front `f`, which activated cell `j`, over edge `e`, if it beats the target's
+    /// queued arrival and finds the target excitable.
+    #[inline]
+    fn arrival(&self, j: usize, f: &Front, e: usize) -> Option<f64> {
+        let tentative = self.hot[self.edges[e].target as usize].tentative;
+        self.arrival_before(j, f, e, tentative)
+    }
+
+    /// [`RelaxView::arrival`] as if the target had nothing queued.
+    fn arrival_ignoring_queue(&self, j: usize, f: &Front, e: usize) -> Option<f64> {
+        self.arrival_before(j, f, e, f64::INFINITY)
+    }
+
+    /// Base delay of edge `e` for front `f` leaving cell `j`, ms (before restitution).
+    #[inline]
+    fn base_delay(&self, j: usize, f: &Front, e: usize) -> f32 {
+        let edge = self.edges[e];
+        let h = &self.hot[edge.target as usize];
+        let layer = f.layer();
+        let fast = layer != 0 && self.hot[j].layer == layer && h.layer == layer;
+        let tau = if fast { self.fast_tau_ms[e] } else { edge.tau_ms };
+        tau * h.inv_cv_scale
+    }
+
+    /// Upper bound of the arrival over edge `e` (slowest restitution).
+    fn latest(&self, j: usize, f: &Front, e: usize) -> f64 {
+        let base = f64::from(self.base_delay(j, f, e));
+        f.at + base + base * self.slowest
+    }
+
+    #[inline]
+    fn arrival_before(&self, j: usize, f: &Front, e: usize, tentative: f64) -> Option<f64> {
+        let h = &self.hot[self.edges[e].target as usize];
+        let base = self.base_delay(j, f, e);
+        // Cheap rejection before restitution: the fastest arrival cannot beat the queued one,
+        // or the slowest possible one is still inside the refractory period.
+        let fastest = f.at + f64::from(base);
+        if fastest >= tentative || fastest + f64::from(base) * self.slowest < h.refractory_until {
+            return None;
+        }
+        // CV restitution of the destination for a front leaving now.
+        let mut factor = 1.0;
+        if !h.repol_at.is_nan() {
+            let r = self.cv_rest[h.region as usize];
+            let di = f.at - h.repol_at;
+            if di < r.di_cutoff_ms {
+                factor = (1.0 - r.a * (-di * r.inv_tau).exp()).max(self.min_factor);
+            }
+        }
+        let arrive = f.at + f64::from(base) / factor;
+        (arrive >= h.refractory_until && arrive < tentative).then_some(arrive)
+    }
+}
+
 /// Which seed set to start a front from (avoids cloning sets on the hot path).
 #[derive(Debug, Clone, Copy)]
 enum SeedSet {
@@ -235,6 +298,10 @@ pub struct EikonalEngine {
     apd_scale: Vec<f32>,
     /// Relaxation data per graph edge (same order as `graph.targets`).
     edges: Vec<HotEdge>,
+    /// Delay of each edge inside the fast endocardial layer, ms.
+    fast_tau_ms: Vec<f32>,
+    /// Lower bound of the delay from each cell to any neighbour, ms (batch horizon).
+    min_out_ms: Vec<f32>,
     cv_rest: [CvRest; REGIONS],
     /// Scenario ablation (survives `reset`) and the current one (adds `Action::Ablate`).
     ablated_base: Vec<bool>,
@@ -258,7 +325,15 @@ pub struct EikonalEngine {
     /// 1 / APD of the last activation (`NaN` = ablated) for the V_m update.
     inv_apd: Vec<f32>,
     origin: Vec<Origin>,
-    heap: BinaryHeap<Front>,
+    queue: FrontQueue,
+    /// Per cell, position in the current batch of its first front / of the first front expected
+    /// to activate it ([`NOT_IN_BATCH`] outside `settle_batch`).
+    first_pos: Vec<u32>,
+    accept_pos: Vec<u32>,
+    // reusable buffers of `advance_to`
+    batch: Vec<Front>,
+    predicted: Vec<bool>,
+    scratch: Vec<Vec<Candidate>>,
     /// External stimuli `(time, cell)` from actions, ascending.
     stimuli: Vec<(f64, u32)>,
     last_av_pathway: Option<f64>,
@@ -305,6 +380,8 @@ impl EikonalEngine {
             params: params.clone(),
             eik,
             edges: Vec::new(),
+            fast_tau_ms: Vec::new(),
+            min_out_ms: vec![0.0; n],
             cv_rest: [CvRest {
                 a: 0.0,
                 inv_tau: 0.0,
@@ -355,7 +432,12 @@ impl EikonalEngine {
             t_act: vec![f64::NAN; n],
             inv_apd: vec![0.0; n],
             origin: vec![Origin::Sinus; n],
-            heap: BinaryHeap::with_capacity(4096),
+            queue: FrontQueue::new(),
+            first_pos: vec![NOT_IN_BATCH; n],
+            accept_pos: vec![NOT_IN_BATCH; n],
+            batch: Vec::new(),
+            predicted: Vec::new(),
+            scratch: Vec::new(),
             stimuli: Vec::new(),
             last_av_pathway: None,
             cells: CellState::new(n),
@@ -430,7 +512,31 @@ impl EikonalEngine {
                 }
             })
             .collect();
+        let fast_ms_per_mm = (1.0 / self.eik.purkinje_layer_cv_m_s.max(1e-6)) as f32;
+        self.fast_tau_ms = g.distance_mm.iter().map(|d| d * fast_ms_per_mm).collect();
+        self.refresh_min_out();
         self.refresh_excitable();
+    }
+
+    /// Recompute [`EikonalEngine::min_out_ms`] (edge delays and CV modifiers changed).
+    fn refresh_min_out(&mut self) {
+        let hot = &self.hot;
+        for (j, m) in self.min_out_ms.iter_mut().enumerate() {
+            *m = self
+                .graph
+                .edges(j)
+                .map(|e| {
+                    let k = self.edges[e].target as usize;
+                    let fast = hot[j].layer != 0 && hot[j].layer == hot[k].layer;
+                    let tau = if fast {
+                        self.edges[e].tau_ms.min(self.fast_tau_ms[e])
+                    } else {
+                        self.edges[e].tau_ms
+                    };
+                    tau * hot[k].inv_cv_scale
+                })
+                .fold(f32::INFINITY, f32::min);
+        }
     }
 
     /// Recompute the per-cell excitability flag (ablation, region block, `conducts`).
@@ -521,6 +627,7 @@ impl EikonalEngine {
         for (h, s) in self.hot.iter_mut().zip(scale) {
             h.inv_cv_scale = 1.0 / s.max(1e-6);
         }
+        self.refresh_min_out();
     }
 
     // --- read-out ---------------------------------------------------------------------------
@@ -590,13 +697,8 @@ impl EikonalEngine {
         }
         let h = &mut self.hot[j];
         h.tentative = h.tentative.min(at);
-        self.heap.push(Front {
-            at,
-            cell,
-            layer,
-            src_probe: self.probe_of[j],
-            origin,
-        });
+        self.queue
+            .push(Front::new(at, cell, layer, self.probe_of[j], origin));
     }
 
     fn seed_set(&mut self, which: SeedSet, at: f64, layer: u8, origin: Origin) {
@@ -793,7 +895,7 @@ impl EikonalEngine {
             }
             Action::Shock { .. } => {
                 // Every excitable cell depolarises at once; fronts in flight die.
-                self.heap.clear();
+                self.queue.clear();
                 self.hot.iter_mut().for_each(|h| h.tentative = f64::INFINITY);
                 for c in 0..self.hot.len() as u32 {
                     self.push_seed(c, at, 0, Origin::External);
@@ -819,17 +921,17 @@ impl EikonalEngine {
 
     // --- propagation ------------------------------------------------------------------------
 
-    /// Settle one popped arrival: accept it if the cell is excitable and recovered, then relax
-    /// its edges.
-    fn settle(&mut self, f: Front) {
-        let j = f.cell as usize;
+    /// Settle one popped arrival: accept it if the cell is excitable and recovered. Returns
+    /// whether the cell activated (its edges then need relaxing).
+    fn settle(&mut self, f: Front) -> bool {
+        let j = f.cell() as usize;
         let h = self.hot[j];
         // exact: `tentative` holds the very value this front was queued with
         if h.tentative.to_bits() == f.at.to_bits() {
             self.hot[j].tentative = f64::INFINITY;
         }
         if f.at < h.refractory_until {
-            return;
+            return false;
         }
         // APD restitution against the previous activation.
         let p = self.rp[h.region as usize];
@@ -848,75 +950,64 @@ impl EikonalEngine {
         }
         self.t_act[j] = f.at;
         self.inv_apd[j] = (1.0 / apd) as f32;
-        self.origin[j] = f.origin;
+        self.origin[j] = f.origin();
         self.cells.activation_ms[j] = f.at as f32;
         self.cells.apd_ms[j] = apd as f32;
 
         let probe = self.probe_of[j];
-        if probe != NO_PROBE && probe != f.src_probe {
+        if probe != NO_PROBE && probe != f.src_probe() {
             let rearm = self.eik.probe_rearm_ms;
             let pr = &mut self.probes[probe as usize];
-            let ap_self = probe != PROBE_AV && f.origin == Origin::AccessoryPathway;
+            let ap_self = probe != PROBE_AV && f.origin() == Origin::AccessoryPathway;
             if !ap_self && f.at - pr.last_fired >= rearm {
                 pr.last_fired = f.at;
                 let region = pr.region;
                 self.events
-                    .push(Event::new(Millis(f.at), region, EventKind::Conducted, f.origin));
+                    .push(Event::new(Millis(f.at), region, EventKind::Conducted, f.origin()));
             }
         }
-        self.relax(j, f);
+        true
+    }
+
+    fn relax_view(&self) -> RelaxView<'_> {
+        let min_factor = self.eik.min_cv_factor;
+        RelaxView {
+            hot: &self.hot,
+            edges: &self.edges,
+            fast_tau_ms: &self.fast_tau_ms,
+            offsets: &self.graph.offsets,
+            cv_rest: &self.cv_rest,
+            min_factor,
+            // arrival ≤ at + base / min_factor = at + base + base · slowest
+            slowest: 1.0 / min_factor.max(1e-6) - 1.0,
+        }
+    }
+
+    /// Queue arrival `arrive` of front `f` at cell `k`.
+    fn queue_arrival(&mut self, k: usize, arrive: f64, f: Front) {
+        self.hot[k].tentative = arrive;
+        self.queue.push(f.to(arrive, k as u32));
     }
 
     /// Queue arrivals at the neighbours of `j`, activated by front `f`.
     fn relax(&mut self, j: usize, f: Front) {
-        let fast_ms_per_mm = (1.0 / self.eik.purkinje_layer_cv_m_s.max(1e-6)) as f32;
-        let own_layer = f.layer != 0 && self.hot[j].layer == f.layer;
-        let min_factor = self.eik.min_cv_factor;
-        // arrival ≤ at + base / min_factor = at + base + base · slowest
-        let slowest = 1.0 / min_factor.max(1e-6) - 1.0;
-        let range = self.graph.offsets[j] as usize..self.graph.offsets[j + 1] as usize;
-        let edges = &self.edges[range];
-        let hot = &mut self.hot;
-        let cv_rest = &self.cv_rest;
-        let pos = &self.cloud.positions;
-        let pj = pos[j];
-        for e in edges {
-            let k = e.target as usize;
-            let h = &hot[k];
-            let base = if own_layer && h.layer == f.layer {
-                pj.distance(pos[k]) * fast_ms_per_mm
-            } else {
-                e.tau_ms
-            } * h.inv_cv_scale;
-            // Cheap rejection before restitution: the slowest possible arrival is still
-            // inside the refractory period, or the fastest cannot beat the queued one.
-            let fastest = f.at + f64::from(base);
-            if fastest >= h.tentative || fastest + f64::from(base) * slowest < h.refractory_until {
-                continue;
+        for e in self.graph.edges(j) {
+            if let Some(arrive) = self.relax_view().arrival(j, &f, e) {
+                self.queue_arrival(self.edges[e].target as usize, arrive, f);
             }
-            // CV restitution of the destination for a front leaving now.
-            let mut factor = 1.0;
-            if !h.repol_at.is_nan() {
-                let r = cv_rest[h.region as usize];
-                let di = f.at - h.repol_at;
-                if di < r.di_cutoff_ms {
-                    factor = (1.0 - r.a * (-di * r.inv_tau).exp()).max(min_factor);
-                }
-            }
-            let arrive = f.at + f64::from(base) / factor;
-            if !(arrive >= h.refractory_until && arrive < h.tentative) {
-                continue;
-            }
-            hot[k].tentative = arrive;
-            self.heap.push(Front {
-                at: arrive,
-                cell: k as u32,
-                ..f
-            });
         }
     }
 
-    /// Settle every arrival up to `until` (ms).
+    /// Settle every arrival up to `until` (ms), batch by batch.
+    ///
+    /// **Batches.** An arrival at `t` into cell `j` can only queue arrivals at
+    /// `≥ t + min_out_ms[j]`, so the queued fronts earlier than `min(t + min_out_ms)` over the
+    /// fronts already taken cannot influence one another: they form a batch. The expensive part
+    /// of a batch — scanning every edge of every front — reads only state that no front of the
+    /// batch changes, so it runs in parallel; settling and queueing then run in pop order, exactly
+    /// as one front at a time would (edges into cells that settle within the batch are
+    /// re-evaluated at that point). Results are bit-identical with or without threads; on one
+    /// thread, or for small batches, fronts are simply settled one at a time.
     fn advance_to(&mut self, until: f64) {
         while let Some((at, cell)) = self.stimuli.first().copied()
             && at <= until
@@ -924,10 +1015,158 @@ impl EikonalEngine {
             self.stimuli.remove(0);
             self.push_seed(cell, at, 0, Origin::External);
         }
-        while self.heap.peek().is_some_and(|f| f.at <= until) {
-            let f = self.heap.pop().expect("peeked");
-            self.settle(f);
+        let mut batch = std::mem::take(&mut self.batch);
+        loop {
+            batch.clear();
+            let mut limit = until;
+            while let Some(f) = self.queue.pop_until(limit) {
+                let horizon = f.at + f64::from(self.min_out_ms[f.cell() as usize]);
+                limit = limit.min(horizon.next_down());
+                batch.push(f);
+            }
+            if batch.is_empty() {
+                break;
+            }
+            if parallel_batches() && batch.len() >= 2 * BATCH_CHUNK {
+                self.settle_batch(&batch);
+            } else {
+                for &f in &batch {
+                    if self.settle(f) {
+                        self.relax(f.cell() as usize, f);
+                    }
+                }
+            }
         }
+        self.batch = batch;
+    }
+
+    /// Settle one batch (see [`EikonalEngine::advance_to`]).
+    fn settle_batch(&mut self, batch: &[Front]) {
+        // Which fronts will activate their cell: exact for the first acceptance of a cell, as
+        // only the cell's own settle changes its refractory state.
+        let mut predicted = std::mem::take(&mut self.predicted);
+        predicted.clear();
+        for (fi, f) in batch.iter().enumerate() {
+            let j = f.cell() as usize;
+            let p = self.accept_pos[j] == NOT_IN_BATCH && f.at >= self.hot[j].refractory_until;
+            if self.first_pos[j] == NOT_IN_BATCH {
+                self.first_pos[j] = fi as u32;
+            }
+            if p {
+                self.accept_pos[j] = fi as u32;
+            }
+            predicted.push(p);
+        }
+
+        // Candidate arrivals per front, from the state at the start of the batch. A target is
+        // unchanged until its first front of the batch is settled, except that its queued
+        // arrival may only get earlier; after an activation it stays refractory for at least
+        // `APD_base · min_apd_fraction · erp_fraction`.
+        let mut scratch = std::mem::take(&mut self.scratch);
+        let chunks = batch.len().div_ceil(BATCH_CHUNK);
+        if scratch.len() < chunks {
+            scratch.resize_with(chunks, Vec::new);
+        }
+        {
+            let view = self.relax_view();
+            let (first_pos, accept_pos) = (&self.first_pos, &self.accept_pos);
+            let (base_apd, apd_scale, rp) = (&self.base_apd, &self.apd_scale, &self.rp);
+            let min_apd = self.eik.min_apd_fraction.min(1.0);
+            let predicted = &predicted;
+            let scan = |c: usize, out: &mut Vec<Candidate>| {
+                out.clear();
+                for fi in c * BATCH_CHUNK..((c + 1) * BATCH_CHUNK).min(batch.len()) {
+                    if !predicted[fi] {
+                        continue;
+                    }
+                    let f = &batch[fi];
+                    let j = f.cell() as usize;
+                    for e in view.offsets[j] as usize..view.offsets[j + 1] as usize {
+                        let k = view.edges[e].target as usize;
+                        // refractoriness only grows within a batch: this rejection always holds
+                        if view.latest(j, f, e) < view.hot[k].refractory_until {
+                            continue;
+                        }
+                        let arrive = if first_pos[k] as usize > fi {
+                            match view.arrival(j, f, e) {
+                                Some(a) => a,
+                                None => continue,
+                            }
+                        } else if (accept_pos[k] as usize) < fi {
+                            // activated earlier in the batch: reject what cannot outlast its ERP
+                            let t_k = batch[accept_pos[k] as usize].at;
+                            let erp = f64::from(base_apd[k])
+                                * f64::from(apd_scale[k])
+                                * min_apd
+                                * rp[view.hot[k].region as usize].erp_fraction;
+                            if view.latest(j, f, e) < t_k + 0.999 * erp {
+                                continue;
+                            }
+                            f64::NAN
+                        } else {
+                            // only its queued arrival was reset (stale or refractory front)
+                            match view.arrival_ignoring_queue(j, f, e) {
+                                Some(a) => a,
+                                None => continue,
+                            }
+                        };
+                        out.push(Candidate {
+                            front: fi as u32,
+                            edge: e as u32,
+                            arrive,
+                        });
+                    }
+                }
+            };
+            #[cfg(feature = "parallel")]
+            {
+                use rayon::prelude::*;
+                scratch[..chunks]
+                    .par_iter_mut()
+                    .enumerate()
+                    .with_min_len(2)
+                    .for_each(|(c, out)| scan(c, out));
+            }
+            #[cfg(not(feature = "parallel"))]
+            for (c, out) in scratch[..chunks].iter_mut().enumerate() {
+                scan(c, out);
+            }
+        }
+
+        // Settle and queue in pop order.
+        let mut cands = scratch[..chunks].iter().flatten().peekable();
+        for (fi, f) in batch.iter().enumerate() {
+            let accepted = self.settle(*f);
+            let j = f.cell() as usize;
+            while let Some(c) = cands.next_if(|c| c.front as usize == fi) {
+                if !accepted {
+                    continue;
+                }
+                let e = c.edge as usize;
+                let k = self.edges[e].target as usize;
+                let arrive = if c.arrive.is_nan() {
+                    match self.relax_view().arrival(j, f, e) {
+                        Some(a) => a,
+                        None => continue,
+                    }
+                } else if c.arrive < self.hot[k].tentative {
+                    // refractory state as scanned, the queued arrival may have moved
+                    c.arrive
+                } else {
+                    continue;
+                };
+                self.queue_arrival(k, arrive, *f);
+            }
+            if accepted && !predicted[fi] {
+                self.relax(j, *f);
+            }
+        }
+        for f in batch {
+            self.first_pos[f.cell() as usize] = NOT_IN_BATCH;
+            self.accept_pos[f.cell() as usize] = NOT_IN_BATCH;
+        }
+        self.scratch = scratch;
+        self.predicted = predicted;
     }
 
     /// Recompute V_m of every cell at `self.now` from its activation time and APD.
@@ -999,7 +1238,7 @@ impl Engine for EikonalEngine {
         self.t_act.iter_mut().for_each(|t| *t = f64::NAN);
         self.inv_apd.iter_mut().for_each(|a| *a = 0.0);
         self.origin.iter_mut().for_each(|o| *o = Origin::Sinus);
-        self.heap.clear();
+        self.queue.clear();
         self.stimuli.clear();
         self.last_av_pathway = None;
         self.ablated.clone_from(&self.ablated_base);
@@ -1105,4 +1344,51 @@ fn structure_coordinate(cloud: &CellCloud) -> Vec<f32> {
         }
     }
     s
+}
+
+#[cfg(all(test, feature = "parallel"))]
+mod tests {
+    use super::*;
+    use heartsim_geometry::{Resolution, idealised_heart};
+
+    /// The batched relaxation runs on the rayon pool; activation must not depend on its size.
+    #[test]
+    fn activation_is_bit_identical_on_any_thread_count() {
+        let heart = idealised_heart(Resolution {
+            mesh_voxel_mm: 8.0,
+            cell_spacing_mm: 2.0,
+        });
+        let base = EikonalEngine::with_seed_sets(
+            Arc::new(heart.cells),
+            &Parameters::default(),
+            EikonalParams::default(),
+            &heart.pmj_seeds,
+        );
+        let s = base.seeds();
+        let seeds: Vec<u32> = [&s.sinus, &s.laf, &s.lpf, &s.rbb]
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect();
+        let run = |threads: usize| {
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap();
+            pool.install(|| {
+                let mut e = base.clone();
+                e.stimulate_cells(&seeds, Millis(0.0), Origin::Sinus);
+                for _ in 0..150 {
+                    e.step(Millis(1.0));
+                }
+                let bits: Vec<u64> = e.activation_times().iter().map(|t| t.to_bits()).collect();
+                (bits, e.cells().vm.clone())
+            })
+        };
+        let (a, vm_a) = run(1);
+        assert!(a.iter().filter(|t| f64::from_bits(**t).is_finite()).count() > 1000);
+        let (b, vm_b) = run(4);
+        assert_eq!(a, b);
+        assert_eq!(vm_a, vm_b);
+    }
 }
