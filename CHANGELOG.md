@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-04
+Second tagged release: the Tier-1 and Tier-2 engines, the forward ECG, the clinical pages, the rhythm library, pacing,
+therapy, tutorials and exports (briefs B03–B11, B13–B16, B20).
+
 ### Added
 - Tabbed application: Simulator, 12-Lead ECG, Axis Trainer, Axis Quiz and Help.
 - 12-lead page with three layouts (12 x 1, 6 x 2, clinical 3 x 4 plus rhythm strip) and a live hexaxial axis circle with per-lead QRS polarity.
@@ -26,9 +30,41 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   `heartsim-cli run <scenario> --seconds … --out …` writing byte-identical files; mdBook user and developer guide in
   `docs/book` published to GitHub Pages by `.github/workflows/docs.yml`.
 
+- Tier-1 anisotropic graph-eikonal activation engine (brief B03): wavefronts on the cell cloud driven by `TimingEngine` events,
+  refractoriness, restitution, a fast endocardial layer per bundle, ablation; calendar queue with results identical on any thread count.
+- ECG analysis (brief B04): Pan-Tompkins QRS detection, P/T boundaries, HR, PR, QRS, QT, QTc (Bazett, Fridericia), axes,
+  regularity, wave marks and the heart-vector loop of the last beat.
+- Tier-1 forward ECG (brief B05): precomputed electrode weight matrix from the cell cloud, single-electrode updates, per-wave gains.
+- Multi-mesh renderer (brief B06): layers with opacity and contours, clip plane, instanced glyphs, CPU picking, PNG capture.
+- Real heart in the 3-D view (briefs B08, B09): voltage, activation-time and APD maps with a colour-blind-safe scale and legend,
+  anatomy panel, camera presets, click to stimulate, shift-click to ablate; rhythm picker, 3-D scrub, heart vector with
+  vectorcardiogram planes, and a Rhythm Quiz tab.
+- Electrode editor (brief B10): drag electrodes on the torso, placement presets (standard, Mason-Likar, posterior, right-sided,
+  paediatric), misplacement exercises and a detector that explains them.
+- Tier-0 scenario library (brief B11): 27 rhythms with teaching notes, sources, expected findings and golden ECG snapshots;
+  `heartsim-cli validate-scenarios`.
+- Pacing devices (brief B13): lead sites, capture thresholds, sensing, biventricular pacing, pacemaker-mediated tachycardia
+  intervention, pacemaker panel and six new paced scenarios.
+- Tutorial engine and scenario timeline editor (brief B15): reader panel with knowledge checks, self-study and tutor modes,
+  saved progress, and two original tutorials (Basics, Cardiac axis).
+- Tier-2 monodomain reaction-diffusion engine on masked voxels (brief B16): Aliev-Panfilov, Mitchell-Schaeffer and Fenton-Karma
+  cell models, results independent of thread count, hand-over from Tier 1.
+
+### Changed
+- The default left-ventricular free wall has an endo-to-epi APD gradient and the septum a uniform APD, which makes the T wave upright.
+
 ### Fixed
+- Tier 2 follows the timing engine's shock outcome: a synchronised shock waits for the R wave and a failed shock leaves the tissue alone.
+- A heart that has not beaten yet is no longer classed as asystolic, which made an early shock fail.
+- LAO and RAO camera presets were swapped; LAO now puts the camera at the patient's left.
 - Tier-1 eikonal: a front reaching absolutely refractory tissue is blocked instead of being slowed until the tissue
   recovers (that let it re-excite the heart where short-APD ischaemic cells border slow-conducting ones).
+
+### Known limitations
+- Tier 1 takes about 60–85 ms per beat against a 15 ms budget, and Tier 2 at 64³ takes 46–62 ms per frame against 8 ms, so Tier 2 is
+  not real time on the dev machine.
+- Tier 2 has no GPU path yet and does not apply spatial `Action::SetRegion`.
+- Two forward-model acceptance tests stay ignored (R-wave progression and fascicular axes) until the anatomy pack geometry is fixed.
 
 ## [0.2.0] — 2026-11-01
 First tagged release: M0 foundation plus briefs B01 (timing engine), B02 (anatomy pipeline) and B12 (packaging).
