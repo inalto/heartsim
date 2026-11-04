@@ -271,6 +271,13 @@ fn synchronised_shock_fires_on_the_r_wave() {
 }
 
 #[test]
+fn a_heart_that_has_not_beaten_yet_is_not_in_asystole() {
+    let mut e = TimingEngine::new(TimingParams::default());
+    e.step(Millis(100.0));
+    assert_eq!(e.rhythm_class(e.now()), RhythmClass::Organised);
+}
+
+#[test]
 fn unsynchronised_shock_in_the_t_wave_is_flagged_vulnerable() {
     // step until an R wave after 1 s, then shock 300 ms later (the T-wave peak)
     let mut e = TimingEngine::new(TimingParams::default());

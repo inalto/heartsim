@@ -297,6 +297,29 @@ fn shock_returns_every_voxel_to_rest_within_50_ms() {
 }
 
 #[test]
+fn synchronised_shock_leaves_the_tissue_alone_until_the_r_wave() {
+    let mut t2 = heart_tier2();
+    run(&mut t2, 330);
+    let excited = |e: &Tier2Engine| e.solver().u().iter().filter(|&&u| u > 0.5).count();
+    assert!(excited(&t2) > 1000);
+    let now = t2.now();
+    t2.apply(
+        &Action::Shock {
+            joules: 100.0,
+            synchronised: true,
+        },
+        now,
+    )
+    .unwrap();
+    run(&mut t2, 2);
+    assert!(
+        excited(&t2) > 1000,
+        "tissue was reset before any shock was delivered"
+    );
+    assert!(t2.drain_shocks().is_empty(), "sync mode waits for the R wave");
+}
+
+#[test]
 fn tissue_activations_are_sensed_by_the_timing_engine() {
     let mut t2 = heart_tier2();
     run(&mut t2, 850); // first sinus beat over, ventricles recovered

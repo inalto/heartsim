@@ -129,6 +129,8 @@ pub struct Tier2Engine<M: CellModel = AlievPanfilov> {
     last_drive_ms: [f64; 3],
     base_conducting: Vec<bool>,
     ingested: usize,
+    /// Shocks already applied to the tissue (index into `timing.shocks()`).
+    shocks_seen: usize,
     routed: Vec<(f64, u32)>,
     fresh: Vec<Event>,
     cells: CellState,
@@ -163,6 +165,7 @@ impl<M: CellModel> Tier2Engine<M> {
     pub fn from_tier1(t1: &Tier1Engine, model: &M, params: Tier2Params) -> Self {
         let mut e = Self::assemble(t1.timing().clone(), t1.eikonal().clone(), model, params);
         e.ingested = e.timing.events().len();
+        e.shocks_seen = e.timing.shocks().len();
         let now = e.timing.now().0;
         e.solver.set_time(now);
         let (t_act, apd) = (t1.eikonal().activation_times(), &t1.cells().apd_ms);
@@ -233,6 +236,7 @@ impl<M: CellModel> Tier2Engine<M> {
             stim_voxel: Vec::new(),
             sampler: Sampler::default(),
             ingested: 0,
+            shocks_seen: 0,
             routed: Vec::new(),
             fresh: Vec::new(),
             cells: CellState::default(),
@@ -555,8 +559,14 @@ impl<M: CellModel> Tier2Engine<M> {
         // the echo events appear in the timing engine's next step and are skipped by `ingest`
     }
 
+    /// Shocks delivered since the last call (see [`crate::defib`]).
+    pub fn drain_shocks(&mut self) -> Vec<crate::defib::ShockRecord> {
+        self.shocks_seen = 0;
+        self.timing.drain_shocks()
+    }
+
     /// Apply an action. Spatial actions act on the tissue (stimuli at their site, ablation,
-    /// regional block, shock); the timing engine sees every action. Succeeds if either honours
+    /// regional block); the timing engine sees every action. Succeeds if either honours
     /// it, otherwise returns the timing engine's error.
     pub fn apply(&mut self, action: &Action, at: Millis) -> Result<(), ActionError> {
         let t = self.timing.apply(action, at);
@@ -623,10 +633,8 @@ impl<M: CellModel> Tier2Engine<M> {
                     Ok(())
                 }
             }
-            Action::Shock { .. } => {
-                self.solver.shock();
-                Ok(())
-            }
+            // The timing engine decides delivery (sync on R) and outcome; `step` applies it.
+            Action::Shock { .. } => Err(ActionError::Unsupported("Shock")),
             Action::SetGlobalSinusRate { .. } => Err(ActionError::Unsupported("SetGlobalSinusRate")),
             Action::SetRegion { .. } => Err(ActionError::Unsupported("SetRegion")),
             Action::AccessoryPathway { .. } => Err(ActionError::Unsupported("AccessoryPathway")),
@@ -646,6 +654,14 @@ impl<M: CellModel> Engine for Tier2Engine<M> {
         let from = self.solver.now_ms();
         self.timing.step(dt);
         self.ingest();
+        for i in self.shocks_seen..self.timing.shocks().len() {
+            let s = self.timing.shocks()[i];
+            if s.success {
+                self.solver.advance_to(s.at.0);
+                self.solver.shock();
+            }
+        }
+        self.shocks_seen = self.timing.shocks().len();
         self.solver.advance_to(self.timing.now().0);
         self.sense_tissue(from);
         self.sample_cells();
@@ -668,6 +684,7 @@ impl<M: CellModel> Engine for Tier2Engine<M> {
         self.timing.reset();
         self.router.reset();
         self.ingested = 0;
+        self.shocks_seen = 0;
         let ablated: Vec<u32> = (0..self.base_conducting.len() as u32)
             .filter(|&v| self.solver.conducting()[v as usize] != self.base_conducting[v as usize])
             .collect();

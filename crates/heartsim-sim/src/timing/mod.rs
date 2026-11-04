@@ -477,7 +477,8 @@ impl TimingEngine {
     #[must_use]
     pub fn rhythm_class(&self, t: Millis) -> RhythmClass {
         let t = t.0;
-        if self.last_ventricular.is_none_or(|v| t - v >= ASYSTOLE_MS) {
+        // Before the first beat, silence is counted from the start of the simulation.
+        if t - self.last_ventricular.unwrap_or(0.0) >= ASYSTOLE_MS {
             return RhythmClass::Asystole;
         }
         let flutter = self.last_a_cycle_ms.is_some_and(|c| c < FLUTTER_CYCLE_MS);
