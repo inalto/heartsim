@@ -18,15 +18,20 @@ rayon = { workspace = true, optional = true }
 [features]
 default = ["parallel"]
 parallel = ["dep:rayon"]
-# gpu = ["dep:wgpu"]   # Tier-2 compute path, see docs/briefs/
+# gpu = ["dep:wgpu"]   # Tier-2 compute path (brief B16, not implemented yet)
 
 [dev-dependencies]
 approx.workspace = true
 criterion.workspace = true
+rayon.workspace = true
 
 [lints]
 workspace = true
 
 [[bench]]
 name = "tier1"
+harness = false
+
+[[bench]]
+name = "tier2"
 harness = false
