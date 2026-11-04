@@ -35,7 +35,7 @@ pub use params::{
     PacerPreset, Side, SinusParams, TimingParams,
 };
 
-use crate::engine::{CellState, Engine, Event, EventKind, Origin};
+use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
 use heartsim_core::scenario::{Action, StimSite};
 use heartsim_core::{Millis, Region};
 use pacer::Pacer;
@@ -62,6 +62,8 @@ pub(crate) enum VentVia {
     /// LV lead of a biventricular device: a front distinct from the RV pace, so the two fuse.
     PacerLv,
     External,
+    /// An activation the tissue model (Tier 2 re-entry) produced and sensed back.
+    Tissue,
 }
 
 /// Which route brought an impulse to the atria.
@@ -75,6 +77,8 @@ pub(crate) enum AtrialVia {
     AccessoryRetro,
     Pacer,
     External,
+    /// A re-entrant atrial front the tissue model (Tier 2) sensed at the AV-nodal input.
+    Tissue,
 }
 
 /// Bundle-branch / fascicular edges.
@@ -307,6 +311,38 @@ impl TimingEngine {
     #[must_use]
     pub fn measured_amplitudes_mv(&self) -> [Option<f64>; 3] {
         self.measured_amplitude_mv
+    }
+
+    /// Feed back an activation that the tissue model produced on its own (Tier 2 functional
+    /// re-entry: flutter, AF, VT, VF), so that the timing graph stays the single source of beat
+    /// timing. An atrial activation is taken as already at the AV-nodal input (it conducts or
+    /// blocks there, overdrives the sinus node); a ventricular one resets the escape timers, is
+    /// seen by the pacemaker's sense amplifier and may conduct retrogradely. The resulting
+    /// events carry `Origin::Reentry` and `EventKind::Automatic`. Processed at the next step.
+    pub fn sense_tissue(&mut self, chamber: Chamber, region: Region, at: Millis) {
+        let at = at.0.max(self.now);
+        let (kind, origin) = (EventKind::Automatic, Origin::Reentry);
+        match chamber {
+            Chamber::Atrium => self.schedule(
+                at,
+                Pending::Atrial {
+                    region,
+                    kind,
+                    origin,
+                    via: AtrialVia::Tissue,
+                },
+            ),
+            Chamber::Ventricle => self.schedule(
+                at,
+                Pending::Ventricular {
+                    region,
+                    kind,
+                    origin,
+                    via: VentVia::Tissue,
+                },
+            ),
+            Chamber::AvJunction => {}
+        }
     }
 
     /// Events produced since the last drain, without taking them.

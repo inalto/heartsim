@@ -7,11 +7,13 @@
 //! * [`ap`] — action-potential templates (shape × APD) shared by Tier 0/1.
 //! * [`tier1`] — Tier-1 anisotropic graph-eikonal activation on the cell cloud with AP
 //!   templates, driven by timing events ([`Tier1Engine`] couples the two).
-//! * Reaction–diffusion (Tier 2) lives in brief B16 and is not yet implemented.
+//! * [`tier2`] — Tier-2 monodomain reaction–diffusion on a masked voxel grid (re-entry, VT/VF,
+//!   flutter/AF), driven by the same timing engine ([`tier2::Tier2Engine`]).
 
 pub mod ap;
 pub mod engine;
 pub mod tier1;
+pub mod tier2;
 pub mod timing;
 
 pub use engine::{CellState, Chamber, Engine, Event, EventKind, Origin};

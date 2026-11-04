@@ -153,7 +153,12 @@ impl TimingEngine {
         }
         self.last_atrial = Some(t);
         self.emit(t, region, kind, origin);
-        let atrial_delay = self.params.atrial_delay_ms;
+        // A front sensed on the tissue model is already at the nodal input.
+        let atrial_delay = if via == AtrialVia::Tissue {
+            0.0
+        } else {
+            self.params.atrial_delay_ms
+        };
         let ladder = match via {
             AtrialVia::NodeRetro | AtrialVia::AccessoryRetro => {
                 LadderSample::retrograde(Chamber::Atrium, t, t + atrial_delay, origin)

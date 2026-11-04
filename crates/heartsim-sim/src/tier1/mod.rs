@@ -338,6 +338,9 @@ pub struct EikonalEngine {
     /// External stimuli `(time, cell)` from actions, ascending.
     stimuli: Vec<(f64, u32)>,
     last_av_pathway: Option<f64>,
+    /// When set, [`EikonalEngine::route_events`] is running: seeds are recorded here instead
+    /// of starting fronts (Tier 2 uses the engine as its event → seed-cell router).
+    capture: Option<Vec<(f64, u32)>>,
     cells: CellState,
     events: Vec<Event>,
 }
@@ -441,6 +444,7 @@ impl EikonalEngine {
             scratch: Vec::new(),
             stimuli: Vec::new(),
             last_av_pathway: None,
+            capture: None,
             cells: CellState::new(n),
             events: Vec::with_capacity(16),
             kinds,
@@ -687,6 +691,41 @@ impl EikonalEngine {
         &self.origin
     }
 
+    /// APD of each cell at a long diastolic interval before `apd_scale`, ms: the transmural,
+    /// apicobasal and RV gradients of the module docs. Tier 2 maps it onto its cell models.
+    #[must_use]
+    pub fn base_apd_ms(&self) -> &[f32] {
+        &self.base_apd
+    }
+
+    /// Fast endocardial ("Purkinje") layer of each cell: 0 = none, 1 = LV, 2 = RV.
+    #[must_use]
+    pub fn fast_layers(&self) -> Vec<u8> {
+        self.hot.iter().map(|h| h.layer).collect()
+    }
+
+    /// The Tier-1 settings this engine was built with.
+    #[must_use]
+    pub fn eikonal_params(&self) -> &EikonalParams {
+        &self.eik
+    }
+
+    /// The tissue parameters in use.
+    #[must_use]
+    pub fn parameters(&self) -> &Parameters {
+        &self.params
+    }
+
+    /// Map timing events to the seed cells and times they would start fronts at, without
+    /// starting them: `(time_ms, cell)` pairs are appended to `out` (same mapping as
+    /// [`EikonalEngine::ingest`], including the progressive conduction-system drive). The
+    /// engine's propagation state is untouched; only the AV-pathway pairing memory advances.
+    pub fn route_events(&mut self, events: &[Event], out: &mut Vec<(f64, u32)>) {
+        self.capture = Some(std::mem::take(out));
+        self.ingest(events);
+        *out = self.capture.take().unwrap_or_default();
+    }
+
     /// Mesh-level events since the last drain (also returned by [`Engine::drain_events`]).
     #[must_use]
     pub fn events(&self) -> &[Event] {
@@ -706,6 +745,10 @@ impl EikonalEngine {
     fn push_seed(&mut self, cell: u32, at: f64, layer: u8, origin: Origin) {
         let j = cell as usize;
         if j >= self.hot.len() {
+            return;
+        }
+        if let Some(capture) = &mut self.capture {
+            capture.push((at, cell));
             return;
         }
         let h = &mut self.hot[j];

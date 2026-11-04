@@ -81,6 +81,28 @@ explicit Euler, dt 0.1–0.25 ms, D ≈ 0.1 mm²/ms scaled per region, fibre ten
 (storage buffers, ping-pong) behind the `gpu` feature; results sampled back to cells for the forward model. Entered from Tier 1 by
 mapping each cell's template phase to `(u, v)`.
 
+* Implementation (`sim::tier2`, brief B16): active voxels in slab order with an 18-neighbour symmetric graph Laplacian that encodes
+  the fibre tensor (no-flux masks, scar, obstacles and the AV ring by construction); cell models behind `CellModel` (Aliev–Panfilov
+  default, Mitchell–Schaeffer, Fenton–Karma 3V) with an APD dial and an excitation dial. `RegionParams` map to `(D_l, D_t,
+  excitation)` by bisection on a 1-D cable of the solver's own `h`/`dt` (D_l ≈ 2.5 mm²/ms for 0.6 m/s: the slow AP upstroke needs
+  far more than the biophysical 0.1) and to the APD dial on a single cell. The explicit step is
+  guarded by `dt·(2·load + 1/max_dt) ≤ 2` and `dt ≤ ½ max_dt`; stimuli are conductances integrated by backward Euler (bounded,
+  libm-free). On a 2 mm grid the slow AP front is ≈ 6 mm wide, so seed stimuli cover a 5 mm radius (critical nucleus ≈ 2D/CV)
+  and fast tissue (Bachmann, crista, the 1.4 m/s Purkinje layer) cannot be carried as tissue within the stability budget: the
+  fast endocardial layer is a *driver* (voxel Dijkstra from each bundle's PMJ voxels, stimuli at those delays). Timing events reach
+  the tissue through the Tier-1 seed router; re-entrant activations at the AV-nodal input and the RV lead tip are fed back with
+  `TimingEngine::sense_tissue`. Sinus beat on the default pack vs Tier 1: activation RMS 6.4 ms (atria 6.4, ventricles 6.5).
+* Measured (release, 2013 Xeon E5-2470 v2 VM, 8 threads unless noted, **never on a quiet machine**: load average 8–70 from other
+  builds, so treat these as upper bounds; `cargo bench -p heartsim-sim --bench tier2`). Default pack, 34.7 k voxels: build and
+  calibration 0.44 s; one 1 ms step (4 substeps) 2.8–3.3 ms in steady running; one 857 ms sinus beat 2.4–2.8 s, i.e. ≈ 0.3–0.36×
+  real time. 64³ budget case (84 k-voxel shell, AP, dt 0.25 ms): 46–62 ms per 16.7 ms frame, 61 ms on 4 threads (8–11 ns per
+  voxel-update), **6–8× over the 8 ms target**, so Tier 2 is not real-time on this CPU yet. Full 262 k box: 140–368 ms. Not done:
+  the wgpu path (`gpu` feature) and SIMD/dense-layout kernels. The test `tier2_budget` does not check the target: it only catches
+  a kernel some 20× slower (fastest frame at opt-level 1: 75–480 ms depending on machine load, limit 1500 ms).
+* Regimes (tests): default AP keeps one rotor ≥ 2 s; the same cell on the APD-mosaic break-up preset fragments into 3–23 phase
+  singularities (the Panfilov 1999 a = 0.1, μ₁ = 0.07 constants did *not* break up in 2-D); Mitchell–Schaeffer holds one stable
+  rotor with τ_close = 100 < τ_open (restitution slope ∝ τ_close/τ_open; τ_close = 300 breaks up).
+
 ### 4.4 Forward ECG
 * Precompute `W[e, j]` for the 9 signal electrodes: equivalent-double-layer / dipole form
   `φ_e = Σ_j w_ej · V_m,j`, `w_ej = −(σ_i/4πσ_b) · (A_j n_j · (r_e − x_j)) / |r_e − x_j|³` for surface cells, falling back to `1/|r|^p`
