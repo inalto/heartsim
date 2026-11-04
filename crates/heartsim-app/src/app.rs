@@ -23,6 +23,7 @@ mod vector_tab;
 const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
 
 mod pacing;
+mod therapy;
 
 const SAMPLE_RATE_HZ: f32 = 500.0;
 
@@ -50,6 +51,8 @@ pub struct HeartSimApp {
     heart: Option<crate::heart_view::HeartView>,
     /// Pacemaker window, strip spike marks and lead markers (B13).
     pacing: pacing::Pacing,
+    /// Drugs, ischaemia and defibrillator window (B14).
+    therapy: therapy::Therapy,
     /// Electrode placement editor (B10); its placement sets the synthesiser's lead vectors.
     electrodes: crate::electrode_tab::ElectrodeTab,
     /// Rhythm presets (B11), the loaded one (`None` = slider settings) and its timeline.
@@ -184,6 +187,7 @@ impl HeartSimApp {
             },
             heart,
             pacing: pacing::Pacing::default(),
+            therapy: therapy::Therapy::default(),
             electrodes: crate::electrode_tab::ElectrodeTab::load_default(
                 SAMPLE_RATE_HZ,
                 (SAMPLE_RATE_HZ * 60.0) as usize,
@@ -215,6 +219,7 @@ impl HeartSimApp {
                 h.on_step(&events, self.clock.dt, self.engine.now());
             }
             self.pacing_step();
+            self.therapy_step();
             self.record_heart_history();
             self.sample_accumulator += self.clock.dt.0;
             while self.sample_accumulator >= sample_period_ms {
@@ -299,6 +304,7 @@ impl HeartSimApp {
                     .text("speed"),
             );
             ui.toggle_value(&mut self.pacing.open, "Pacemaker");
+            ui.toggle_value(&mut self.therapy.open, "Therapy");
         });
     }
 
@@ -581,6 +587,7 @@ impl eframe::App for HeartSimApp {
         }
 
         self.pacing_window(&ctx);
+        self.therapy_window(&ctx);
         match self.tab {
             Tab::Simulator => self.simulator_tab(ui),
             Tab::TwelveLead => self.twelve_lead_tab(ui),

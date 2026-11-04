@@ -22,8 +22,14 @@
 //! `APD_base·(1 − a·exp(−DI/τ))`.
 //!
 //! **Heterogeneity** (research §3.5). `APD_base` blends `apd_endo_ms` (depth 0) to `apd_ms`
-//! (depth 1) and adds an apicobasal gradient and an RV offset ([`EikonalParams`]); per-cell
-//! `apd_scale`/`cv_scale` are the hooks for ischaemia and drugs (brief B14).
+//! (depth 1) and adds an apicobasal gradient and an RV offset ([`EikonalParams`]).
+//!
+//! **Drugs and ischaemia** (brief B14). Per cell, APD and CV are multiplied by the drug effect of
+//! the cell's tissue class ([`EikonalEngine::set_drug_effects`], from the timing engine's
+//! pharmacology), by the injury of the coronary lesions (`Action::Stenosis`, see
+//! [`crate::ischaemia`]) and by the user hooks; a cell plays `rest + amp · template` with the
+//! injury's resting-potential rise and plateau loss, so the forward ECG sees the injury current
+//! and the voltage map shows the depolarised zone. Infarct cores are non-excitable.
 //!
 //! **His–Purkinje.** The procedural pack has no Purkinje tree; a thin fast endocardial layer stands
 //! in for it (Gillette et al. 2021). Only fronts delivered by the layer's own bundle (LAF/LPF for
@@ -53,6 +59,8 @@ pub use seeds::{SeedMap, lead_cells, resolve_site, side_index};
 
 use crate::ap::ApTemplate;
 use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+use crate::ischaemia::{InjuryField, IschaemiaState, injury_field};
+use crate::pharma::DrugEffects;
 use crate::timing::{ActionError, HisPurkinjeParams, PacerConfig, Side};
 use glam::Vec3;
 use heartsim_core::{Action, Millis, Parameters, Region, RegionParams, StimSite};
@@ -242,10 +250,13 @@ impl RelaxView<'_> {
     fn arrival_before(&self, j: usize, f: &Front, e: usize, tentative: f64) -> Option<f64> {
         let h = &self.hot[self.edges[e].target as usize];
         let base = self.base_delay(j, f, e);
-        // Cheap rejection before restitution: the fastest arrival cannot beat the queued one,
-        // or the slowest possible one is still inside the refractory period.
+        // The fastest arrival cannot beat the queued one, or it finds the target absolutely
+        // refractory: block. (Letting restitution slow such a front until the target recovers
+        // would make it "wait" in front of the refractory tissue and re-excite it later — a
+        // re-entry the eikonal model cannot represent, seen where short-APD ischaemic tissue
+        // borders slow-conducting cells.)
         let fastest = f.at + f64::from(base);
-        if fastest >= tentative || fastest + f64::from(base) * self.slowest < h.refractory_until {
+        if fastest >= tentative || fastest < h.refractory_until {
             return None;
         }
         // CV restitution of the destination for a front leaving now.
@@ -296,7 +307,22 @@ pub struct EikonalEngine {
     rp: [RegionParams; REGIONS],
     /// APD at long diastolic interval before modifiers, ms.
     base_apd: Vec<f32>,
+    /// Combined APD multiplier: user × drug × injury (read at activation).
     apd_scale: Vec<f32>,
+    /// User APD / CV multipliers ([`EikonalEngine::apd_scale_mut`], [`EikonalEngine::set_cv_scale`]).
+    user_apd_scale: Vec<f32>,
+    user_cv_scale: Vec<f32>,
+    /// `user_apd_scale` was handed out mutably: recombine before the next step.
+    modifiers_dirty: bool,
+    /// AHA segment per cell (0 = none) for coronary territories; empty until set.
+    aha_segments: Vec<u8>,
+    ischaemia: IschaemiaState,
+    injury: InjuryField,
+    /// Drug effect the modifiers were last built from.
+    drug: DrugEffects,
+    /// `vm = rest_vm + amp_vm · template` per cell (injury current, hyperkalaemia).
+    rest_vm: Vec<f32>,
+    amp_vm: Vec<f32>,
     /// Relaxation data per graph edge (same order as `graph.targets`).
     edges: Vec<HotEdge>,
     /// Delay of each edge inside the fast endocardial layer, ms.
@@ -390,6 +416,15 @@ impl EikonalEngine {
             }; REGIONS],
             base_apd: vec![0.0; n],
             apd_scale: vec![1.0; n],
+            user_apd_scale: vec![1.0; n],
+            user_cv_scale: vec![1.0; n],
+            modifiers_dirty: false,
+            aha_segments: Vec::new(),
+            ischaemia: IschaemiaState::default(),
+            injury: InjuryField::healthy(n),
+            drug: DrugEffects::NONE,
+            rest_vm: vec![0.0; n],
+            amp_vm: vec![1.0; n],
             ablated_base: vec![false; n],
             ablated: vec![false; n],
             region_blocked: [false; REGIONS],
@@ -544,7 +579,8 @@ impl EikonalEngine {
     fn refresh_excitable(&mut self) {
         for (j, h) in self.hot.iter_mut().enumerate() {
             let r = h.region as usize;
-            h.excitable = !self.ablated[j] && !self.region_blocked[r] && self.rp[r].conducts;
+            let dead = self.ablated[j] || self.injury.scar[j];
+            h.excitable = !dead && !self.region_blocked[r] && self.rp[r].conducts;
             let t = self.t_act[j];
             h.refractory_until = if !h.excitable {
                 f64::INFINITY
@@ -553,8 +589,10 @@ impl EikonalEngine {
             } else {
                 t + f64::from(self.cells.apd_ms[j]) * self.rp[r].erp_fraction
             };
-            if self.ablated[j] {
+            if dead {
                 self.inv_apd[j] = f32::NAN;
+            } else if self.inv_apd[j].is_nan() {
+                self.inv_apd[j] = 0.0;
             }
         }
     }
@@ -629,17 +667,127 @@ impl EikonalEngine {
         }
     }
 
-    /// Per-cell APD multipliers (ischaemia, drugs — brief B14). Applied at the next activation.
+    /// Per-cell user APD multipliers, combined with the drug and injury modifiers before the
+    /// next step and applied at each cell's next activation.
     pub fn apd_scale_mut(&mut self) -> &mut [f32] {
-        &mut self.apd_scale
+        self.modifiers_dirty = true;
+        &mut self.user_apd_scale
     }
 
-    /// Set per-cell CV multipliers (ischaemia, drugs — brief B14); `scale[i]` applies to cell
-    /// `i` immediately. Missing entries keep their value.
+    /// Set per-cell user CV multipliers (combined with the drug and injury modifiers);
+    /// `scale[i]` applies to cell `i` immediately. Missing entries keep their value.
     pub fn set_cv_scale(&mut self, scale: &[f32]) {
-        for (h, s) in self.hot.iter_mut().zip(scale) {
-            h.inv_cv_scale = 1.0 / s.max(1e-6);
+        for (u, s) in self.user_cv_scale.iter_mut().zip(scale) {
+            *u = *s;
         }
+        self.refresh_modifiers();
+    }
+
+    /// AHA segment (1–17, 0 = none) of every cell, from `AnatomyPack::aha_segments`: the
+    /// coronary territories `Action::Stenosis` needs. Lesions in effect are re-mapped.
+    ///
+    /// # Panics
+    /// If `segments` has not one entry per cell.
+    pub fn set_aha_segments(&mut self, segments: &[u8]) {
+        assert_eq!(segments.len(), self.cloud.len(), "one AHA segment per cell");
+        self.aha_segments = segments.to_vec();
+        self.refresh_injury();
+    }
+
+    /// Apply the timing engine's combined drug effect (call every step; cheap when it has not
+    /// changed by more than 0.5 %).
+    pub fn set_drug_effects(&mut self, effects: &DrugEffects) {
+        if effects.distance(&self.drug) < 5e-3 {
+            return;
+        }
+        let shape_changed = (effects.repolarisation_slope - self.drug.repolarisation_slope).abs() > 1e-3
+            || (effects.plateau_sag - self.drug.plateau_sag).abs() > 1e-3;
+        self.drug = *effects;
+        if shape_changed {
+            let t = ApTemplate::ventricular_modified(
+                TEMPLATE_SAMPLES,
+                self.drug.repolarisation_slope as f32,
+                self.drug.plateau_sag as f32,
+            );
+            self.vm_lut[Shape::Ventricular as usize] =
+                std::array::from_fn(|i| t.at(i as f32 / VM_LUT as f32));
+        }
+        self.refresh_modifiers();
+    }
+
+    /// Drug effect the cell modifiers are currently built from.
+    #[must_use]
+    pub fn drug_effects(&self) -> &DrugEffects {
+        &self.drug
+    }
+
+    /// Coronary lesions in effect on the mesh.
+    #[must_use]
+    pub fn ischaemia(&self) -> &IschaemiaState {
+        &self.ischaemia
+    }
+
+    /// Per-cell result of the lesions (injury 0 … 1, scar, modifiers).
+    #[must_use]
+    pub fn injury(&self) -> &InjuryField {
+        &self.injury
+    }
+
+    /// The cell cloud with infarct-core cells relabelled `Region::Scar`, for building a forward
+    /// model (B5) that treats the scar as silent tissue without intracellular continuity: a
+    /// healed infarct has no membrane potential, so its border with live myocardium is a tissue
+    /// boundary, not a source. `None` while there is no scar.
+    #[must_use]
+    pub fn cloud_with_scar(&self) -> Option<CellCloud> {
+        if !self.injury.scar.contains(&true) {
+            return None;
+        }
+        let mut c = (*self.cloud).clone();
+        for (r, &dead) in c.regions.iter_mut().zip(&self.injury.scar) {
+            if dead {
+                *r = Region::Scar;
+            }
+        }
+        Some(c)
+    }
+
+    /// Recompute the injury field from the lesions, then the modifiers and excitability.
+    fn refresh_injury(&mut self) {
+        let n = self.cloud.len();
+        self.injury = if self.aha_segments.is_empty() || self.ischaemia.is_empty() {
+            InjuryField::healthy(n)
+        } else {
+            injury_field(
+                &self.cloud,
+                &self.graph,
+                &self.kinds,
+                &self.aha_segments,
+                self.ischaemia.lesions(),
+            )
+        };
+        self.refresh_modifiers();
+        self.refresh_excitable();
+    }
+
+    /// Combine user, drug and injury modifiers into the per-cell APD / CV scales and the V_m
+    /// rest level and amplitude.
+    fn refresh_modifiers(&mut self) {
+        let d = &self.drug;
+        for i in 0..self.cloud.len() {
+            let (cv, apd, myocardium) = match self.kinds[i] {
+                CellKind::Atrial => (d.atrial_cv_scale, d.atrial_apd_scale, true),
+                CellKind::Ventricular => (d.ventricular_cv_scale, d.ventricular_apd_scale, true),
+                CellKind::Purkinje => (d.his_purkinje_cv_scale, 1.0, false),
+                CellKind::SinusNode | CellKind::Driven => (1.0, 1.0, false),
+            };
+            self.apd_scale[i] = self.user_apd_scale[i] * self.injury.apd_scale[i] * apd as f32;
+            let cv = self.user_cv_scale[i] * self.injury.cv_scale[i] * cv as f32;
+            self.hot[i].inv_cv_scale = 1.0 / cv.max(1e-6);
+            let drug_rest = if myocardium { d.rest_offset as f32 } else { 0.0 };
+            self.rest_vm[i] = self.injury.rest_offset[i] + drug_rest;
+            self.amp_vm[i] = 1.0 - self.rest_vm[i] - self.injury.plateau_loss[i];
+        }
+        self.modifiers_dirty = false;
         self.refresh_min_out();
     }
 
@@ -909,19 +1057,50 @@ impl EikonalEngine {
                 Ok(())
             }
             Action::Shock { .. } => {
-                // Every excitable cell depolarises at once; fronts in flight die.
-                self.queue.clear();
-                self.hot.iter_mut().for_each(|h| h.tentative = f64::INFINITY);
-                for c in 0..self.hot.len() as u32 {
-                    self.push_seed(c, at, 0, Origin::External);
+                self.shock(Millis(at));
+                Ok(())
+            }
+            Action::Stenosis { branch, severity } => {
+                if self.aha_segments.is_empty() {
+                    return Err(ActionError::Unsupported("Stenosis without AHA segments"));
                 }
+                self.ischaemia
+                    .apply(branch, *severity)
+                    .map_err(|e| ActionError::UnknownBranch(e.0))?;
+                self.refresh_injury();
                 Ok(())
             }
             Action::SetGlobalSinusRate { .. } => Err(ActionError::Unsupported("SetGlobalSinusRate")),
             Action::AccessoryPathway { .. } => Err(ActionError::Unsupported("AccessoryPathway")),
-            Action::Stenosis { .. } => Err(ActionError::Unsupported("Stenosis")),
             Action::Drug { .. } => Err(ActionError::Unsupported("Drug")),
             Action::MoveElectrode { .. } => Err(ActionError::Unsupported("MoveElectrode")),
+        }
+    }
+
+    /// A successful defibrillation shock at `at`: fronts in flight die and every excitable
+    /// cell — refractory or not — starts a fresh action potential at `at` (a defibrillating
+    /// field depolarises excitable tissue and prolongs the refractoriness of refractory tissue,
+    /// so the whole heart is synchronised; Zipes et al. 1975, Dillon 1991). The timing engine
+    /// decides delivery and outcome, see [`crate::defib`].
+    pub fn shock(&mut self, at: Millis) {
+        let at = at.0.max(self.now);
+        self.queue.clear();
+        self.stimuli.clear();
+        for j in 0..self.hot.len() {
+            let h = &mut self.hot[j];
+            h.tentative = f64::INFINITY;
+            if !h.excitable {
+                continue;
+            }
+            let p = self.rp[h.region as usize];
+            let apd = f64::from(self.base_apd[j]) * f64::from(self.apd_scale[j]);
+            h.repol_at = at + apd;
+            h.refractory_until = at + apd * p.erp_fraction;
+            self.t_act[j] = at;
+            self.inv_apd[j] = (1.0 / apd) as f32;
+            self.origin[j] = Origin::External;
+            self.cells.activation_ms[j] = at as f32;
+            self.cells.apd_ms[j] = apd as f32;
         }
     }
 
@@ -1191,17 +1370,28 @@ impl EikonalEngine {
         let inv_apd = &self.inv_apd;
         let shape = &self.shape;
         let lut = &self.vm_lut;
+        let (rest, amp) = (&self.rest_vm, &self.amp_vm);
         let kernel = |offset: usize, vm: &mut [f32]| {
             let r = offset..offset + vm.len();
-            let cells = t_act[r.clone()].iter().zip(&inv_apd[r.clone()]).zip(&shape[r]);
-            for (v, ((&t, &inv), &s)) in vm.iter_mut().zip(cells) {
-                // NaN (never activated / ablated) fails the range test and gives rest.
+            let cells = t_act[r.clone()]
+                .iter()
+                .zip(&inv_apd[r.clone()])
+                .zip(&shape[r.clone()])
+                .zip(rest[r.clone()].iter().zip(&amp[r]));
+            for (v, (((&t, &inv), &s), (&o, &a))) in vm.iter_mut().zip(cells) {
+                if inv.is_nan() {
+                    // ablated / necrotic: electrically dead
+                    *v = 0.0;
+                    continue;
+                }
+                // never activated (t = NaN) fails the range test and gives rest
                 let phase = (now - t) as f32 * inv;
-                *v = if (0.0..1.0).contains(&phase) {
+                let tpl = if (0.0..1.0).contains(&phase) {
                     lut[s as usize][((phase * VM_LUT as f32) as usize).min(VM_LUT - 1)]
                 } else {
                     0.0
                 };
+                *v = o + a * tpl;
             }
         };
         #[cfg(feature = "parallel")]
@@ -1222,6 +1412,9 @@ impl EikonalEngine {
 
 impl Engine for EikonalEngine {
     fn step(&mut self, dt: Millis) {
+        if self.modifiers_dirty {
+            self.refresh_modifiers();
+        }
         self.now += dt.0;
         self.advance_to(self.now);
         self.update_vm();
@@ -1258,7 +1451,11 @@ impl Engine for EikonalEngine {
         self.last_av_pathway = None;
         self.ablated.clone_from(&self.ablated_base);
         self.region_blocked = [false; REGIONS];
-        self.refresh_excitable();
+        self.ischaemia.clear();
+        self.drug = DrugEffects::NONE;
+        let t = ApTemplate::ventricular(TEMPLATE_SAMPLES);
+        self.vm_lut[Shape::Ventricular as usize] = std::array::from_fn(|i| t.at(i as f32 / VM_LUT as f32));
+        self.refresh_injury();
         for p in &mut self.probes {
             p.last_fired = f64::NEG_INFINITY;
         }

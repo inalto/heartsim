@@ -11,12 +11,13 @@ use crate::engine::{Chamber, EventKind, Origin};
 use heartsim_core::{Millis, Region};
 
 /// Shrier recovery curve: conduction time for recovery time `rt` (ms), `None` if blocked.
-/// `erp_bonus_ms` is the transient drug effect added to the pathway's ERP.
-fn pathway_conduction(p: &AvPathway, rt: f64, erp_bonus_ms: f64) -> Option<f64> {
-    if p.blocked || rt < p.erp_ms + erp_bonus_ms {
+/// Drugs add `erp_bonus_ms` to the pathway's ERP and divide the conduction time by
+/// `cv_scale` (nodal conduction velocity).
+fn pathway_conduction(p: &AvPathway, rt: f64, erp_bonus_ms: f64, cv_scale: f64) -> Option<f64> {
+    if p.blocked || rt < (p.erp_ms + erp_bonus_ms).max(0.0) {
         return None;
     }
-    Some(p.min_ms + p.recovery_amplitude_ms * (-(rt - p.erp_ms) / p.recovery_tau_ms).exp())
+    Some((p.min_ms + p.recovery_amplitude_ms * (-(rt - p.erp_ms) / p.recovery_tau_ms).exp()) / cv_scale)
 }
 
 fn since(last: Option<f64>, t: f64) -> f64 {
@@ -60,6 +61,7 @@ impl TimingEngine {
                 self.activate_ventricle(t, region, kind, origin, via);
             }
             Pending::HisRetro { origin } => self.on_his_retro(t, origin),
+            Pending::Shock { joules, synchronised } => self.deliver_shock(t, joules, synchronised),
             Pending::Stimulus { target } => match target {
                 StimTarget::Atrium(r) => {
                     self.activate_atrium(t, r, EventKind::Stimulus, Origin::External, AtrialVia::External);
@@ -87,7 +89,7 @@ impl TimingEngine {
         } else {
             s.rate_bpm
         };
-        let rr = 60_000.0 / rate;
+        let rr = 60_000.0 / (rate * self.drug_effects().sa_rate_scale);
         if s.respiration_depth <= 0.0 {
             return rr;
         }
@@ -142,7 +144,7 @@ impl TimingEngine {
         origin: Origin,
         via: AtrialVia,
     ) -> bool {
-        if since(self.last_atrial, t) < self.params.atrial_erp_ms {
+        if since(self.last_atrial, t) < self.atrial_erp() {
             let r = if via == AtrialVia::Sinus {
                 Region::SinoatrialNode
             } else {
@@ -151,9 +153,12 @@ impl TimingEngine {
             self.emit(t, r, EventKind::Blocked, origin);
             return false;
         }
+        if let Some(last) = self.last_atrial {
+            self.last_a_cycle_ms = Some(t - last);
+        }
         self.last_atrial = Some(t);
         self.emit(t, region, kind, origin);
-        let atrial_delay = self.params.atrial_delay_ms;
+        let atrial_delay = self.atrial_delay();
         let ladder = match via {
             AtrialVia::NodeRetro | AtrialVia::AccessoryRetro => {
                 LadderSample::retrograde(Chamber::Atrium, t, t + atrial_delay, origin)
@@ -184,7 +189,7 @@ impl TimingEngine {
             && ap.antegrade
         {
             let arrive = t + atrial_delay;
-            if since(self.ap_last_use, arrive) >= ap.erp_ms {
+            if since(self.ap_last_use, arrive) >= ap.erp_ms + self.drug_effects().accessory_erp_add_ms {
                 let v_t = arrive + ap.delay_ms;
                 self.ap_last_use = Some(arrive);
                 self.ladder_push(LadderSample::antegrade(
@@ -219,12 +224,12 @@ impl TimingEngine {
             self.ladder_push(LadderSample::antegrade(Chamber::AvJunction, t, bar, origin).blocked());
             return;
         }
-        let bonus = self.av_erp_bonus(t);
+        let (bonus, cv) = (self.av_erp_bonus(), self.drug_effects().av_conduction_scale);
         let rt = since(self.last_his_output, t);
-        let (route, avct) = if let Some(d) = pathway_conduction(&av.fast, rt, bonus) {
+        let (route, avct) = if let Some(d) = pathway_conduction(&av.fast, rt, bonus, cv) {
             (Some((HisVia::Fast, Region::AvNodeFastPathway)), d)
         } else if av.dual_pathways
-            && let Some(d) = pathway_conduction(&av.slow, rt, bonus)
+            && let Some(d) = pathway_conduction(&av.slow, rt, bonus, cv)
         {
             (Some((HisVia::Slow, Region::AvNodeSlowPathway)), d)
         } else {
@@ -287,9 +292,9 @@ impl TimingEngine {
         // pathway the impulse came down.
         let av = self.params.av.clone();
         if via != HisVia::Fast && av.retrograde_fast && !av.complete_block && !av.fast.blocked {
-            let bonus = self.av_erp_bonus(t);
-            if since(self.fast_last_use, t) >= av.fast.erp_ms + bonus {
-                let delay = av.retrograde_delay_ms;
+            let bonus = self.av_erp_bonus();
+            if since(self.fast_last_use, t) >= (av.fast.erp_ms + bonus).max(0.0) {
+                let delay = av.retrograde_delay_ms / self.drug_effects().av_conduction_scale;
                 let echo_origin = if via == HisVia::Slow {
                     Origin::Reentry
                 } else {
@@ -323,7 +328,7 @@ impl TimingEngine {
 
     /// His → bundle branches → earliest ventricular activation.
     fn conduct_his_purkinje(&mut self, t: f64, origin: Origin, his_interval: f64) {
-        let hp = self.params.his_purkinje.clone();
+        let hp = self.his_purkinje();
         let branch_t = t + hp.his_ms;
         let mut earliest: Option<(f64, Region)> = None;
         let mut consider = |time: f64, region: Region| {
@@ -390,7 +395,7 @@ impl TimingEngine {
         if since(self.last_his_fired, t) < his_erp {
             return; // His bundle still refractory from its own antegrade activation
         }
-        let total = self.params.his_purkinje.total_ms();
+        let total = self.his_purkinje().total_ms();
         self.ladder_push(LadderSample::retrograde(
             Chamber::AvJunction,
             t - total,
@@ -413,11 +418,12 @@ impl TimingEngine {
     ) -> bool {
         let gap = since(self.last_ventricular, t);
         let fusion = gap < self.params.fusion_window_ms && self.last_vent_via != Some(via);
-        if !fusion && gap < self.params.ventricular_erp_ms {
+        if !fusion && gap < self.ventricular_erp() {
             self.emit(t, region, EventKind::Blocked, origin);
             return false;
         }
         if !fusion {
+            self.last_v_rr_ms = gap.is_finite().then_some(gap);
             self.last_ventricular = Some(t);
             self.last_vent_via = Some(via);
         }
@@ -431,7 +437,7 @@ impl TimingEngine {
 
         // Retrograde into the His–Purkinje system (not for impulses that came down it).
         if via != VentVia::HisPurkinje {
-            let total = self.params.his_purkinje.total_ms();
+            let total = self.his_purkinje().total_ms();
             self.schedule(t + total, Pending::HisRetro { origin });
         }
         // Retrograde over the accessory pathway (orthodromic AVRT, retrograde P).
@@ -439,7 +445,7 @@ impl TimingEngine {
             && let Some(ap) = self.params.accessory.clone()
             && ap.retrograde
         {
-            if since(self.ap_last_use, t) >= ap.erp_ms {
+            if since(self.ap_last_use, t) >= ap.erp_ms + self.drug_effects().accessory_erp_add_ms {
                 let (delay, a_region) = (ap.delay_ms, ap.atrial_region());
                 self.ap_last_use = Some(t);
                 self.ladder_push(LadderSample::retrograde(
@@ -468,8 +474,10 @@ impl TimingEngine {
 
     pub(crate) fn check_escape(&mut self) {
         let now = self.now;
-        let esc = self.params.escape.clone();
-        let hp_total = self.params.his_purkinje.total_ms();
+        let mut esc = self.params.escape.clone();
+        esc.junctional_bpm = self.automatic_rate(esc.junctional_bpm);
+        esc.ventricular_bpm = self.automatic_rate(esc.ventricular_bpm);
+        let hp_total = self.his_purkinje().total_ms();
         // Anchor: the last ventricular activation or the one already on its way from the node.
         let anchor = self
             .escape_anchor
@@ -581,7 +589,7 @@ impl TimingEngine {
                 continue;
             }
             let st = &mut self.foci[id];
-            if f.max_fires > 0 && st.fires >= f.max_fires {
+            if st.terminated || (f.max_fires > 0 && st.fires >= f.max_fires) {
                 continue;
             }
             match f.mode {
@@ -614,7 +622,7 @@ impl TimingEngine {
                             |p| matches!(p, Pending::FocusFire { id: fid, .. } if *fid == id as u8),
                         );
                         self.schedule(
-                            t + 60_000.0 / rate_bpm,
+                            t + 60_000.0 / self.automatic_rate(rate_bpm),
                             Pending::FocusFire {
                                 id: id as u8,
                                 remaining: 1,
@@ -631,7 +639,7 @@ impl TimingEngine {
             return;
         };
         let st = &mut self.foci[id as usize];
-        if f.max_fires > 0 && st.fires >= f.max_fires {
+        if st.terminated || (f.max_fires > 0 && st.fires >= f.max_fires) {
             return;
         }
         st.fires += 1;
@@ -669,7 +677,10 @@ impl TimingEngine {
                 );
             }
             FocusMode::Automatic { rate_bpm, .. } if rate_bpm > 0.0 => {
-                self.schedule(t + 60_000.0 / rate_bpm, Pending::FocusFire { id, remaining: 1 });
+                self.schedule(
+                    t + 60_000.0 / self.automatic_rate(rate_bpm),
+                    Pending::FocusFire { id, remaining: 1 },
+                );
             }
             _ => {}
         }

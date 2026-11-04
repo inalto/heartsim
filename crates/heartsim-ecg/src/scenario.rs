@@ -8,7 +8,7 @@
 //! no randomness, no I/O.
 
 use crate::analysis::{Analysis, Analyzer};
-use crate::synth::{FRIDERICIA_EXPONENT, GaussianSynth, MorphologyOverrides, UnknownWave};
+use crate::synth::{FRIDERICIA_EXPONENT, GaussianSynth, MorphologyOverrides, SynthModulation, UnknownWave};
 use heartsim_core::scenario::{ExpectedFindings, ScenarioError};
 use heartsim_core::{LEAD_COUNT, Lead, Millis, Scenario};
 use heartsim_sim::{ActionError, Engine, Event, TimingEngine, TimingParams};
@@ -102,6 +102,7 @@ impl Tier0Scenario {
     pub fn record(&self, seconds: f64) -> Result<Recording, Tier0Error> {
         let mut synth = self.synth().map_err(Tier0Error::Morphology)?;
         let mut eng = TimingEngine::new(self.timing.clone());
+        eng.set_shock_seed(self.scenario.seed);
         let mut timeline = self.scenario.timeline.clone();
         timeline.sort_by(|a, b| a.at.0.total_cmp(&b.at.0));
         let mut next = 0;
@@ -119,6 +120,7 @@ impl Tier0Scenario {
             let evs = eng.drain_events();
             synth.on_events(&evs);
             synth.on_pacer_markers(&eng.drain_pacer_markers());
+            synth.modulation = SynthModulation::from_state(&eng.drug_effects(), eng.ischaemia());
             events.extend(evs);
             let s = synth.sample(eng.now());
             for (buf, v) in leads.iter_mut().zip(s.0) {

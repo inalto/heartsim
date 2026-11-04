@@ -6,8 +6,11 @@ pub mod annotations;
 pub mod axis_dial;
 pub mod calipers;
 pub mod colour_bar;
+pub mod defib_panel;
+pub mod drug_tray;
 pub mod ecg_view;
 pub mod electrode_editor;
+pub mod ischaemia_panel;
 pub mod pacer_panel;
 pub mod snapshot;
 pub mod strip;
@@ -20,8 +23,13 @@ pub use annotations::{EcgAnnotations, interval_readout};
 pub use axis_dial::{AxisDialStyle, axis_dial, lead_polarity};
 pub use calipers::{Caliper, CaliperReading, CaliperSet, Playback};
 pub use colour_bar::{colour_bar, lut_colour};
+pub use defib_panel::{DefibPanelState, DefibResponse, DefibSound, defib_panel, describe_shock};
+pub use drug_tray::drug_tray;
 pub use ecg_view::EcgView;
 pub use electrode_editor::{EditorCommand, ElectrodeEditor, electrode_editor_panel};
+pub use ischaemia_panel::{
+    IschaemiaPanelState, IschaemiaResponse, coronary_tree, ischaemia_panel, territory_glyphs,
+};
 pub use pacer_panel::{PaceMark, PaceMarks, PacerPanelResponse, PacerPanelState, lead_glyphs, pacer_panel};
 pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
 pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};

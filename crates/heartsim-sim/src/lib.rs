@@ -7,10 +7,16 @@
 //! * [`ap`] — action-potential templates (shape × APD) shared by Tier 0/1.
 //! * [`tier1`] — Tier-1 anisotropic graph-eikonal activation on the cell cloud with AP
 //!   templates, driven by timing events ([`Tier1Engine`] couples the two).
+//! * [`pharma`] — drugs and electrolyte disturbances as parameter-modifier sets with onset /
+//!   offset kinetics (`assets/drugs.ron`), [`ischaemia`] — coronary stenosis and infarction by
+//!   territory, [`defib`] — synchronised cardioversion / defibrillation outcomes (brief B14).
 //! * Reaction–diffusion (Tier 2) lives in brief B16 and is not yet implemented.
 
 pub mod ap;
+pub mod defib;
 pub mod engine;
+pub mod ischaemia;
+pub mod pharma;
 pub mod tier1;
 pub mod timing;
 

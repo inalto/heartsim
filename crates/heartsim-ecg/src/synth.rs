@@ -5,11 +5,14 @@
 //! Each event picks a beat [`Template`] from what the engine reports: sinus, ectopic, retrograde
 //! or paced P; normally conducted, bundle-branch-blocked (from the `Blocked` branch events of the
 //! same beat), pre-excited, ectopic or paced QRS–T. Scenario files tune the shapes through
-//! [`MorphologyOverrides`].
+//! [`MorphologyOverrides`]; drugs, electrolytes and coronary lesions of the timing engine reach
+//! every new beat through [`SynthModulation`] (brief B14).
 
 use crate::leadvec::LeadVectors;
 use glam::DVec3;
 use heartsim_core::{FrontalAxis, LEAD_COUNT, Lead, Millis, Region, TwelveLead};
+use heartsim_sim::ischaemia::IschaemiaState;
+use heartsim_sim::pharma::DrugEffects;
 use heartsim_sim::timing::{MarkerKind, PacerMarker};
 use heartsim_sim::{Event, EventKind, Origin};
 use serde::{Deserialize, Serialize};
@@ -281,6 +284,81 @@ impl std::fmt::Display for UnknownWave {
 
 impl std::error::Error for UnknownWave {}
 
+/// Tier-0 rendering of the timing engine's drug and ischaemia state (brief B14). The Tier-1
+/// mesh produces the same changes from first principles (CV → QRS width, APD → QT, AP shape →
+/// T shape, injury current → ST); here they are morphology rules applied to every beat spawned
+/// after the modulation is set.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SynthModulation {
+    /// QRS width multiplier (ventricular conduction slowing: class Ic, hyperkalaemia).
+    pub qrs_width_scale: f64,
+    /// P width and amplitude multipliers (atrial conduction slowing flattens and widens the P).
+    pub p_width_scale: f64,
+    pub p_amplitude_scale: f64,
+    /// QT multiplier (T offset; ventricular APD).
+    pub qt_scale: f64,
+    /// T amplitude and width multipliers (peaked narrow T of hyperkalaemia, flat broad T of
+    /// hypokalaemia).
+    pub t_amplitude_scale: f64,
+    pub t_width_scale: f64,
+    /// Depth of the digoxin ST "scoop" (sagging depression opposite the T), mV.
+    pub st_scoop_mv: f64,
+    /// U-wave amplitude along the T direction, mV.
+    pub u_wave_mv: f64,
+    /// ST injury vector (heart frame, mV): ST deviation from J to T in every lead is its
+    /// projection.
+    pub st_vector_mv: DVec3,
+}
+
+impl Default for SynthModulation {
+    fn default() -> Self {
+        Self::NONE
+    }
+}
+
+impl SynthModulation {
+    /// No drug, no lesion.
+    pub const NONE: Self = Self {
+        qrs_width_scale: 1.0,
+        p_width_scale: 1.0,
+        p_amplitude_scale: 1.0,
+        qt_scale: 1.0,
+        t_amplitude_scale: 1.0,
+        t_width_scale: 1.0,
+        st_scoop_mv: 0.0,
+        u_wave_mv: 0.0,
+        st_vector_mv: DVec3::ZERO,
+    };
+
+    /// The morphology of a drug effect and a set of coronary lesions (research §3.5 table).
+    #[must_use]
+    pub fn from_state(drug: &DrugEffects, ischaemia: &IschaemiaState) -> Self {
+        let slope = drug.repolarisation_slope;
+        let st = ischaemia.st_vector_mv();
+        Self {
+            qrs_width_scale: 1.0 / drug.ventricular_cv_scale,
+            p_width_scale: 1.0 / drug.atrial_cv_scale,
+            p_amplitude_scale: drug.atrial_cv_scale.min(1.0),
+            qt_scale: drug.ventricular_apd_scale,
+            t_amplitude_scale: (1.0 + if slope > 0.0 { 1.0 } else { 0.6 } * slope).max(0.1),
+            t_width_scale: (1.0 - if slope > 0.0 { 0.35 } else { 0.3 } * slope).max(0.3),
+            st_scoop_mv: 0.12 * drug.plateau_sag,
+            u_wave_mv: 0.15 * drug.u_wave,
+            st_vector_mv: DVec3::new(st[0], st[1], st[2]),
+        }
+    }
+}
+
+/// Hexaxial angle and anterior component of a heart-frame direction (the inverse of
+/// [`WaveSpec::direction`] up to length).
+fn wave_direction(v: DVec3) -> (f64, f64) {
+    let frontal = v.x.hypot(v.y);
+    if frontal < 1e-9 * v.length().max(1e-12) {
+        return (0.0, 1e6 * v.z.signum());
+    }
+    ((-v.y).atan2(v.x).to_degrees(), v.z / frontal)
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ActiveWave {
     spec: WaveSpec,
@@ -316,6 +394,8 @@ pub struct GaussianSynth {
     /// QT rate adaptation exponent: T offset and width scale with `(RR / 1000 ms)^k`, RR being
     /// the interval from the previous ventricular beat. 0 = fixed QT (the textbook default).
     pub qt_rate_exponent: f64,
+    /// Drug / ischaemia morphology of new beats.
+    pub modulation: SynthModulation,
     active: Vec<ActiveWave>,
     branch_blocks: u8,
     last_beat_ms: Option<f64>,
@@ -353,6 +433,7 @@ impl GaussianSynth {
             qrs_width_scale: 1.0,
             axis_shift_deg: 0.0,
             qt_rate_exponent: 0.0,
+            modulation: SynthModulation::NONE,
             active: Vec::new(),
             branch_blocks: 0,
             last_beat_ms: None,
@@ -555,15 +636,22 @@ impl GaussianSynth {
             }
             _ => 1.0,
         };
-        let (scale, shift) = (self.qrs_width_scale * width, self.axis_shift_deg);
+        let m = self.modulation;
+        let (scale, shift) = (
+            self.qrs_width_scale * width * m.qrs_width_scale,
+            self.axis_shift_deg,
+        );
         let mut new = Vec::new();
+        let mut t_wave = None;
         for w in self.waves(tpl) {
             let mut s = *w;
             if ventricular {
                 s.axis_deg += shift;
                 if s.name == "T" {
-                    s.offset_ms *= qt;
-                    s.width_ms *= qt;
+                    s.offset_ms *= qt * m.qt_scale;
+                    s.width_ms *= qt * m.qt_scale * m.t_width_scale;
+                    s.amplitude *= m.t_amplitude_scale;
+                    t_wave = Some(s);
                 } else {
                     s.offset_ms *= scale;
                     s.width_ms *= scale;
@@ -571,8 +659,49 @@ impl GaussianSynth {
                         s.axis_deg += rotation_deg;
                     }
                 }
+            } else if s.name == "P" {
+                s.width_ms *= m.p_width_scale;
+                s.offset_ms *= m.p_width_scale;
+                s.amplitude *= m.p_amplitude_scale;
             }
             new.push(ActiveWave { spec: s, t0 });
+        }
+        if let Some(t) = t_wave {
+            // ST injury: a broad component from the J point to the T peak along the injury
+            // vector (σ 80 ms centred at 0.6 of the T offset: ≈ 0.9 of its peak 60 ms after J).
+            let v = m.st_vector_mv;
+            if v.length() > 1e-6 {
+                let (axis_deg, anterior) = wave_direction(v);
+                let spec = WaveSpec {
+                    name: "ST",
+                    amplitude: v.length() / 0.9,
+                    width_ms: 80.0 * m.qt_scale,
+                    offset_ms: t.offset_ms * 0.6,
+                    axis_deg,
+                    anterior,
+                };
+                new.push(ActiveWave { spec, t0 });
+            }
+            if m.st_scoop_mv > 0.0 {
+                let spec = WaveSpec {
+                    name: "scoop",
+                    amplitude: -m.st_scoop_mv * t.amplitude.signum(),
+                    width_ms: 0.8 * t.width_ms,
+                    offset_ms: t.offset_ms - 1.2 * t.width_ms,
+                    ..t
+                };
+                new.push(ActiveWave { spec, t0 });
+            }
+            if m.u_wave_mv > 0.0 {
+                let spec = WaveSpec {
+                    name: "U",
+                    amplitude: m.u_wave_mv * t.amplitude.signum(),
+                    width_ms: 25.0,
+                    offset_ms: t.offset_ms + 2.0 * t.width_ms + 40.0,
+                    ..t
+                };
+                new.push(ActiveWave { spec, t0 });
+            }
         }
         self.active.extend(new);
     }
@@ -684,6 +813,36 @@ mod tests {
             let expected = 60.0 + shift;
             assert!((ax - expected).abs() < 3.0, "axis {ax} vs {expected}");
         }
+    }
+
+    #[test]
+    fn modulation_widens_qrs_peaks_t_and_adds_st_vector() {
+        // the first beat's T wave (QRS ≈ 355 ms, next QRS ≈ 1210 ms)
+        let tail_max = |v: &[TwelveLead], lead: Lead, from: usize| {
+            v[from..1100].iter().map(|x| x.get(lead)).fold(f64::MIN, f64::max)
+        };
+        let mut base = GaussianSynth::textbook();
+        let normal = run(2.0, &mut base);
+        // hyperkalaemia: taller T, earlier (shorter QT)
+        let mut s = GaussianSynth::textbook();
+        let mut hyper_k = DrugEffects::NONE;
+        hyper_k.repolarisation_slope = 1.0;
+        hyper_k.ventricular_apd_scale = 0.85;
+        s.modulation = SynthModulation::from_state(&hyper_k, &IschaemiaState::default());
+        let peaked = run(2.0, &mut s);
+        // first beat: QRS at ≈ 355 ms, T well after 450 ms
+        assert!(tail_max(&peaked, Lead::V3, 450) > 1.4 * tail_max(&normal, Lead::V3, 450));
+        // anterior STEMI: ST up in V2, down in III, 60 ms after the J point (QRS ≈ 355–415 ms)
+        let mut s = GaussianSynth::textbook();
+        let mut isch = IschaemiaState::default();
+        isch.apply("LAD", 1.0).unwrap();
+        s.modulation = SynthModulation::from_state(&DrugEffects::NONE, &isch);
+        let stemi = run(2.0, &mut s);
+        let st = |v: &[TwelveLead], lead: Lead| v[505].get(lead) - v[150].get(lead);
+        assert!(st(&stemi, Lead::V2) - st(&normal, Lead::V2) > 0.15);
+        assert!(st(&stemi, Lead::III) - st(&normal, Lead::III) < -0.05);
+        let (axis, anterior) = wave_direction(DVec3::new(0.0, -1.0, 0.0));
+        assert!((axis - 90.0).abs() < 1e-9 && anterior.abs() < 1e-9);
     }
 
     #[test]

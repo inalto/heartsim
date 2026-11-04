@@ -13,6 +13,16 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   60 s history with pause and drag-to-scrub (3-D view follows via a 10 Hz `SnapshotRing`); draggable calipers with
   Δt/bpm/ΔV read-out, snapping, shift-click to add, arrow-key nudge; P/R/T labels and PR/RR brackets from the B4 analyser;
   HR/PR/QRS/QT/QTc/axis read-out panel; PNG snapshot of the 12-lead page.
+- Drugs, ischaemia and defibrillation (brief B14): `assets/drugs.ron` drug table (adenosine, verapamil, diltiazem,
+  digoxin, flecainide, amiodarone, atropine, adrenaline, lidocaine, hyper-/hypokalaemia) with onset/hold/half-life
+  kinetics (`heartsim_sim::pharma`); `Action::Stenosis` by coronary branch with the wavefront rule, injury current,
+  infarct scar and presets (`heartsim_sim::ischaemia`); synchronised / unsynchronised shocks with charge time and
+  per-rhythm success probability (`heartsim_sim::defib`); Tier-0 `SynthModulation`; Therapy window with drug tray,
+  coronary-tree picker (territory highlight on the heart) and defibrillator.
+
+### Fixed
+- Tier-1 eikonal: a front reaching absolutely refractory tissue is blocked instead of being slowed until the tissue
+  recovers (that let it re-excite the heart where short-APD ischaemic cells border slow-conducting ones).
 
 ## [0.2.0] — 2026-11-01
 First tagged release: M0 foundation plus briefs B01 (timing engine), B02 (anatomy pipeline) and B12 (packaging).

@@ -170,6 +170,8 @@ pub struct HeartView {
     pacer_channels: [bool; 3],
     lead_set: Option<GlyphSetId>,
     lead_glyphs: Vec<GlyphInstance>,
+    /// Extra markers drawn with the lead glyphs (coronary territory highlight, B14).
+    overlay_glyphs: Vec<GlyphInstance>,
     /// Per-cell values to show instead of the live engine state (scrubbing a paused strip).
     scrub_cells: Option<Vec<f32>>,
 }
@@ -283,6 +285,10 @@ impl HeartView {
                 .as_ref()
                 .map(|ap| (ap.ventricular_side, ap.atrial_side)),
         );
+        // coronary territories for `Action::Stenosis` (B14)
+        if pack.aha_segments.len() == engine.cloud().len() {
+            engine.set_aha_segments(&pack.aha_segments);
+        }
         let mut hoods = pack.hoods;
         let mut layers: Vec<HeartLayer> = pack
             .meshes
@@ -342,6 +348,7 @@ impl HeartView {
             pacer_channels: [false; 3],
             lead_set: None,
             lead_glyphs: Vec::new(),
+            overlay_glyphs: Vec::new(),
             scrub_cells: None,
         }
     }
@@ -350,6 +357,28 @@ impl HeartView {
     #[must_use]
     pub fn engine(&self) -> &EikonalEngine {
         &self.engine
+    }
+
+    /// The Tier-1 engine, for actions and modifiers (drug effects, shocks, lesions — B14).
+    pub fn engine_mut(&mut self) -> &mut EikonalEngine {
+        &mut self.engine
+    }
+
+    /// Territory weight of a coronary branch per cell (0 … 1), for highlighting it.
+    #[must_use]
+    pub fn territory_weight(&self, branch: heartsim_sim::ischaemia::CoronaryBranch) -> Vec<f32> {
+        heartsim_sim::ischaemia::territory_weight(
+            self.engine.cloud(),
+            self.engine.graph(),
+            self.engine.kinds(),
+            &self.aha_segments,
+            branch,
+        )
+    }
+
+    /// Extra markers drawn with the lead glyphs (replaced every call).
+    pub fn set_overlay_glyphs(&mut self, glyphs: Vec<GlyphInstance>) {
+        self.overlay_glyphs = glyphs;
     }
 
     /// Put the pacemaker leads at the sites of `cfg` (B13); only the channels its mode uses are
@@ -660,7 +689,17 @@ impl HeartView {
         let scene = &mut res.scene;
         self.sync_scene(scene, &rs.queue, dt);
         if let Some(id) = self.lead_set {
-            scene.set_spheres(&rs.device, &rs.queue, id, &self.lead_glyphs);
+            if self.overlay_glyphs.is_empty() {
+                scene.set_spheres(&rs.device, &rs.queue, id, &self.lead_glyphs);
+            } else {
+                let all: Vec<GlyphInstance> = self
+                    .lead_glyphs
+                    .iter()
+                    .chain(&self.overlay_glyphs)
+                    .copied()
+                    .collect();
+                scene.set_spheres(&rs.device, &rs.queue, id, &all);
+            }
         }
 
         let uv = |p: egui::Pos2| {
