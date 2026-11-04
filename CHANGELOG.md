@@ -19,6 +19,12 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   infarct scar and presets (`heartsim_sim::ischaemia`); synchronised / unsynchronised shocks with charge time and
   per-rhythm success probability (`heartsim_sim::defib`); Tier-0 `SynthModulation`; Therapy window with drug tray,
   coronary-tree picker (territory highlight on the heart) and defibrillator.
+- Exports and documentation (brief B20): new `heartsim-io` crate shared by the app and the CLI — 12-lead PDF (3 x 4 + lead II
+  rhythm strip, A4/Letter landscape, patient-free header), 12-lead page and rhythm-strip PNGs, CSV, WFDB (format 16, 500 Hz,
+  1000 units/mV), scenario RON and a deterministic share-bundle zip; Export / Import window in the app (drag-and-drop import
+  of CSV, WFDB or bundles into the strip and 12-lead views for review with the calipers, `.ron` scenario files, window screenshot);
+  `heartsim-cli run <scenario> --seconds … --out …` writing byte-identical files; mdBook user and developer guide in
+  `docs/book` published to GitHub Pages by `.github/workflows/docs.yml`.
 
 ### Fixed
 - Tier-1 eikonal: a front reaching absolutely refractory tissue is blocked instead of being slowed until the tissue

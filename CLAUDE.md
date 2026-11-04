@@ -12,7 +12,7 @@ work packages in `docs/briefs/`.
    Rendering interpolates; it never drives the simulation.
 3. **One source of truth**: beat timing comes from `heartsim_sim::TimingEngine` events; the ECG strip and the 3-D colour map are both
    derived from engine state so they can never disagree.
-4. **Layering** (`core` → `geometry` → `sim` → `ecg` → `render` → `ui` → `app`/`cli`): lower crates never depend on higher ones;
+4. **Layering** (`core` → `geometry` → `sim` → `ecg` → `render` → `ui` → `io` → `app`/`cli`): lower crates never depend on higher ones;
    `core`, `geometry`, `sim`, `ecg` compile without wgpu/egui and on `wasm32`.
 5. **Units in names**: `_ms`, `_mv`, `_mm`, `_bpm`, `_m_s`. Heart coordinates are millimetres, +x = patient's left, +y = cranial,
    +z = anterior.

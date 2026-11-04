@@ -30,12 +30,18 @@ cargo run --release -p heartsim-app
 cargo run -p heartsim-cli -- synth --bpm 70 --seconds 10 --out ecg.csv
 ```
 ```bash
+cargo run -p heartsim-cli -- run assets/scenarios/lbbb.ron --seconds 12 --out exports/
+```
+```bash
 cargo xtask ci
 ```
+The `run` command writes the 12-lead PDF, PNGs, CSV, WFDB record, scenario file and share bundle that the app's Export window
+writes. The user and developer guide is in [`docs/book`](docs/book/src/SUMMARY.md) (`mdbook serve docs/book`) and is published
+to GitHub Pages.
 Linux needs `libxkbcommon-dev libwayland-dev libasound2-dev` (Debian/Ubuntu names). Toolchain is pinned in `rust-toolchain.toml`.
 
 ## Layout
-`crates/heartsim-{core,geometry,sim,ecg,render,ui,app,cli}` (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); `assets/` scenarios
+`crates/heartsim-{core,geometry,sim,ecg,render,ui,io,app,cli}` (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); `assets/` scenarios
 and locales; `docs/` requirements, architecture, roadmap, and research notes; `xtask/` automation.
 
 ## Contributing

@@ -15,6 +15,7 @@ use crate::scenarios::{ScenarioLibrary, Timeline, scenario_picker};
 use crate::snapshot_ring::SnapshotRing;
 use crate::vector_overlay::VectorOverlay;
 
+mod exports;
 mod scenario_control;
 mod tour;
 mod tutorials;
@@ -70,6 +71,8 @@ pub struct HeartSimApp {
     /// Guided tutorials (B15) and the scenario timeline editor.
     tutorials: crate::tutorial_ui::Tutorials,
     timeline_tab: tutorials::TimelineTab,
+    /// Export / Import window and the recording under review (B20).
+    exports: crate::export_panel::ExportPanel,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -208,6 +211,7 @@ impl HeartSimApp {
             tour: tour::Tour::from_env(),
             tutorials: crate::tutorial_ui::Tutorials::load_default(),
             timeline_tab: tutorials::TimelineTab::default(),
+            exports: crate::export_panel::ExportPanel::default(),
         }
     }
 
@@ -559,12 +563,16 @@ impl HeartSimApp {
 impl eframe::App for HeartSimApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.exports_frame(&ctx);
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
         if !self.ecg.is_paused() {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
         self.ecg.update(&self.rings);
-        self.electrodes.update(&self.rings, &mut self.synth);
+        // the editor counts live samples; a recording under review must not reach it
+        if self.exports.review.is_none() {
+            self.electrodes.update(&self.rings, &mut self.synth);
+        }
         if self.tab != Tab::Electrodes {
             self.electrodes.deactivate(frame.wgpu_render_state.as_ref());
         }
@@ -589,6 +597,7 @@ impl eframe::App for HeartSimApp {
                 for t in Tab::ALL {
                     ui.selectable_value(&mut self.tab, t, t.title());
                 }
+                self.export_button(ui);
             });
         });
         if matches!(

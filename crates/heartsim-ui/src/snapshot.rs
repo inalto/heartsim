@@ -1,6 +1,7 @@
 //! PNG snapshot of a 12-lead page, rasterised on the CPU with the same [`StripWindow`] mapping
-//! and cell layout as the screen, so the image matches what is shown (minus text labels: the
-//! raster path carries no font). No GPU read-back, so it also works headless and in tests.
+//! and cell layout as the screen, so the image matches what is shown. The raster path carries no
+//! font, only the bitmap glyphs lead labels need. No GPU read-back, so it also works headless and
+//! in tests.
 
 use crate::strip::{StripStyle, StripWindow};
 use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, page_cells};
@@ -38,7 +39,52 @@ fn line(img: &mut RgbaImage, a: Pos2, b: Pos2, clip: Rect, c: Color32) {
     }
 }
 
-fn draw_cell(img: &mut RgbaImage, win: &StripWindow, ring: &LeadRing, style: &StripStyle, invert: bool) {
+/// 5 × 7 bitmap of a character used in lead labels (each row's low 5 bits, top row first).
+fn glyph(c: char) -> Option<[u8; 7]> {
+    Some(match c {
+        'I' => [0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+        'V' => [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
+        'a' => [0b00000, 0b00000, 0b01110, 0b00001, 0b01111, 0b10001, 0b01111],
+        'R' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
+        'L' => [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
+        'F' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000],
+        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+        '2' => [0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111],
+        '3' => [0b11111, 0b00010, 0b00100, 0b00010, 0b00001, 0b10001, 0b01110],
+        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
+        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
+        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
+        '-' => [0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000],
+        _ => return None,
+    })
+}
+
+/// A lead label at the top-left of `r`, blocks of about 0.4 mm so it reads like the printed page.
+fn draw_label(img: &mut RgbaImage, r: Rect, style: &StripStyle, label: &str) {
+    let block = (style.px_per_mm * 0.4).round().max(1.0);
+    let top = r.top() + 2.0 * block;
+    let mut x = r.left() + 2.0 * block;
+    for bitmap in label.chars().filter_map(glyph) {
+        for (row, bits) in bitmap.iter().enumerate() {
+            for col in 0..5 {
+                if bits & (0b10000 >> col) != 0 {
+                    let min = Pos2::new(x + col as f32 * block, top + row as f32 * block);
+                    fill(img, Rect::from_min_size(min, Vec2::splat(block)), style.trace);
+                }
+            }
+        }
+        x += 6.0 * block;
+    }
+}
+
+fn draw_cell(
+    img: &mut RgbaImage,
+    win: &StripWindow,
+    ring: &LeadRing,
+    style: &StripStyle,
+    invert: bool,
+    label: &str,
+) {
     let r = win.rect;
     fill(img, r, style.paper);
     if style.show_grid {
@@ -98,6 +144,7 @@ fn draw_cell(img: &mut RgbaImage, win: &StripWindow, ring: &LeadRing, style: &St
     for w in pulse.windows(2) {
         line(img, w[0], w[1], r, style.trace);
     }
+    draw_label(img, r, style, label);
 }
 
 /// Rasterise a 12-lead page of `width_px × height_px` pixels whose newest sample is just before
@@ -124,8 +171,36 @@ pub fn render_page(
         let probe = StripWindow::new(cell.rect, &style, ring.sample_rate_hz, head);
         let cell_head = head.saturating_sub(cell.columns_before_head as u64 * probe.visible_samples);
         let win = StripWindow::new(cell.rect, &style, ring.sample_rate_hz, cell_head);
-        draw_cell(&mut img, &win, ring, &style, cell.invert);
+        let label = if cell.invert {
+            format!("-{}", cell.lead.label())
+        } else {
+            cell.lead.label().to_string()
+        };
+        draw_cell(&mut img, &win, ring, &style, cell.invert, &label);
     }
+    img
+}
+
+/// Rasterise one strip labelled `label` of `width_px × height_px` pixels whose newest sample is
+/// just before absolute index `head` (scroll or sweep, as `style.mode` says), calibration pulse at
+/// the left edge.
+#[must_use]
+pub fn render_strip(
+    ring: &LeadRing,
+    style: &StripStyle,
+    label: &str,
+    head: u64,
+    size_px: [u32; 2],
+    px_per_point: f32,
+) -> RgbaImage {
+    let mut img = RgbaImage::from_pixel(size_px[0], size_px[1], px(style.paper));
+    let style = StripStyle {
+        px_per_mm: style.px_per_mm * px_per_point,
+        ..*style
+    };
+    let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(size_px[0] as f32, size_px[1] as f32));
+    let win = StripWindow::new(rect, &style, ring.sample_rate_hz, head);
+    draw_cell(&mut img, &win, ring, &style, false, label);
     img
 }
 
@@ -134,4 +209,53 @@ pub fn encode_png(img: &RgbaImage) -> Result<Vec<u8>, image::ImageError> {
     let mut out = std::io::Cursor::new(Vec::new());
     img.write_to(&mut out, ImageFormat::Png)?;
     Ok(out.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heartsim_core::Lead;
+
+    fn dark_pixels(img: &RgbaImage, x: std::ops::Range<u32>, y: std::ops::Range<u32>) -> usize {
+        x.flat_map(|x| y.clone().map(move |y| (x, y)))
+            .filter(|&(x, y)| img.get_pixel(x, y).0[0] < 100)
+            .count()
+    }
+
+    #[test]
+    fn every_lead_label_can_be_drawn() {
+        for l in Lead::ALL {
+            assert!(l.label().chars().all(|c| glyph(c).is_some()), "{}", l.label());
+        }
+        assert!(glyph('-').is_some(), "Cabrera's inverted aVR");
+    }
+
+    #[test]
+    fn page_cells_carry_their_label_above_the_trace() {
+        let rings: Vec<LeadRing> = (0..12)
+            .map(|_| {
+                let mut r = LeadRing::new(5000, 500.0);
+                (0..5000).for_each(|_| r.push(0.0));
+                r
+            })
+            .collect();
+        let style = StripStyle {
+            px_per_mm: 5.0,
+            ..StripStyle::paper()
+        };
+        let img = render_page(
+            &rings,
+            &style,
+            TwelveLeadLayout::Clinical,
+            LeadOrder::Standard,
+            5000,
+            [1250, 800],
+            1.0,
+        );
+        // the top-left corner of the first cell holds "I", of the rhythm strip row "II"
+        let i = dark_pixels(&img, 2..40, 2..40);
+        let ii = dark_pixels(&img, 2..40, 602..640);
+        assert!(i > 0, "no label in the first cell");
+        assert!(ii > i, "\"II\" has more ink than \"I\": {ii} vs {i}");
+    }
 }
