@@ -140,7 +140,7 @@ pub fn scenario_picker(
         .and_then(|i| library.entries.get(i))
         .map_or("Custom (sliders)", |s| s.scenario.title.as_str());
     ui.label("Rhythm:");
-    egui::ComboBox::from_id_salt("scenario_picker")
+    let combo = egui::ComboBox::from_id_salt("scenario_picker")
         .selected_text(title)
         .width(320.0)
         .show_ui(ui, |ui| {
@@ -154,6 +154,7 @@ pub fn scenario_picker(
                 }
             }
         });
+    heartsim_ui::highlight::mark(&combo.response, "rhythm_picker");
     if let Some(s) = current.and_then(|i| library.entries.get(i)) {
         let r = ui
             .button("Restart")

@@ -6,8 +6,11 @@ pub mod electrode_tab;
 pub mod heart_history;
 pub mod heart_view;
 pub mod rhythm_quiz;
+pub mod scenario_file;
 pub mod scenarios;
 pub mod snapshot_ring;
+pub mod tutorial;
+pub mod tutorial_ui;
 pub mod vector_overlay;
 pub use app::HeartSimApp;
 

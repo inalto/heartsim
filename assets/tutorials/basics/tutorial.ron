@@ -1,0 +1,150 @@
+// heartsim tutorial: first steps with the simulator. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-app/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "basics",
+    title: "Basics: from one heartbeat to the ECG",
+    summary: "Follow a single beat through the conduction system, freeze it on the strip, read the heart rate and meet your first abnormal rhythm.",
+    pages: [
+        Page(
+            title: "Welcome",
+            markdown: r#"
+Welcome to **heartsim**. Every page of a tutorial sets the simulator up for you: the rhythm, the
+speed and the view change as you turn the pages, so you can read and watch at the same time.
+
+On the left of the Simulator tab is the **3-D heart**. Its colours show the electrical state of the
+tissue: resting muscle is drawn in cool colours, depolarised (excited) muscle in warm colours.
+
+At the bottom is the **ECG strip**. It is computed from the same simulation, so every deflection
+on the strip belongs to something you can see happening in the heart.
+
+Use **Next** to continue. You can leave the tutorial at any time; your place is remembered.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(CameraPreset(Ap)),
+                Ui(SetSpeed(1.0)),
+                Ui(Resume),
+            ],
+        ),
+        Page(
+            title: "One beat in slow motion",
+            markdown: r#"
+The simulation now runs at one fifth of real time (see the highlighted **speed** slider).
+
+Watch one beat travel through the heart:
+
+1. The **sinus node**, high in the right atrium, fires on its own.
+2. The wave spreads over both **atria**: this produces the **P wave**.
+3. The **AV node** holds the impulse back for a moment. Nothing large is depolarising, so the strip
+   stays flat: this pause is most of the **PR interval**.
+4. The **His bundle**, the **bundle branches** and the **Purkinje fibres** carry the impulse quickly
+   to the inner surface of both ventricles.
+5. The **ventricles** depolarise from the inside out: the large, fast **QRS complex**.
+6. The ventricles recover: the broad **T wave**.
+"#,
+            actions: [
+                Ui(SetSpeed(0.2)),
+                Ui(Highlight("speed")),
+            ],
+        ),
+        Page(
+            title: "Freeze a moment",
+            markdown: r#"
+The simulation has just been **paused** a few milliseconds after the start of a QRS complex.
+
+While paused you can scroll back along the strip with the **s back** slider. The 3-D heart follows
+the cursor: whatever instant the strip shows, the heart shows the same instant. Move back to the P
+wave and compare the colour of the atria with that of the ventricles.
+
+Press **Run** (the highlighted button) when you want the simulation to continue.
+"#,
+            actions: [
+                Ui(SetSpeed(0.5)),
+                Ui(WaitForEvent(Qrs)),
+                Ui(WaitForEvent(ElapsedMs(40.0))),
+                Ui(Pause),
+                Ui(Highlight("pause")),
+            ],
+            check: Some(Question(
+                prompt: "Which event does the QRS complex record?",
+                choices: [
+                    "Depolarisation of the atria",
+                    "Depolarisation of the ventricles",
+                    "Recovery (repolarisation) of the ventricles",
+                    "Conduction through the AV node",
+                ],
+                answer: 1,
+                explanation: "The QRS is the depolarisation of the ventricular muscle. Conduction through the AV node is too small to be seen on the surface ECG; ventricular recovery is the T wave.",
+            )),
+        ),
+        Page(
+            title: "Reading the heart rate",
+            markdown: r#"
+The sinus node has just been set to a faster rate.
+
+On standard ECG paper running at **25 mm/s** one small square is 0.04 s and one large square
+(five small ones) is 0.2 s. Three hundred large squares pass in one minute, so a quick estimate is:
+
+> heart rate ≈ 300 ÷ (number of large squares between two R waves)
+
+One large square between beats is 300/min, two is 150, three is 100, four is 75, five is 60.
+For irregular rhythms count the complexes in a 10-second strip and multiply by six.
+"#,
+            actions: [
+                Ui(Resume),
+                Ui(SetSpeed(1.0)),
+                Sim(SetGlobalSinusRate(bpm: 100.0)),
+            ],
+            check: Some(Question(
+                prompt: "At 25 mm/s the R waves are three large squares apart. What is the heart rate?",
+                choices: ["60 /min", "100 /min", "150 /min", "75 /min"],
+                answer: 1,
+                explanation: "300 ÷ 3 = 100 beats per minute.",
+            )),
+        ),
+        Page(
+            title: "A first abnormal rhythm",
+            markdown: r#"
+The rhythm list (highlighted) now shows **first-degree AV block**.
+
+Every P wave is still followed by a QRS complex, but the delay between them is longer than normal.
+The normal **PR interval** is 120–200 ms (three to five small squares); here it is longer.
+In the heart you can see the impulse wait longer in the AV node before the ventricles light up.
+
+Try the calipers under the strip to measure the PR interval yourself.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_1st")),
+                Ui(SelectLead(II)),
+                Ui(Highlight("rhythm_picker")),
+            ],
+            check: Some(Question(
+                prompt: "Which measurement is abnormal in first-degree AV block?",
+                choices: ["The QRS duration", "The QT interval", "The PR interval", "The heart rate"],
+                answer: 2,
+                explanation: "First-degree AV block is a PR interval above 200 ms with every P wave conducted.",
+            )),
+        ),
+        Page(
+            title: "Where to go next",
+            markdown: r#"
+You have followed a beat through the conduction system, frozen it on the strip, estimated the
+heart rate and recognised a prolonged PR interval.
+
+Good next steps:
+
+* the **Cardiac axis** tutorial, which explains how the limb leads tell you the direction of
+  ventricular depolarisation;
+* the **Rhythm list** above the strip, which holds every rhythm in the library;
+* the **Rhythm Quiz** tab, to test yourself.
+
+Press **Finish** to close the tutorial.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+            ],
+        ),
+    ],
+)
