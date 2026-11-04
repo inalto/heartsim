@@ -44,4 +44,4 @@ pub use placement::{
 };
 pub use ring::{LeadRing, MinMax};
 pub use scenario::{Recording, Tier0Error, Tier0Scenario};
-pub use synth::{GaussianSynth, MorphologyOverrides, Template, WaveOverride, WaveSpec};
+pub use synth::{GaussianSynth, MorphologyOverrides, SynthModulation, Template, WaveOverride, WaveSpec};

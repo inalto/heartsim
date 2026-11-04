@@ -35,7 +35,12 @@ pub use params::{
     PacerPreset, Side, SinusParams, TimingParams,
 };
 
+use crate::defib::{
+    RhythmClass, SYNC_DELAY_MS, ShockRecord, ShockRng, VULNERABLE_WINDOW, success_probability,
+};
 use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+use crate::ischaemia::IschaemiaState;
+use crate::pharma::{DrugEffects, Pharmacology};
 use heartsim_core::scenario::{Action, StimSite};
 use heartsim_core::{Millis, Region};
 use pacer::Pacer;
@@ -138,6 +143,8 @@ pub(crate) enum Pending {
     HisRetro { origin: Origin },
     /// Programmed stimulus (`Action::Stimulate` / `PacingTrain`).
     Stimulus { target: StimTarget },
+    /// Defibrillator discharge (`Action::Shock`; synchronised shocks are scheduled on the R wave).
+    Shock { joules: f64, synchronised: bool },
 }
 
 /// Where a programmed stimulus is delivered.
@@ -161,6 +168,8 @@ pub(crate) struct FocusState {
     pub beats: u32,
     /// Discharges so far (for `max_fires` and exit block).
     pub fires: u32,
+    /// Terminated by a successful shock (Tier-1 stub of an ectopic tachycardia).
+    pub terminated: bool,
 }
 
 /// Errors from [`TimingEngine::apply`].
@@ -175,6 +184,8 @@ pub enum ActionError {
     UnsupportedSite(String),
     /// Unknown drug name.
     UnknownDrug(String),
+    /// Unknown coronary branch in `Action::Stenosis`.
+    UnknownBranch(String),
 }
 
 impl std::fmt::Display for ActionError {
@@ -186,6 +197,7 @@ impl std::fmt::Display for ActionError {
             ActionError::UnsupportedRegion(r) => write!(f, "region {r:?} is not an edge of the timing graph"),
             ActionError::UnsupportedSite(s) => write!(f, "stimulus site `{s}` cannot be mapped to a chamber"),
             ActionError::UnknownDrug(d) => write!(f, "unknown drug `{d}`"),
+            ActionError::UnknownBranch(b) => write!(f, "unknown coronary branch `{b}`"),
         }
     }
 }
@@ -195,9 +207,14 @@ impl std::error::Error for ActionError {}
 /// Capacity reserved for the pending queue; `PacingTrain` may grow it (not a per-step allocation).
 const QUEUE_CAPACITY: usize = 128;
 
-/// Adenosine: transient AV-nodal ERP increase, ms per unit dose, and its duration, ms.
-const ADENOSINE_ERP_BONUS_MS_PER_DOSE: f64 = 300.0;
-const ADENOSINE_DURATION_MS: f64 = 10_000.0;
+/// Default seed of the shock-outcome generator ([`TimingEngine::set_shock_seed`]).
+const DEFAULT_SHOCK_SEED: u64 = 0x5EED_DEF1;
+/// No ventricular activation for this long: asystole, ms.
+const ASYSTOLE_MS: f64 = 3000.0;
+/// RR below this is a tachycardia (> 100 bpm), ms.
+const TACHYCARDIA_RR_MS: f64 = 600.0;
+/// Atrial cycle below this is fibrillation / flutter (> 250 bpm), ms.
+const FLUTTER_CYCLE_MS: f64 = 240.0;
 
 /// The timing engine. See the module documentation for the model.
 #[derive(Debug, Clone)]
@@ -232,9 +249,20 @@ pub struct TimingEngine {
     fast_last_use: Option<f64>,
     slow_last_use: Option<f64>,
     his_beats_since_drop: u32,
-    /// Adenosine: ERP bonus and expiry.
-    av_erp_bonus_ms: f64,
-    av_erp_bonus_until: f64,
+
+    // --- drugs, ischaemia, defibrillation (B14) ---
+    pharma: Pharmacology,
+    /// Combined drug effect, updated at the start of every step.
+    drug: DrugEffects,
+    ischaemia: IschaemiaState,
+    shock_seed: u64,
+    rng: ShockRng,
+    /// Energy of a synchronised shock waiting for the next R wave, J.
+    sync_armed: Option<f64>,
+    shocks: Vec<ShockRecord>,
+    /// Last ventricular and atrial cycle lengths (rhythm class at a shock), ms.
+    last_v_rr_ms: Option<f64>,
+    last_a_cycle_ms: Option<f64>,
 
     // --- accessory pathway ---
     ap_last_use: Option<f64>,
@@ -271,8 +299,15 @@ impl TimingEngine {
             fast_last_use: None,
             slow_last_use: None,
             his_beats_since_drop: 0,
-            av_erp_bonus_ms: 0.0,
-            av_erp_bonus_until: f64::NEG_INFINITY,
+            pharma: Pharmacology::default(),
+            drug: DrugEffects::NONE,
+            ischaemia: IschaemiaState::default(),
+            shock_seed: DEFAULT_SHOCK_SEED,
+            rng: ShockRng::new(DEFAULT_SHOCK_SEED),
+            sync_armed: None,
+            shocks: Vec::with_capacity(4),
+            last_v_rr_ms: None,
+            last_a_cycle_ms: None,
             ap_last_use: None,
             foci: vec![FocusState::default(); n_foci],
             pacer: Pacer::default(),
@@ -364,20 +399,187 @@ impl TimingEngine {
     }
 
     pub(crate) fn emit(&mut self, at: f64, region: Region, kind: EventKind, origin: Origin) {
-        self.events.push(Event::new(Millis(at), region, kind, origin));
+        let ev = Event::new(Millis(at), region, kind, origin);
+        // A synchronised shock fires on the R wave: the first ventricular activation after it
+        // was armed.
+        if ev.kind != EventKind::Blocked
+            && ev.chamber == Chamber::Ventricle
+            && let Some(joules) = self.sync_armed.take()
+        {
+            self.schedule(
+                at + SYNC_DELAY_MS,
+                Pending::Shock {
+                    joules,
+                    synchronised: true,
+                },
+            );
+        }
+        self.events.push(ev);
     }
 
     pub(crate) fn ladder_push(&mut self, s: LadderSample) {
         self.ladder.push(s);
     }
 
-    /// Effective AV-nodal ERP addition from drugs at `t`, ms.
-    pub(crate) fn av_erp_bonus(&self, t: f64) -> f64 {
-        if t < self.av_erp_bonus_until {
-            self.av_erp_bonus_ms
-        } else {
-            0.0
+    /// Combined drug effect of the current step.
+    #[must_use]
+    pub fn drug_effects(&self) -> DrugEffects {
+        self.drug
+    }
+
+    /// Drug administrations and the drug table (drug-tray timers).
+    #[must_use]
+    pub fn pharmacology(&self) -> &Pharmacology {
+        &self.pharma
+    }
+
+    /// Mutable pharmacology, e.g. to replace the drug table or speed up the kinetics.
+    pub fn pharmacology_mut(&mut self) -> &mut Pharmacology {
+        &mut self.pharma
+    }
+
+    /// Coronary lesions in effect (`Action::Stenosis`); Tier 0 draws its ST vector from them.
+    #[must_use]
+    pub fn ischaemia(&self) -> &IschaemiaState {
+        &self.ischaemia
+    }
+
+    /// Shocks delivered since the last drain, without taking them.
+    #[must_use]
+    pub fn shocks(&self) -> &[ShockRecord] {
+        &self.shocks
+    }
+
+    /// Shocks delivered since the last call (animation, sound, strip artefact).
+    pub fn drain_shocks(&mut self) -> Vec<ShockRecord> {
+        std::mem::take(&mut self.shocks)
+    }
+
+    /// A synchronised shock is waiting for the next R wave.
+    #[must_use]
+    pub fn shock_armed(&self) -> bool {
+        self.sync_armed.is_some()
+    }
+
+    /// Withdraw a synchronised shock still waiting for its R wave.
+    pub fn cancel_armed_shock(&mut self) {
+        self.sync_armed = None;
+    }
+
+    /// Seed of the shock-outcome generator (a scenario's `seed`); takes effect now and at
+    /// every `reset`.
+    pub fn set_shock_seed(&mut self, seed: u64) {
+        self.shock_seed = seed;
+        self.rng = ShockRng::new(seed);
+    }
+
+    /// Rhythm class at `t` from the last ventricular and atrial cycles (see [`RhythmClass`]).
+    #[must_use]
+    pub fn rhythm_class(&self, t: Millis) -> RhythmClass {
+        let t = t.0;
+        if self.last_ventricular.is_none_or(|v| t - v >= ASYSTOLE_MS) {
+            return RhythmClass::Asystole;
         }
+        let flutter = self.last_a_cycle_ms.is_some_and(|c| c < FLUTTER_CYCLE_MS);
+        match self.last_v_rr_ms {
+            Some(rr) if rr < TACHYCARDIA_RR_MS => match self.last_vent_via {
+                Some(VentVia::Focus | VentVia::Escape | VentVia::External) => {
+                    RhythmClass::VentricularTachycardia
+                }
+                Some(VentVia::Pacer | VentVia::PacerLv) => RhythmClass::Organised,
+                _ if flutter => RhythmClass::AtrialFibrillationOrFlutter,
+                _ => RhythmClass::SupraventricularTachycardia,
+            },
+            _ if flutter => RhythmClass::AtrialFibrillationOrFlutter,
+            _ => RhythmClass::Organised,
+        }
+    }
+
+    /// Deliver a shock at `t` (see [`crate::defib`]): draw the outcome, and on success
+    /// depolarise every structure at once.
+    pub(crate) fn deliver_shock(&mut self, t: f64, joules: f64, synchronised: bool) {
+        let rhythm = self.rhythm_class(Millis(t));
+        let erp = self.ventricular_erp();
+        let vulnerable = !synchronised
+            && self.last_ventricular.is_some_and(|v| {
+                let d = t - v;
+                (VULNERABLE_WINDOW.0 * erp..=VULNERABLE_WINDOW.1 * erp).contains(&d)
+            });
+        let success = self.rng.next_f64() < success_probability(rhythm, joules);
+        if success {
+            // Every structure depolarised at once: pending wavefronts die (re-entry
+            // terminates), all tissue is refractory from `t`, ectopic tachycardia foci stop.
+            self.queue.clear();
+            self.last_atrial = Some(t);
+            self.last_ventricular = Some(t);
+            self.last_vent_via = None;
+            self.last_v_rr_ms = None;
+            self.last_a_cycle_ms = None;
+            self.escape_anchor = t;
+            self.last_his_output = Some(t);
+            self.last_his_fired = Some(t);
+            self.fast_last_use = Some(t);
+            self.slow_last_use = Some(t);
+            self.ap_last_use = Some(t);
+            self.sinus_suppression_ms = 0.0;
+            for (id, f) in self.params.foci.iter().enumerate() {
+                if let FocusMode::Automatic { rate_bpm, .. } = f.mode
+                    && rate_bpm * self.drug.automaticity_scale > 60_000.0 / TACHYCARDIA_RR_MS
+                {
+                    self.foci[id].terminated = true;
+                }
+            }
+            self.schedule(t + self.sinus_cycle_ms(t), Pending::Sinus);
+            self.schedule_automatic_foci(t);
+        }
+        self.shocks.push(ShockRecord {
+            at: Millis(t),
+            joules,
+            synchronised,
+            rhythm,
+            success,
+            vulnerable,
+        });
+    }
+
+    // --- drug-modified parameters ------------------------------------------------------------
+
+    /// AV-nodal ERP addition from drugs, ms.
+    pub(crate) fn av_erp_bonus(&self) -> f64 {
+        self.drug.av_erp_add_ms
+    }
+
+    /// Atrial conduction time to the AV-node input, ms (drug CV change).
+    pub(crate) fn atrial_delay(&self) -> f64 {
+        self.params.atrial_delay_ms / self.drug.atrial_cv_scale
+    }
+
+    /// Atrial ERP, ms (drug APD change).
+    pub(crate) fn atrial_erp(&self) -> f64 {
+        self.params.atrial_erp_ms * self.drug.atrial_apd_scale
+    }
+
+    /// Ventricular ERP, ms (drug APD and post-repolarisation refractoriness).
+    pub(crate) fn ventricular_erp(&self) -> f64 {
+        self.params.ventricular_erp_ms * self.drug.ventricular_apd_scale * self.drug.ventricular_erp_scale
+    }
+
+    /// His–Purkinje delays with the drug CV change applied.
+    pub(crate) fn his_purkinje(&self) -> HisPurkinjeParams {
+        let mut hp = self.params.his_purkinje.clone();
+        let k = 1.0 / self.drug.his_purkinje_cv_scale;
+        if (k - 1.0).abs() > f64::EPSILON {
+            hp.his_ms *= k;
+            for e in [&mut hp.rbb, &mut hp.lbb, &mut hp.laf, &mut hp.lpf] {
+                e.delay_ms *= k;
+            }
+        }
+        hp
+    }
+
+    /// Rate of an automatic focus or escape pacemaker, bpm (drug automaticity change).
+    pub(crate) fn automatic_rate(&self, rate_bpm: f64) -> f64 {
+        rate_bpm * self.drug.automaticity_scale
     }
 
     // --- scenario actions ------------------------------------------------------------------
@@ -437,27 +639,33 @@ impl TimingEngine {
                 }
                 Ok(())
             }
-            Action::Drug { name, dose } => self.apply_drug(name, *dose, at),
-            Action::Shock { .. } => {
-                // Every structure depolarised at once: pending wavefronts die (re-entry
-                // terminates) and all tissue is refractory from `at`.
-                self.queue.clear();
-                self.last_atrial = Some(at);
-                self.last_ventricular = Some(at);
-                self.escape_anchor = at;
-                self.last_his_output = Some(at);
-                self.last_his_fired = Some(at);
-                self.fast_last_use = Some(at);
-                self.slow_last_use = Some(at);
-                self.ap_last_use = Some(at);
-                self.sinus_suppression_ms = 0.0;
-                self.schedule(at + self.sinus_cycle_ms(at), Pending::Sinus);
-                self.schedule_automatic_foci(at);
+            Action::Drug { name, dose } => {
+                if self.pharma.administer(name, *dose, at) {
+                    Ok(())
+                } else {
+                    Err(ActionError::UnknownDrug(name.clone()))
+                }
+            }
+            Action::Shock { joules, synchronised } => {
+                if *synchronised {
+                    self.sync_armed = Some(*joules);
+                } else {
+                    self.schedule(
+                        at,
+                        Pending::Shock {
+                            joules: *joules,
+                            synchronised: false,
+                        },
+                    );
+                }
                 Ok(())
             }
+            Action::Stenosis { branch, severity } => self
+                .ischaemia
+                .apply(branch, *severity)
+                .map_err(|e| ActionError::UnknownBranch(e.0)),
             Action::SetRegion { .. } => Err(ActionError::Unsupported("SetRegion")),
             Action::Ablate { .. } => Err(ActionError::Unsupported("Ablate")),
-            Action::Stenosis { .. } => Err(ActionError::Unsupported("Stenosis")),
             Action::MoveElectrode { .. } => Err(ActionError::Unsupported("MoveElectrode")),
         }
     }
@@ -481,19 +689,6 @@ impl TimingEngine {
             other => return Err(ActionError::UnsupportedRegion(other)),
         }
         Ok(())
-    }
-
-    /// Drugs the timing engine knows. Adenosine: transient (10 s) AV-nodal ERP increase of
-    /// 300 ms × dose — enough to break AVNRT/AVRT and cause brief AV block.
-    fn apply_drug(&mut self, name: &str, dose: f64, at: f64) -> Result<(), ActionError> {
-        match name.to_ascii_lowercase().as_str() {
-            "adenosine" => {
-                self.av_erp_bonus_ms = ADENOSINE_ERP_BONUS_MS_PER_DOSE * dose.max(0.0);
-                self.av_erp_bonus_until = at + ADENOSINE_DURATION_MS;
-                Ok(())
-            }
-            other => Err(ActionError::UnknownDrug(other.to_string())),
-        }
     }
 
     /// Landmarks are matched by prefix: `ra*`/`la*`/`atri*` → atria, `his*` → His bundle,
@@ -522,9 +717,10 @@ impl TimingEngine {
         for id in 0..self.params.foci.len() {
             if let FocusMode::Automatic { rate_bpm, .. } = self.params.foci[id].mode
                 && rate_bpm > 0.0
+                && !self.foci[id].terminated
             {
                 self.schedule(
-                    t + 60_000.0 / rate_bpm,
+                    t + 60_000.0 / self.automatic_rate(rate_bpm),
                     Pending::FocusFire {
                         id: id as u8,
                         remaining: 1,
@@ -539,6 +735,7 @@ impl Engine for TimingEngine {
     fn step(&mut self, dt: Millis) {
         self.now += dt.0;
         self.step_start = self.events.len();
+        self.drug = self.pharma.effects_at(self.now);
         while self.queue.first().is_some_and(|s| s.at <= self.now) {
             let s = self.queue.remove(0);
             self.dispatch(s.at, s.what);
@@ -578,8 +775,14 @@ impl Engine for TimingEngine {
         self.fast_last_use = None;
         self.slow_last_use = None;
         self.his_beats_since_drop = 0;
-        self.av_erp_bonus_ms = 0.0;
-        self.av_erp_bonus_until = f64::NEG_INFINITY;
+        self.pharma.clear();
+        self.drug = DrugEffects::NONE;
+        self.ischaemia.clear();
+        self.rng = ShockRng::new(self.shock_seed);
+        self.sync_armed = None;
+        self.shocks.clear();
+        self.last_v_rr_ms = None;
+        self.last_a_cycle_ms = None;
         self.ap_last_use = None;
         self.foci.clear();
         self.foci.resize(self.params.foci.len(), FocusState::default());
@@ -723,7 +926,7 @@ mod tests {
         assert!(matches!(
             e.apply(
                 &Action::Drug {
-                    name: "digoxin".into(),
+                    name: "snake oil".into(),
                     dose: 1.0
                 },
                 Millis::ZERO

@@ -1,0 +1,183 @@
+// Drug table of the pharmacology model (brief B14, `heartsim_sim::pharma`).
+//
+// Each entry gives the effect of the standard dose at its full size and its time course after
+// one administration: rise to 95 % at `onset_ms`, full effect for `hold_ms`, then decay with
+// `half_life_ms` (0 = persists until the drug is stopped with a dose of 0). Fields left out of
+// `effects` are neutral (scales 1.0, additions 0.0); see `DrugEffects` for their meaning.
+//
+// Values are simplified, teaching-grade re-derivations from the literature (Opie & Gersh,
+// "Drugs for the Heart", 9th ed. 2021; ACLS/ERC 2021 drug sections; Vaughan Williams classes;
+// heartsim research doc §2.5.1 for AV-nodal effects and §3.5 for the electrolyte and digoxin AP
+// changes). They are NOT dosing guidance.
+DrugTable(
+    format_version: 1,
+    drugs: [
+        Drug(
+            name: "adenosine",
+            title: "Adenosine",
+            class: "A1-receptor agonist (I_K,Ado)",
+            standard_dose: "6 mg IV rapid bolus",
+            notes: "Opens I_K,Ado in the AV node and SA node: a few seconds of AV block that breaks re-entry through the node (AVNRT, orthodromic AVRT) and unmasks flutter waves. Transient sinus slowing; shortens atrial refractoriness.",
+            doses: [1.0, 2.0],
+            kinetics: Kinetics(onset_ms: 1000.0, hold_ms: 6000.0, half_life_ms: 1500.0),
+            effects: DrugEffects(
+                av_erp_add_ms: 300.0,
+                sa_rate_scale: 0.75,
+                atrial_apd_scale: 0.85,
+            ),
+        ),
+        Drug(
+            name: "verapamil",
+            title: "Verapamil",
+            class: "Class IV, L-type Ca2+-channel blocker",
+            standard_dose: "5 mg IV over 2 min",
+            notes: "Slows AV-nodal conduction and prolongs nodal refractoriness: PR lengthens and the ventricular rate in atrial fibrillation or flutter falls. Mild sinus slowing. Contraindicated in pre-excited AF (does not slow the accessory pathway).",
+            kinetics: Kinetics(onset_ms: 90000.0, hold_ms: 600000.0, half_life_ms: 14400000.0),
+            effects: DrugEffects(
+                av_conduction_scale: 0.6,
+                av_erp_add_ms: 120.0,
+                sa_rate_scale: 0.9,
+            ),
+        ),
+        Drug(
+            name: "diltiazem",
+            title: "Diltiazem",
+            class: "Class IV, L-type Ca2+-channel blocker",
+            standard_dose: "0.25 mg/kg IV over 2 min",
+            notes: "Like verapamil: AV-nodal conduction slowed, refractoriness prolonged; rate control in AF and flutter.",
+            kinetics: Kinetics(onset_ms: 120000.0, hold_ms: 600000.0, half_life_ms: 12600000.0),
+            effects: DrugEffects(
+                av_conduction_scale: 0.65,
+                av_erp_add_ms: 100.0,
+                sa_rate_scale: 0.92,
+            ),
+        ),
+        Drug(
+            name: "digoxin",
+            title: "Digoxin",
+            class: "Na+/K+-ATPase inhibitor, vagotonic",
+            standard_dose: "0.5 mg IV loading dose",
+            notes: "Vagal AV-nodal slowing (longer PR, rate control), shorter ventricular APD with the sagging 'scooped' ST segment, short QT. In excess: increased automaticity (ectopy) and AV block.",
+            kinetics: Kinetics(onset_ms: 900000.0, hold_ms: 7200000.0, half_life_ms: 129600000.0),
+            effects: DrugEffects(
+                av_erp_add_ms: 80.0,
+                av_conduction_scale: 0.85,
+                sa_rate_scale: 0.9,
+                automaticity_scale: 1.3,
+                ventricular_apd_scale: 0.9,
+                plateau_sag: 0.7,
+            ),
+        ),
+        Drug(
+            name: "flecainide",
+            title: "Flecainide",
+            class: "Class Ic, Na+-channel blocker",
+            standard_dose: "2 mg/kg IV over 10 min",
+            notes: "Slows conduction in all fast-response tissue (atria, His–Purkinje, ventricles, accessory pathways): P and QRS widen, PR lengthens. Little effect on APD.",
+            kinetics: Kinetics(onset_ms: 600000.0, hold_ms: 1800000.0, half_life_ms: 50400000.0),
+            effects: DrugEffects(
+                atrial_cv_scale: 0.75,
+                ventricular_cv_scale: 0.7,
+                his_purkinje_cv_scale: 0.7,
+                accessory_erp_add_ms: 80.0,
+            ),
+        ),
+        Drug(
+            name: "amiodarone",
+            title: "Amiodarone",
+            class: "Class III (multi-channel), with I, II and IV actions",
+            standard_dose: "300 mg IV",
+            notes: "Prolongs atrial and ventricular APD and refractoriness (longer QT), slows conduction slightly, slows the sinus node and the AV node.",
+            kinetics: Kinetics(onset_ms: 1200000.0, hold_ms: 3600000.0, half_life_ms: 0.0),
+            effects: DrugEffects(
+                ventricular_apd_scale: 1.15,
+                atrial_apd_scale: 1.15,
+                ventricular_cv_scale: 0.92,
+                atrial_cv_scale: 0.92,
+                av_erp_add_ms: 60.0,
+                av_conduction_scale: 0.9,
+                sa_rate_scale: 0.9,
+                accessory_erp_add_ms: 60.0,
+            ),
+        ),
+        Drug(
+            name: "atropine",
+            title: "Atropine",
+            class: "Muscarinic (M2) antagonist",
+            standard_dose: "0.5 mg IV",
+            notes: "Removes vagal tone: faster sinus rate, faster AV-nodal conduction with shorter refractoriness (helps nodal block, not infranodal block).",
+            doses: [1.0, 2.0, 6.0],
+            kinetics: Kinetics(onset_ms: 60000.0, hold_ms: 1800000.0, half_life_ms: 9000000.0),
+            effects: DrugEffects(
+                sa_rate_scale: 1.4,
+                av_erp_add_ms: -60.0,
+                av_conduction_scale: 1.2,
+            ),
+        ),
+        Drug(
+            name: "adrenaline",
+            title: "Adrenaline (epinephrine)",
+            class: "α/β-adrenergic agonist",
+            standard_dose: "1 mg IV",
+            notes: "β1 stimulation: much faster sinus rate, more automaticity of every pacemaker (ectopy), faster AV conduction, slightly shorter APD.",
+            doses: [0.1, 0.5, 1.0],
+            kinetics: Kinetics(onset_ms: 30000.0, hold_ms: 60000.0, half_life_ms: 150000.0),
+            effects: DrugEffects(
+                sa_rate_scale: 1.8,
+                automaticity_scale: 1.6,
+                av_conduction_scale: 1.2,
+                av_erp_add_ms: -40.0,
+                ventricular_apd_scale: 0.92,
+            ),
+        ),
+        Drug(
+            name: "lidocaine",
+            title: "Lidocaine",
+            class: "Class Ib, Na+-channel blocker",
+            standard_dose: "1–1.5 mg/kg IV",
+            notes: "Use-dependent Na+-channel block in ventricular (especially ischaemic) tissue: ventricular refractoriness outlasts the slightly shorter APD, Purkinje automaticity falls. Little effect on atria and AV node.",
+            kinetics: Kinetics(onset_ms: 60000.0, hold_ms: 300000.0, half_life_ms: 540000.0),
+            effects: DrugEffects(
+                ventricular_erp_scale: 1.15,
+                ventricular_apd_scale: 0.95,
+                ventricular_cv_scale: 0.95,
+                automaticity_scale: 0.7,
+            ),
+        ),
+        Drug(
+            name: "hyperkalaemia",
+            title: "Hyperkalaemia (K+ ≈ 7 mmol/L)",
+            class: "Electrolyte disturbance",
+            standard_dose: "dose 1 ≈ K+ 7 mmol/L (0.5 ≈ 6, 1.5 ≈ 8+)",
+            notes: "Resting potential depolarised, faster phase 3: tall narrow peaked T, short QT. With rising K+ the P flattens and widens, PR and QRS lengthen (slower conduction) towards a sine-wave pattern. Stop with dose 0.",
+            doses: [0.5, 1.0, 1.5],
+            kinetics: Kinetics(onset_ms: 60000.0, hold_ms: 0.0, half_life_ms: 0.0),
+            effects: DrugEffects(
+                rest_offset: 0.12,
+                ventricular_apd_scale: 0.85,
+                atrial_apd_scale: 0.9,
+                repolarisation_slope: 1.0,
+                atrial_cv_scale: 0.6,
+                ventricular_cv_scale: 0.75,
+                his_purkinje_cv_scale: 0.8,
+                av_conduction_scale: 0.85,
+            ),
+        ),
+        Drug(
+            name: "hypokalaemia",
+            title: "Hypokalaemia (K+ ≈ 2.5 mmol/L)",
+            class: "Electrolyte disturbance",
+            standard_dose: "dose 1 ≈ K+ 2.5 mmol/L",
+            notes: "Slower phase-3 repolarisation and longer APD: low flat T, prominent U wave, long QT(U), mild ST depression; more ectopy. Stop with dose 0.",
+            doses: [0.5, 1.0],
+            kinetics: Kinetics(onset_ms: 60000.0, hold_ms: 0.0, half_life_ms: 0.0),
+            effects: DrugEffects(
+                rest_offset: -0.03,
+                ventricular_apd_scale: 1.2,
+                repolarisation_slope: -1.0,
+                automaticity_scale: 1.2,
+                u_wave: 1.0,
+            ),
+        ),
+    ],
+)

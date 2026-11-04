@@ -28,6 +28,7 @@ impl HeartSimApp {
         self.clock = SimClock::new(Millis(1.0));
         self.clock.speed = speed;
         self.engine = TimingEngine::new(s.timing.clone());
+        self.engine.set_shock_seed(s.scenario.seed);
         self.synth = synth;
         self.timeline = Timeline::new(s.scenario.timeline.clone());
         self.sample_accumulator = 0.0;
@@ -46,10 +47,12 @@ impl HeartSimApp {
     /// `Tier0Scenario::record` does).
     pub(super) fn apply_timeline(&mut self) {
         let now = self.engine.now();
-        for a in self.timeline.due(now) {
+        let due: Vec<_> = self.timeline.due(now).cloned().collect();
+        for a in due {
             if let Err(e) = self.engine.apply(&a.action, a.at) {
                 tracing::warn!("timeline action at {:.0} ms: {e}", a.at.0);
             }
+            self.forward_to_heart(&a.action);
         }
     }
 

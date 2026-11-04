@@ -7,8 +7,15 @@
 //! tissue depolarises every cell once per beat, so the integral is 1 and the lead reports its
 //! nominal electrogram amplitude; scar, ablation or a lead floating off the wall lower it, and
 //! the timing engine's pacemaker then undersenses.
+//!
+//! **Drugs, ischaemia, shocks** (brief B14). The timing engine owns the pharmacology and the
+//! defibrillator: every step the eikonal engine receives its combined drug effect, and a shock
+//! the timing engine delivered successfully (synchronised on the R wave or not) depolarises the
+//! mesh at the same instant. `Stenosis` reaches both engines (timing keeps the lesions for the
+//! Tier-0 ST vector; the mesh computes the per-cell injury).
 
 use super::EikonalEngine;
+use crate::defib::ShockRecord;
 use crate::engine::{CellState, Engine, Event};
 use crate::timing::{ActionError, LeadSite, PacerChannel, TimingEngine, TimingParams};
 use heartsim_core::{Action, Millis};
@@ -110,6 +117,8 @@ pub struct Tier1Engine {
     ingested: usize,
     /// Electrogram probes of the pacing leads, indexed by [`PacerChannel`].
     probes: [Option<LeadProbe>; 3],
+    /// Shocks already handed to the eikonal engine (index into `timing.shocks()`).
+    shocks_seen: usize,
 }
 
 impl Tier1Engine {
@@ -129,6 +138,7 @@ impl Tier1Engine {
             eikonal,
             ingested: 0,
             probes: [None, None, None],
+            shocks_seen: 0,
         };
         t1.place_leads();
         t1
@@ -213,6 +223,10 @@ impl Tier1Engine {
     /// engine cannot map it to a chamber.
     pub fn apply(&mut self, action: &Action, at: Millis) -> Result<(), ActionError> {
         let t = self.timing.apply(action, at);
+        if matches!(action, Action::Shock { .. }) {
+            // delivered (on the R wave, with its outcome) by the timing engine, see `step`
+            return t;
+        }
         let e = self.eikonal.apply(action, at);
         if matches!(action, Action::AccessoryPathway { .. }) {
             self.eikonal.set_accessory(
@@ -233,11 +247,24 @@ impl Tier1Engine {
     pub fn drain_mesh_events(&mut self) -> Vec<Event> {
         self.eikonal.drain_events()
     }
+
+    /// Shocks delivered since the last call (see [`crate::defib`]).
+    pub fn drain_shocks(&mut self) -> Vec<ShockRecord> {
+        self.shocks_seen = 0;
+        self.timing.drain_shocks()
+    }
 }
 
 impl Engine for Tier1Engine {
     fn step(&mut self, dt: Millis) {
         self.timing.step(dt);
+        for s in &self.timing.shocks()[self.shocks_seen..] {
+            if s.success {
+                self.eikonal.shock(s.at);
+            }
+        }
+        self.shocks_seen = self.timing.shocks().len();
+        self.eikonal.set_drug_effects(&self.timing.drug_effects());
         let evs = self.timing.events();
         self.eikonal.ingest(&evs[self.ingested..]);
         self.ingested = evs.len();
@@ -262,6 +289,7 @@ impl Engine for Tier1Engine {
         self.timing.reset();
         self.eikonal.reset();
         self.ingested = 0;
+        self.shocks_seen = 0;
         self.place_leads();
     }
 }

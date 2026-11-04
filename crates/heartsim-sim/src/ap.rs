@@ -25,6 +25,31 @@ impl ApTemplate {
         Self { samples }
     }
 
+    /// The ventricular shape with a drug / electrolyte change of its plateau and phase 3
+    /// (brief B14, research §3.5): `repolarisation_slope` +1 makes phase 3 steep and late
+    /// (hyperkalaemia: tall, narrow, peaked T), −1 slow and early (hypokalaemia: low, broad T);
+    /// `plateau_sag` 0 … 1 lets the plateau decline progressively (digoxin: the scooped ST
+    /// segment that runs down into the T wave). `(0, 0)` is exactly [`ApTemplate::ventricular`].
+    #[must_use]
+    pub fn ventricular_modified(n: usize, repolarisation_slope: f32, plateau_sag: f32) -> Self {
+        if repolarisation_slope == 0.0 && plateau_sag == 0.0 {
+            return Self::ventricular(n);
+        }
+        let k = 6.0 * 2f32.powf(repolarisation_slope.clamp(-1.5, 1.5));
+        let sag = 0.4 * plateau_sag.clamp(0.0, 1.0);
+        let samples = (0..n)
+            .map(|i| {
+                let phi = i as f32 / n as f32;
+                let upstroke = 1.0 - (-phi * 80.0).exp();
+                let plateau = 1.0 - (phi / 0.9).powf(k).min(1.0);
+                let dome = 0.85 + 0.15 * (1.0 - (phi * 6.0).min(1.0));
+                let scoop = 1.0 - sag * (phi / 0.9).min(1.0).sqrt();
+                (upstroke * plateau * dome * scoop).clamp(0.0, 1.0)
+            })
+            .collect();
+        Self { samples }
+    }
+
     /// A triangular atrial-like shape (shorter plateau).
     #[must_use]
     pub fn atrial(n: usize) -> Self {
@@ -115,6 +140,20 @@ mod tests {
         assert!(t.at(0.999) < 0.05);
         assert_eq!(t.at(1.0), 0.0);
         assert!(t.repolarisation_phase() > 0.8);
+    }
+
+    #[test]
+    fn modified_ventricular_shapes() {
+        let base = ApTemplate::ventricular(256);
+        assert_eq!(ApTemplate::ventricular_modified(256, 0.0, 0.0), base);
+        let steep = ApTemplate::ventricular_modified(256, 1.0, 0.0);
+        let slow = ApTemplate::ventricular_modified(256, -1.0, 0.0);
+        // late in the plateau the steep shape is still high, the slow one already falling
+        assert!(steep.at(0.7) > base.at(0.7) && base.at(0.7) > slow.at(0.7));
+        assert!(steep.at(0.999) < 0.05 && slow.at(0.999) < 0.05);
+        let scooped = ApTemplate::ventricular_modified(256, 0.0, 1.0);
+        assert!(scooped.at(0.6) < base.at(0.6) - 0.1, "sagging plateau");
+        assert!((scooped.at(0.02) - base.at(0.02)).abs() < 0.1, "upstroke kept");
     }
 
     #[test]

@@ -9,9 +9,15 @@
 //!   templates, driven by timing events ([`Tier1Engine`] couples the two).
 //! * [`tier2`] — Tier-2 monodomain reaction–diffusion on a masked voxel grid (re-entry, VT/VF,
 //!   flutter/AF), driven by the same timing engine ([`tier2::Tier2Engine`]).
+//! * [`pharma`] — drugs and electrolyte disturbances as parameter-modifier sets with onset /
+//!   offset kinetics (`assets/drugs.ron`), [`ischaemia`] — coronary stenosis and infarction by
+//!   territory, [`defib`] — synchronised cardioversion / defibrillation outcomes (brief B14).
 
 pub mod ap;
+pub mod defib;
 pub mod engine;
+pub mod ischaemia;
+pub mod pharma;
 pub mod tier1;
 pub mod tier2;
 pub mod timing;
