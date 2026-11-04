@@ -1,0 +1,19 @@
+[book]
+title = "heartsim guide"
+description = "User and developer guide of heartsim, an open 3-D heart electrophysiology and 12-lead ECG simulator for medical education."
+authors = ["heartsim contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/inalto/heartsim"
+edit-url-template = "https://github.com/inalto/heartsim/edit/master/docs/book/{path}"
+site-url = "/heartsim/"
+no-section-label = false
+
+[output.html.search]
+enable = true

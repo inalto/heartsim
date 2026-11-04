@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod electrode_tab;
+pub mod export_panel;
 pub mod heart_history;
 pub mod heart_view;
 pub mod rhythm_quiz;

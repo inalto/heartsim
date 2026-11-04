@@ -23,13 +23,15 @@ heartsim-sim       Engine trait, TimingEngine (SA/AV/His/escape; events), ApTemp
                    Tier-2 RdEngine (Aliev–Panfilov/MS/FK on voxels), interventions (stimulus, block, ablation, pathway, stenosis,
                    defib, drugs), pacemaker state machines
 heartsim-ecg       LeadVectors, Tier-0 GaussianSynth, ForwardModel (weight matrix W[electrode, cell] from positions; EDL/dipole),
-                   LeadRing + min/max decimation, filters/noise, interval & wave detection, QTc, heart vector, export (CSV/WFDB)
+                   LeadRing + min/max decimation, filters/noise, interval & wave detection, QTc, heart vector
 heartsim-render    wgpu: offscreen scene (colour+depth), per-vertex scalar buffer + LUT textures, clip planes, picking rays, glyphs,
                    lines (vector arrow, catheters), offscreen capture to PNG
 heartsim-ui        egui widgets: ecg_strip (painter), twelve-lead page, Viewport3d (egui_wgpu callback), Cabrera wheel, calipers,
                    parameter panels, ladder diagram, scenario browser, quiz views; egui_tiles layout; Fluent i18n
+heartsim-io        exports and imports (B20): EcgRecord excerpt, 12-lead PDF (printpdf), page/strip PNG (ui's CPU rasteriser),
+                   CSV, WFDB format 16, scenario RON, deterministic share-bundle zip; CSV/WFDB/zip import for review
 heartsim-app       eframe app: model (clock, engine, synth/forward, rings), settings, persistence, audio (kira), exports, tutorials
-heartsim-cli       headless: run scenario, export CSV/PNG/PDF, benchmark, validate presets
+heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets
 xtask              ci, asset pipeline (decimate meshes, bake hoods/fibres/W matrix), release checks
 ```
 Dependency direction is strictly downward in this list.

@@ -1,0 +1,26 @@
+[package]
+name = "heartsim-io"
+description = "ECG exports and imports: 12-lead PDF, PNG, CSV, WFDB, scenario RON and share bundles."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+heartsim-core.workspace = true
+heartsim-sim.workspace = true
+heartsim-ecg.workspace = true
+heartsim-ui.workspace = true
+egui.workspace = true
+image.workspace = true
+printpdf.workspace = true
+ron.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+lopdf.workspace = true
+
+[lints]
+workspace = true

@@ -119,6 +119,15 @@ impl EcgView {
         }
     }
 
+    /// The rings now hold a different signal (a recording swapped in or out): forget what was
+    /// measured on the old one. The analysis is otherwise only redone when the head moves, so a
+    /// paused view would keep showing the old read-out.
+    pub fn signal_replaced(&mut self) {
+        self.annotations = None;
+        self.strip_calipers.reset();
+        self.page_calipers.iter_mut().for_each(CaliperSet::reset);
+    }
+
     /// Paper speed, gain, mode, colours, grid, calibration, labels, caliper reset and (while
     /// paused) the scrub slider.
     pub fn controls(&mut self, ui: &mut Ui, rings: &[LeadRing]) {

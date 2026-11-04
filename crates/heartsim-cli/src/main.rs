@@ -42,6 +42,42 @@ enum Cmd {
         /// Scenario directory (e.g. `assets/scenarios`).
         dir: PathBuf,
     },
+    /// Run a scenario headless and write the same exports as the app's Export window: 12-lead PDF,
+    /// page and strip PNGs, CSV, WFDB (.hea + .dat), scenario RON and the share bundle zip.
+    Run {
+        /// Scenario file, or the id of a scenario in the installed library (e.g. `lbbb`).
+        scenario: String,
+        /// Simulated time to run, s.
+        #[arg(long, default_value_t = 10.0)]
+        seconds: f64,
+        /// Length of the exported excerpt (the end of the run), s.
+        #[arg(long, default_value_t = 10.0)]
+        window: f64,
+        /// Paper speed of the PDF and PNGs, mm/s.
+        #[arg(long, default_value_t = 25.0)]
+        speed: f32,
+        /// Gain of the PDF and PNGs, mm/mV.
+        #[arg(long, default_value_t = 10.0)]
+        gain: f32,
+        /// PDF paper: a4 or letter (landscape).
+        #[arg(long, default_value = "a4")]
+        paper: String,
+        /// Date printed in the headers, YYYY-MM-DD (default: today, UTC).
+        #[arg(long)]
+        date: Option<String>,
+        /// Cabrera limb-lead order on the PDF and page PNG.
+        #[arg(long)]
+        cabrera: bool,
+        /// Lead of the strip PNG.
+        #[arg(long, default_value = "II")]
+        strip_lead: String,
+        /// Comma-separated subset of pdf,png,csv,wfdb,ron,bundle.
+        #[arg(long, default_value = "pdf,png,csv,wfdb,ron,bundle")]
+        formats: String,
+        /// Output directory (created if missing).
+        #[arg(short, long)]
+        out: PathBuf,
+    },
     /// Load an anatomy pack and print counts, bounds, per-region cells, k-NN statistics, landmarks
     /// and electrodes.
     AnatomyInfo {
@@ -98,6 +134,107 @@ fn validate_scenarios(dir: &Path) -> Result<()> {
     println!("{} scenarios, {failed} failed", files.len());
     if failed > 0 {
         anyhow::bail!("{failed} of {} scenarios failed validation", files.len());
+    }
+    Ok(())
+}
+
+/// Settings of `run`, as parsed from the command line.
+struct RunArgs {
+    scenario: String,
+    seconds: f64,
+    window: f64,
+    speed: f32,
+    gain: f32,
+    paper: String,
+    date: Option<String>,
+    cabrera: bool,
+    strip_lead: String,
+    formats: String,
+    out: PathBuf,
+}
+
+/// A scenario path, or an id looked up in `$HEARTSIM_ASSETS/scenarios`, `./assets/scenarios` and the source tree.
+fn scenario_path(arg: &str) -> Result<PathBuf> {
+    let p = PathBuf::from(arg);
+    if p.is_file() {
+        return Ok(p);
+    }
+    let mut roots: Vec<PathBuf> = std::env::var_os("HEARTSIM_ASSETS")
+        .map(PathBuf::from)
+        .into_iter()
+        .collect();
+    roots.push(PathBuf::from("assets"));
+    roots.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"));
+    roots
+        .into_iter()
+        .map(|r| r.join("scenarios").join(format!("{arg}.ron")))
+        .find(|p| p.is_file())
+        .ok_or_else(|| anyhow::anyhow!("no scenario file or library id `{arg}`"))
+}
+
+fn parse_formats(list: &str) -> Result<heartsim_io::Formats> {
+    let mut f = heartsim_io::Formats {
+        pdf: false,
+        png: false,
+        csv: false,
+        wfdb: false,
+        ron: false,
+        bundle: false,
+    };
+    for item in list.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        match item {
+            "pdf" => f.pdf = true,
+            "png" => f.png = true,
+            "csv" => f.csv = true,
+            "wfdb" => f.wfdb = true,
+            "ron" => f.ron = true,
+            "bundle" | "zip" => f.bundle = true,
+            other => anyhow::bail!("unknown format `{other}` (use pdf,png,csv,wfdb,ron,bundle)"),
+        }
+    }
+    Ok(f)
+}
+
+fn run(a: RunArgs) -> Result<()> {
+    let path = scenario_path(&a.scenario)?;
+    let s = Tier0Scenario::from_ron(&std::fs::read_to_string(&path)?)
+        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+    let paper = match a.paper.to_ascii_lowercase().as_str() {
+        "a4" => heartsim_io::Paper::A4,
+        "letter" | "us-letter" => heartsim_io::Paper::Letter,
+        other => anyhow::bail!("unknown paper `{other}` (a4 or letter)"),
+    };
+    let date = a.date.unwrap_or_else(heartsim_io::today);
+    anyhow::ensure!(
+        heartsim_io::unix_time_of_date(&date).is_some(),
+        "--date must be YYYY-MM-DD, not `{date}`"
+    );
+    let strip_lead = Lead::ALL
+        .into_iter()
+        .find(|l| l.label().eq_ignore_ascii_case(&a.strip_lead))
+        .ok_or_else(|| anyhow::anyhow!("unknown lead `{}`", a.strip_lead))?;
+    let rec = s.record(a.seconds)?;
+    let excerpt = heartsim_io::EcgRecord::from_recording(&rec, a.window, heartsim_io::EXPORT_RATE_HZ);
+    let info = heartsim_io::ExportInfo {
+        scenario_id: s.scenario.id.clone(),
+        scenario_title: s.scenario.title.clone(),
+        mm_per_s: a.speed,
+        mm_per_mv: a.gain,
+        date,
+        paper,
+    };
+    let opts = heartsim_io::ExportOptions {
+        formats: parse_formats(&a.formats)?,
+        order: if a.cabrera {
+            heartsim_ui::LeadOrder::Cabrera
+        } else {
+            heartsim_ui::LeadOrder::Standard
+        },
+        strip_lead,
+    };
+    let files = heartsim_io::export_files(&excerpt, &info, &s, &opts)?;
+    for p in heartsim_io::write_files(&a.out, &files)? {
+        eprintln!("wrote {}", p.display());
     }
     Ok(())
 }
@@ -254,6 +391,31 @@ fn main() -> Result<()> {
             std::fs::write(&out, Scenario::sinus_normal().to_ron()?)?;
             eprintln!("wrote {}", out.display());
         }
+        Cmd::Run {
+            scenario,
+            seconds,
+            window,
+            speed,
+            gain,
+            paper,
+            date,
+            cabrera,
+            strip_lead,
+            formats,
+            out,
+        } => run(RunArgs {
+            scenario,
+            seconds,
+            window,
+            speed,
+            gain,
+            paper,
+            date,
+            cabrera,
+            strip_lead,
+            formats,
+            out,
+        })?,
         Cmd::AnatomyInfo { pack } => anatomy_info(&pack)?,
         Cmd::ValidateScenarios { dir } => validate_scenarios(&dir)?,
     }

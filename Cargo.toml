@@ -21,6 +21,8 @@ heartsim-sim = { path = "crates/heartsim-sim", version = "0.2.0" }
 heartsim-ecg = { path = "crates/heartsim-ecg", version = "0.2.0" }
 heartsim-render = { path = "crates/heartsim-render", version = "0.2.0" }
 heartsim-ui = { path = "crates/heartsim-ui", version = "0.2.0" }
+heartsim-io = { path = "crates/heartsim-io", version = "0.2.0" }
+heartsim-app = { path = "crates/heartsim-app", version = "0.2.0" }
 
 # --- GPU / windowing / GUI (versions verified on crates.io 2026-10-31) ---------
 wgpu = { version = "30.0.1", default-features = false, features = ["wgsl", "vulkan", "metal", "dx12", "gles", "webgpu", "webgl"] }
@@ -56,7 +58,10 @@ ron = "0.12.3"
 toml = "1.1.8"
 csv = "1.4.0"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-printpdf = "0.12.8"
+# PDF without the HTML layout engine (and its system-font lookup): only builtin fonts are used.
+printpdf = { version = "0.12.8", default-features = false }
+# Share bundles: deflate only (flate2's pure-Rust backend), no encryption or exotic codecs.
+zip = { version = "9.3.0", default-features = false, features = ["deflate-flate2"] }
 directories = "6.0.0"
 
 # --- build tooling (xtask only) ----------------------------------------------
@@ -77,6 +82,7 @@ insta = { version = "1.49.0", features = ["csv", "json", "ron"] }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 approx = "0.5.1"
 egui_kittest = "0.37.0"
+lopdf = { version = "0.44.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

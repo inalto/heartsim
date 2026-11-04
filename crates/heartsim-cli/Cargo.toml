@@ -16,10 +16,16 @@ heartsim-core.workspace = true
 heartsim-geometry.workspace = true
 heartsim-sim.workspace = true
 heartsim-ecg.workspace = true
+heartsim-io.workspace = true
+heartsim-ui.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 csv.workspace = true
 glam.workspace = true
+
+[dev-dependencies]
+# The parity test drives the app's own export path against this binary's output.
+heartsim-app.workspace = true
 
 [lints]
 workspace = true

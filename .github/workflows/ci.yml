@@ -60,6 +60,12 @@ jobs:
       - run: cargo build --workspace --release --bin heartsim --bin heartsim-cli
       - name: Smoke test CLI
         run: cargo run --release -p heartsim-cli -- synth --seconds 2 --out ecg.csv && head -3 ecg.csv
+      - name: Export a scenario headless
+        run: cargo run --release -p heartsim-cli -- run assets/scenarios/sinus_normal.ron --seconds 12 --out exports
+      - name: WFDB export readable by the wfdb Python package (optional)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: pip install --quiet wfdb && python3 scripts/check_wfdb.py exports/heartsim_sinus_normal
 
   msrv:
     name: MSRV (1.95)

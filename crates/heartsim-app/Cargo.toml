@@ -19,6 +19,7 @@ heartsim-sim.workspace = true
 heartsim-ecg.workspace = true
 heartsim-render.workspace = true
 heartsim-ui.workspace = true
+heartsim-io.workspace = true
 eframe.workspace = true
 egui.workspace = true
 egui-wgpu.workspace = true
