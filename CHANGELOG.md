@@ -5,6 +5,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- Validation bridge to scientific solvers (brief B23; see `docs/validation-bridge.md`). `heartsim-cli export-opencarp` writes a scenario as an openCARP experiment:
+  tetrahedral mesh, fibres, region tags, timing-engine stimuli, Aliev-Panfilov or TT06 parameters and a carputils script. `import-vtk` reads VTU, legacy VTK, PVD, IGB and
+  activation `.dat` results onto the cell cloud by nearest point. `validation-report` compares them with a Tier-1 or Tier-2 run (activation RMS, per-lead ECG RMSE, QRS and
+  T correlation; Markdown, PNG, JSON). `niederer` runs the benchmark slab on Tier 2 and reports its deviations. No solver has been run on these files yet: this is tested
+  against the documented formats, Tier 2 is calibrated rather than TT06, and the stored reference is a secondary table, not the paper's supplement.
 - Re-entry framework (brief B17): scenario files may carry a `reentry:` section (`heartsim_sim::tier2::ReentrySpec`) with tissue patches
   (APD / CV scaling by region, sphere, box or compartment, inert obstacles, APD mosaics), the initiation (S1–S2–S3 or burst pacing,
   cross-field stimulation, a pre-seeded rotating wave, or a `Tier2Snapshot` state file) and the tier-switch policy.

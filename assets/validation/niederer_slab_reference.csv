@@ -1,0 +1,29 @@
+# Reference activation times for the Niederer et al. 2011 N-version slab benchmark
+# (Phil. Trans. R. Soc. A 369:4331-4351, doi:10.1098/rsta.2011.0139).
+#
+# PROVENANCE, read before citing. This is NOT the benchmark's electronic supplementary material, which
+# could not be retrieved when this file was made. The values are the h = 0.1 mm FEM row of Table 3 in
+# Mountris, Pueyo et al., "Meshfree implementation of the cardiac monodomain model through the Fragile
+# Points Method" (arXiv:2111.06975), which reprints Mountris & Pueyo's results and says they were
+# validated against the benchmark. They are integers, so rounding alone is up to 0.5 ms.
+# Cross-check: P8 = 43 ms lies in the 42-43 ms the lifex-ep paper (arXiv:2308.01651) quotes as the
+# benchmark's converged value. That source used D_l = 0.115 mm2/ms and D_t/D_l = 0.12 rather than the
+# benchmark's 0.0953 and 0.132 mm2/ms ratio, so small differences from the true consensus are expected.
+#
+# Coordinates: axes rotated to fibres along +x as in the openCARP example of this benchmark (the source
+# has its 20 mm fibre axis along z). The labels follow Figure 5 of arXiv:2111.06975, read by eye: P1 is the
+# stimulus corner, P2 the far end of the same 20 mm edge, P3 is 3 mm and P5 is 7 mm across the fibres from
+# P1; P8 is the opposite corner and C the centre.
+#
+# role: `fit` points set the Tier-2 calibration (see docs/validation-bridge.md); `held_out` points never
+# touch it and are the only honest measure of how well the calibrated model predicts anything.
+point,x_mm,y_mm,z_mm,activation_ms,role
+P1,0,0,0,1,fit
+P2,20,0,0,29,fit
+P3,0,0,3,8,fit
+P4,20,0,3,31,held_out
+P5,0,7,0,27,fit
+P6,20,7,0,41,held_out
+P7,0,7,3,29,held_out
+P8,20,7,3,43,held_out
+C,10,3.5,1.5,20,held_out

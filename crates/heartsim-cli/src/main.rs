@@ -1,3 +1,5 @@
+mod bridge;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use heartsim_core::{Lead, Millis, Scenario};
@@ -84,6 +86,118 @@ enum Cmd {
         /// Pack directory (contains `manifest.ron`).
         pack: PathBuf,
     },
+    /// Write a scenario as an openCARP experiment: mesh, fibres, region tags, stimuli, parameters and a
+    /// carputils script. heartsim only writes the files; running openCARP is your step, under its licence.
+    ExportOpencarp {
+        /// Scenario file or library id, or `niederer-slab` for the benchmark slab.
+        scenario: String,
+        /// Output directory (created if missing).
+        #[arg(short, long)]
+        out: PathBuf,
+        /// Anatomy pack directory (default: the procedural idealised heart).
+        #[arg(long)]
+        pack: Option<PathBuf>,
+        /// Lattice spacing of the procedural heart, mm.
+        #[arg(long, default_value_t = 2.3)]
+        spacing_mm: f32,
+        /// Cell model the solver runs.
+        #[arg(long, value_enum, default_value = "ap")]
+        ionic: bridge::export::Ionic,
+        /// Simulated time, ms; timing-engine events up to here become stimuli.
+        #[arg(long, default_value_t = 800.0)]
+        tend_ms: f64,
+        /// Radius of each seed cell's electrode, mm (default 1.5 × the spacing).
+        #[arg(long)]
+        stim_radius_mm: Option<f32>,
+        /// APD band width of the element tags, ms.
+        #[arg(long, default_value_t = 10.0)]
+        apd_step_ms: f32,
+        /// Mesh spacing of `niederer-slab`, mm.
+        #[arg(long, default_value_t = 0.5)]
+        dx_mm: f32,
+    },
+    /// Read solver results (VTU, legacy VTK, PVD series, IGB + activation .dat) onto the cell cloud by
+    /// nearest point, writing cells_activation.csv, cells_vm.igb and import.json.
+    ImportVtk {
+        /// Directory of solver results.
+        dir: PathBuf,
+        /// Output directory (default: `<dir>/heartsim_import`).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+        /// Anatomy pack directory (default: the procedural idealised heart).
+        #[arg(long)]
+        pack: Option<PathBuf>,
+        /// Lattice spacing of the procedural heart, mm.
+        #[arg(long, default_value_t = 2.3)]
+        spacing_mm: f32,
+        /// Mesh base name for .igb and .dat results (`<base>.pts`).
+        #[arg(long)]
+        mesh: Option<PathBuf>,
+        /// Name of the V_m array in VTK files.
+        #[arg(long)]
+        vm_array: Option<String>,
+        /// Name of the activation-time array in VTK files.
+        #[arg(long)]
+        lat_array: Option<String>,
+        /// Time between the files of a series with no .pvd, ms.
+        #[arg(long)]
+        frame_dt_ms: Option<f64>,
+        /// Unit of VTK point coordinates.
+        #[arg(long, value_enum, default_value = "auto")]
+        length_unit: bridge::import::LengthUnit,
+        /// Threshold for timing activation from V_m when no activation array exists (default 0 mV, or 0.5 if normalised).
+        #[arg(long)]
+        lat_threshold: Option<f64>,
+        /// A cell with no sample closer than this gets no value, mm (default 1.5 × the spacing).
+        #[arg(long)]
+        max_distance_mm: Option<f32>,
+    },
+    /// Compare heartsim's run of a scenario with an import: activation scatter, per-lead ECG overlay and a
+    /// metrics table, as Markdown + PNG + JSON.
+    ValidationReport {
+        /// Scenario file or library id.
+        scenario: String,
+        /// Output directory of `import-vtk`.
+        #[arg(long)]
+        imported: PathBuf,
+        /// Output directory (created if missing).
+        #[arg(short, long)]
+        out: PathBuf,
+        /// Anatomy pack directory (default: the procedural idealised heart).
+        #[arg(long)]
+        pack: Option<PathBuf>,
+        /// Lattice spacing of the procedural heart, mm.
+        #[arg(long, default_value_t = 2.3)]
+        spacing_mm: f32,
+        /// heartsim engine to compare: 1 or 2.
+        #[arg(long, value_enum, default_value = "1")]
+        tier: bridge::report::Tier,
+        /// Imported V_m at rest (default: the first frame's median).
+        #[arg(long, allow_negative_numbers = true)]
+        vm_rest: Option<f32>,
+        /// Imported V_m at peak (default: the series maximum).
+        #[arg(long, allow_negative_numbers = true)]
+        vm_peak: Option<f32>,
+    },
+    /// Run the Niederer slab on the Tier-2 solver against the stored reference activation times and write
+    /// a report. The model is calibrated phenomenological tissue, not TT06: read the report's first paragraph.
+    Niederer {
+        /// Spatial steps, mm.
+        #[arg(long, value_delimiter = ',', default_value = "0.5")]
+        dx_mm: Vec<f32>,
+        /// Output directory (created if missing).
+        #[arg(short, long)]
+        out: PathBuf,
+        /// A reference CSV to use instead of the stored one.
+        #[arg(long)]
+        reference: Option<PathBuf>,
+        /// A solver's results for the same slab, to add to the table.
+        #[arg(long)]
+        external: Option<PathBuf>,
+        /// Mesh base name for `--external` .igb and .dat results.
+        #[arg(long)]
+        mesh: Option<PathBuf>,
+    },
 }
 
 fn validate_scenarios(dir: &Path) -> Result<()> {
@@ -154,7 +268,7 @@ struct RunArgs {
 }
 
 /// A scenario path, or an id looked up in `$HEARTSIM_ASSETS/scenarios`, `./assets/scenarios` and the source tree.
-fn scenario_path(arg: &str) -> Result<PathBuf> {
+pub(crate) fn scenario_path(arg: &str) -> Result<PathBuf> {
     let p = PathBuf::from(arg);
     if p.is_file() {
         return Ok(p);
@@ -418,6 +532,86 @@ fn main() -> Result<()> {
         })?,
         Cmd::AnatomyInfo { pack } => anatomy_info(&pack)?,
         Cmd::ValidateScenarios { dir } => validate_scenarios(&dir)?,
+        Cmd::ExportOpencarp {
+            scenario,
+            out,
+            pack,
+            spacing_mm,
+            ionic,
+            tend_ms,
+            stim_radius_mm,
+            apd_step_ms,
+            dx_mm,
+        } => bridge::export::run(&bridge::export::ExportArgs {
+            scenario,
+            out,
+            pack,
+            spacing_mm,
+            ionic,
+            tend_ms,
+            stim_radius_mm,
+            apd_step_ms,
+            dx_mm,
+        })?,
+        Cmd::ImportVtk {
+            dir,
+            out,
+            pack,
+            spacing_mm,
+            mesh,
+            vm_array,
+            lat_array,
+            frame_dt_ms,
+            length_unit,
+            lat_threshold,
+            max_distance_mm,
+        } => bridge::import::run(&bridge::import::ImportArgs {
+            dir,
+            out,
+            pack,
+            spacing_mm,
+            max_distance_mm,
+            source: bridge::import::SourceOptions {
+                mesh,
+                vm_array,
+                lat_array,
+                frame_dt_ms,
+                length_unit,
+                lat_threshold,
+            },
+        })?,
+        Cmd::ValidationReport {
+            scenario,
+            imported,
+            out,
+            pack,
+            spacing_mm,
+            tier,
+            vm_rest,
+            vm_peak,
+        } => bridge::report::run(&bridge::report::ReportArgs {
+            scenario,
+            imported,
+            out,
+            pack,
+            spacing_mm,
+            tier,
+            vm_rest,
+            vm_peak,
+        })?,
+        Cmd::Niederer {
+            dx_mm,
+            out,
+            reference,
+            external,
+            mesh,
+        } => bridge::niederer::run(&bridge::niederer::NiedererArgs {
+            dx_mm,
+            out,
+            reference,
+            external,
+            mesh,
+        })?,
     }
     Ok(())
 }
