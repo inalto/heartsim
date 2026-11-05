@@ -7,6 +7,7 @@
 //! down (0° = lead I, +90° = aVF, as [`crate::axis_dial`]); horizontal plane seen from above with
 //! the patient's left to the right and anterior down (V1–V2 point down, V6 to the right).
 
+use crate::t;
 use egui::{Align2, Color32, FontId, Pos2, Sense, Shape, Stroke, Ui, Vec2};
 use glam::DVec3;
 use heartsim_core::Lead;
@@ -25,10 +26,10 @@ impl VectorPlane {
     pub const ALL: [VectorPlane; 2] = [VectorPlane::Frontal, VectorPlane::Horizontal];
 
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            VectorPlane::Frontal => "Frontal plane",
-            VectorPlane::Horizontal => "Horizontal plane",
+            VectorPlane::Frontal => t!("plane-frontal"),
+            VectorPlane::Horizontal => t!("plane-horizontal"),
         }
     }
 
@@ -144,7 +145,7 @@ pub fn vector_plane(
     painter.text(
         rect.right_bottom() - Vec2::new(6.0, 4.0),
         Align2::RIGHT_BOTTOM,
-        format!("ring = {full_scale_mv:.1} mV"),
+        t!("vector-ring-scale", value = format!("{full_scale_mv:.1}")),
         FontId::proportional(11.0),
         style.text,
     );

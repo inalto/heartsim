@@ -14,6 +14,7 @@ use heartsim_core::{Electrode, LEAD_COUNT, Lead, Scenario};
 use heartsim_ecg::{Cable, ExtraLead, GaussianSynth, LeadRing, Limb};
 use heartsim_geometry::{ElectrodeSet, TriMesh};
 use heartsim_render::{GlyphInstance, GlyphSetId, OrbitCamera, SceneRenderer, srgb_color};
+use heartsim_ui::t;
 use heartsim_ui::{
     ElectrodeEditor, StripStyle, Viewport3d, ViewportResources, ecg_strip, electrode_editor_panel,
     lead_column,
@@ -186,21 +187,19 @@ impl ElectrodeTab {
     fn file_buttons(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             if ui
-                .button("Save placement")
-                .on_hover_text(format!(
-                    "Write a scenario with these electrodes to {SCENARIO_FILE}"
-                ))
+                .button(t!("el-save"))
+                .on_hover_text(t!("el-save-hint", file = SCENARIO_FILE))
                 .clicked()
             {
                 let mut s = Scenario::sinus_normal();
                 self.editor.save_scenario(&mut s);
                 self.file_status = Some(match s.to_ron().map(|t| std::fs::write(SCENARIO_FILE, t)) {
-                    Ok(Ok(())) => format!("Saved {SCENARIO_FILE}"),
-                    Ok(Err(e)) => format!("Save failed: {e}"),
-                    Err(e) => format!("Save failed: {e}"),
+                    Ok(Ok(())) => t!("el-saved", file = SCENARIO_FILE),
+                    Ok(Err(e)) => t!("el-save-failed", error = e.to_string()),
+                    Err(e) => t!("el-save-failed", error = e.to_string()),
                 });
             }
-            if ui.button("Load placement").clicked() {
+            if ui.button(t!("el-load")).clicked() {
                 self.file_status = Some(
                     match std::fs::read_to_string(SCENARIO_FILE)
                         .map_err(|e| e.to_string())
@@ -208,9 +207,9 @@ impl ElectrodeTab {
                     {
                         Ok(s) => {
                             self.editor.load_scenario(&s);
-                            format!("Loaded {SCENARIO_FILE}")
+                            t!("el-loaded", file = SCENARIO_FILE)
                         }
-                        Err(e) => format!("Load failed: {e}"),
+                        Err(e) => t!("el-load-failed", error = e.as_str()),
                     },
                 );
             }
@@ -242,7 +241,7 @@ impl ElectrodeTab {
     /// The torso viewport with draggable electrodes.
     fn viewport(&mut self, ui: &mut egui::Ui, rs: Option<&egui_wgpu::RenderState>) {
         let Some(rs) = rs else {
-            ui.label("3-D view unavailable: edit the electrodes from the panel.");
+            ui.label(t!("el-no-3d"));
             return;
         };
         let size = ui.available_size();
@@ -333,11 +332,11 @@ impl ElectrodeTab {
         drop(renderer);
         let hint = match (self.dragging, self.editor.landmark()) {
             _ if !self.editor.revealed() => {
-                "Electrodes hidden during the exercise: read the ECG.".to_string()
+                t!("el-hidden")
             }
             (Some(c), Some(l)) => format!("{}: {l}", c.label()),
             (Some(c), None) => c.label().to_string(),
-            (None, _) => "Drag an electrode over the torso; drag elsewhere to rotate.".to_string(),
+            (None, _) => t!("el-drag-hint"),
         };
         painter_hint(ui, rect, &hint);
         response.on_hover_cursor(if self.dragging.is_some() {

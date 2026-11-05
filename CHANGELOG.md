@@ -22,12 +22,30 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   forward-model ECG and the Tier-2 cells, and the therapy window, click-to-ablate and the timeline act on it. The status line shows the
   tier, the phase-singularity count and the achieved speed.
 - User guide page *Re-entry presets*.
+- Localisation with Project Fluent (brief B19): every user-visible string of the panels and tabs goes through `t!("key")`
+  (`heartsim_ui::i18n`), with catalogues in `assets/locales/<language>/*.ftl` embedded at compile time. Italian is complete;
+  German, French and Spanish are stubs that fall back to English. The language follows the operating system and can be
+  changed in the new Settings window (the choice is remembered). Domain names (regions, coronary branches, lead sites,
+  rhythm classes, limbs) are translated through `heartsim_ui::labels`.
+- Settings window: language, high-contrast theme and reduced motion. Reduced motion stops the automatic rotation of the
+  3-D heart and the defibrillator's shock flash.
+- Keyboard shortcuts: Space pauses or resumes; ←/→ scrub while paused (Shift for 1 s steps); + / − change the simulation
+  speed; 1–9 open a tab. They are listed in the Help tab and are off while a text box has the keyboard.
+- Labelled transport controls (Run / Pause and the speed slider) so screen readers and AccessKit see their names.
+- Tests (`crates/heartsim-ui/tests/i18n.rs`): every English key exists in Italian; stub languages define no unknown keys; the
+  embedded catalogue list matches the files; every key used in code is defined in English; no hard-coded label text in the
+  panels; switching language relabels the toolbar.
 
 ### Changed
 - The timing engine no longer vetoes tissue-sensed atrial or ventricular activations with its own ERP, and classifies tissue-sensed
   ventricular activity as VT (cycle ≥ 250 ms) or VF (shorter), so a shock to a re-entry preset is scored as VT/VF rather than SVT.
 - Tier-2 sensing: an activation within `sense_window_ms` (now 300 ms, was 150) of a timing event is that event's own conduction;
   `sense_gap_ms` (150 ms) is the new minimum spacing of fed-back activations.
+
+### Not yet translated
+- Tutorial pages and scenario texts (`assets/tutorials`, `assets/scenarios`), electrode presets and exercise texts, the
+  descriptions of ischaemia presets and the detector's findings, the pacemaker preset codes, the Territory names, and the
+  export preset descriptions. These remain English.
 
 ## [0.3.0] — 2026-11-04
 Second tagged release: the Tier-1 and Tier-2 engines, the forward ECG, the clinical pages, the rhythm library, pacing,

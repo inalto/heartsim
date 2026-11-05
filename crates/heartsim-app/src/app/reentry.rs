@@ -24,6 +24,8 @@ use heartsim_geometry::{AnatomyPack, CellCloud};
 use heartsim_sim::defib::ShockRecord;
 use heartsim_sim::tier2::{Preset, SwitchingEngine, Tier};
 use heartsim_sim::{Engine, EventKind};
+use heartsim_ui::i18n::number;
+use heartsim_ui::t;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -256,7 +258,7 @@ impl HeartSimApp {
         let current = self.reentry.active.as_ref().map(|a| a.index);
         let title = current
             .and_then(|i| self.reentry.presets.get(i))
-            .map_or("Re-entry presets…", |p| p.scenario.title.as_str());
+            .map_or_else(|| t!("reentry-picker"), |p| p.scenario.title.clone());
         let mut picked = None;
         egui::ComboBox::from_id_salt("reentry_picker")
             .selected_text(title)
@@ -277,18 +279,16 @@ impl HeartSimApp {
         }
         if let Some(act) = &self.reentry.active {
             let tier = match act.engine.tier() {
-                Tier::One => "Tier 1".to_string(),
-                Tier::Two => format!(
-                    "Tier 2 · {} phase singularities · quiet {:.1} s",
-                    act.engine.phase_singularities(),
-                    act.engine.quiet_ms().unwrap_or(0.0).max(0.0) / 1000.0
+                Tier::One => t!("reentry-tier1"),
+                Tier::Two => t!(
+                    "reentry-tier2",
+                    count = i64::try_from(act.engine.phase_singularities()).unwrap_or(i64::MAX),
+                    quiet = number(act.engine.quiet_ms().unwrap_or(0.0).max(0.0) / 1000.0, 1),
                 ),
             };
-            ui.label(format!("{tier} · {:.2}× real time", act.speed))
-                .on_hover_text(
-                    "Tier 2 is not real time on every machine; the simulation runs as fast as it can.",
-                );
-            if ui.button("Stop").clicked() {
+            ui.label(t!("reentry-speed", tier = tier, speed = number(act.speed, 2),))
+                .on_hover_text(t!("reentry-speed-hint"));
+            if ui.button(t!("reentry-stop")).clicked() {
                 self.stop_reentry();
             }
         }

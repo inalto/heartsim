@@ -7,6 +7,7 @@
 //! share one mapping and can never disagree.
 
 use crate::annotations::LeadMarks;
+use crate::t;
 use egui::{Align2, Color32, FontId, Id, Mesh, Pos2, Rect, Shape, Stroke, Ui, Vec2};
 use heartsim_ecg::{LeadRing, WaveKind};
 use std::sync::Arc;
@@ -30,10 +31,10 @@ pub enum SweepMode {
 impl SweepMode {
     /// UI label.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Scroll => "Scroll",
-            Self::Sweep => "Sweep",
+            Self::Scroll => t!("sweep-scroll"),
+            Self::Sweep => t!("sweep-sweep"),
         }
     }
 }
