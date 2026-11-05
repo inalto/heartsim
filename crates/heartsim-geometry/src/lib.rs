@@ -6,6 +6,7 @@
 //!   k-nearest-neighbour graph carrying distances and fibre alignment, and a vertex→cell "hood"
 //!   so mesh vertices can be coloured from cell state.
 
+pub mod bridge;
 pub mod cloud;
 pub mod electrodes;
 pub mod hood;

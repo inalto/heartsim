@@ -31,7 +31,7 @@ heartsim-ui        egui widgets: ecg_strip (painter), twelve-lead page, Viewport
 heartsim-io        exports and imports (B20): EcgRecord excerpt, 12-lead PDF (printpdf), page/strip PNG (ui's CPU rasteriser),
                    CSV, WFDB format 16, scenario RON, deterministic share-bundle zip; CSV/WFDB/zip import for review
 heartsim-app       eframe app: model (clock, engine, synth/forward, rings), settings, persistence, audio (kira), exports, tutorials
-heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets
+heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets, openCARP bridge
 xtask              ci, asset pipeline (decimate meshes, bake hoods/fibres/W matrix), release checks
 ```
 Dependency direction is strictly downward in this list.
