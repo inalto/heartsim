@@ -10,6 +10,7 @@ use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
 use heartsim_ecg::LeadRing;
+use heartsim_ui::t;
 use heartsim_ui::{StripStyle, TwelveLeadLayout, lead_column, twelve_lead_page};
 
 /// Choices per question.
@@ -199,9 +200,9 @@ impl RhythmQuiz {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     let label = if self.question.is_some() {
-                        "Next question"
+                        t!("rq-next")
                     } else {
-                        "New question"
+                        t!("app-quiz-new")
                     };
                     if ui
                         .add_enabled(!library.is_empty(), egui::Button::new(label))
@@ -209,36 +210,44 @@ impl RhythmQuiz {
                     {
                         self.next_question(library);
                     }
-                    ui.label(format!("Score {}/{}", self.correct, self.asked));
+                    ui.label(t!(
+                        "app-quiz-score",
+                        correct = self.correct.to_string(),
+                        asked = self.asked.to_string()
+                    ));
                     if self.streak > 1 {
-                        ui.label(format!("streak {}", self.streak));
+                        ui.label(t!("rq-streak", count = self.streak.to_string()));
                     }
                 });
-                ui.checkbox(&mut self.twelve_lead, "Show all 12 leads");
+                ui.checkbox(&mut self.twelve_lead, t!("rq-twelve-lead"));
                 ui.separator();
                 if library.is_empty() {
-                    ui.label("No scenario library found (assets/scenarios).");
+                    ui.label(t!("rq-no-library"));
                     return;
                 }
                 if let Some(e) = &self.error {
                     ui.colored_label(egui::Color32::LIGHT_RED, e);
                 }
                 let Some(q) = self.question.clone() else {
-                    ui.label("Press New question, read the strip, then choose the rhythm.");
+                    ui.label(t!("rq-intro"));
                     return;
                 };
                 ui.label(if self.chosen.is_none() {
-                    "What is the rhythm?"
+                    t!("rq-question")
                 } else {
-                    "Answer:"
+                    t!("rq-answer")
                 });
                 for &i in &q.options {
                     let title = &library.entries[i].scenario.title;
                     let text = match self.chosen {
-                        Some(_) if i == q.answer => egui::RichText::new(format!("{title}  (correct)"))
-                            .color(egui::Color32::LIGHT_GREEN),
-                        Some(c) if c == i => egui::RichText::new(format!("{title}  (your answer)"))
-                            .color(egui::Color32::LIGHT_RED),
+                        Some(_) if i == q.answer => {
+                            egui::RichText::new(t!("rq-correct-choice", title = title.as_str()))
+                                .color(egui::Color32::LIGHT_GREEN)
+                        }
+                        Some(c) if c == i => {
+                            egui::RichText::new(t!("rq-your-choice", title = title.as_str()))
+                                .color(egui::Color32::LIGHT_RED)
+                        }
                         _ => egui::RichText::new(title),
                     };
                     if ui
@@ -252,19 +261,16 @@ impl RhythmQuiz {
                     ui.separator();
                     let s = &library.entries[q.answer].scenario;
                     if c == q.answer {
-                        ui.colored_label(egui::Color32::LIGHT_GREEN, "Correct.");
+                        ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
                     } else {
-                        ui.colored_label(
-                            egui::Color32::LIGHT_RED,
-                            format!("Not quite: this is {}.", s.title),
-                        );
+                        ui.colored_label(egui::Color32::LIGHT_RED, t!("rq-wrong", title = s.title.as_str()));
                     }
                     ui.label(&s.description);
                     if let Some(notes) = &s.notes {
                         let teaching = notes.split("\n\nSources:").next().unwrap_or(notes);
-                        ui.collapsing("Why", |ui| ui.label(teaching));
+                        ui.collapsing(t!("rq-why"), |ui| ui.label(teaching));
                     }
-                    if ui.button("Open in simulator").clicked() {
+                    if ui.button(t!("rq-open")).clicked() {
                         open = Some(q.answer);
                     }
                 }

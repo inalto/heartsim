@@ -3,6 +3,7 @@
 //! The analyser works on a window of sample indices starting at 0; here the window's first sample
 //! is pinned to its absolute ring index so labels stay on their waves while the strip scrolls.
 
+use crate::t;
 use egui::Ui;
 use heartsim_core::{AxisClass, LEAD_COUNT, Lead};
 use heartsim_ecg::analysis::{DEFAULT_WINDOW_S, marks::marks_for_lead};
@@ -81,16 +82,16 @@ fn fmt_ms(v: Option<f64>) -> String {
 /// a guess.
 pub fn interval_readout(ui: &mut Ui, analysis: Option<&Analysis>) {
     let Some(a) = analysis else {
-        ui.weak("Measuring…");
+        ui.weak(t!("readout-measuring"));
         return;
     };
     match a.quality {
         SignalQuality::NoSignal => {
-            ui.weak("No signal");
+            ui.weak(t!("readout-no-signal"));
             return;
         }
         SignalQuality::NoQrs => {
-            ui.weak("No QRS complexes detected");
+            ui.weak(t!("readout-no-qrs"));
             return;
         }
         SignalQuality::Good => {}
@@ -110,20 +111,19 @@ pub fn interval_readout(ui: &mut Ui, analysis: Option<&Analysis>) {
             );
             row("RR", fmt_ms(a.rr_ms));
             row(
-                "Rhythm",
+                &t!("readout-rhythm"),
                 match a.regularity {
-                    Regularity::Unknown => "—",
-                    Regularity::Regular => "regular",
-                    Regularity::Irregular => "irregular",
-                }
-                .to_owned(),
+                    Regularity::Unknown => "—".to_owned(),
+                    Regularity::Regular => t!("readout-regular"),
+                    Regularity::Irregular => t!("readout-irregular"),
+                },
             );
             row(
                 "PR",
                 if a.p_wave_present {
                     fmt_ms(a.pr_ms)
                 } else {
-                    "no P waves".to_owned()
+                    t!("readout-no-p")
                 },
             );
             row("QRS", fmt_ms(a.qrs_ms));
@@ -131,22 +131,22 @@ pub fn interval_readout(ui: &mut Ui, analysis: Option<&Analysis>) {
             row("QTc (Bazett)", fmt_ms(a.qtc_bazett_ms));
             row("QTc (Fridericia)", fmt_ms(a.qtc_fridericia_ms));
             row(
-                "QRS axis",
+                &t!("readout-qrs-axis"),
                 a.qrs_axis.map_or_else(
                     || "—".to_owned(),
                     |ax| {
                         let class = match ax.classify() {
-                            AxisClass::Normal => "normal",
-                            AxisClass::LeftDeviation => "left deviation",
-                            AxisClass::RightDeviation => "right deviation",
-                            AxisClass::ExtremeDeviation => "extreme",
+                            AxisClass::Normal => t!("axis-normal"),
+                            AxisClass::LeftDeviation => t!("axis-left"),
+                            AxisClass::RightDeviation => t!("axis-right"),
+                            AxisClass::ExtremeDeviation => t!("axis-extreme"),
                         };
                         format!("{:+.0}° ({class})", ax.degrees)
                     },
                 ),
             );
             row(
-                "T axis",
+                &t!("readout-t-axis"),
                 a.t_axis
                     .map_or_else(|| "—".to_owned(), |ax| format!("{:+.0}°", ax.degrees)),
             );

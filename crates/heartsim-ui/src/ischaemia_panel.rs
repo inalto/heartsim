@@ -6,6 +6,7 @@
 //! the engine. The branch under the cursor (or the selected one) is reported so the app can
 //! highlight its territory on the 3-D heart ([`territory_glyphs`]).
 
+use crate::t;
 use egui::{Color32, Pos2, Sense, Stroke, Ui, vec2};
 use glam::Vec3;
 use heartsim_core::Action;
@@ -143,7 +144,7 @@ pub fn coronary_tree(
         );
     }
     let response = match hovered {
-        Some(b) => response.on_hover_text(b.label()),
+        Some(b) => response.on_hover_text(crate::labels::branch_name(b)),
         None => response,
     };
     let clicked = if response.clicked() { hovered } else { None };
@@ -166,43 +167,43 @@ pub fn ischaemia_panel(
     lesions: &[Lesion],
 ) -> IschaemiaResponse {
     let mut r = IschaemiaResponse::default();
-    ui.strong("Coronary tree");
+    ui.strong(t!("ischaemia-coronary-tree"));
     let (clicked, hovered) = coronary_tree(ui, state.branch, lesions);
     if let Some(b) = clicked {
         state.branch = b;
     }
     ui.horizontal_wrapped(|ui| {
         for b in [CoronaryBranch::Global, CoronaryBranch::Pericardium] {
-            ui.selectable_value(&mut state.branch, b, b.label());
+            ui.selectable_value(&mut state.branch, b, crate::labels::branch_name(b));
         }
     });
-    ui.label(format!(
-        "Selected: {} ({})",
-        state.branch.label(),
-        state.branch.id()
+    ui.label(t!(
+        "ischaemia-selected",
+        branch = crate::labels::branch_name(state.branch),
+        id = state.branch.id()
     ));
-    ui.add(egui::Slider::new(&mut state.severity, 0.0..=1.0).text("severity"))
-        .on_hover_text("0 = open; ≥ 0.8 occludes the whole wall (ST elevation); 0.5–0.65 injures the subendocardium only (ST depression).");
-    ui.checkbox(&mut state.infarct, "Healed infarct (scar)");
+    ui.add(egui::Slider::new(&mut state.severity, 0.0..=1.0).text(t!("ischaemia-severity")))
+        .on_hover_text(t!("ischaemia-severity-hint"));
+    ui.checkbox(&mut state.infarct, t!("ischaemia-infarct"));
     let kind = if state.infarct {
         LesionKind::Infarct
     } else {
         LesionKind::Acute
     };
     ui.horizontal(|ui| {
-        if ui.button("Apply").clicked() {
+        if ui.button(t!("ischaemia-apply")).clicked() {
             r.actions.push(Action::Stenosis {
                 branch: stenosis_target(state.branch, kind),
                 severity: state.severity,
             });
         }
-        if ui.button("Reperfuse").clicked() {
+        if ui.button(t!("ischaemia-reperfuse")).clicked() {
             r.actions.push(Action::Stenosis {
                 branch: stenosis_target(state.branch, kind),
                 severity: 0.0,
             });
         }
-        if ui.button("Clear all").clicked() {
+        if ui.button(t!("ischaemia-clear-all")).clicked() {
             r.actions.push(Action::Stenosis {
                 branch: "all".into(),
                 severity: 0.0,
@@ -210,26 +211,31 @@ pub fn ischaemia_panel(
         }
     });
     ui.separator();
-    ui.strong("Presets");
+    ui.strong(t!("ischaemia-presets"));
     ui.horizontal_wrapped(|ui| {
         for p in IschaemiaPreset::ALL {
-            if ui.button(p.label()).on_hover_text(p.description()).clicked() {
+            if ui
+                .button(crate::labels::preset_name(p))
+                .on_hover_text(p.description())
+                .clicked()
+            {
                 r.actions.extend(p.actions());
             }
         }
     });
     if !lesions.is_empty() {
         ui.separator();
-        ui.strong("In effect");
+        ui.strong(t!("ischaemia-in-effect"));
         for l in lesions {
             let kind = match l.kind {
-                LesionKind::Acute => "acute",
-                LesionKind::Infarct => "infarct",
+                LesionKind::Acute => t!("ischaemia-acute"),
+                LesionKind::Infarct => t!("ischaemia-infarct-kind"),
             };
-            ui.label(format!(
-                "{} — {kind}, severity {:.2}",
-                l.branch.label(),
-                l.severity
+            ui.label(t!(
+                "ischaemia-lesion-line",
+                branch = crate::labels::branch_name(l.branch),
+                kind = kind,
+                severity = crate::i18n::number(l.severity, 2)
             ));
         }
     }

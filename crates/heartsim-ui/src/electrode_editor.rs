@@ -9,6 +9,7 @@
 //! extra leads. A placement change is installed into the synthesiser only after every sample made
 //! with the old lead vectors has been read, so the recordings never mix placements.
 
+use crate::t;
 use egui::Ui;
 use glam::{DVec3, Vec3};
 use heartsim_core::{Electrode, LEAD_COUNT, Scenario};
@@ -169,10 +170,10 @@ impl ElectrodeEditor {
     #[must_use]
     pub fn describe(&self, c: Cable) -> String {
         let Some(p) = self.placement.cable_position(c) else {
-            return "off".to_string();
+            return t!("electrode-off");
         };
         if let Some(l) = Limb::at(p) {
-            return format!("on the {}", l.label());
+            return t!("electrode-on-limb", limb = crate::labels::limb_name(l));
         }
         let at_standard = match c {
             Cable::Standard(e) => self.standard.position(e).distance(p) < 1.0,
@@ -183,7 +184,7 @@ impl ElectrodeEditor {
             |s| s.describe(p),
         );
         if at_standard {
-            format!("{place} (standard)")
+            t!("electrode-standard", place = place)
         } else {
             place
         }
@@ -375,7 +376,7 @@ fn cables(p: &Placement) -> Vec<Cable> {
 /// and the detector's verdict.
 pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
     let mut cmd = None;
-    ui.strong("Presets");
+    ui.strong(t!("electrode-presets"));
     ui.horizontal_wrapped(|ui| {
         for p in Preset::ALL {
             if ui.button(p.label()).on_hover_text(p.description()).clicked() {
@@ -384,14 +385,14 @@ pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
         }
     });
     if ui
-        .button("Fit leads")
-        .on_hover_text("Put every electrode back on its standard site.")
+        .button(t!("electrode-fit"))
+        .on_hover_text(t!("electrode-fit-hint"))
         .clicked()
     {
         cmd = Some(EditorCommand::Reset);
     }
     ui.separator();
-    ui.strong("Extra leads");
+    ui.strong(t!("electrode-extra-leads"));
     ui.horizontal_wrapped(|ui| {
         for x in ExtraLead::ALL {
             let mut on = ed.placement.extras.contains_key(&x);
@@ -402,12 +403,12 @@ pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
     });
     ui.separator();
 
-    ui.strong("Exercises");
+    ui.strong(t!("electrode-exercises"));
     ui.horizontal_wrapped(|ui| {
-        if ui.button("New exercise").clicked() {
+        if ui.button(t!("electrode-new-exercise")).clicked() {
             cmd = Some(EditorCommand::RandomExercise);
         }
-        egui::ComboBox::new("exercise", "Choose")
+        egui::ComboBox::new("exercise", t!("electrode-choose"))
             .selected_text("…")
             .show_ui(ui, |ui| {
                 for x in Exercise::ALL {
@@ -417,7 +418,7 @@ pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
                 }
             });
         if ui
-            .add_enabled(!ed.revealed(), egui::Button::new("Explain"))
+            .add_enabled(!ed.revealed(), egui::Button::new(t!("electrode-explain")))
             .clicked()
         {
             cmd = Some(EditorCommand::Reveal);
@@ -425,24 +426,22 @@ pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
     });
     match (ed.exercise, ed.revealed()) {
         (Some(_), false) => {
-            ui.label(
-                "Something is wrong with the electrodes. Read the 12-lead, decide what, then press Explain.",
-            );
+            ui.label(t!("electrode-exercise-prompt"));
         }
         (Some(x), true) => {
-            ui.label(format!("Exercise: {}.", x.label()));
+            ui.label(t!("electrode-exercise-name", name = x.label()));
         }
         (None, _) => {}
     }
     if ed.revealed() {
         ui.separator();
-        ui.strong("Detector");
+        ui.strong(t!("electrode-detector"));
         match ed.findings() {
             None => {
-                ui.weak("Recording with the new placement…");
+                ui.weak(t!("electrode-recording"));
             }
             Some([]) => {
-                ui.label("The leads match the standard placement.");
+                ui.label(t!("electrode-matches-standard"));
             }
             Some(f) => {
                 for finding in f {
@@ -462,8 +461,8 @@ pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
 /// Electrode table, selected-electrode actions and the cable-swap row (hidden during an
 /// unrevealed exercise, where it would give the answer away).
 fn electrode_list(ui: &mut Ui, ed: &mut ElectrodeEditor, cmd: &mut Option<EditorCommand>) {
-    ui.strong("Electrodes");
-    ui.checkbox(&mut ed.snap, "Snap to intercostal spaces and chest lines");
+    ui.strong(t!("electrode-electrodes"));
+    ui.checkbox(&mut ed.snap, t!("electrode-snap"));
     egui::Grid::new("electrodes")
         .num_columns(2)
         .striped(true)
@@ -478,24 +477,29 @@ fn electrode_list(ui: &mut Ui, ed: &mut ElectrodeEditor, cmd: &mut Option<Editor
             }
         });
     if let Some(l) = ed.landmark() {
-        ui.weak(format!("Last snap: {l}"));
+        ui.weak(t!("electrode-last-snap", landmark = l.to_string()));
     }
     if let Some(Cable::Standard(e)) = ed.selected {
         ui.horizontal_wrapped(|ui| {
             if let Some(l) = Limb::of(e)
                 && ed.placement.limb_of(e) != Some(l)
-                && ui.button(format!("Back on the {}", l.label())).clicked()
+                && ui
+                    .button(t!("electrode-back-on-limb", limb = crate::labels::limb_name(l)))
+                    .clicked()
             {
                 *cmd = Some(EditorCommand::PutOnLimb(e));
             }
-            if PRECORDIAL.contains(&e) && ui.button("Back to the standard site").clicked() {
+            if PRECORDIAL.contains(&e) && ui.button(t!("electrode-back-standard")).clicked() {
                 *cmd = Some(EditorCommand::Move(Cable::Standard(e), ed.standard.position(e)));
             }
         });
-        ui.weak("Drag it on the torso to move it.");
+        ui.weak(t!("electrode-drag-hint"));
     }
     ui.horizontal_wrapped(|ui| {
-        for (id, slot, label) in [("swap_a", 0, "and"), ("swap_b", 1, "cables")] {
+        for (id, slot, label) in [
+            ("swap_a", 0, t!("electrode-swap-and")),
+            ("swap_b", 1, t!("electrode-swap-cables")),
+        ] {
             let current = if slot == 0 { ed.swap_pair.0 } else { ed.swap_pair.1 };
             egui::ComboBox::new(id, label)
                 .selected_text(current.label())
@@ -512,7 +516,10 @@ fn electrode_list(ui: &mut Ui, ed: &mut ElectrodeEditor, cmd: &mut Option<Editor
                 });
         }
         if ui
-            .add_enabled(ed.swap_pair.0 != ed.swap_pair.1, egui::Button::new("Swap"))
+            .add_enabled(
+                ed.swap_pair.0 != ed.swap_pair.1,
+                egui::Button::new(t!("electrode-swap")),
+            )
             .clicked()
         {
             *cmd = Some(EditorCommand::Swap(ed.swap_pair.0, ed.swap_pair.1));

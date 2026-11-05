@@ -8,6 +8,7 @@ use heartsim_core::{Lead, Scenario};
 use heartsim_ecg::{GaussianSynth, LeadRing, MorphologyOverrides, Tier0Scenario};
 use heartsim_io::{EcgRecord, ExportFile, ExportInfo, ExportOptions, Formats, Imported, Paper, export_files};
 use heartsim_sim::TimingParams;
+use heartsim_ui::t;
 use heartsim_ui::{LeadOrder, PaceMarks, StripStyle};
 use std::path::PathBuf;
 
@@ -202,8 +203,12 @@ impl ExportPanel {
             .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
             .collect();
         match written.first().and_then(|p| p.parent()) {
-            Some(dir) => format!("Wrote {} to {}", names.join(", "), dir.display()),
-            None => "Nothing written".into(),
+            Some(dir) => t!(
+                "export-wrote",
+                names = names.join(", "),
+                dir = dir.display().to_string()
+            ),
+            None => t!("export-nothing"),
         }
     }
 }

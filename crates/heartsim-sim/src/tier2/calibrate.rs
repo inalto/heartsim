@@ -6,7 +6,9 @@
 //! is deterministic.
 
 use super::model::CellModel;
-use super::solver::{ACTIVATION_THRESHOLD, Trajectory, apply_stimulus, stimulus_conductance};
+use super::solver::{ACTIVATION_THRESHOLD, Tissue, Trajectory, apply_stimulus, stimulus_conductance};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 /// Cable length, voxels; CV is timed between `CABLE_FROM` and `CABLE_TO`.
 const CABLE_LEN: usize = 48;
@@ -161,10 +163,9 @@ pub fn single_cell_apd<M: CellModel>(model: &M, dt_ms: f32) -> f32 {
     Trajectory::of(model, dt_ms).apd_ms
 }
 
-/// `model.scaled_apd(s)` with the single-cell APD closest to `target_ms` (bisection on log s
-/// over `[0.05, 20]`). Returns the scaled model and its APD.
-#[must_use]
-pub fn solve_apd<M: CellModel>(model: &M, target_ms: f32, dt_ms: f32) -> (M, f32) {
+/// The `s` for which `model.scaled_apd(s)` has the single-cell APD closest to `target_ms`
+/// (bisection on log s over `[0.05, 20]`).
+fn solve_apd_dial<M: CellModel>(model: &M, target_ms: f32, dt_ms: f32) -> f32 {
     let apd = |s: f32| single_cell_apd(&model.scaled_apd(s), dt_ms);
     let (mut lo, mut hi) = (0.05f32.ln(), 20.0f32.ln());
     for _ in 0..BISECTIONS {
@@ -176,15 +177,124 @@ pub fn solve_apd<M: CellModel>(model: &M, target_ms: f32, dt_ms: f32) -> (M, f32
             hi = mid;
         }
     }
-    let m = model.scaled_apd(hi.exp());
+    hi.exp()
+}
+
+/// `model.scaled_apd(s)` with the single-cell APD closest to `target_ms` (bisection on log s
+/// over `[0.05, 20]`). Returns the scaled model and its APD.
+#[must_use]
+pub fn solve_apd<M: CellModel>(model: &M, target_ms: f32, dt_ms: f32) -> (M, f32) {
+    let m = model.scaled_apd(solve_apd_dial(model, target_ms, dt_ms));
     let a = single_cell_apd(&m, dt_ms);
     (m, a)
+}
+
+/// Fraction of the explicit stability limit [`retarget`] may use (the engine default).
+const RETARGET_STABILITY: f32 = 0.9;
+
+/// Memo of [`retarget`]: `(APD dial factor, diffusivity ratio)` per `(model, D, scales, h, dt)`.
+/// The calibration is a pure function of its key, so sharing it between engines changes no result;
+/// it only saves the seconds a mosaic of hundreds of twin classes would take.
+type RetargetMemo = Mutex<HashMap<String, (f32, f32)>>;
+
+fn retarget_memo() -> &'static RetargetMemo {
+    static MEMO: OnceLock<RetargetMemo> = OnceLock::new();
+    MEMO.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// The tissue `t` with its APD scaled by `apd_scale` and its **measured** plane-wave speed by
+/// `cv_scale`, both solved on the solver's own grid.
+///
+/// Stretching or shrinking the plateau of a calibrated cell changes its upstroke and so its CV
+/// (a short-APD Aliev–Panfilov cell conducts much more slowly, and on a coarse grid not at all),
+/// so scaling the APD and `D` independently — what a drug or a remodelling patch would naively
+/// do — breaks conduction. Here the APD dial is solved for the target APD first, then `D` is
+/// solved for the target CV with that dial, within the stability budget; the transverse
+/// diffusivity keeps the tissue's anisotropy. The excitation dial is left alone, so a CV target
+/// above what `D` can reach at the budget is clipped to it.
+#[must_use]
+pub fn retarget<M: CellModel>(
+    t: &Tissue<M>,
+    apd_scale: f32,
+    cv_scale: f32,
+    h_mm: f32,
+    dt_ms: f32,
+) -> Tissue<M> {
+    if (apd_scale - 1.0).abs() < 1e-4 && (cv_scale - 1.0).abs() < 1e-4 {
+        return t.clone();
+    }
+    let key = format!(
+        "{:?}|{:x}|{:x}|{:x}|{:x}|{:x}|{:x}",
+        t.model,
+        t.d_long.to_bits(),
+        t.d_trans.to_bits(),
+        apd_scale.to_bits(),
+        cv_scale.to_bits(),
+        h_mm.to_bits(),
+        dt_ms.to_bits()
+    );
+    let hit = retarget_memo().lock().ok().and_then(|m| m.get(&key).copied());
+    let (s_apd, d_ratio) = hit.unwrap_or_else(|| {
+        let apd0 = single_cell_apd(&t.model, dt_ms);
+        let cv0 = cable_cv(&t.model, t.d_long, h_mm, dt_ms).unwrap_or(0.0);
+        let solved = if apd0.is_finite() && cv0 > 0.0 {
+            let s_apd = solve_apd_dial(&t.model, apd0 * apd_scale, dt_ms);
+            let m = t.model.scaled_apd(s_apd);
+            // tr D = D_l + 2 D_t for the fibre tensor
+            let ratio = if t.d_long > 0.0 {
+                (t.d_trans / t.d_long).clamp(0.0, 1.0)
+            } else {
+                1.0
+            };
+            let d_max =
+                (trace_budget(&m, h_mm, dt_ms, RETARGET_STABILITY) / (1.0 + 2.0 * ratio)).max(t.d_long);
+            let (d, _) = solve_d(&m, cv0 * cv_scale, h_mm, dt_ms, d_max);
+            (s_apd, d / t.d_long)
+        } else {
+            (1.0, 1.0)
+        };
+        if let Ok(mut memo) = retarget_memo().lock() {
+            memo.insert(key, solved);
+        }
+        solved
+    });
+    Tissue {
+        model: t.model.scaled_apd(s_apd),
+        d_long: t.d_long * d_ratio,
+        d_trans: t.d_trans * d_ratio,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tier2::model::AlievPanfilov;
+
+    #[test]
+    fn retarget_scales_apd_and_measured_cv_together() {
+        let (h, dt) = (4.0, 0.25);
+        let base = AlievPanfilov::default();
+        let (d, _) = solve_d(&base, 0.6, h, dt, 28.0);
+        let t = Tissue {
+            model: base,
+            d_long: d,
+            d_trans: 0.4 * d,
+        };
+        let (apd0, cv0) = (
+            single_cell_apd(&t.model, dt),
+            cable_cv(&t.model, t.d_long, h, dt).unwrap(),
+        );
+        for (a, c) in [(0.4f32, 0.6f32), (0.6, 0.8), (1.2, 0.5)] {
+            let r = retarget(&t, a, c, h, dt);
+            let (apd, cv) = (
+                single_cell_apd(&r.model, dt),
+                cable_cv(&r.model, r.d_long, h, dt).unwrap_or(0.0),
+            );
+            assert!((apd / (apd0 * a) - 1.0).abs() < 0.05, "APD {apd} vs {}", apd0 * a);
+            assert!((cv / (cv0 * c) - 1.0).abs() < 0.08, "CV {cv} vs {}", cv0 * c);
+            assert!((r.d_trans / r.d_long - 0.4).abs() < 1e-4, "anisotropy kept");
+        }
+    }
 
     #[test]
     fn calibration_hits_its_targets() {

@@ -14,6 +14,7 @@ impl HeartSimApp {
     /// Load library scenario `index`: a fresh timing engine and synthesiser from the file, the
     /// 3-D engine re-timed from the same parameters, empty strips, clock at zero (speed kept).
     pub(super) fn load_scenario(&mut self, index: usize) {
+        self.stop_reentry();
         let Some(s) = self.library.entries.get(index) else {
             return;
         };

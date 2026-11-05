@@ -169,6 +169,18 @@ impl Tier1Engine {
         }
     }
 
+    /// Take the heart back from Tier 2 once its re-entry has stopped: the timing engine of the
+    /// running simulation replaces this one's (so the beat timing is continuous), lesions made
+    /// meanwhile are kept, and every cell starts at rest at the timing engine's clock.
+    pub fn resume_from(&mut self, timing: TimingEngine, lesion_cells: &[u32]) {
+        self.timing = timing;
+        self.ingested = self.timing.events().len();
+        self.shocks_seen = self.timing.shocks().len();
+        self.eikonal.ablate_cells(lesion_cells);
+        self.eikonal.quiesce(self.timing.now());
+        self.place_leads();
+    }
+
     /// Mutable timing engine, e.g. to reprogram the pacemaker (call [`Tier1Engine::place_leads`]
     /// after moving a lead).
     pub fn timing_mut(&mut self) -> &mut TimingEngine {

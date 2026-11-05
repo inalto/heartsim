@@ -10,6 +10,47 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   activation `.dat` results onto the cell cloud by nearest point. `validation-report` compares them with a Tier-1 or Tier-2 run (activation RMS, per-lead ECG RMSE, QRS and
   T correlation; Markdown, PNG, JSON). `niederer` runs the benchmark slab on Tier 2 and reports its deviations. No solver has been run on these files yet: this is tested
   against the documented formats, Tier 2 is calibrated rather than TT06, and the stored reference is a secondary table, not the paper's supplement.
+- Re-entry framework (brief B17): scenario files may carry a `reentry:` section (`heartsim_sim::tier2::ReentrySpec`) with tissue patches
+  (APD / CV scaling by region, sphere, box or compartment, inert obstacles, APD mosaics), the initiation (S1–S2–S3 or burst pacing,
+  cross-field stimulation, a pre-seeded rotating wave, or a `Tier2Snapshot` state file) and the tier-switch policy.
+- `assets/scenarios/reentry/af_persistent.ron`: persistent atrial fibrillation (no P waves, f waves ≈ 0.15 mV in V1, irregularly irregular
+  ventricular response at ≈ 100–130/min). Its atrial rate is ≈ 165/min, below clinical AF. Flutter, scar-related VT, torsades and VF
+  presets are **not** included: no induction protocol produced a surviving rotor in the heart-shaped model.
+- `SwitchingEngine`: runs Tier 1 until the scenario or an action (rapid pacing burst, S2/S3 extrastimuli, an unsynchronised shock) needs
+  re-entry, continues the same simulation in Tier 2, and hands back to Tier 1 after 2 s without re-entry (a phase-singularity run of 0.6 s
+  or an unexplained tissue activation at the AV-nodal input or lead tip; minimum dwell 3 s), keeping the beat timing and lesions.
+- Tier 2 follows the timing engine's drug effects (`calibrate::retarget` re-solves the diffusivity, so short-APD tissue still conducts),
+  applies an unsynchronised shock on the T wave of a normal beat as a field stimulus, and saves / restores its state
+  (`Tier2Engine::snapshot`, `restore`).
+- Pulmonary-vein isolation and cavotricuspid-isthmus ablation lines (`preset::pvi_lesions`, `preset::cti_lesions`).
+- Simulator tab: a **Re-entry presets** list runs a preset on the switching engine; the strip, the 12-lead page and the 3-D heart show the
+  forward-model ECG and the Tier-2 cells, and the therapy window, click-to-ablate and the timeline act on it. The status line shows the
+  tier, the phase-singularity count and the achieved speed.
+- User guide page *Re-entry presets*.
+- Localisation with Project Fluent (brief B19): every user-visible string of the panels and tabs goes through `t!("key")`
+  (`heartsim_ui::i18n`), with catalogues in `assets/locales/<language>/*.ftl` embedded at compile time. Italian is complete;
+  German, French and Spanish are stubs that fall back to English. The language follows the operating system and can be
+  changed in the new Settings window (the choice is remembered). Domain names (regions, coronary branches, lead sites,
+  rhythm classes, limbs) are translated through `heartsim_ui::labels`.
+- Settings window: language, high-contrast theme and reduced motion. Reduced motion stops the automatic rotation of the
+  3-D heart and the defibrillator's shock flash.
+- Keyboard shortcuts: Space pauses or resumes; ←/→ scrub while paused (Shift for 1 s steps); + / − change the simulation
+  speed; 1–9 open a tab. They are listed in the Help tab and are off while a text box has the keyboard.
+- Labelled transport controls (Run / Pause and the speed slider) so screen readers and AccessKit see their names.
+- Tests (`crates/heartsim-ui/tests/i18n.rs`): every English key exists in Italian; stub languages define no unknown keys; the
+  embedded catalogue list matches the files; every key used in code is defined in English; no hard-coded label text in the
+  panels; switching language relabels the toolbar.
+
+### Changed
+- The timing engine no longer vetoes tissue-sensed atrial or ventricular activations with its own ERP, and classifies tissue-sensed
+  ventricular activity as VT (cycle ≥ 250 ms) or VF (shorter), so a shock to a re-entry preset is scored as VT/VF rather than SVT.
+- Tier-2 sensing: an activation within `sense_window_ms` (now 300 ms, was 150) of a timing event is that event's own conduction;
+  `sense_gap_ms` (150 ms) is the new minimum spacing of fed-back activations.
+
+### Not yet translated
+- Tutorial pages and scenario texts (`assets/tutorials`, `assets/scenarios`), electrode presets and exercise texts, the
+  descriptions of ischaemia presets and the detector's findings, the pacemaker preset codes, the Territory names, and the
+  export preset descriptions. These remain English.
 
 ## [0.3.0] — 2026-11-04
 Second tagged release: the Tier-1 and Tier-2 engines, the forward ECG, the clinical pages, the rhythm library, pacing,

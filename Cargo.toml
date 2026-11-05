@@ -83,6 +83,10 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 clap = { version = "4.6.7", features = ["derive"] }
 pollster = "1.0.1"
+# Localisation: Project Fluent (fluent 0.17 pairs with fluent-bundle 0.16 and unic-langid 0.9)
+fluent = "0.17.0"
+unic-langid = "0.9.6"
+sys-locale = "0.3.2"
 
 # --- dev / test --------------------------------------------------------------
 proptest = "1.12.0"

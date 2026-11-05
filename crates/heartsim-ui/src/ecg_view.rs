@@ -4,6 +4,7 @@
 use crate::annotations::{EcgAnnotations, interval_readout};
 use crate::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
 use crate::strip::{GAINS_MM_MV, SPEEDS_MM_S, StripStyle, StripTrace, StripWindow, SweepMode, draw_strip};
+use crate::t;
 use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, page_cells};
 use egui::{Rect, Ui};
 use heartsim_core::Lead;
@@ -132,43 +133,45 @@ impl EcgView {
     /// paused) the scrub slider.
     pub fn controls(&mut self, ui: &mut Ui, rings: &[LeadRing]) {
         ui.horizontal_wrapped(|ui| {
-            egui::ComboBox::from_id_salt("ecg_speed")
+            let speed = egui::ComboBox::from_id_salt("ecg_speed")
                 .selected_text(format!("{} mm/s", self.style.mm_per_s))
                 .show_ui(ui, |ui| {
                     for s in SPEEDS_MM_S {
                         ui.selectable_value(&mut self.style.mm_per_s, s, format!("{s} mm/s"));
                     }
                 });
-            egui::ComboBox::from_id_salt("ecg_gain")
+            name_combo(&speed.response, &t!("ecg-speed"));
+            let gain = egui::ComboBox::from_id_salt("ecg_gain")
                 .selected_text(format!("{} mm/mV", self.style.mm_per_mv))
                 .show_ui(ui, |ui| {
                     for g in GAINS_MM_MV {
                         ui.selectable_value(&mut self.style.mm_per_mv, g, format!("{g} mm/mV"));
                     }
                 });
+            name_combo(&gain.response, &t!("ecg-gain"));
             for m in [SweepMode::Scroll, SweepMode::Sweep] {
                 ui.selectable_value(&mut self.style.mode, m, m.label());
             }
             let mut dark = self.style.is_dark();
-            if ui.checkbox(&mut dark, "Monitor colours").changed() {
+            if ui.checkbox(&mut dark, t!("ecg-monitor-colours")).changed() {
                 self.style = if dark {
                     self.style.monitor()
                 } else {
                     self.style.with_paper_colours()
                 };
             }
-            ui.checkbox(&mut self.style.show_grid, "Grid");
-            ui.checkbox(&mut self.show_waves, "Waves");
-            ui.checkbox(&mut self.show_intervals, "PR/RR");
+            ui.checkbox(&mut self.style.show_grid, t!("ecg-grid"));
+            ui.checkbox(&mut self.show_waves, t!("ecg-waves"));
+            ui.checkbox(&mut self.show_intervals, t!("ecg-intervals"));
             ui.add(
                 egui::Slider::new(&mut self.style.px_per_mm, 1.5..=8.0)
-                    .text("pt/mm")
+                    .text(t!("ecg-px-per-mm"))
                     .max_decimals(2),
             )
-            .on_hover_text("Screen calibration: hold a ruler to the 5 mm grid squares and adjust until they measure 5 mm.");
+            .on_hover_text(t!("ecg-calibration-hint"));
             if ui
-                .button("Calipers ✕")
-                .on_hover_text("Shift-click a strip to add a caliper pair; drag lines; ←/→ nudge; Esc clears.")
+                .button(t!("ecg-calipers"))
+                .on_hover_text(t!("ecg-calipers-hint"))
                 .clicked()
             {
                 self.strip_calipers.reset();
@@ -177,17 +180,39 @@ impl EcgView {
             if self.playback.is_paused() {
                 ui.separator();
                 let fs = fs_of(rings);
-                let visible = rings.first().map_or(0, |r| r.len() as u64).min((10.0 * fs) as u64);
+                let visible = rings
+                    .first()
+                    .map_or(0, |r| r.len() as u64)
+                    .min((10.0 * fs) as u64);
                 let max = rings.first().map_or(0.0, |r| Playback::max_scrub_ms(r, visible));
                 let mut back_s = self.playback.scrub_ms() / 1000.0;
                 if ui
-                    .add(egui::Slider::new(&mut back_s, 0.0..=(max / 1000.0).max(0.0)).text("s back"))
+                    .add(
+                        egui::Slider::new(&mut back_s, 0.0..=(max / 1000.0).max(0.0))
+                            .text(t!("ecg-scrub-back")),
+                    )
                     .changed()
                 {
                     self.playback.set_scrub_ms(back_s * 1000.0, max);
                 }
             }
         });
+    }
+
+    /// Moves the scrub cursor `ms` further back in time (negative = forward) while paused; the
+    /// keyboard ←/→ shortcuts use it. Does nothing while the simulation runs.
+    pub fn scrub_back_by(&mut self, ms: f64, rings: &[LeadRing]) {
+        if !self.playback.is_paused() {
+            return;
+        }
+        let fs = fs_of(rings);
+        let visible = rings
+            .first()
+            .map_or(0, |r| r.len() as u64)
+            .min((10.0 * fs) as u64);
+        let max = rings.first().map_or(0.0, |r| Playback::max_scrub_ms(r, visible));
+        let next = (self.playback.scrub_ms() + ms).clamp(0.0, max.max(0.0));
+        self.playback.set_scrub_ms(next, max);
     }
 
     /// Interval read-out panel (HR, PR, QRS, QT, QTc, axis).
@@ -293,8 +318,8 @@ impl EcgView {
             .map_err(|e| e.to_string())
             .and_then(|png| std::fs::write(path, png).map_err(|e| e.to_string()));
         self.last_export = Some(match res {
-            Ok(()) => format!("Saved {}", path.display()),
-            Err(e) => format!("Snapshot failed: {e}"),
+            Ok(()) => t!("ecg-saved", path = path.display().to_string()),
+            Err(e) => t!("ecg-snapshot-failed", error = e),
         });
     }
 
@@ -308,4 +333,9 @@ impl EcgView {
     pub fn strip_calipers_mut(&mut self) -> &mut CaliperSet {
         &mut self.strip_calipers
     }
+}
+
+/// Gives a combo box its accessible name (the visible label sits beside it in the layout).
+fn name_combo(response: &egui::Response, name: &str) {
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, name));
 }

@@ -8,8 +8,9 @@
 //! "break-up" constants of Panfilov 1999 (a = 0.1, μ₁ = 0.07) did *not* break up in our 2-D
 //! sheets, so the break-up preset relies on dispersion of refractoriness instead.
 
+use super::calibrate;
 use super::model::CellModel;
-use super::solver::{Monodomain, Tissue};
+use super::solver::Monodomain;
 use glam::Vec3;
 use std::collections::BTreeMap;
 
@@ -60,21 +61,26 @@ pub fn apd_patch<M: CellModel>(
     apd_scale: f32,
 ) -> usize {
     let vox = solver.grid().voxels_within(centre, radius_mm, None);
+    scale_voxels(solver, &vox, apd_scale, 1.0);
+    vox.len()
+}
+
+/// Scale the APD by `apd_scale` and the measured conduction velocity by `cv_scale` on `voxels`
+/// ([`calibrate::retarget`]: the diffusivity is re-solved for the new action potential, since
+/// shortening the plateau alone would stop conduction on a coarse grid). Each tissue class found
+/// there gets a re-targeted twin, so overlapping calls compound.
+pub fn scale_voxels<M: CellModel>(solver: &mut Monodomain<M>, voxels: &[u32], apd_scale: f32, cv_scale: f32) {
+    let (h, dt) = (solver.grid().h_mm, solver.dt_ms());
     let mut twins: BTreeMap<u16, Vec<u32>> = BTreeMap::new();
-    for &v in &vox {
+    for &v in voxels {
         twins.entry(solver.classes()[v as usize]).or_default().push(v);
     }
+    let mut assign = Vec::with_capacity(twins.len());
     for (class, members) in twins {
-        let t = &solver.tissue()[usize::from(class)];
-        let twin = Tissue {
-            model: t.model.scaled_apd(apd_scale),
-            d_long: t.d_long,
-            d_trans: t.d_trans,
-        };
-        let id = solver.add_tissue(twin);
-        solver.set_class(&members, id);
+        let twin = calibrate::retarget(&solver.tissue()[usize::from(class)], apd_scale, cv_scale, h, dt);
+        assign.push((solver.add_tissue(twin), members));
     }
-    vox.len()
+    solver.set_classes(&assign);
 }
 
 /// Break-up preset: an APD mosaic of 12 mm patches with APD × 0.6 … 1.4 ([`apd_mosaic`]). A
@@ -89,6 +95,19 @@ pub fn breakup_substrate<M: CellModel>(solver: &mut Monodomain<M>, seed: u64) {
 /// meeting a still-refractory patch break, which turns a single Aliev–Panfilov rotor into
 /// multiple wavelets (research §2.3.6: "breakup with heterogeneity").
 pub fn apd_mosaic<M: CellModel>(solver: &mut Monodomain<M>, patch_mm: f32, lo: f32, hi: f32, seed: u64) {
+    apd_mosaic_in(solver, None, patch_mm, lo, hi, seed);
+}
+
+/// [`apd_mosaic`] restricted to `voxels` (`None` = every voxel). The patch lattice is that of
+/// the whole grid, so the mosaic of a sub-region does not depend on the region's shape.
+pub fn apd_mosaic_in<M: CellModel>(
+    solver: &mut Monodomain<M>,
+    voxels: Option<&[u32]>,
+    patch_mm: f32,
+    lo: f32,
+    hi: f32,
+    seed: u64,
+) {
     let g = solver.grid();
     let mut state = seed ^ 0x9E37_79B9_7F4A_7C15;
     let mut next = move || {
@@ -108,20 +127,26 @@ pub fn apd_mosaic<M: CellModel>(solver: &mut Monodomain<M>, patch_mm: f32, lo: f
     };
     // group voxels by (patch, class) and give each group a scaled twin class
     let mut groups: BTreeMap<(usize, u16), Vec<u32>> = BTreeMap::new();
-    for v in 0..g.len() {
+    let all: Vec<u32>;
+    let members: &[u32] = if let Some(v) = voxels {
+        v
+    } else {
+        all = (0..g.len() as u32).collect();
+        &all
+    };
+    for &v in members {
+        let v = v as usize;
         groups
             .entry((patch_of(v), solver.classes()[v]))
             .or_default()
             .push(v as u32);
     }
+    let (h, dt) = (solver.grid().h_mm, solver.dt_ms());
     let mut assign = Vec::with_capacity(groups.len());
     for ((patch, class), members) in groups {
-        let t = &solver.tissue()[usize::from(class)];
-        let twin = Tissue {
-            model: t.model.scaled_apd(scale[patch]),
-            d_long: t.d_long,
-            d_trans: t.d_trans,
-        };
+        // quantised to 0.05 so that the (memoised) re-targeting is shared between patches
+        let s = (scale[patch] * 20.0).round() / 20.0;
+        let twin = calibrate::retarget(&solver.tissue()[usize::from(class)], s, 1.0, h, dt);
         assign.push((solver.add_tissue(twin), members));
     }
     solver.set_classes(&assign);
