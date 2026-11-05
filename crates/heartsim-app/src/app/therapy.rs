@@ -46,6 +46,9 @@ impl HeartSimApp {
 
     /// Apply a therapy action now: timing engine first, then the heart.
     fn apply_therapy(&mut self, action: &Action) {
+        if self.reentry_apply(action) {
+            return;
+        }
         let now = self.engine.now();
         if let Err(e) = self.engine.apply(action, now) {
             tracing::warn!("therapy action: {e}");
@@ -59,7 +62,9 @@ impl HeartSimApp {
     pub(super) fn therapy_step(&mut self) {
         let fx = self.engine.drug_effects();
         self.synth.modulation = SynthModulation::from_state(&fx, self.engine.ischaemia());
-        let shocks = self.engine.drain_shocks();
+        let shocks = self
+            .reentry_shocks()
+            .unwrap_or_else(|| self.engine.drain_shocks());
         if let Some(h) = &mut self.heart {
             h.engine_mut().set_drug_effects(&fx);
             for s in shocks.iter().filter(|s| s.success) {

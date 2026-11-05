@@ -25,6 +25,7 @@ mod vector_tab;
 const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
 
 mod pacing;
+mod reentry;
 mod therapy;
 
 const SAMPLE_RATE_HZ: f32 = 500.0;
@@ -73,6 +74,8 @@ pub struct HeartSimApp {
     timeline_tab: tutorials::TimelineTab,
     /// Export / Import window and the recording under review (B20).
     exports: crate::export_panel::ExportPanel,
+    /// Re-entry presets and the running one (B17).
+    reentry: reentry::Reentry,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -212,11 +215,16 @@ impl HeartSimApp {
             tutorials: crate::tutorial_ui::Tutorials::load_default(),
             timeline_tab: tutorials::TimelineTab::default(),
             exports: crate::export_panel::ExportPanel::default(),
+            reentry: reentry::Reentry::load_default(),
         }
     }
 
     fn step_simulation(&mut self, frame_dt: Millis) {
         let steps = self.clock.advance(frame_dt);
+        if self.reentry_active() {
+            self.step_reentry(steps);
+            return;
+        }
         let sample_period_ms = 1000.0 / f64::from(SAMPLE_RATE_HZ);
         for _ in 0..steps {
             self.apply_timeline();
@@ -318,6 +326,7 @@ impl HeartSimApp {
             highlight::mark(&speed, "speed");
             highlight::mark(&ui.toggle_value(&mut self.pacing.open, "Pacemaker"), "pacemaker");
             highlight::mark(&ui.toggle_value(&mut self.therapy.open, "Therapy"), "therapy");
+            self.reentry_controls(ui);
         });
     }
 

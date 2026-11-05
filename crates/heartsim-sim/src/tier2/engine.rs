@@ -28,8 +28,10 @@
 use super::calibrate;
 use super::grid::{Compartment, NO_VOXEL, VoxelGrid, VoxelSpec};
 use super::model::{AlievPanfilov, CellModel};
-use super::solver::{Monodomain, Tissue};
+use super::solver::{Monodomain, Tissue, TissueModifier};
+use crate::defib::RhythmClass;
 use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+use crate::pharma::DrugEffects;
 use crate::tier1::{CellKind, EikonalEngine, Tier1Engine, resolve_site};
 use crate::timing::{ActionError, TimingEngine, TimingParams};
 use glam::Vec3;
@@ -52,15 +54,26 @@ pub struct Tier2Params {
     /// Stimulus current on top of the per-voxel load share, u per ms.
     pub stim_amplitude: f32,
     pub stim_duration_ms: f64,
+    /// Drive of the field a shock into an organised rhythm applies to all tissue, u per ms. A
+    /// shock on the T wave excites what has recovered and leaves the rest alone, which is the
+    /// vulnerable-period mechanism of VF induction (see [`Tier2Engine`] `step`).
+    pub shock_drive: f32,
     /// Seed cells excite the voxels within this radius, mm (≤ 0 → `voxel_mm`). The slow
     /// Aliev–Panfilov front is ≈ 6 mm wide and its critical nucleus has a radius of ≈ 2D/CV
     /// ≈ 5–8 mm, so a smaller stimulated volume dies out.
     pub stim_radius_mm: f32,
+    /// A voxel is active when a cell lies within `max(0.9 × cell spacing, reach_h × voxel_mm)` of
+    /// its centre. On a coarse grid (4 mm) the thin atrial walls would otherwise leave voxel
+    /// chains one voxel wide, where a short-APD front dies; 0 keeps the cloud-spacing rule.
+    pub reach_h: f32,
     /// APD targets are quantised to this step when forming tissue classes, ms.
     pub apd_step_ms: f32,
     /// A tissue activation at a sensing site within this time of a timing-engine event of the
     /// same chamber is that event's own beat and is not fed back, ms.
     pub sense_window_ms: f64,
+    /// Minimum spacing of two fed-back activations at one sensing site, ms (the sensing site's
+    /// refractory period: it bounds the atrial rate the AV node is shown, 60000/gap per minute).
+    pub sense_gap_ms: f64,
 }
 
 impl Default for Tier2Params {
@@ -72,10 +85,104 @@ impl Default for Tier2Params {
             stability: 0.9,
             stim_amplitude: 1.0,
             stim_duration_ms: 2.0,
+            shock_drive: 2.0,
             stim_radius_mm: 5.0,
+            reach_h: 0.0,
             apd_step_ms: 4.0,
-            sense_window_ms: 150.0,
+            sense_window_ms: 300.0,
+            sense_gap_ms: 150.0,
         }
+    }
+}
+
+/// A restart state of the tissue — a pre-seeded spiral or fibrillation — for scenarios that
+/// should not wait seconds of simulated initiation. It is tied to the voxel grid it was taken
+/// on by a fingerprint, and to the model by its variable count.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tier2Snapshot {
+    /// Hash of the voxel lattice (dimensions, spacing, active voxels, compartments).
+    pub fingerprint: u64,
+    /// Variables per voxel (membrane variable first).
+    pub vars: u32,
+    /// Membrane variable per voxel.
+    pub u: Vec<f32>,
+    /// The other variables, `vars − 1` per voxel.
+    pub gates: Vec<f32>,
+    /// Last activation of each voxel relative to the snapshot time, ms (`NaN` = never).
+    pub t_act_rel_ms: Vec<f32>,
+}
+
+/// Why a [`Tier2Snapshot`] cannot be loaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotError {
+    /// Not a snapshot file, or truncated.
+    Format,
+    /// Taken on a different voxel lattice (anatomy, voxel size) or model.
+    Mismatch,
+}
+
+impl std::fmt::Display for SnapshotError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SnapshotError::Format => write!(f, "not a Tier-2 state file"),
+            SnapshotError::Mismatch => write!(f, "state was taken on a different voxel grid or cell model"),
+        }
+    }
+}
+
+impl std::error::Error for SnapshotError {}
+
+const SNAPSHOT_MAGIC: &[u8; 4] = b"HSS1";
+
+impl Tier2Snapshot {
+    /// Little-endian binary: magic, fingerprint, voxel count, variable count, then the three
+    /// `f32` arrays.
+    #[must_use]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut b = Vec::with_capacity(24 + 4 * (self.u.len() * 2 + self.gates.len()));
+        b.extend_from_slice(SNAPSHOT_MAGIC);
+        b.extend_from_slice(&self.fingerprint.to_le_bytes());
+        b.extend_from_slice(&(self.u.len() as u32).to_le_bytes());
+        b.extend_from_slice(&self.vars.to_le_bytes());
+        for x in self.u.iter().chain(&self.gates).chain(&self.t_act_rel_ms) {
+            b.extend_from_slice(&x.to_le_bytes());
+        }
+        b
+    }
+
+    /// Parse [`Tier2Snapshot::to_bytes`].
+    pub fn from_bytes(b: &[u8]) -> Result<Self, SnapshotError> {
+        let head = b.get(..20).ok_or(SnapshotError::Format)?;
+        if &head[..4] != SNAPSHOT_MAGIC {
+            return Err(SnapshotError::Format);
+        }
+        let u64_at = |o: usize| u64::from_le_bytes(b[o..o + 8].try_into().expect("8 bytes"));
+        let u32_at = |o: usize| u32::from_le_bytes(b[o..o + 4].try_into().expect("4 bytes"));
+        let fingerprint = u64_at(4);
+        let n = u32_at(12) as usize;
+        let vars = u32_at(16);
+        if vars < 2 {
+            return Err(SnapshotError::Format);
+        }
+        let total = n * (2 + vars as usize - 1);
+        let body = b.get(20..).ok_or(SnapshotError::Format)?;
+        if body.len() != 4 * total {
+            return Err(SnapshotError::Format);
+        }
+        let all: Vec<f32> = body
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
+            .collect();
+        let g = n * (vars as usize - 1);
+        Ok(Self {
+            fingerprint,
+            vars,
+            u: all[..n].to_vec(),
+            gates: all[n..n + g].to_vec(),
+            t_act_rel_ms: all[n + g..].to_vec(),
+        })
     }
 }
 
@@ -131,6 +238,8 @@ pub struct Tier2Engine<M: CellModel = AlievPanfilov> {
     ingested: usize,
     /// Shocks already applied to the tissue (index into `timing.shocks()`).
     shocks_seen: usize,
+    /// Drug effects the tissue modifiers were last set from.
+    drug_applied: DrugEffects,
     routed: Vec<(f64, u32)>,
     fresh: Vec<Event>,
     cells: CellState,
@@ -166,6 +275,7 @@ impl<M: CellModel> Tier2Engine<M> {
         let mut e = Self::assemble(t1.timing().clone(), t1.eikonal().clone(), model, params);
         e.ingested = e.timing.events().len();
         e.shocks_seen = e.timing.shocks().len();
+        e.sync_drug();
         let now = e.timing.now().0;
         e.solver.set_time(now);
         let (t_act, apd) = (t1.eikonal().activation_times(), &t1.cells().apd_ms);
@@ -205,7 +315,15 @@ impl<M: CellModel> Tier2Engine<M> {
         }
         let (grid, voxel_cell) = voxelise(&router, &params);
         let (tissue, class) = calibrate_tissue(&router, &grid, &voxel_cell, model, &params);
-        let solver = Monodomain::new(grid, tissue, class, params.dt_ms);
+        let mut solver = Monodomain::new(grid, tissue, class, params.dt_ms);
+        // lesions the router already carries (scenario `ablated_cells`, Tier-1 ablation) are
+        // inert tissue here too
+        let dead: Vec<u32> = (0..voxel_cell.len() as u32)
+            .filter(|&v| router.ablated()[voxel_cell[v as usize] as usize])
+            .collect();
+        if !dead.is_empty() {
+            solver.set_conducting(&dead, false);
+        }
         let mut e = Self {
             base_conducting: solver.conducting().to_vec(),
             sense: [
@@ -237,6 +355,7 @@ impl<M: CellModel> Tier2Engine<M> {
             sampler: Sampler::default(),
             ingested: 0,
             shocks_seen: 0,
+            drug_applied: DrugEffects::NONE,
             routed: Vec::new(),
             fresh: Vec::new(),
             cells: CellState::default(),
@@ -550,13 +669,183 @@ impl<M: CellModel> Tier2Engine<M> {
                 .fold(f64::INFINITY, f64::min);
             if first.is_finite()
                 && first - site.last_timing_ms > window
-                && first - site.last_sensed_ms > window
+                && first - site.last_sensed_ms > self.params.sense_gap_ms
             {
                 site.last_sensed_ms = first;
                 self.timing.sense_tissue(site.chamber, site.region, Millis(first));
             }
         }
         // the echo events appear in the timing engine's next step and are skipped by `ingest`
+    }
+
+    /// Follow the timing engine's combined drug effect: APD and CV of the atrial and
+    /// ventricular tissue are scaled by it (amiodarone lengthens the wavelength, flecainide
+    /// slows conduction), so a drug acts on re-entry the way it does on the strip.
+    fn sync_drug(&mut self) {
+        let d = self.timing.drug_effects();
+        if d == self.drug_applied {
+            return;
+        }
+        self.drug_applied = d;
+        // Drug kinetics change the effect every step while a drug washes in; re-solving the
+        // tissue costs tens of milliseconds, so it follows in steps of 2.5 % only.
+        let q = |x: f64| ((x * 40.0).round() / 40.0) as f32;
+        let atrial = TissueModifier {
+            apd_scale: q(d.atrial_apd_scale),
+            cv_scale: q(d.atrial_cv_scale),
+        };
+        let ventricular = TissueModifier {
+            apd_scale: q(d.ventricular_apd_scale),
+            cv_scale: q(d.ventricular_cv_scale),
+        };
+        if [atrial, ventricular] != self.solver.modifiers() {
+            self.solver.set_modifiers(atrial, ventricular);
+        }
+    }
+
+    /// Hash of the voxel lattice, to tie a [`Tier2Snapshot`] to its grid (FNV-1a).
+    #[must_use]
+    pub fn fingerprint(&self) -> u64 {
+        let g = self.solver.grid();
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut feed = |x: u64| {
+            h ^= x;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        };
+        for d in g.dims {
+            feed(d as u64);
+        }
+        feed(u64::from(g.h_mm.to_bits()));
+        feed(M::VARS as u64);
+        for v in 0..g.len() {
+            for c in g.ijk[v] {
+                feed(u64::from(c));
+            }
+            feed(g.compartment[v] as u64);
+        }
+        h
+    }
+
+    /// The tissue state as a restart file (see [`Tier2Snapshot`]).
+    #[must_use]
+    pub fn snapshot(&self) -> Tier2Snapshot {
+        let (u, gates, t_act_rel_ms) = self.solver.state_copy();
+        Tier2Snapshot {
+            fingerprint: self.fingerprint(),
+            vars: M::VARS as u32,
+            u,
+            gates,
+            t_act_rel_ms,
+        }
+    }
+
+    /// Replace the tissue state by `snap` (activation times re-anchored to now).
+    pub fn restore(&mut self, snap: &Tier2Snapshot) -> Result<(), SnapshotError> {
+        let n = self.solver.grid().len();
+        if snap.fingerprint != self.fingerprint()
+            || snap.vars as usize != M::VARS
+            || snap.u.len() != n
+            || snap.gates.len() != n * (M::VARS - 1)
+            || snap.t_act_rel_ms.len() != n
+        {
+            return Err(SnapshotError::Mismatch);
+        }
+        self.solver.load_state(&snap.u, &snap.gates, &snap.t_act_rel_ms);
+        self.sample_cells();
+        Ok(())
+    }
+
+    /// Cells inside lesions made since the tissue was built (inert voxels that conducted at
+    /// the start): handed to Tier 1 when it takes the heart back, so a lesion outlives the
+    /// re-entry it was made for.
+    #[must_use]
+    pub fn lesion_cells(&self) -> Vec<u32> {
+        let g = self.solver.grid();
+        let cond = self.solver.conducting();
+        self.router
+            .cloud()
+            .positions
+            .iter()
+            .enumerate()
+            .filter(|&(_, &p)| {
+                let l = g.lattice(p).round();
+                g.voxel_at(l.x as i64, l.y as i64, l.z as i64)
+                    .is_some_and(|v| !cond[v as usize] && self.base_conducting[v as usize])
+            })
+            .map(|(c, _)| c as u32)
+            .collect()
+    }
+
+    /// Cross-field stimulation of the voxels of `compartment` ([`super::preset::Initiation::CrossField`]):
+    /// S1 over the 12 % of the compartment's x-extent at its low-x end at `start_ms`, S2 over its
+    /// low-x, low-y quadrant at `start_ms + s2_ms`; both 4 ms strong pulses.
+    pub fn cross_field(&mut self, compartment: Compartment, start_ms: f64, s2_ms: f64) {
+        let g = self.solver.grid();
+        let pts: Vec<(u32, Vec3)> = (0..g.len() as u32)
+            .filter(|&v| g.compartment[v as usize] == compartment)
+            .map(|v| (v, g.position(v)))
+            .collect();
+        if pts.is_empty() {
+            return;
+        }
+        let (lo, hi) = pts.iter().fold(
+            (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+            |(a, b), (_, p)| (a.min(*p), b.max(*p)),
+        );
+        let mid = (lo + hi) * 0.5;
+        let x1 = lo.x + 0.12 * (hi.x - lo.x);
+        let s1: Vec<u32> = pts.iter().filter(|(_, p)| p.x <= x1).map(|(v, _)| *v).collect();
+        let s2: Vec<u32> = pts
+            .iter()
+            .filter(|(_, p)| p.x <= mid.x && p.y <= mid.y)
+            .map(|(v, _)| *v)
+            .collect();
+        let start = start_ms.max(self.solver.now_ms());
+        self.solver.stimulate(&s1, start, 4.0, 2.0);
+        self.solver.stimulate(&s2, start + s2_ms, 4.0, 2.0);
+    }
+
+    /// Pre-seed a rotating wave ([`super::preset::Initiation::PhaseWave`]).
+    pub fn seed_phase_wave(&mut self, compartment: Compartment, centre: Option<Vec3>, axis: Vec3, span: f32) {
+        let g = self.solver.grid();
+        let vox: Vec<u32> = (0..g.len() as u32)
+            .filter(|&v| g.compartment[v as usize] == compartment)
+            .collect();
+        if vox.is_empty() {
+            return;
+        }
+        let centre =
+            centre.unwrap_or_else(|| vox.iter().map(|&v| g.position(v)).sum::<Vec3>() / vox.len() as f32);
+        let axis = axis.try_normalize().unwrap_or(Vec3::Y);
+        let u = axis.any_orthonormal_vector();
+        let w = axis.cross(u);
+        let now = self.solver.now_ms();
+        let phases: Vec<(u32, f32)> = vox
+            .iter()
+            .map(|&v| {
+                let p = g.position(v) - centre;
+                let theta = p.dot(w).atan2(p.dot(u));
+                (v, (theta + std::f32::consts::PI) / std::f32::consts::TAU * span)
+            })
+            .collect();
+        for (v, phase) in phases {
+            let c = usize::from(self.solver.classes()[v as usize]);
+            let apd = self.solver.trajectories()[c].apd_ms;
+            self.solver
+                .set_voxel_phase(v as usize, phase, (now - f64::from(phase * apd)) as f32);
+        }
+        self.sample_cells();
+    }
+
+    /// Time of the last tissue activation fed back to the timing engine at either sensing
+    /// site, ms (−∞ if none): evidence of re-entry that needs no phase singularity (a flutter
+    /// circuit around an obstacle has none).
+    #[must_use]
+    pub fn last_sensed_ms(&self) -> f64 {
+        self.sense
+            .iter()
+            .map(|s| s.last_sensed_ms)
+            .fold(f64::NEG_INFINITY, f64::max)
     }
 
     /// Shocks delivered since the last call (see [`crate::defib`]).
@@ -653,10 +942,24 @@ impl<M: CellModel> Engine for Tier2Engine<M> {
     fn step(&mut self, dt: Millis) {
         let from = self.solver.now_ms();
         self.timing.step(dt);
+        self.sync_drug();
         self.ingest();
         for i in self.shocks_seen..self.timing.shocks().len() {
             let s = self.timing.shocks()[i];
-            if s.success {
+            if s.vulnerable && !s.synchronised && s.rhythm == RhythmClass::Organised {
+                // Unsynchronised shock on the T wave of a normal beat: the field excites the
+                // tissue that has recovered and not the rest, so the new fronts meet a
+                // refractory wall (unidirectional block). Whether this starts VF is up to the
+                // tissue, not to the timing engine's outcome draw.
+                self.solver.advance_to(s.at.0);
+                let all: Vec<u32> = (0..self.solver.grid().len() as u32).collect();
+                self.solver.stimulate(
+                    &all,
+                    s.at.0,
+                    self.params.stim_duration_ms,
+                    self.params.shock_drive,
+                );
+            } else if s.success {
                 self.solver.advance_to(s.at.0);
                 self.solver.shock();
             }
@@ -692,6 +995,11 @@ impl<M: CellModel> Engine for Tier2Engine<M> {
             self.solver.set_conducting(&ablated, true);
         }
         self.solver.reset();
+        if self.drug_applied != DrugEffects::NONE {
+            self.drug_applied = DrugEffects::NONE;
+            self.solver
+                .set_modifiers(TissueModifier::NONE, TissueModifier::NONE);
+        }
         for site in &mut self.sense {
             site.last_timing_ms = f64::NEG_INFINITY;
             site.last_sensed_ms = f64::NEG_INFINITY;
@@ -747,7 +1055,7 @@ fn voxelise(router: &EikonalEngine, params: &Tier2Params) -> (VoxelGrid, Vec<u32
     let origin = lo - Vec3::splat(h);
     let ext = ((hi - lo) / h).ceil();
     let dims = [ext.x as usize + 3, ext.y as usize + 3, ext.z as usize + 3];
-    let r_max = 0.9 * cell_spacing(router);
+    let r_max = (0.9 * cell_spacing(router)).max(params.reach_h * h);
     // nearest myocardial cell of every voxel centre within r_max: each cell stamps the voxels
     // around it (cells in index order, strict `<`, so ties go to the lower cell index)
     let mut best: Vec<(f32, u32)> = vec![(f32::INFINITY, u32::MAX); dims[0] * dims[1] * dims[2]];

@@ -643,6 +643,50 @@ impl EikonalEngine {
         self.refresh_excitable();
     }
 
+    /// Cells currently non-excitable by ablation (scenario `ablated_cells` and lesions).
+    #[must_use]
+    pub fn ablated(&self) -> &[bool] {
+        &self.ablated
+    }
+
+    /// Make `cells` non-excitable (lesions made elsewhere, e.g. in Tier 2); unlike
+    /// [`EikonalEngine::set_ablated_cells`] they do not outlive a `reset`.
+    pub fn ablate_cells(&mut self, cells: &[u32]) {
+        for &c in cells {
+            if let Some(a) = self.ablated.get_mut(c as usize) {
+                *a = true;
+            }
+        }
+        self.refresh_excitable();
+    }
+
+    /// Put every cell at rest at `at`: wavefronts, refractoriness and V_m are cleared while
+    /// lesions, blocks, drug and ischaemia modifiers stay. Used when Tier 2 hands the heart back
+    /// after its re-entry has stopped, so no tissue is left mid-action-potential.
+    pub fn quiesce(&mut self, at: Millis) {
+        let n = self.t_act.len();
+        for h in &mut self.hot {
+            *h = Hot {
+                region: h.region,
+                layer: h.layer,
+                inv_cv_scale: h.inv_cv_scale,
+                ..Hot::REST
+            };
+        }
+        self.t_act.iter_mut().for_each(|t| *t = f64::NAN);
+        self.inv_apd.iter_mut().for_each(|a| *a = 0.0);
+        self.queue.clear();
+        self.stimuli.clear();
+        self.last_av_pathway = None;
+        for p in &mut self.probes {
+            p.last_fired = f64::NEG_INFINITY;
+        }
+        self.cells = CellState::new(n);
+        self.events.clear();
+        self.now = at.0;
+        self.refresh_excitable();
+    }
+
     /// Place ectopic focus `id` at `site` (default: the chamber's landmark).
     pub fn set_focus_site(&mut self, id: u8, site: &StimSite) {
         let cloud = Arc::clone(&self.cloud);
