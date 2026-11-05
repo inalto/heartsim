@@ -7,6 +7,7 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical design: crates, data flow, simulation tiers, ECG forward model, rendering, file formats, testing, packaging | implementers |
 | [ROADMAP.md](ROADMAP.md) | Milestones M0–M8 with exit criteria and the dependency order of the briefs | planners |
 | [anatomy-pack.md](anatomy-pack.md) | Anatomy pack format, coordinate frame, the procedural default pack, and how to bake one from the open Strocchi/Rodero meshes (download, licence, attribution) | geometry/sim implementers |
+| [web.md](web.md) | The browser (WebAssembly) build: how to build and serve it, what it drops, the WebGL2 fallback, size budget, smoke test and browser test matrix | implementers, testers |
 | [tutorials.md](tutorials.md) | Tutorial file format (pages, actions, checks), modes, progress, the scenario timeline editor | educators, content authors |
 | [briefs/](briefs/) | One self-contained implementation brief per work package, with recommended model (Opus / Sonnet / Haiku) | subagents |
 | [research/reference-apps.md](research/reference-apps.md) | Feature inventory and UX analysis of Epicardio EHS2, cardiacrhythmsim.com, ecgaxistrainer, Epicardio WebGL | product |

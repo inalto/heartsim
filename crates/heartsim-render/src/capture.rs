@@ -56,6 +56,7 @@ pub fn read_rgba8(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Te
 }
 
 /// Encode tightly packed RGBA8 pixels as a PNG file.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     use image::ImageEncoder;
     let mut out = Vec::new();

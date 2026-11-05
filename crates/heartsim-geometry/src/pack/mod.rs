@@ -248,21 +248,32 @@ impl AnatomyPack {
 
     /// Load and verify a pack directory.
     pub fn load(dir: &Path) -> Result<Self, PackError> {
-        let manifest_path = dir.join("manifest.ron");
-        let text = std::fs::read_to_string(&manifest_path).map_err(|e| io_err(&manifest_path, e))?;
+        Self::load_with(|rel| {
+            let path = dir.join(rel);
+            std::fs::read(&path).map_err(|e| io_err(&path, e))
+        })
+    }
+
+    /// Load and verify a pack whose files come from `read_file` (a path relative to the pack root,
+    /// `manifest.ron` first), e.g. from memory after a download where there is no directory to
+    /// read. Every file is still checked against the manifest's size and CRC-32, so a truncated
+    /// download is reported, never half-loaded.
+    pub fn load_with(
+        mut read_file: impl FnMut(&str) -> Result<Vec<u8>, PackError>,
+    ) -> Result<Self, PackError> {
+        let text = String::from_utf8_lossy(&read_file("manifest.ron")?).into_owned();
         let manifest: PackManifest = ron::from_str(&text)?;
         if manifest.format_version != PACK_FORMAT_VERSION {
             return Err(PackError::Version {
                 found: manifest.format_version,
             });
         }
-        let read = |rel: &str| -> Result<Vec<u8>, PackError> {
+        let mut read = |rel: &str| -> Result<Vec<u8>, PackError> {
             let entry = manifest
                 .files
                 .get(rel)
                 .ok_or_else(|| PackError::Format(format!("{rel}: not listed in manifest")))?;
-            let path = dir.join(rel);
-            let bytes = std::fs::read(&path).map_err(|e| io_err(&path, e))?;
+            let bytes = read_file(rel)?;
             if bytes.len() as u64 != entry.bytes {
                 return Err(PackError::Size {
                     file: rel.to_string(),

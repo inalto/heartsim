@@ -6,13 +6,16 @@
 //! engine's events, so the strip and the heart show the scenario's beats and nothing else. Timeline
 //! actions go to the timing engine only, for the same reason.
 
+use crate::assets::AssetBundle;
 use eframe::egui;
 use heartsim_core::{Millis, TimedAction};
 use heartsim_ecg::Tier0Scenario;
+#[cfg(feature = "native")]
 use std::path::{Path, PathBuf};
 
 /// Where the scenario library is looked for: next to the anatomy packs (`$HEARTSIM_ASSETS`, the
 /// installed layout, macOS bundle resources, the working directory, the source tree).
+#[cfg(feature = "native")]
 #[must_use]
 pub fn default_scenario_dir() -> Option<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
@@ -46,6 +49,7 @@ impl ScenarioLibrary {
     ///
     /// # Errors
     /// When the directory cannot be read.
+    #[cfg(feature = "native")]
     pub fn load_dir(dir: &Path) -> std::io::Result<Self> {
         let mut files: Vec<PathBuf> = std::fs::read_dir(dir)?
             .filter_map(|e| e.ok().map(|e| e.path()))
@@ -67,16 +71,39 @@ impl ScenarioLibrary {
         Ok(Self { entries })
     }
 
-    /// The default library, or an empty one when none is installed.
+    /// Every `scenarios/*.ron` of a downloaded bundle; same rules as [`Self::load_dir`].
     #[must_use]
-    pub fn load_default() -> Self {
-        default_scenario_dir()
-            .and_then(|d| {
-                Self::load_dir(&d)
-                    .inspect_err(|e| tracing::warn!("{}: {e}", d.display()))
+    pub fn from_bundle(bundle: &AssetBundle) -> Self {
+        let mut entries: Vec<Tier0Scenario> = bundle
+            .files_in("scenarios", ".ron")
+            .filter_map(|p| {
+                Tier0Scenario::from_ron(&bundle.text(p)?)
+                    .inspect_err(|e| tracing::warn!("{p}: {e}"))
                     .ok()
             })
-            .unwrap_or_default()
+            .collect();
+        entries.sort_by(|a, b| a.scenario.title.cmp(&b.scenario.title));
+        Self { entries }
+    }
+
+    /// The default library, or an empty one when none is installed (always empty without the
+    /// `native` feature: the web build uses [`Self::from_bundle`]).
+    #[must_use]
+    pub fn load_default() -> Self {
+        #[cfg(feature = "native")]
+        {
+            default_scenario_dir()
+                .and_then(|d| {
+                    Self::load_dir(&d)
+                        .inspect_err(|e| tracing::warn!("{}: {e}", d.display()))
+                        .ok()
+                })
+                .unwrap_or_default()
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            Self::default()
+        }
     }
 
     #[must_use]

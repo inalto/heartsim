@@ -233,7 +233,8 @@ impl UnitMesh {
 #[derive(Debug)]
 struct Targets {
     size: (u32, u32),
-    /// Single-sample colour: the blit source and the screenshot source.
+    /// Single-sample colour: the blit source and the screenshot source (read back on desktop only).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     color: wgpu::Texture,
     color_view: wgpu::TextureView,
     /// Multisampled colour, resolved into `color`; only when MSAA is on.
@@ -888,7 +889,10 @@ impl SceneRenderer {
     // ---- rendering -----------------------------------------------------------------------
 
     fn ensure_targets(&mut self, device: &wgpu::Device, size: (u32, u32)) {
-        let size = (size.0.max(1), size.1.max(1));
+        // WebGL2 devices cap textures at 2048-8192 px; a window larger than that renders at the cap
+        // and the blit scales it up.
+        let max = device.limits().max_texture_dimension_2d.max(1);
+        let size = (size.0.clamp(1, max), size.1.clamp(1, max));
         if self.targets.as_ref().is_some_and(|t| t.size == size) {
             return;
         }

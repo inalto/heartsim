@@ -2,6 +2,7 @@
 mod bake;
 mod icons;
 mod release;
+mod web;
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
@@ -37,6 +38,10 @@ enum Task {
     ReleaseNotes(ReleaseNotesArgs),
     /// Build an anatomy pack (procedural by default; `--source` for an open-licence mesh).
     BakeAnatomy(bake::BakeArgs),
+    /// Write `heartsim-assets.zip` (anatomy pack, rhythms, tutorials) for the browser build; trunk's `pre_build` hook.
+    WebAssets(web::AssetsArgs),
+    /// Fail if the `trunk build` output (wasm + asset archive) is over the 25 MiB budget.
+    WebBudget(web::BudgetArgs),
 }
 
 #[derive(Args, Debug)]
@@ -146,5 +151,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Task::BakeAnatomy(args) => bake::run(&args),
+        Task::WebAssets(args) => web::assets(&repo_root(), &args),
+        Task::WebBudget(args) => web::budget(&repo_root(), &args),
     }
 }

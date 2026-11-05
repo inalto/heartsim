@@ -15,7 +15,9 @@
 use heartsim_core::{Action, Lead};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(feature = "native")]
+use std::path::PathBuf;
 
 pub const TUTORIAL_FORMAT_VERSION: u32 = 1;
 
@@ -294,6 +296,7 @@ pub struct ProgressStore {
 
 impl ProgressStore {
     /// `tutorial_progress.ron` next to eframe's own settings file.
+    #[cfg(feature = "native")]
     #[must_use]
     pub fn default_path() -> Option<PathBuf> {
         directories::ProjectDirs::from("", "", "heartsim").map(|d| d.data_dir().join("tutorial_progress.ron"))
@@ -310,6 +313,21 @@ impl ProgressStore {
                     .ok()
             })
             .unwrap_or_default()
+    }
+
+    /// Parse the text written by [`Self::to_text`] (the web build keeps it in `localStorage`
+    /// through eframe's storage); unreadable text is an empty store, never an error.
+    #[must_use]
+    pub fn from_text(text: &str) -> Self {
+        ron::from_str(text)
+            .inspect_err(|e| tracing::warn!("saved tutorial progress: {e}"))
+            .unwrap_or_default()
+    }
+
+    /// The store as RON text.
+    #[must_use]
+    pub fn to_text(&self) -> String {
+        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default()).unwrap_or_default()
     }
 
     /// Write to `path`, creating its directory.
@@ -332,6 +350,7 @@ impl ProgressStore {
 }
 
 /// Where the tutorials are looked for: next to the scenario library.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn default_tutorial_dir() -> Option<PathBuf> {
     crate::scenarios::default_scenario_dir()
@@ -349,6 +368,7 @@ pub struct TutorialLibrary {
 impl TutorialLibrary {
     /// # Errors
     /// When the directory cannot be read.
+    #[cfg(feature = "native")]
     pub fn load_dir(dir: &Path) -> std::io::Result<Self> {
         let mut files: Vec<PathBuf> = std::fs::read_dir(dir)?
             .filter_map(|e| e.ok().map(|e| e.path().join("tutorial.ron")))
@@ -369,15 +389,39 @@ impl TutorialLibrary {
         Ok(Self { tutorials })
     }
 
+    /// Every `tutorials/<id>/tutorial.ron` of a downloaded bundle, in id order (as `load_dir`).
     #[must_use]
-    pub fn load_default() -> Self {
-        default_tutorial_dir()
-            .and_then(|d| {
-                Self::load_dir(&d)
-                    .inspect_err(|e| tracing::warn!("{}: {e}", d.display()))
+    pub fn from_bundle(bundle: &crate::assets::AssetBundle) -> Self {
+        let tutorials = bundle
+            .subdirs_with("tutorials", "tutorial.ron")
+            .filter_map(|id| {
+                let path = format!("tutorials/{id}/tutorial.ron");
+                Tutorial::from_ron(&bundle.text(&path)?)
+                    .inspect_err(|e| tracing::warn!("{path}: {e}"))
                     .ok()
             })
-            .unwrap_or_default()
+            .collect();
+        Self { tutorials }
+    }
+
+    /// The installed tutorials (none without the `native` feature: the web build uses
+    /// [`Self::from_bundle`]).
+    #[must_use]
+    pub fn load_default() -> Self {
+        #[cfg(feature = "native")]
+        {
+            default_tutorial_dir()
+                .and_then(|d| {
+                    Self::load_dir(&d)
+                        .inspect_err(|e| tracing::warn!("{}: {e}", d.display()))
+                        .ok()
+                })
+                .unwrap_or_default()
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            Self::default()
+        }
     }
 }
 

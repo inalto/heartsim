@@ -12,6 +12,7 @@ use heartsim_core::Action;
 use heartsim_render::CameraPreset;
 use heartsim_sim::Engine as _;
 use heartsim_ui::{CameraCommand, StripWindow, TimelineEditor, highlight, timeline_editor};
+#[cfg(feature = "native")]
 use std::path::PathBuf;
 
 use crate::tutorial::{CameraView, Panel, TutorialHost, UiAction};
@@ -22,6 +23,7 @@ pub(super) struct TimelineTab {
     /// Library index of the scenario being edited.
     editing: Option<usize>,
     editor: TimelineEditor,
+    #[cfg(feature = "native")]
     save_path: String,
     status: Option<String>,
     /// Show the editor instead of the tutorial list.
@@ -148,11 +150,14 @@ impl HeartSimApp {
             let s = &self.library.entries[index].scenario;
             tt.editor = TimelineEditor::new(&s.timeline);
             tt.editing = Some(index);
-            tt.save_path = crate::scenario_file::user_scenario_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(format!("{}.ron", s.id))
-                .display()
-                .to_string();
+            #[cfg(feature = "native")]
+            {
+                tt.save_path = crate::scenario_file::user_scenario_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(format!("{}.ron", s.id))
+                    .display()
+                    .to_string();
+            }
             tt.status = None;
         }
         ui.heading(&self.library.entries[index].scenario.title);
@@ -187,6 +192,7 @@ impl HeartSimApp {
                 tt.editing = None;
             }
         });
+        #[cfg(feature = "native")]
         ui.horizontal(|ui| {
             ui.label("File:");
             ui.add(egui::TextEdit::singleline(&mut tt.save_path).desired_width(420.0));
@@ -203,6 +209,8 @@ impl HeartSimApp {
                 });
             }
         });
+        #[cfg(not(feature = "native"))]
+        ui.weak("Saving scenario files is a desktop feature.");
         if let Some(s) = &tt.status {
             ui.weak(s);
         }
@@ -227,6 +235,7 @@ impl HeartSimApp {
     }
 }
 
+#[cfg(feature = "native")]
 fn save_scenario(s: &heartsim_ecg::Tier0Scenario, path: &std::path::Path) -> anyhow::Result<()> {
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)?;

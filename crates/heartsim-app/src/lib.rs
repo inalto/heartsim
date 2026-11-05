@@ -2,7 +2,9 @@
 //! native window so the same `HeartSimApp` can be mounted in the web build.
 
 pub mod app;
+pub mod assets;
 pub mod electrode_tab;
+#[cfg(feature = "export")]
 pub mod export_panel;
 pub mod heart_history;
 pub mod heart_view;
@@ -13,7 +15,8 @@ pub mod snapshot_ring;
 pub mod tutorial;
 pub mod tutorial_ui;
 pub mod vector_overlay;
-pub use app::HeartSimApp;
+pub use app::{AppStatus, HeartSimApp};
+pub use assets::AssetBundle;
 
 /// The line printed by `heartsim --version`; installers' smoke tests assert on the `heartsim <semver>` prefix.
 pub fn version_line() -> String {

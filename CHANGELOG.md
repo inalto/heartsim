@@ -4,6 +4,21 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- WebAssembly build (brief B21): new `heartsim-web` crate builds the whole app for the browser with `trunk build --release`
+  (WebGPU, falling back to WebGL2), with a loading screen, a canvas that fills the window and `localStorage` persistence
+  (quiz score, tutorial progress). The wasm carries no anatomy: the page downloads `heartsim-assets.zip` (anatomy pack,
+  rhythm library, tutorials; written by `cargo xtask web-assets`) and the app loads it from memory
+  (`heartsim_app::AssetBundle`, `HeartSimApp::with_assets`, `AnatomyPack::load_with`).
+- `heartsim-app` features: `native` (disk asset discovery, user data directory, plain-file save/load), `export` (the
+  Export / Import window and `heartsim-io`) and `parallel` (rayon); all on by default. `heartsim-render` and the
+  workspace entries for `heartsim-sim` / `heartsim-ecg` get a matching `parallel` switch. The web build drops `native`,
+  `export` and `parallel`: no export or file buttons, no threads (results are identical, only slower).
+- `cargo xtask web-assets` and `cargo xtask web-budget` (wasm + assets must stay under 25 MiB); `.github/workflows/web.yml`
+  builds, checks the budget and runs a Playwright smoke test on pull requests. It uploads an artifact and does not publish.
+- Test that no shader uses storage buffers, compute or `@interpolate(linear)` (WebGL2 fallback); `docs/web.md` with the
+  browser test matrix.
+
 ## [0.3.0] — 2026-11-04
 Second tagged release: the Tier-1 and Tier-2 engines, the forward ECG, the clinical pages, the rhythm library, pacing,
 therapy, tutorials and exports (briefs B03–B11, B13–B16, B20).

@@ -14,7 +14,12 @@ wgpu.workspace = true
 glam.workspace = true
 bytemuck.workspace = true
 image.workspace = true
-rayon.workspace = true
+rayon = { workspace = true, optional = true }
+
+[features]
+default = ["parallel"]
+# Per-vertex scalar mapping on rayon; the web build turns it off (no threads in the browser).
+parallel = ["dep:rayon"]
 
 [dev-dependencies]
 pollster.workspace = true

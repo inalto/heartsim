@@ -4,6 +4,7 @@
 //! use and [`Tier0Scenario::from_ron`] reads.
 
 use heartsim_ecg::Tier0Scenario;
+#[cfg(feature = "native")]
 use std::path::PathBuf;
 
 /// The scenario file text of `s`.
@@ -28,6 +29,7 @@ pub fn to_ron(s: &Tier0Scenario) -> Result<String, ron::Error> {
 }
 
 /// Where edited scenarios are saved by default: `<user data dir>/scenarios`.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn user_scenario_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "heartsim").map(|d| d.data_dir().join("scenarios"))

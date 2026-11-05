@@ -15,6 +15,7 @@ use crate::scenarios::{ScenarioLibrary, Timeline, scenario_picker};
 use crate::snapshot_ring::SnapshotRing;
 use crate::vector_overlay::VectorOverlay;
 
+#[cfg(feature = "export")]
 mod exports;
 mod scenario_control;
 mod tour;
@@ -23,6 +24,8 @@ mod vector_tab;
 
 /// eframe storage key of the rhythm-quiz score.
 const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
+/// eframe storage key of the tutorial progress where there is no settings directory (the web build).
+const TUTORIAL_PROGRESS_KEY: &str = "tutorial_progress";
 
 mod pacing;
 mod therapy;
@@ -72,7 +75,20 @@ pub struct HeartSimApp {
     tutorials: crate::tutorial_ui::Tutorials,
     timeline_tab: tutorials::TimelineTab,
     /// Export / Import window and the recording under review (B20).
+    #[cfg(feature = "export")]
     exports: crate::export_panel::ExportPanel,
+}
+
+/// A snapshot of the model for hosts that cannot look inside it (the web build publishes it to the
+/// page so a browser test can tell that the heart is alive and the strip is moving).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AppStatus {
+    /// Simulation clock, ms.
+    pub sim_time_ms: f64,
+    /// ECG samples pushed to the strip since start; grows while the simulation runs.
+    pub strip_samples: u64,
+    /// The anatomy pack is shown (not the placeholder sphere).
+    pub anatomy_loaded: bool,
 }
 
 const LIMB: [Lead; 6] = [Lead::I, Lead::II, Lead::III, Lead::AVR, Lead::AVL, Lead::AVF];
@@ -146,7 +162,63 @@ impl Quiz {
 }
 
 impl HeartSimApp {
+    /// The desktop app: anatomy pack, rhythms and tutorials are looked for on disk
+    /// (`$HEARTSIM_ASSETS`, next to the executable, the source tree). Without the `native`
+    /// feature nothing is found and the app shows the placeholder sphere; use
+    /// [`Self::with_assets`] there.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::build(cc, None)
+    }
+
+    /// The app on assets that are already in memory (the web build downloads them).
+    pub fn with_assets(cc: &eframe::CreationContext<'_>, assets: &crate::assets::AssetBundle) -> Self {
+        Self::build(cc, Some(assets))
+    }
+
+    /// The anatomy-pack heart and the electrode tab, from the bundle or from disk. The pack is
+    /// read once: the electrode tab takes its sites and torso before the heart consumes it.
+    fn load_heart(
+        assets: Option<&crate::assets::AssetBundle>,
+    ) -> (
+        Option<crate::heart_view::HeartView>,
+        crate::electrode_tab::ElectrodeTab,
+    ) {
+        let rate = SAMPLE_RATE_HZ;
+        let capacity = (SAMPLE_RATE_HZ * 60.0) as usize;
+        let timing = TimingParams::default();
+        if let Some(assets) = assets {
+            return match assets.load_pack() {
+                Ok(pack) => {
+                    let tab = crate::electrode_tab::ElectrodeTab::new(
+                        pack.electrodes.clone(),
+                        Some(&pack.torso),
+                        rate,
+                        capacity,
+                    );
+                    (Some(crate::heart_view::HeartView::from_pack(pack, &timing)), tab)
+                }
+                Err(e) => {
+                    tracing::warn!("no anatomy pack, showing a sphere: {e}");
+                    (
+                        None,
+                        crate::electrode_tab::ElectrodeTab::load_default(rate, capacity),
+                    )
+                }
+            };
+        }
+        #[cfg(feature = "native")]
+        let heart = crate::heart_view::HeartView::load_default(&timing)
+            .inspect_err(|e| tracing::warn!("no anatomy pack, showing a sphere: {e:#}"))
+            .ok();
+        #[cfg(not(feature = "native"))]
+        let heart = None;
+        (
+            heart,
+            crate::electrode_tab::ElectrodeTab::load_default(rate, capacity),
+        )
+    }
+
+    fn build(cc: &eframe::CreationContext<'_>, assets: Option<&crate::assets::AssetBundle>) -> Self {
         let rs = cc
             .wgpu_render_state
             .as_ref()
@@ -155,13 +227,11 @@ impl HeartSimApp {
         let mut sphere = icosphere(4);
         sphere.recompute_normals();
         let vertex_count = sphere.vertex_count();
-        let heart = crate::heart_view::HeartView::load_default(&TimingParams::default())
-            .inspect_err(|e| tracing::warn!("no anatomy pack, showing a sphere: {e:#}"))
-            .ok()
-            .map(|mut h| {
-                h.install(rs, &mut scene);
-                h
-            });
+        let (heart, electrodes) = Self::load_heart(assets);
+        let heart = heart.map(|mut h| {
+            h.install(rs, &mut scene);
+            h
+        });
         if heart.is_none() {
             scene.set_mesh(&rs.device, &sphere);
         }
@@ -198,20 +268,39 @@ impl HeartSimApp {
             heart,
             pacing: pacing::Pacing::default(),
             therapy: therapy::Therapy::default(),
-            electrodes: crate::electrode_tab::ElectrodeTab::load_default(
-                SAMPLE_RATE_HZ,
-                (SAMPLE_RATE_HZ * 60.0) as usize,
-            ),
-            library: ScenarioLibrary::load_default(),
+            electrodes,
+            library: assets.map_or_else(ScenarioLibrary::load_default, ScenarioLibrary::from_bundle),
             scenario: None,
             timeline: Timeline::default(),
             heart_history: HeartHistory::new(),
             vector,
             rhythm_quiz,
             tour: tour::Tour::from_env(),
-            tutorials: crate::tutorial_ui::Tutorials::load_default(),
+            tutorials: Self::load_tutorials(cc, assets),
             timeline_tab: tutorials::TimelineTab::default(),
+            #[cfg(feature = "export")]
             exports: crate::export_panel::ExportPanel::default(),
+        }
+    }
+
+    fn load_tutorials(
+        cc: &eframe::CreationContext<'_>,
+        assets: Option<&crate::assets::AssetBundle>,
+    ) -> crate::tutorial_ui::Tutorials {
+        let Some(assets) = assets else {
+            return crate::tutorial_ui::Tutorials::load_default();
+        };
+        let saved = cc.storage.and_then(|s| s.get_string(TUTORIAL_PROGRESS_KEY));
+        crate::tutorial_ui::Tutorials::from_bundle(assets, saved.as_deref())
+    }
+
+    /// See [`AppStatus`].
+    #[must_use]
+    pub fn status(&self) -> AppStatus {
+        AppStatus {
+            sim_time_ms: self.engine.now().0,
+            strip_samples: self.rings[0].pushed(),
+            anatomy_loaded: self.heart.is_some(),
         }
     }
 
@@ -405,6 +494,7 @@ impl HeartSimApp {
                     ui.selectable_value(&mut self.ecg.order, o, o.label());
                 }
                 ui.separator();
+                #[cfg(feature = "native")]
                 if ui.button("Save PNG").clicked() {
                     let path =
                         std::path::PathBuf::from(format!("heartsim-12lead-{:.0}.png", self.engine.now().0));
@@ -563,6 +653,7 @@ impl HeartSimApp {
 impl eframe::App for HeartSimApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        #[cfg(feature = "export")]
         self.exports_frame(&ctx);
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
         if !self.ecg.is_paused() {
@@ -570,7 +661,11 @@ impl eframe::App for HeartSimApp {
         }
         self.ecg.update(&self.rings);
         // the editor counts live samples; a recording under review must not reach it
-        if self.exports.review.is_none() {
+        #[cfg(feature = "export")]
+        let reviewing = self.exports.review.is_some();
+        #[cfg(not(feature = "export"))]
+        let reviewing = false;
+        if !reviewing {
             self.electrodes.update(&self.rings, &mut self.synth);
         }
         if self.tab != Tab::Electrodes {
@@ -597,6 +692,7 @@ impl eframe::App for HeartSimApp {
                 for t in Tab::ALL {
                     ui.selectable_value(&mut self.tab, t, t.title());
                 }
+                #[cfg(feature = "export")]
                 self.export_button(ui);
             });
         });
@@ -635,5 +731,7 @@ impl eframe::App for HeartSimApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string(RHYTHM_QUIZ_SCORE_KEY, self.rhythm_quiz.score_string());
+        #[cfg(not(feature = "native"))]
+        storage.set_string(TUTORIAL_PROGRESS_KEY, self.tutorials.progress.to_text());
     }
 }
