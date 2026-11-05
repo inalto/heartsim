@@ -5,6 +5,7 @@
 //! hands to the timing engine (as a timeline or tutorial would), and it reads back what the
 //! engine's pharmacology reports ([`ActiveDrug`]), so the timer always shows the engine's state.
 
+use crate::t;
 use egui::{Color32, ProgressBar, RichText, Ui};
 use heartsim_core::Action;
 use heartsim_sim::pharma::{ActiveDrug, DrugTable};
@@ -37,7 +38,7 @@ pub fn drug_tray(ui: &mut Ui, table: &DrugTable, active: &[ActiveDrug]) -> Vec<A
                 ui.label(title).on_hover_ui(|ui| {
                     ui.strong(&d.title);
                     ui.label(&d.class);
-                    ui.label(format!("Dose 1 = {}", d.standard_dose));
+                    ui.label(t!("drug-dose-one", dose = d.standard_dose.as_str()));
                     if !d.notes.is_empty() {
                         ui.separator();
                         ui.label(&d.notes);
@@ -53,7 +54,7 @@ pub fn drug_tray(ui: &mut Ui, table: &DrugTable, active: &[ActiveDrug]) -> Vec<A
                             actions.push(give(&d.name, dose));
                         }
                     }
-                    if now.is_some() && ui.small_button("Stop").clicked() {
+                    if now.is_some() && ui.small_button(t!("drug-stop")).clicked() {
                         actions.push(give(&d.name, 0.0));
                     }
                 });
@@ -67,11 +68,11 @@ pub fn drug_tray(ui: &mut Ui, table: &DrugTable, active: &[ActiveDrug]) -> Vec<A
                                 format_elapsed(a.since_ms),
                                 100.0 * a.fraction
                             ));
-                        ui.add(bar).on_hover_text(format!(
-                            "Dose given {:.2} × standard, {} ago; effect {:.0} % of one standard dose at full effect.",
-                            a.dose,
-                            format_elapsed(a.since_ms),
-                            100.0 * a.fraction
+                        ui.add(bar).on_hover_text(t!(
+                            "drug-dose-given",
+                            dose = crate::i18n::number(a.dose, 2),
+                            ago = format_elapsed(a.since_ms),
+                            effect = format!("{:.0}", 100.0 * a.fraction)
                         ));
                     }
                     None => {

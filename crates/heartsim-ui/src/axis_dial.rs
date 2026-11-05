@@ -2,6 +2,7 @@
 //! the measured or guessed QRS axis as an arrow. Screen frame: 0° = lead I (patient's left, drawn
 //! to the right as in a frontal view), +90° = aVF (down), −90° = up.
 
+use crate::t;
 use egui::{Align2, Color32, FontId, Pos2, Sense, Shape, Stroke, Ui, Vec2};
 use heartsim_core::{AxisClass, FrontalAxis, Lead};
 
@@ -155,12 +156,12 @@ pub fn axis_dial(
 /// perpendicular to the axis (|cos| < 0.2, i.e. within ~12°) is equiphasic: the classic trick for
 /// finding the axis is "the equiphasic lead is perpendicular to it".
 #[must_use]
-pub fn lead_polarity(axis_deg: f64, lead: Lead) -> &'static str {
+pub fn lead_polarity(axis_deg: f64, lead: Lead) -> String {
     match (FrontalAxis { degrees: axis_deg }).projection_onto(lead) {
-        Some(c) if c > 0.2 => "positive",
-        Some(c) if c < -0.2 => "negative",
-        Some(_) => "equiphasic",
-        None => "",
+        Some(c) if c > 0.2 => t!("polarity-positive"),
+        Some(c) if c < -0.2 => t!("polarity-negative"),
+        Some(_) => t!("polarity-equiphasic"),
+        None => String::new(),
     }
 }
 

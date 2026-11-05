@@ -6,6 +6,7 @@
 //! ([`DefibPanelState::on_shocks`]) for the flash animation, the status line and the
 //! [`DefibSound`] events.
 
+use crate::t;
 use egui::{Color32, ProgressBar, RichText, Ui};
 use heartsim_core::Action;
 use heartsim_sim::defib::{DefibState, Defibrillator, ENERGY_STEPS_J, ShockRecord, success_probability};
@@ -28,6 +29,8 @@ pub struct DefibPanelState {
     pub defib: Defibrillator,
     /// Last shock delivered.
     pub last_shock: Option<ShockRecord>,
+    /// Reduced motion (B19 settings): the shock no longer flashes the panel.
+    pub reduced_motion: bool,
     flash_until_ms: f64,
 }
 
@@ -56,7 +59,7 @@ impl DefibPanelState {
     /// The panel flashes after a shock.
     #[must_use]
     pub fn flashing(&self, now_ms: f64) -> bool {
-        now_ms < self.flash_until_ms
+        !self.reduced_motion && now_ms < self.flash_until_ms
     }
 }
 
@@ -64,20 +67,26 @@ impl DefibPanelState {
 #[must_use]
 pub fn describe_shock(s: &ShockRecord) -> String {
     let mode = if s.synchronised {
-        "synchronised"
+        t!("defib-sync")
     } else {
-        "unsynchronised"
+        t!("defib-unsync")
     };
-    let outcome = if s.success { "terminated" } else { "no effect" };
-    let mut text = format!(
-        "{:.0} J {mode} at {:.1} s on {} (p ≈ {:.0} %): {outcome}",
-        s.joules,
-        s.at.0 / 1000.0,
-        s.rhythm.label(),
-        100.0 * success_probability(s.rhythm, s.joules)
+    let outcome = if s.success {
+        t!("defib-terminated")
+    } else {
+        t!("defib-no-effect")
+    };
+    let mut text = t!(
+        "defib-shock-line",
+        joules = format!("{:.0}", s.joules),
+        mode = mode,
+        at = crate::i18n::number(s.at.0 / 1000.0, 1),
+        rhythm = crate::labels::rhythm_name(s.rhythm),
+        probability = format!("{:.0}", 100.0 * success_probability(s.rhythm, s.joules)),
+        outcome = outcome
     );
     if s.vulnerable {
-        text.push_str(" — delivered in the T wave (vulnerable period)");
+        text = format!("{text} — {}", t!("defib-vulnerable"));
     }
     text
 }
@@ -91,20 +100,20 @@ pub fn defib_panel(ui: &mut Ui, state: &mut DefibPanelState, now_ms: f64, armed:
     }
     let d = &mut state.defib;
     ui.horizontal(|ui| {
-        egui::ComboBox::from_label("Energy")
+        egui::ComboBox::from_label(t!("defib-energy"))
             .selected_text(format!("{:.0} J", d.energy_j))
             .show_ui(ui, |ui| {
                 for e in ENERGY_STEPS_J {
                     ui.selectable_value(&mut d.energy_j, e, format!("{e:.0} J"));
                 }
             });
-        ui.toggle_value(&mut d.synchronised, "SYNC")
-            .on_hover_text("Synchronised cardioversion: the shock is delivered on the next R wave (VT with a pulse, SVT, AF, flutter). Off for VF.");
+        ui.toggle_value(&mut d.synchronised, t!("defib-sync-button"))
+            .on_hover_text(t!("defib-sync-hint"));
     });
     ui.horizontal(|ui| {
         let charging = matches!(d.state, DefibState::Charging { .. });
         if ui
-            .add_enabled(!charging, egui::Button::new("CHARGE"))
+            .add_enabled(!charging, egui::Button::new(t!("defib-charge")))
             .on_hover_text(format!(
                 "≈ {:.1} s to {:.0} J",
                 Defibrillator::charge_time_ms(d.energy_j) / 1000.0,
@@ -115,28 +124,30 @@ pub fn defib_panel(ui: &mut Ui, state: &mut DefibPanelState, now_ms: f64, armed:
             d.charge(now_ms);
         }
         let ready = d.state == DefibState::Ready;
-        let shock = egui::Button::new(RichText::new("SHOCK").strong().color(Color32::WHITE)).fill(if ready {
-            Color32::from_rgb(200, 30, 30)
-        } else {
-            Color32::from_rgb(90, 40, 40)
-        });
+        let shock = egui::Button::new(RichText::new(t!("defib-shock")).strong().color(Color32::WHITE)).fill(
+            if ready {
+                Color32::from_rgb(200, 30, 30)
+            } else {
+                Color32::from_rgb(90, 40, 40)
+            },
+        );
         if ui.add_enabled(ready, shock).clicked() {
             r.action = d.shock();
         }
-        if ui.button("Disarm").clicked() {
+        if ui.button(t!("defib-disarm")).clicked() {
             d.disarm();
             r.cancel_armed = armed;
         }
     });
     let fraction = d.charge_fraction(now_ms) as f32;
     let label = match d.state {
-        DefibState::Idle => "idle".to_string(),
-        DefibState::Charging { .. } => format!("charging {:.0} %", 100.0 * fraction),
-        DefibState::Ready => format!("charged to {:.0} J", d.energy_j),
+        DefibState::Idle => t!("defib-idle"),
+        DefibState::Charging { .. } => t!("defib-charging", percent = format!("{:.0}", 100.0 * fraction)),
+        DefibState::Ready => t!("defib-charged", joules = format!("{:.0}", d.energy_j)),
     };
     ui.add(ProgressBar::new(fraction).text(label));
     if armed {
-        ui.colored_label(Color32::YELLOW, "SYNC: waiting for an R wave…");
+        ui.colored_label(Color32::YELLOW, t!("defib-sync-waiting"));
     }
     if let Some(s) = &state.last_shock {
         let text = describe_shock(s);
