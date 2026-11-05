@@ -144,7 +144,9 @@ impl TimingEngine {
         origin: Origin,
         via: AtrialVia,
     ) -> bool {
-        if since(self.last_atrial, t) < self.atrial_erp() {
+        // A front sensed on the tissue model has already passed the tissue's own refractoriness:
+        // the timing engine's atrial ERP (a Tier-0/1 stand-in for it) must not veto a fact.
+        if via != AtrialVia::Tissue && since(self.last_atrial, t) < self.atrial_erp() {
             let r = if via == AtrialVia::Sinus {
                 Region::SinoatrialNode
             } else {
@@ -423,7 +425,9 @@ impl TimingEngine {
     ) -> bool {
         let gap = since(self.last_ventricular, t);
         let fusion = gap < self.params.fusion_window_ms && self.last_vent_via != Some(via);
-        if !fusion && gap < self.ventricular_erp() {
+        // As for the atria: a ventricular front the tissue produced (VT, VF) is never vetoed by
+        // the timing engine's ERP, which would turn VF (cycles of 150-200 ms) into "asystole".
+        if !fusion && via != VentVia::Tissue && gap < self.ventricular_erp() {
             self.emit(t, region, EventKind::Blocked, origin);
             return false;
         }

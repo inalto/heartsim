@@ -174,6 +174,11 @@ pub struct HeartView {
     overlay_glyphs: Vec<GlyphInstance>,
     /// Per-cell values to show instead of the live engine state (scrubbing a paused strip).
     scrub_cells: Option<Vec<f32>>,
+    /// Cell state of the Tier-2 engine while a re-entry scenario runs (B17): shown instead of
+    /// the eikonal engine's, which is idle then.
+    external: Option<heartsim_sim::CellState>,
+    /// Clicks made while `external` is set, as actions for the engine that owns the heart.
+    pending_actions: Vec<Action>,
 }
 
 impl std::fmt::Debug for HeartView {
@@ -350,6 +355,8 @@ impl HeartView {
             lead_glyphs: Vec::new(),
             overlay_glyphs: Vec::new(),
             scrub_cells: None,
+            external: None,
+            pending_actions: Vec::new(),
         }
     }
 
@@ -435,7 +442,7 @@ impl HeartView {
             }
         }
         self.now_ms = now.0;
-        if self.tier1 {
+        if self.tier1 && self.external.is_none() {
             self.engine.ingest(events);
             self.engine.step(dt);
         }
@@ -451,9 +458,30 @@ impl HeartView {
         self.tier1 = on;
     }
 
+    /// Show `cells` (the Tier-2 engine's state of a re-entry scenario, B17) instead of the
+    /// eikonal engine's; `None` returns to it. Clicks are then collected as actions
+    /// ([`HeartView::take_pending_actions`]) for the engine that owns the heart.
+    pub fn set_external_cells(&mut self, cells: Option<&heartsim_sim::CellState>) {
+        match (cells, &mut self.external) {
+            (Some(c), Some(buf)) => buf.clone_from(c),
+            (Some(c), slot) => *slot = Some(c.clone()),
+            (None, slot) => *slot = None,
+        }
+    }
+
+    /// Actions the user made on the heart while it is driven externally (stimulus, ablation).
+    pub fn take_pending_actions(&mut self) -> Vec<Action> {
+        std::mem::take(&mut self.pending_actions)
+    }
+
+    /// The cell state on display: the external engine's, else the eikonal engine's.
+    fn shown_cells(&self) -> &heartsim_sim::CellState {
+        self.external.as_ref().unwrap_or_else(|| self.engine.cells())
+    }
+
     /// Per-cell value of the current colour mode, in its display unit.
     fn fill_per_cell(&mut self) {
-        let cells = self.engine.cells();
+        let cells = self.external.as_ref().unwrap_or_else(|| self.engine.cells());
         let beat = self.beat_start_ms as f32;
         let late = self.window(ColourMode::Isochrone).1;
         match self.mode {
@@ -505,6 +533,8 @@ impl HeartView {
         self.beat_start_ms = 0.0;
         self.now_ms = 0.0;
         self.scrub_cells = None;
+        self.external = None;
+        self.pending_actions.clear();
         self.status = None;
     }
 
@@ -534,7 +564,7 @@ impl HeartView {
     #[must_use]
     pub fn cell_info(&self, cell: u32) -> CellInfo {
         let i = cell as usize;
-        let cells = self.engine.cells();
+        let cells = self.shown_cells();
         let region = self.engine.cloud().regions[i];
         let t = cells.activation_ms[i];
         let beat = self.beat_start_ms as f32;
@@ -559,6 +589,34 @@ impl HeartView {
         let now = timing.now();
         let region = self.engine.cloud().regions[cell as usize];
         let site = StimSite::Cell(cell);
+        if self.external.is_some() {
+            // re-entry scenario: the engine that owns the heart takes the action
+            let (action, text) = if ablate {
+                (
+                    Action::Ablate {
+                        site,
+                        radius_mm: f64::from(self.ablate_radius_mm),
+                    },
+                    format!(
+                        "Ablated {:.0} mm around {}",
+                        self.ablate_radius_mm,
+                        region.label()
+                    ),
+                )
+            } else {
+                (
+                    Action::Stimulate {
+                        site,
+                        strength: 1.0,
+                        duration_ms: 2.0,
+                    },
+                    format!("Stimulus: {} at {:.0} ms", region.label(), now.0),
+                )
+            };
+            self.pending_actions.push(action);
+            self.status = Some(text);
+            return;
+        }
         let result = if ablate {
             let action = Action::Ablate {
                 site,

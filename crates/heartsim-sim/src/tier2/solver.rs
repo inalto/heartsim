@@ -43,6 +43,24 @@ pub struct Tissue<M> {
     pub d_trans: f32,
 }
 
+/// Compartment-wide change of the tissue: a drug effect or remodelling (see
+/// [`Monodomain::set_modifiers`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TissueModifier {
+    /// APD (and so refractory period) multiplier.
+    pub apd_scale: f32,
+    /// Conduction-velocity multiplier (≤ 1).
+    pub cv_scale: f32,
+}
+
+impl TissueModifier {
+    /// No change.
+    pub const NONE: Self = Self {
+        apd_scale: 1.0,
+        cv_scale: 1.0,
+    };
+}
+
 /// A single-cell action potential sampled by phase (time since upstroke / APD), used to map a
 /// Tier-1 phase onto model state and to define the post-shock state.
 #[derive(Debug, Clone)]
@@ -185,6 +203,14 @@ pub struct Monodomain<M: CellModel> {
     tissue: Vec<Tissue<M>>,
     trajectories: Vec<Trajectory>,
     class: Vec<u16>,
+    /// Compartment-wide modifiers (drugs), `[atrial, ventricular]`.
+    modifiers: [TissueModifier; 2],
+    /// `tissue` with the modifiers applied, two entries per class: `2·class + compartment`.
+    effective: Vec<Tissue<M>>,
+    /// Index into `effective` of every voxel.
+    eff_class: Vec<u16>,
+    /// The modifiers changed since `effective` was built.
+    effective_dirty: bool,
     /// `false` = inert (ablated, obstacle): no reaction, no links, held at rest.
     conducting: Vec<bool>,
     /// CSR links: `col[row[i]..row[i+1]]`, weights in 1/ms.
@@ -246,6 +272,10 @@ impl<M: CellModel> Monodomain<M> {
             tissue,
             trajectories,
             class,
+            modifiers: [TissueModifier::NONE; 2],
+            effective: Vec::new(),
+            eff_class: Vec::new(),
+            effective_dirty: true,
         };
         m.rebuild_links();
         m.reset();
@@ -263,11 +293,12 @@ impl<M: CellModel> Monodomain<M> {
     /// # Panics
     /// If a voxel's diffusive load violates the explicit stability limit `dt·Σw ≤ 1`.
     pub fn rebuild_links(&mut self) {
+        self.refresh_effective();
         let g = &self.grid;
         let inv_h2 = 1.0 / (g.h_mm * g.h_mm);
         let coeffs: Vec<[f32; 9]> = (0..g.len())
             .map(|v| {
-                let t = &self.tissue[usize::from(self.class[v])];
+                let t = &self.effective[usize::from(self.eff_class[v])];
                 VoxelGrid::stencil(g.fibre[v], t.d_long, t.d_trans)
             })
             .collect();
@@ -308,7 +339,7 @@ impl<M: CellModel> Monodomain<M> {
         // around −load, the reaction up to 1/max_dt; stable while dt·(2·load + 1/max_dt) ≤ 2.
         let worst = (0..g.len())
             .map(|v| {
-                let m = &self.tissue[usize::from(self.class[v])].model;
+                let m = &self.effective[usize::from(self.eff_class[v])].model;
                 self.dt_ms * (2.0 * self.load[v] + 1.0 / m.max_dt_ms())
             })
             .fold(0.0f32, f32::max);
@@ -317,7 +348,7 @@ impl<M: CellModel> Monodomain<M> {
             "explicit step unstable: dt·(2·load + λ_reaction) = {worst} > 2"
         );
         let fastest = self
-            .tissue
+            .effective
             .iter()
             .map(|t| t.model.max_dt_ms())
             .fold(f32::INFINITY, f32::min);
@@ -425,6 +456,38 @@ impl<M: CellModel> Monodomain<M> {
         self.gates[v * g..(v + 1) * g].copy_from_slice(&s[1..M::VARS]);
     }
 
+    /// Copy of the dynamic state: membrane variable, the other variables (`M::VARS − 1` per
+    /// voxel) and the last activation times relative to now (`NaN` = never).
+    #[must_use]
+    pub fn state_copy(&self) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+        let now = self.now_ms() as f32;
+        (
+            self.u.clone(),
+            self.gates.clone(),
+            self.t_act.iter().map(|t| t - now).collect(),
+        )
+    }
+
+    /// Load a state taken with [`Monodomain::state_copy`]; activation times are re-anchored to
+    /// the current time. Pending stimuli are dropped.
+    ///
+    /// # Panics
+    /// If the slices do not match this grid and model.
+    pub fn load_state(&mut self, u: &[f32], gates: &[f32], t_act_rel: &[f32]) {
+        assert_eq!(u.len(), self.u.len());
+        assert_eq!(gates.len(), self.gates.len());
+        assert_eq!(t_act_rel.len(), self.t_act.len());
+        let now = self.now_ms() as f32;
+        self.u.copy_from_slice(u);
+        self.u_next.copy_from_slice(u);
+        self.gates.copy_from_slice(gates);
+        for (t, r) in self.t_act.iter_mut().zip(t_act_rel) {
+            *t = now + r;
+        }
+        self.pulses.clear();
+        self.stim.iter_mut().for_each(|x| *x = 0.0);
+    }
+
     /// Put voxel `v` at `phase` APDs after an upstroke at `t_act_ms` (rest for NaN/late phases).
     pub fn set_voxel_phase(&mut self, v: usize, phase: f32, t_act_ms: f32) {
         let mut s = [0.0f32; MAX_VARS];
@@ -505,6 +568,51 @@ impl<M: CellModel> Monodomain<M> {
         self.rebuild_links();
     }
 
+    /// Scale APD and measured CV of every atrial / ventricular voxel (drug effects,
+    /// remodelling), re-solved on this grid by [`super::calibrate::retarget`]. `cv_scale` is
+    /// clamped to ≤ 1. The classes themselves and the single-cell trajectories (hand-over, shock
+    /// state) are left as they were.
+    pub fn set_modifiers(&mut self, atrial: TissueModifier, ventricular: TissueModifier) {
+        self.modifiers = [atrial, ventricular];
+        self.effective_dirty = true;
+        self.rebuild_links();
+    }
+
+    /// The modifiers in force, `[atrial, ventricular]`.
+    #[must_use]
+    pub fn modifiers(&self) -> [TissueModifier; 2] {
+        self.modifiers
+    }
+
+    /// Rebuild the effective class table when classes or modifiers changed, and the per-voxel
+    /// index into it.
+    fn refresh_effective(&mut self) {
+        if self.effective_dirty || self.effective.len() != 2 * self.tissue.len() {
+            self.effective.clear();
+            for t in &self.tissue {
+                for m in self.modifiers {
+                    self.effective.push(if m == TissueModifier::NONE {
+                        t.clone()
+                    } else {
+                        super::calibrate::retarget(
+                            t,
+                            m.apd_scale.max(0.05),
+                            m.cv_scale.clamp(0.05, 1.0),
+                            self.grid.h_mm,
+                            self.dt_ms,
+                        )
+                    });
+                }
+            }
+            self.effective_dirty = false;
+        }
+        self.eff_class.clear();
+        self.eff_class
+            .extend((0..self.grid.len()).map(|v| {
+                2 * self.class[v] + u16::from(self.grid.compartment[v] == Compartment::Ventricular)
+            }));
+    }
+
     /// Append a tissue class; returns its index.
     pub fn add_tissue(&mut self, tissue: Tissue<M>) -> u16 {
         self.trajectories.push(Trajectory::of(&tissue.model, self.dt_ms));
@@ -536,7 +644,7 @@ impl<M: CellModel> Monodomain<M> {
         }
         let now = t0 as f32;
         let (u, row, col, w, stim) = (&self.u, &self.row, &self.col, &self.weight, &self.stim);
-        let (tissue, class, conducting) = (&self.tissue, &self.class, &self.conducting);
+        let (tissue, class, conducting) = (&self.effective, &self.eff_class, &self.conducting);
         let g = M::VARS - 1;
         let kernel = |start: usize, un: &mut [f32], gs: &mut [f32], ta: &mut [f32]| {
             let mut s = [0.0f32; MAX_VARS];
