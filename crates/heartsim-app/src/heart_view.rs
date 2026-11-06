@@ -21,6 +21,7 @@ use heartsim_render::{
 };
 use heartsim_sim::timing::PacerConfig;
 use heartsim_sim::{EikonalEngine, EikonalParams, Engine, Event, EventKind, TimingEngine, TimingParams};
+use heartsim_ui::t;
 use heartsim_ui::{
     AnatomyPanelState, CameraCommand, Viewport3d, ViewportResources, anatomy_panel, colour_bar,
 };
@@ -54,11 +55,11 @@ impl ColourMode {
     pub const ALL: [ColourMode; 3] = [ColourMode::Voltage, ColourMode::Isochrone, ColourMode::Apd];
 
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            ColourMode::Voltage => "Voltage",
-            ColourMode::Isochrone => "Activation time",
-            ColourMode::Apd => "APD",
+            ColourMode::Voltage => t!("colour-voltage"),
+            ColourMode::Isochrone => t!("colour-activation"),
+            ColourMode::Apd => t!("colour-apd"),
         }
     }
 
@@ -176,6 +177,11 @@ pub struct HeartView {
     overlay_glyphs: Vec<GlyphInstance>,
     /// Per-cell values to show instead of the live engine state (scrubbing a paused strip).
     scrub_cells: Option<Vec<f32>>,
+    /// Cell state of the Tier-2 engine while a re-entry scenario runs (B17): shown instead of
+    /// the eikonal engine's, which is idle then.
+    external: Option<heartsim_sim::CellState>,
+    /// Clicks made while `external` is set, as actions for the engine that owns the heart.
+    pending_actions: Vec<Action>,
 }
 
 impl std::fmt::Debug for HeartView {
@@ -215,20 +221,20 @@ pub fn default_pack_dir() -> Option<PathBuf> {
 }
 
 /// Display name of a pack mesh, for the layer list and the labels.
-fn pretty_name(name: &str) -> &str {
+fn pretty_name(name: &str) -> String {
     match name {
-        "lv" => "Left ventricle",
-        "rv" => "Right ventricle",
-        "la" => "Left atrium",
-        "ra" => "Right atrium",
-        "aorta" => "Aorta",
-        "pulmonary_artery" => "Pulmonary artery",
-        "pulmonary_veins" => "Pulmonary veins",
-        "svc" => "Superior vena cava",
-        "ivc" => "Inferior vena cava",
-        "valve_rings" => "Valve rings",
-        "torso" => "Torso",
-        other => other,
+        "lv" => t!("part-lv"),
+        "rv" => t!("part-rv"),
+        "la" => t!("part-la"),
+        "ra" => t!("part-ra"),
+        "aorta" => t!("part-aorta"),
+        "pulmonary_artery" => t!("part-pulmonary-artery"),
+        "pulmonary_veins" => t!("part-pulmonary-veins"),
+        "svc" => t!("part-svc"),
+        "ivc" => t!("part-ivc"),
+        "valve_rings" => t!("part-valve-rings"),
+        "torso" => t!("part-torso"),
+        other => other.to_string(),
     }
 }
 
@@ -354,6 +360,8 @@ impl HeartView {
             lead_glyphs: Vec::new(),
             overlay_glyphs: Vec::new(),
             scrub_cells: None,
+            external: None,
+            pending_actions: Vec::new(),
         }
     }
 
@@ -439,7 +447,7 @@ impl HeartView {
             }
         }
         self.now_ms = now.0;
-        if self.tier1 {
+        if self.tier1 && self.external.is_none() {
             self.engine.ingest(events);
             self.engine.step(dt);
         }
@@ -455,9 +463,30 @@ impl HeartView {
         self.tier1 = on;
     }
 
+    /// Show `cells` (the Tier-2 engine's state of a re-entry scenario, B17) instead of the
+    /// eikonal engine's; `None` returns to it. Clicks are then collected as actions
+    /// ([`HeartView::take_pending_actions`]) for the engine that owns the heart.
+    pub fn set_external_cells(&mut self, cells: Option<&heartsim_sim::CellState>) {
+        match (cells, &mut self.external) {
+            (Some(c), Some(buf)) => buf.clone_from(c),
+            (Some(c), slot) => *slot = Some(c.clone()),
+            (None, slot) => *slot = None,
+        }
+    }
+
+    /// Actions the user made on the heart while it is driven externally (stimulus, ablation).
+    pub fn take_pending_actions(&mut self) -> Vec<Action> {
+        std::mem::take(&mut self.pending_actions)
+    }
+
+    /// The cell state on display: the external engine's, else the eikonal engine's.
+    fn shown_cells(&self) -> &heartsim_sim::CellState {
+        self.external.as_ref().unwrap_or_else(|| self.engine.cells())
+    }
+
     /// Per-cell value of the current colour mode, in its display unit.
     fn fill_per_cell(&mut self) {
-        let cells = self.engine.cells();
+        let cells = self.external.as_ref().unwrap_or_else(|| self.engine.cells());
         let beat = self.beat_start_ms as f32;
         let late = self.window(ColourMode::Isochrone).1;
         match self.mode {
@@ -509,6 +538,8 @@ impl HeartView {
         self.beat_start_ms = 0.0;
         self.now_ms = 0.0;
         self.scrub_cells = None;
+        self.external = None;
+        self.pending_actions.clear();
         self.status = None;
     }
 
@@ -538,7 +569,7 @@ impl HeartView {
     #[must_use]
     pub fn cell_info(&self, cell: u32) -> CellInfo {
         let i = cell as usize;
-        let cells = self.engine.cells();
+        let cells = self.shown_cells();
         let region = self.engine.cloud().regions[i];
         let t = cells.activation_ms[i];
         let beat = self.beat_start_ms as f32;
@@ -563,16 +594,44 @@ impl HeartView {
         let now = timing.now();
         let region = self.engine.cloud().regions[cell as usize];
         let site = StimSite::Cell(cell);
+        if self.external.is_some() {
+            // re-entry scenario: the engine that owns the heart takes the action
+            let (action, text) = if ablate {
+                (
+                    Action::Ablate {
+                        site,
+                        radius_mm: f64::from(self.ablate_radius_mm),
+                    },
+                    format!(
+                        "Ablated {:.0} mm around {}",
+                        self.ablate_radius_mm,
+                        region.label()
+                    ),
+                )
+            } else {
+                (
+                    Action::Stimulate {
+                        site,
+                        strength: 1.0,
+                        duration_ms: 2.0,
+                    },
+                    format!("Stimulus: {} at {:.0} ms", region.label(), now.0),
+                )
+            };
+            self.pending_actions.push(action);
+            self.status = Some(text);
+            return;
+        }
         let result = if ablate {
             let action = Action::Ablate {
                 site,
                 radius_mm: f64::from(self.ablate_radius_mm),
             };
             self.engine.apply(&action, now).map(|()| {
-                format!(
-                    "Ablated {:.0} mm around {}",
-                    self.ablate_radius_mm,
-                    region.label()
+                t!(
+                    "heart-ablated",
+                    radius = format!("{:.0}", self.ablate_radius_mm),
+                    region = heartsim_ui::labels::region_name(region)
                 )
             })
         } else {
@@ -593,7 +652,13 @@ impl HeartView {
                     now,
                 );
             }
-            r.map(|()| format!("Stimulus: {} at {:.0} ms", region.label(), now.0))
+            r.map(|()| {
+                t!(
+                    "heart-stimulus",
+                    region = heartsim_ui::labels::region_name(region),
+                    time = format!("{:.0}", now.0)
+                )
+            })
         };
         self.status = Some(result.unwrap_or_else(|e| e.to_string()));
     }
@@ -602,7 +667,7 @@ impl HeartView {
     pub fn clear_ablation(&mut self) {
         self.engine.reset();
         self.engine.step(Millis(self.now_ms));
-        self.status = Some("Ablation lesions cleared".to_string());
+        self.status = Some(t!("heart-ablation-cleared"));
     }
 
     // ---- UI ------------------------------------------------------------------------------
@@ -611,8 +676,8 @@ impl HeartView {
     pub fn controls(&mut self, ui: &mut egui::Ui) {
         let mut tier1 = self.tier1;
         if ui
-            .checkbox(&mut tier1, "3-D activation (Tier 1)")
-            .on_hover_text("Off: ECG strip only (Tier 0); the heart is drawn without a colour map.")
+            .checkbox(&mut tier1, t!("heart-tier1"))
+            .on_hover_text(t!("heart-tier1-hint"))
             .changed()
         {
             self.set_tier1(tier1);
@@ -629,13 +694,13 @@ impl HeartView {
             let width = ui.available_width().min(260.0);
             colour_bar(ui, width, &table, &mut w.0, &mut w.1, lo..=hi, self.mode.unit());
             ui.horizontal(|ui| {
-                if ui.button("Reset window").clicked() {
+                if ui.button(t!("heart-reset-window")).clicked() {
                     *w = self.mode.default_window();
                 }
                 if ui
                     .checkbox(
                         &mut (self.lut_style == LutStyle::ColourBlindSafe),
-                        "Colour-blind safe",
+                        t!("heart-colour-blind"),
                     )
                     .changed()
                 {
@@ -648,18 +713,18 @@ impl HeartView {
             });
             ui.add_enabled(
                 self.mode == ColourMode::Voltage,
-                egui::Checkbox::new(&mut self.wavefront, "Wavefront outline"),
+                egui::Checkbox::new(&mut self.wavefront, t!("heart-wavefront")),
             );
             ui.separator();
-            ui.strong("Click on the heart");
+            ui.strong(t!("heart-click"));
             ui.horizontal(|ui| {
-                ui.radio_value(&mut self.tool, ClickTool::Stimulate, "Stimulate");
-                ui.radio_value(&mut self.tool, ClickTool::Ablate, "Ablate");
+                ui.radio_value(&mut self.tool, ClickTool::Stimulate, t!("heart-stimulate"));
+                ui.radio_value(&mut self.tool, ClickTool::Ablate, t!("heart-ablate"));
             });
-            ui.add(egui::Slider::new(&mut self.ablate_radius_mm, 2.0..=15.0).text("lesion radius mm"));
+            ui.add(egui::Slider::new(&mut self.ablate_radius_mm, 2.0..=15.0).text(t!("heart-lesion-radius")));
             ui.horizontal(|ui| {
-                ui.label("Shift-click ablates.");
-                if ui.button("Clear ablation").clicked() {
+                ui.label(t!("heart-shift-click"));
+                if ui.button(t!("heart-clear-ablation")).clicked() {
                     self.clear_ablation();
                 }
             });
@@ -746,16 +811,16 @@ impl HeartView {
         drop(renderer);
         if let Some(info) = self.hover.clone() {
             response.on_hover_ui_at_pointer(|ui| {
-                ui.strong(info.region.label());
+                ui.strong(heartsim_ui::labels::region_name(info.region));
                 if info.territory != Territory::None {
-                    ui.label(format!("Territory: {}", info.territory.label()));
+                    ui.label(t!("heart-territory", territory = info.territory.label()));
                 }
                 ui.label(format!("V_m {:.0} mV", info.vm_mv));
                 ui.label(match info.activation_ms {
-                    Some(t) => format!("Activated at {t:.0} ms this beat"),
-                    None => "Not yet activated this beat".to_string(),
+                    Some(t) => t!("heart-activated", time = format!("{t:.0}")),
+                    None => t!("heart-not-activated"),
                 });
-                ui.label(format!("APD {:.0} ms", info.apd_ms));
+                ui.label(t!("heart-apd", value = format!("{:.0}", info.apd_ms)));
                 ui.label(format!("CV {:.2} m/s", info.cv_m_s));
             });
         }
@@ -774,7 +839,7 @@ impl HeartView {
             desc.alpha = toggle.alpha;
             let id = scene.add_layer(&rs.device, &desc);
             if let Some(layer) = scene.layer_mut(id) {
-                layer.label = Some(pretty_name(&l.name).to_string());
+                layer.label = Some(pretty_name(&l.name));
                 layer.pickable = l.kind.is_some();
                 layer.clip = true;
                 layer.visible = toggle.visible;
@@ -834,7 +899,7 @@ impl HeartView {
             Some(CameraCommand::Frame) => scene.frame_scene(),
             None => {}
         }
-        if self.panel.auto_rotate {
+        if self.panel.auto_rotate && !self.panel.reduced_motion {
             scene.camera.yaw += AUTO_ROTATE_RAD_S * dt;
         }
         let back = (scene.camera.eye() - scene.camera.target).normalize_or_zero();

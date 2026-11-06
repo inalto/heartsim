@@ -1,3 +1,4 @@
+use crate::settings::settings_window;
 use eframe::egui;
 use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead, Millis, SimClock};
 use heartsim_ecg::{GaussianSynth, LeadRing, estimate_frontal_axis};
@@ -6,7 +7,7 @@ use heartsim_render::SceneRenderer;
 use heartsim_sim::{Engine, TimingEngine, TimingParams};
 use heartsim_ui::{
     AxisDialStyle, EcgView, LeadOrder, TwelveLeadLayout, Viewport3d, ViewportResources, axis_dial, highlight,
-    lead_column, lead_polarity,
+    lead_column, lead_polarity, t, transport_controls,
 };
 
 use crate::heart_history::HeartHistory;
@@ -17,6 +18,7 @@ use crate::vector_overlay::VectorOverlay;
 
 #[cfg(feature = "export")]
 mod exports;
+mod keys;
 mod scenario_control;
 mod tour;
 mod tutorials;
@@ -28,6 +30,7 @@ const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
 const TUTORIAL_PROGRESS_KEY: &str = "tutorial_progress";
 
 mod pacing;
+mod reentry;
 mod therapy;
 
 const SAMPLE_RATE_HZ: f32 = 500.0;
@@ -77,6 +80,11 @@ pub struct HeartSimApp {
     /// Export / Import window and the recording under review (B20).
     #[cfg(feature = "export")]
     exports: crate::export_panel::ExportPanel,
+    /// Re-entry presets and the running one (B17).
+    reentry: reentry::Reentry,
+    /// Preferences (language, high contrast, reduced motion) and the Settings window (B19).
+    settings: crate::settings::Settings,
+    settings_open: bool,
 }
 
 /// A snapshot of the model for hosts that cannot look inside it (the web build publishes it to the
@@ -120,17 +128,17 @@ impl Tab {
         Tab::Help,
     ];
 
-    fn title(self) -> &'static str {
+    fn title(self) -> String {
         match self {
-            Tab::Simulator => "Simulator",
-            Tab::TwelveLead => "12-Lead ECG",
-            Tab::HeartVector => "Heart Vector",
-            Tab::AxisTrainer => "Axis Trainer",
-            Tab::Quiz => "Axis Quiz",
-            Tab::Electrodes => "Electrodes",
-            Tab::RhythmQuiz => "Rhythm Quiz",
-            Tab::Tutorials => "Tutorials",
-            Tab::Help => "Help",
+            Tab::Simulator => t!("tab-simulator"),
+            Tab::TwelveLead => t!("tab-12-lead"),
+            Tab::HeartVector => t!("tab-heart-vector"),
+            Tab::AxisTrainer => t!("tab-axis-trainer"),
+            Tab::Quiz => t!("tab-axis-quiz"),
+            Tab::Electrodes => t!("tab-electrodes"),
+            Tab::RhythmQuiz => t!("tab-rhythm-quiz"),
+            Tab::Tutorials => t!("tab-tutorials"),
+            Tab::Help => t!("tab-help"),
         }
     }
 }
@@ -241,6 +249,8 @@ impl HeartSimApp {
         });
         let mut vector = VectorOverlay::new();
         vector.install(rs);
+        let settings = crate::settings::Settings::load(cc.storage);
+        settings.apply(&cc.egui_ctx);
         let mut rhythm_quiz = RhythmQuiz::default();
         if let Some(score) = cc.storage.and_then(|s| s.get_string(RHYTHM_QUIZ_SCORE_KEY)) {
             rhythm_quiz.restore_score(&score);
@@ -280,6 +290,9 @@ impl HeartSimApp {
             timeline_tab: tutorials::TimelineTab::default(),
             #[cfg(feature = "export")]
             exports: crate::export_panel::ExportPanel::default(),
+            reentry: assets.map_or_else(reentry::Reentry::load_default, reentry::Reentry::from_bundle),
+            settings,
+            settings_open: false,
         }
     }
 
@@ -306,6 +319,10 @@ impl HeartSimApp {
 
     fn step_simulation(&mut self, frame_dt: Millis) {
         let steps = self.clock.advance(frame_dt);
+        if self.reentry_active() {
+            self.step_reentry(steps);
+            return;
+        }
         let sample_period_ms = 1000.0 / f64::from(SAMPLE_RATE_HZ);
         for _ in 0..steps {
             self.apply_timeline();
@@ -377,36 +394,40 @@ impl HeartSimApp {
                 self.load_scenario(i);
             }
             ui.separator();
-            let pause = ui.button(if self.ecg.is_paused() { "Run" } else { "Pause" });
-            highlight::mark(&pause, "pause");
-            if pause.clicked() {
+            let transport = transport_controls(ui, self.ecg.is_paused(), &mut self.clock.speed);
+            highlight::mark(&transport.pause, "pause");
+            if transport.pause.clicked() {
                 self.ecg.toggle_pause();
             }
             let mut bpm = self.engine.params.sinus.rate_bpm;
             if ui
-                .add(egui::Slider::new(&mut bpm, 30.0..=200.0).text("SA rate bpm"))
+                .add(egui::Slider::new(&mut bpm, 30.0..=200.0).text(t!("app-sa-rate")))
                 .changed()
             {
                 self.engine.params.sinus.rate_bpm = bpm;
             }
-            ui.checkbox(&mut self.engine.params.av.complete_block, "AV block");
+            ui.checkbox(&mut self.engine.params.av.complete_block, t!("app-av-block"));
             let mut ratio = self.engine.params.av.mobitz2_ratio;
             if ui
-                .add(egui::Slider::new(&mut ratio, 0..=6).text("Mobitz II n"))
+                .add(egui::Slider::new(&mut ratio, 0..=6).text(t!("app-mobitz")))
                 .changed()
             {
                 self.engine.params.av.mobitz2_ratio = ratio;
             }
-            ui.add(egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0).text("axis shift °"));
-            ui.add(egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0).text("QRS width"));
-            let speed = ui.add(
-                egui::Slider::new(&mut self.clock.speed, 0.05..=2.0)
-                    .logarithmic(true)
-                    .text("speed"),
+            ui.add(
+                egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0).text(t!("app-axis-shift")),
             );
-            highlight::mark(&speed, "speed");
-            highlight::mark(&ui.toggle_value(&mut self.pacing.open, "Pacemaker"), "pacemaker");
-            highlight::mark(&ui.toggle_value(&mut self.therapy.open, "Therapy"), "therapy");
+            ui.add(egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0).text(t!("app-qrs-width")));
+            highlight::mark(&transport.speed, "speed");
+            highlight::mark(
+                &ui.toggle_value(&mut self.pacing.open, t!("app-pacemaker")),
+                "pacemaker",
+            );
+            highlight::mark(
+                &ui.toggle_value(&mut self.therapy.open, t!("app-therapy")),
+                "therapy",
+            );
+            self.reentry_controls(ui);
         });
     }
 
@@ -417,13 +438,13 @@ impl HeartSimApp {
     fn live_axis_panel(&mut self, ui: &mut egui::Ui) {
         let axis = self.measured_axis();
         ui.vertical_centered(|ui| {
-            ui.strong("Frontal QRS axis");
+            ui.strong(t!("app-frontal-axis"));
             let side = ui.available_width().min(330.0);
             axis_dial(ui, side, axis, None, false, &AxisDialStyle::default());
         });
         if let Some(a) = axis {
             ui.separator();
-            ui.label("Net QRS polarity:");
+            ui.label(t!("app-net-polarity"));
             egui::Grid::new("polarity").show(ui, |ui| {
                 for l in LIMB {
                     ui.label(l.label());
@@ -481,7 +502,7 @@ impl HeartSimApp {
     fn twelve_lead_tab(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("layout").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Layout:");
+                ui.label(t!("app-layout"));
                 for l in [
                     TwelveLeadLayout::Stacked,
                     TwelveLeadLayout::TwoColumn,
@@ -495,7 +516,7 @@ impl HeartSimApp {
                 }
                 ui.separator();
                 #[cfg(feature = "native")]
-                if ui.button("Save PNG").clicked() {
+                if ui.button(t!("app-save-png")).clicked() {
                     let path =
                         std::path::PathBuf::from(format!("heartsim-12lead-{:.0}.png", self.engine.now().0));
                     let ppp = ui.ctx().pixels_per_point();
@@ -519,28 +540,28 @@ impl HeartSimApp {
 
     fn axis_trainer_tab(&mut self, ui: &mut egui::Ui) {
         egui::Panel::left("dial").default_size(430.0).show(ui, |ui| {
-            ui.label("Click or drag on the circle to rotate the heart's electrical axis.");
+            ui.label(t!("app-axis-trainer-hint"));
             let axis = self.measured_axis();
             let side = ui.available_width().min(ui.available_height() - 40.0).max(200.0);
             if let Some(target) = axis_dial(ui, side, axis, None, true, &AxisDialStyle::default()) {
                 self.set_qrs_axis(target);
             }
-            if ui.button("Reset to normal axis").clicked() {
+            if ui.button(t!("app-reset-axis")).clicked() {
                 self.synth.axis_shift_deg = 0.0;
             }
         });
         egui::Panel::right("polarity").default_size(200.0).show(ui, |ui| {
-            ui.strong("Net QRS in each lead");
+            ui.strong(t!("app-net-qrs-each"));
             if let Some(a) = self.measured_axis() {
                 for l in LIMB {
                     ui.label(format!("{:<4} {}", l.label(), lead_polarity(a, l)));
                 }
                 ui.separator();
                 ui.label(match (FrontalAxis { degrees: a }).classify() {
-                    AxisClass::Normal => "Lead I and aVF both positive (or II positive): normal.",
-                    AxisClass::LeftDeviation => "Lead I positive, aVF negative: left axis deviation.",
-                    AxisClass::RightDeviation => "Lead I negative, aVF positive: right axis deviation.",
-                    AxisClass::ExtremeDeviation => "Both I and aVF negative: extreme (north-west) axis.",
+                    AxisClass::Normal => t!("app-axis-normal"),
+                    AxisClass::LeftDeviation => t!("app-axis-left"),
+                    AxisClass::RightDeviation => t!("app-axis-right"),
+                    AxisClass::ExtremeDeviation => t!("app-axis-extreme"),
                 });
             }
         });
@@ -553,7 +574,7 @@ impl HeartSimApp {
     fn quiz_tab(&mut self, ui: &mut egui::Ui) {
         egui::Panel::left("quizdial").default_size(430.0).show(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("New question").clicked() {
+                if ui.button(t!("app-quiz-new")).clicked() {
                     let target = FrontalAxis::normalise(self.quiz.next_random() * 360.0 - 180.0);
                     self.set_qrs_axis(target);
                     self.quiz.target_deg = Some(target);
@@ -563,7 +584,7 @@ impl HeartSimApp {
                 let can_check =
                     self.quiz.target_deg.is_some() && self.quiz.guess_deg.is_some() && !self.quiz.revealed;
                 if ui
-                    .add_enabled(can_check, egui::Button::new("Check answer"))
+                    .add_enabled(can_check, egui::Button::new(t!("app-quiz-check")))
                     .clicked()
                 {
                     self.quiz.revealed = true;
@@ -574,16 +595,18 @@ impl HeartSimApp {
                         self.quiz.correct += 1;
                     }
                 }
-                ui.label(format!("Score {}/{}", self.quiz.correct, self.quiz.asked));
+                ui.label(t!(
+                    "app-quiz-score",
+                    correct = self.quiz.correct.to_string(),
+                    asked = self.quiz.asked.to_string()
+                ));
             });
             match (self.quiz.target_deg, self.quiz.guess_deg, self.quiz.revealed) {
                 (None, ..) => {
-                    ui.label(
-                        "Press New question, read the six limb leads, then click the axis on the circle.",
-                    );
+                    ui.label(t!("app-quiz-intro"));
                 }
                 (Some(_), None, _) => {
-                    ui.label("Click the circle where you think the QRS axis points.");
+                    ui.label(t!("app-quiz-click"));
                 }
                 (Some(t), Some(g), true) => {
                     let err = FrontalAxis::normalise(g - t);
@@ -593,11 +616,16 @@ impl HeartSimApp {
                         } else {
                             egui::Color32::LIGHT_RED
                         },
-                        format!("Answer {t:+.0}°, you chose {g:+.0}° (off by {:.0}°)", err.abs()),
+                        t!(
+                            "app-quiz-answer",
+                            answer = format!("{t:+.0}"),
+                            chosen = format!("{g:+.0}"),
+                            off = format!("{:.0}", err.abs())
+                        ),
                     );
                 }
                 (Some(_), Some(g), false) => {
-                    ui.label(format!("Your answer: {g:+.0}°. Press Check answer."));
+                    ui.label(t!("app-quiz-your-answer", chosen = format!("{g:+.0}")));
                 }
             }
             let side = ui.available_width().min(ui.available_height() - 40.0).max(200.0);
@@ -627,24 +655,31 @@ impl HeartSimApp {
         egui::CentralPanel::default().show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.heading("heartsim");
-                ui.label("An open educational heart electrophysiology and ECG simulator.");
+                ui.label(t!("help-intro"));
                 ui.separator();
-                ui.strong("Tabs");
-                ui.label("Simulator: the heart model with one selectable lead and the live axis.");
-                ui.label("12-Lead ECG: all twelve leads at once (12 × 1, 6 × 2 or the clinical 3 × 4 with rhythm strip) next to the axis circle.");
-                ui.label("Axis Trainer: drag on the circle to rotate the axis and watch every limb lead change.");
-                ui.label("Heart Vector: the cardiac dipole at the strip cursor and its loop over the last beat, on the frontal and horizontal planes.");
-                ui.label("Axis Quiz: a hidden axis is dialled in; read the leads and click your answer.");
-                ui.label("Tutorials: guided lessons that drive the simulator page by page, and an editor for a rhythm's timeline of interventions.");
-                ui.label("Rhythm Quiz: name the rhythm on a strip from the scenario library; the choices include the rhythms it is most often mistaken for.");
+                ui.strong(t!("help-tabs-heading"));
+                ui.label(t!("help-tab-simulator"));
+                ui.label(t!("help-tab-12-lead"));
+                ui.label(t!("help-tab-axis-trainer"));
+                ui.label(t!("help-tab-heart-vector"));
+                ui.label(t!("help-tab-axis-quiz"));
+                ui.label(t!("help-tab-tutorials"));
+                ui.label(t!("help-tab-rhythm-quiz"));
                 ui.separator();
-                ui.strong("Rhythms and scrubbing");
-                ui.label("Pick a rhythm from the Rhythm list above the strip: the ECG and the 3-D heart both run from it. Pause and drag the 's back' slider: the heart, the heart-vector arrow and the strip all show the same instant.");
+                ui.strong(t!("help-rhythms-heading"));
+                ui.label(t!("help-rhythms-text"));
                 ui.separator();
-                ui.strong("Finding the axis");
-                ui.label("Normal axis is −30° to +90°. Lead I and aVF both positive: normal. I positive, aVF negative: left deviation (beyond −30° when II is also negative). I negative, aVF positive: right deviation. Both negative: extreme axis. The equiphasic limb lead is perpendicular to the axis.");
+                ui.strong(t!("help-axis-heading"));
+                ui.label(t!("help-axis-text"));
                 ui.separator();
-                ui.label("Educational tool, not for clinical use.");
+                ui.strong(t!("help-keys-heading"));
+                ui.label(t!("help-keys-space"));
+                ui.label(t!("help-keys-arrows"));
+                ui.label(t!("help-keys-speed"));
+                ui.label(t!("help-keys-tabs"));
+                ui.weak(t!("help-keys-note"));
+                ui.separator();
+                ui.label(t!("help-disclaimer"));
             });
         });
     }
@@ -655,6 +690,14 @@ impl eframe::App for HeartSimApp {
         let ctx = ui.ctx().clone();
         #[cfg(feature = "export")]
         self.exports_frame(&ctx);
+        self.keyboard_shortcuts(&ctx);
+        if self.settings_open && settings_window(&ctx, &mut self.settings_open, &mut self.settings) {
+            self.settings.apply(&ctx);
+        }
+        self.therapy.set_reduced_motion(self.settings.reduced_motion);
+        if let Some(h) = &mut self.heart {
+            h.panel.reduced_motion = self.settings.reduced_motion;
+        }
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
         if !self.ecg.is_paused() {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
@@ -694,6 +737,7 @@ impl eframe::App for HeartSimApp {
                 }
                 #[cfg(feature = "export")]
                 self.export_button(ui);
+                ui.toggle_value(&mut self.settings_open, t!("settings-button"));
             });
         });
         if matches!(
@@ -733,5 +777,6 @@ impl eframe::App for HeartSimApp {
         storage.set_string(RHYTHM_QUIZ_SCORE_KEY, self.rhythm_quiz.score_string());
         #[cfg(not(feature = "native"))]
         storage.set_string(TUTORIAL_PROGRESS_KEY, self.tutorials.progress.to_text());
+        storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());
     }
 }

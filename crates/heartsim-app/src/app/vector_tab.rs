@@ -5,6 +5,7 @@
 use super::HeartSimApp;
 use eframe::egui;
 use heartsim_core::Lead;
+use heartsim_ui::t;
 use heartsim_ui::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};
 
 impl HeartSimApp {
@@ -26,20 +27,29 @@ impl HeartSimApp {
         egui::Panel::right("vector_readout")
             .default_size(260.0)
             .show(ui, |ui| {
-                ui.strong("Heart vector");
-                ui.label(
-                    "The arrow is the cardiac dipole at the strip cursor, recovered from all twelve leads. \
-                     The loop is the path of its tip through the last complete beat (blue to pink).",
-                );
+                ui.strong(t!("vector-heading"));
+                ui.label(t!("vector-intro"));
                 if let Some(d) = self.cursor_dipole() {
                     ui.separator();
                     ui.monospace(format!("|v| {:.2} mV", d.length()));
-                    ui.monospace(format!("x {:+.2}  (left)", d.x));
-                    ui.monospace(format!("y {:+.2}  (cranial)", d.y));
-                    ui.monospace(format!("z {:+.2}  (anterior)", d.z));
+                    ui.monospace(t!(
+                        "vector-x",
+                        value = format!("{:+.2}", d.x),
+                        side = t!("vector-left")
+                    ));
+                    ui.monospace(t!(
+                        "vector-y",
+                        value = format!("{:+.2}", d.y),
+                        side = t!("vector-cranial")
+                    ));
+                    ui.monospace(t!(
+                        "vector-z",
+                        value = format!("{:+.2}", d.z),
+                        side = t!("vector-anterior")
+                    ));
                 }
                 ui.separator();
-                ui.label("Pause and scrub the strip to step the arrow through the P, QRS and T loops.");
+                ui.label(t!("vector-scrub-hint"));
                 ui.separator();
                 self.ecg.readout(ui);
             });

@@ -13,6 +13,10 @@
 //! * [`engine`] — [`Tier2Engine`]: timing engine + solver on the voxelised cell cloud, Tier-1 hand-over,
 //!   tissue → timing sensing, voxel → cell sampling for the forward ECG and colour maps.
 //! * [`reentry`] — S1–S2 cross-field, obstacles, APD patches / mosaic, the break-up preset.
+//! * [`preset`] — the `reentry:` section of scenario files (patches, initiation, switch policy), PVI and
+//!   CTI ablation lines (brief B17).
+//! * [`switching`] — [`SwitchingEngine`]: Tier 1 until re-entry is needed, then Tier 2, and back after 2 s
+//!   without it (brief B17).
 //!
 //! **Numerical guard rails.** The explicit step is stable while
 //! `dt·(2·Σ_j w_ij + 1/max_dt) ≤ 2` per voxel and the upstroke spans ≥ 2 steps
@@ -25,10 +29,16 @@ pub mod calibrate;
 pub mod engine;
 pub mod grid;
 pub mod model;
+pub mod preset;
 pub mod reentry;
 pub mod solver;
+pub mod switching;
 
-pub use engine::{Tier2Engine, Tier2Params};
+pub use engine::{SnapshotError, Tier2Engine, Tier2Params, Tier2Snapshot};
 pub use grid::{Compartment, VoxelGrid, VoxelSpec};
 pub use model::{AlievPanfilov, CellModel, FentonKarma, MitchellSchaeffer};
-pub use solver::{Monodomain, Tissue, Trajectory};
+pub use preset::{
+    Initiation, Patch, PatchEffect, PatchTarget, Preset, PresetError, ReentrySpec, SwitchPolicy,
+};
+pub use solver::{Monodomain, Tissue, TissueModifier, Trajectory};
+pub use switching::{SwitchReason, SwitchRecord, SwitchingEngine, Tier, requires_reentry};

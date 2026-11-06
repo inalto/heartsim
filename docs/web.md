@@ -41,7 +41,16 @@ works from a sub-path such as `https://<user>.github.io/heartsim/` and from any 
 Audio: the app has no sound yet (brief B21 mentions a `kira` / Web Audio beep). When a monitor beep is added it should use Web
 Audio from a user gesture; nothing in the web build depends on `kira`.
 
-Persistence: eframe's `persistence` feature stores the Rhythm Quiz score and the tutorial progress in `localStorage`.
+Persistence: eframe's `persistence` feature stores the Rhythm Quiz score, the tutorial progress and the Settings window's choices
+(language, high contrast, reduced motion) in `localStorage`.
+
+Language: the Fluent catalogues are compiled into the wasm; the language follows `navigator.language` (`sys-locale` with its
+`js` feature) until the user picks one in Settings.
+
+Re-entry presets (Tier 2, brief B17): the preset list and the anatomy pack come from the downloaded archive
+(`scenarios/reentry/`, `anatomy/default/`). They run on one thread with a `Date.now()` frame budget (`std::time::Instant` panics
+in a browser), so the achieved speed shown in the controls will be below the desktop's. This path is covered by native tests
+(bundle presets equal disk presets, the pack loads from the kept subset) but has not been run in a browser.
 
 ## WebGL2 fallback
 

@@ -2,6 +2,7 @@
 //! widget only edits [`AnatomyPanelState`] (and returns one-shot camera commands); the app copies
 //! the state into the renderer's layers each frame, so the panel is testable without a GPU.
 
+use crate::t;
 use egui::Ui;
 use heartsim_render::CameraPreset;
 
@@ -18,6 +19,8 @@ pub struct LayerToggle {
 
 /// Everything the anatomy panel edits.
 #[derive(Debug, Clone, PartialEq)]
+// The layer, clipping and label switches are independent toggles, not a state machine.
+#[allow(clippy::struct_excessive_bools)]
 pub struct AnatomyPanelState {
     /// One entry per scene layer, in scene order.
     pub layers: Vec<LayerToggle>,
@@ -33,6 +36,8 @@ pub struct AnatomyPanelState {
     pub lao_rao_deg: f32,
     /// Spin the camera slowly around the cranio-caudal axis.
     pub auto_rotate: bool,
+    /// Reduced motion (B19 settings): the automatic rotation cannot run, so its checkbox is off and disabled.
+    pub reduced_motion: bool,
 }
 
 impl AnatomyPanelState {
@@ -53,6 +58,7 @@ impl AnatomyPanelState {
             labels: false,
             lao_rao_deg: 0.0,
             auto_rotate: false,
+            reduced_motion: false,
         }
     }
 
@@ -77,7 +83,7 @@ pub enum CameraCommand {
 /// Draw the panel. Returns the camera change the user asked for this frame, if any.
 pub fn anatomy_panel(ui: &mut Ui, state: &mut AnatomyPanelState) -> Option<CameraCommand> {
     let mut command = None;
-    ui.strong("Layers");
+    ui.strong(t!("anatomy-layers"));
     egui::Grid::new("anatomy_layers").num_columns(2).show(ui, |ui| {
         for l in &mut state.layers {
             ui.checkbox(&mut l.visible, l.name.as_str());
@@ -85,30 +91,30 @@ pub fn anatomy_panel(ui: &mut Ui, state: &mut AnatomyPanelState) -> Option<Camer
                 l.visible,
                 egui::Slider::new(&mut l.alpha, 0.0..=1.0)
                     .show_value(false)
-                    .text("opacity"),
+                    .text(t!("anatomy-opacity")),
             );
             ui.end_row();
         }
     });
-    ui.checkbox(&mut state.labels, "Labels");
+    ui.checkbox(&mut state.labels, t!("anatomy-labels"));
     ui.horizontal(|ui| {
-        ui.checkbox(&mut state.clip_enabled, "Cut-away");
+        ui.checkbox(&mut state.clip_enabled, t!("anatomy-cut-away"));
         ui.add_enabled(
             state.clip_enabled,
             egui::Slider::new(&mut state.clip_depth, -1.0..=1.0)
                 .show_value(false)
-                .text("depth"),
+                .text(t!("anatomy-depth")),
         );
     });
     ui.separator();
-    ui.strong("View");
+    ui.strong(t!("anatomy-view"));
     ui.horizontal_wrapped(|ui| {
         for p in CameraPreset::ALL {
             if ui.button(p.label()).clicked() {
                 command = Some(CameraCommand::Preset(p));
             }
         }
-        if ui.button("Fit").clicked() {
+        if ui.button(t!("anatomy-fit")).clicked() {
             command = Some(CameraCommand::Frame);
         }
     });
@@ -121,12 +127,14 @@ pub fn anatomy_panel(ui: &mut Ui, state: &mut AnatomyPanelState) -> Option<Camer
                     v if v > 0.5 => format!("RAO {v:.0}°"),
                     _ => "AP".to_string(),
                 })
-                .text("oblique"),
+                .text(t!("anatomy-oblique")),
         )
         .changed()
     {
         command = Some(CameraCommand::Oblique(state.lao_rao_deg));
     }
-    ui.checkbox(&mut state.auto_rotate, "Auto-rotate");
+    ui.add_enabled_ui(!state.reduced_motion, |ui| {
+        ui.checkbox(&mut state.auto_rotate, t!("anatomy-auto-rotate"));
+    });
     command
 }

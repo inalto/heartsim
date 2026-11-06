@@ -6,6 +6,7 @@
 //! variant. A row whose text does not parse is shown in red and keeps the timeline from being
 //! taken out until it is fixed.
 
+use crate::t;
 use egui::{Color32, Painter, Pos2, Sense, Stroke, Ui, vec2};
 use heartsim_core::{Action, Millis, Region, StimSite, TimedAction};
 
@@ -190,9 +191,9 @@ impl TimelineEditor {
             .striped(true)
             .num_columns(4)
             .show(ui, |ui| {
-                let time_header = ui.strong("t (ms)").id;
-                ui.strong("Kind");
-                let action_header = ui.strong("Action (scenario syntax)").id;
+                let time_header = ui.strong(t!("timeline-time")).id;
+                ui.strong(t!("timeline-kind"));
+                let action_header = ui.strong(t!("timeline-action")).id;
                 ui.label("");
                 ui.end_row();
                 for (i, r) in self.rows.iter_mut().enumerate() {
@@ -223,7 +224,7 @@ impl TimelineEditor {
                         r.reparse();
                         changed = true;
                     }
-                    if ui.button("Delete").clicked() {
+                    if ui.button(t!("timeline-delete")).clicked() {
                         remove = Some(i);
                     }
                     ui.end_row();
@@ -240,7 +241,7 @@ impl TimelineEditor {
         ui.horizontal(|ui| {
             let tpl = templates();
             self.new_kind = self.new_kind.min(tpl.len() - 1);
-            let new_label = ui.label("New action:").id;
+            let new_label = ui.label(t!("timeline-new-action")).id;
             egui::ComboBox::from_id_salt("timeline_new_kind")
                 .selected_text(action_kind(&tpl[self.new_kind]))
                 .show_ui(ui, |ui| {
@@ -250,15 +251,15 @@ impl TimelineEditor {
                 })
                 .response
                 .labelled_by(new_label);
-            let at = ui.label("at").id;
+            let at = ui.label(t!("timeline-at")).id;
             ui.add(
                 egui::DragValue::new(&mut self.new_at_ms)
                     .speed(10.0)
                     .range(0.0..=3_600_000.0)
-                    .suffix(" ms"),
+                    .suffix(format!(" {}", t!("timeline-ms"))),
             )
             .labelled_by(at);
-            if ui.button("Add").clicked() {
+            if ui.button(t!("timeline-add")).clicked() {
                 self.add(self.new_at_ms, &tpl[self.new_kind]);
                 changed = true;
             }
@@ -325,7 +326,7 @@ pub fn scrub_bar(
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .map(|(i, _)| i)
         });
-    resp.on_hover_text("Scenario timeline: one tick per action, red = now. Click a tick to select its row.");
+    resp.on_hover_text(t!("timeline-hint"));
     clicked
 }
 

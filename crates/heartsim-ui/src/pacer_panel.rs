@@ -8,6 +8,7 @@
 //! pace happens, so the panel, the strip spikes ([`PaceMarks`]) and the heart's lead markers
 //! ([`lead_glyphs`]) all show the timing engine's markers.
 
+use crate::t;
 use egui::{Color32, Painter, Pos2, Stroke, Ui, vec2};
 use glam::Vec3;
 use heartsim_render::GlyphInstance;
@@ -122,10 +123,12 @@ fn slider(ui: &mut Ui, value: &mut f64, range: std::ops::RangeInclusive<f64>, te
 fn site_combo(ui: &mut Ui, label: &str, lead: &mut LeadParams, sites: &[LeadSite]) -> bool {
     let mut moved = false;
     egui::ComboBox::new(label, label)
-        .selected_text(lead.site.label())
+        .selected_text(crate::labels::lead_site_name(lead.site))
         .show_ui(ui, |ui| {
             for s in sites {
-                moved |= ui.selectable_value(&mut lead.site, *s, s.label()).changed();
+                moved |= ui
+                    .selectable_value(&mut lead.site, *s, crate::labels::lead_site_name(*s))
+                    .changed();
             }
         });
     moved
@@ -135,11 +138,11 @@ fn site_combo(ui: &mut Ui, label: &str, lead: &mut LeadParams, sites: &[LeadSite
 pub fn pacer_panel(ui: &mut Ui, state: &mut PacerPanelState) -> PacerPanelResponse {
     let mut r = PacerPanelResponse::default();
     ui.horizontal(|ui| {
-        ui.strong("Pacemaker");
-        r.changed |= ui.checkbox(&mut state.connected, "Connected").changed();
+        ui.strong(t!("pacer-title"));
+        r.changed |= ui.checkbox(&mut state.connected, t!("pacer-connected")).changed();
     });
     ui.horizontal_wrapped(|ui| {
-        ui.label("Preset:");
+        ui.label(t!("pacer-preset"));
         for p in PacerPreset::ALL {
             if ui.button(p.label()).clicked() {
                 state.config = PacerConfig::preset(p);
@@ -152,80 +155,105 @@ pub fn pacer_panel(ui: &mut Ui, state: &mut PacerPanelState) -> PacerPanelRespon
     ui.add_enabled_ui(state.connected, |ui| {
         let c = &mut state.config;
         ui.horizontal_wrapped(|ui| {
-            ui.label("Mode:");
+            ui.label(t!("pacer-mode"));
             for m in PacerMode::ALL {
                 r.changed |= ui.selectable_value(&mut c.mode, m, m.label()).changed();
             }
         });
         ui.horizontal(|ui| {
-            r.changed |= ui.toggle_value(&mut c.paused, "PAUSE").changed();
+            r.changed |= ui.toggle_value(&mut c.paused, t!("pacer-pause")).changed();
             r.changed |= ui
-                .toggle_value(&mut c.asynchronous, "ASYNC")
-                .on_hover_text("Asynchronous (magnet) mode: sensing off, fixed-rate pacing.")
+                .toggle_value(&mut c.asynchronous, t!("pacer-async"))
+                .on_hover_text(t!("pacer-async-hint"))
                 .changed();
         });
-        r.changed |= slider(ui, &mut c.lower_rate_bpm, RATE_RANGE_PPM, "rate ppm");
+        r.changed |= slider(ui, &mut c.lower_rate_bpm, RATE_RANGE_PPM, &t!("pacer-rate"));
         ui.separator();
-        ui.label("Atrium");
-        r.changed |= slider(ui, &mut c.atrial_output_ma, OUTPUT_RANGE_MA, "A output mA");
+        ui.label(t!("pacer-atrium"));
+        r.changed |= slider(
+            ui,
+            &mut c.atrial_output_ma,
+            OUTPUT_RANGE_MA,
+            &t!("pacer-a-output"),
+        );
         r.changed |= slider(
             ui,
             &mut c.atrial_sensitivity_mv,
             SENSITIVITY_RANGE_MV,
-            "A sensitivity mV",
+            &t!("pacer-a-sensitivity"),
         );
-        ui.label("Ventricle");
-        r.changed |= slider(ui, &mut c.ventricular_output_ma, OUTPUT_RANGE_MA, "V output mA");
+        ui.label(t!("pacer-ventricle"));
+        r.changed |= slider(
+            ui,
+            &mut c.ventricular_output_ma,
+            OUTPUT_RANGE_MA,
+            &t!("pacer-v-output"),
+        );
         r.changed |= slider(
             ui,
             &mut c.ventricular_sensitivity_mv,
             SENSITIVITY_RANGE_MV,
-            "V sensitivity mV",
+            &t!("pacer-v-sensitivity"),
         );
         ui.separator();
-        r.changed |= slider(ui, &mut c.av_delay_ms, 50.0..=300.0, "AV delay ms");
-        r.changed |= slider(ui, &mut c.upper_rate_bpm, 80.0..=180.0, "upper rate ppm");
-        r.changed |= slider(ui, &mut c.pvarp_ms, 150.0..=500.0, "PVARP ms");
+        r.changed |= slider(ui, &mut c.av_delay_ms, 50.0..=300.0, &t!("pacer-av-delay"));
+        r.changed |= slider(ui, &mut c.upper_rate_bpm, 80.0..=180.0, &t!("pacer-upper-rate"));
+        r.changed |= slider(ui, &mut c.pvarp_ms, 150.0..=500.0, &t!("pacer-pvarp"));
         ui.separator();
-        ui.label("Leads");
+        ui.label(t!("pacer-leads"));
         let mut moved = false;
-        moved |= site_combo(ui, "A lead", &mut c.atrial_lead, &[LeadSite::RaAppendage]);
         moved |= site_combo(
             ui,
-            "V lead",
+            &t!("pacer-a-lead"),
+            &mut c.atrial_lead,
+            &[LeadSite::RaAppendage],
+        );
+        moved |= site_combo(
+            ui,
+            &t!("pacer-v-lead"),
             &mut c.ventricular_lead,
             &[LeadSite::RvApex, LeadSite::RvSeptum, LeadSite::HisBundle],
         );
         let mut biv = c.lv_lead.is_some();
-        if ui.checkbox(&mut biv, "LV lead (BiV)").changed() {
+        if ui.checkbox(&mut biv, t!("pacer-lv-lead-biv")).changed() {
             c.lv_lead = biv.then(|| LeadParams::at(LeadSite::LvLateral));
             moved = true;
         }
         if let Some(lv) = &mut c.lv_lead {
-            moved |= site_combo(ui, "LV lead", lv, &[LeadSite::LvLateral, LeadSite::LvPosterior]);
-            r.changed |= slider(
+            moved |= site_combo(
                 ui,
-                &mut c.vv_delay_ms,
-                -80.0..=80.0,
-                "VV offset ms (− = LV first)",
+                &t!("pacer-lv-lead"),
+                lv,
+                &[LeadSite::LvLateral, LeadSite::LvPosterior],
             );
+            r.changed |= slider(ui, &mut c.vv_delay_ms, -80.0..=80.0, &t!("pacer-vv-offset"));
         }
         r.changed |= moved;
         r.leads_moved |= moved;
-        ui.label(format!(
-            "Thresholds now: A {:.1} mA, V {:.1} mA",
-            c.atrial_lead.threshold_at(state.now_ms),
-            c.ventricular_lead.threshold_at(state.now_ms)
+        ui.label(t!(
+            "pacer-thresholds",
+            atrial = crate::i18n::number(c.atrial_lead.threshold_at(state.now_ms), 1),
+            ventricular = crate::i18n::number(c.ventricular_lead.threshold_at(state.now_ms), 1)
         ));
     });
     ui.separator();
     ui.horizontal(|ui| {
         for ch in [PacerChannel::Atrial, PacerChannel::Ventricular] {
             let l = ch.letter();
-            led(ui, state.sense_lit(ch), SENSE_COLOUR, &format!("{l} sense"));
-            led(ui, state.pace_lit(ch), PACE_COLOUR, &format!("{l} pace"));
+            led(
+                ui,
+                state.sense_lit(ch),
+                SENSE_COLOUR,
+                &t!("pacer-sense", channel = l.to_string()),
+            );
+            led(
+                ui,
+                state.pace_lit(ch),
+                PACE_COLOUR,
+                &t!("pacer-pace", channel = l.to_string()),
+            );
         }
-        led(ui, state.connected, SENSE_COLOUR, "battery");
+        led(ui, state.connected, SENSE_COLOUR, &t!("pacer-battery"));
     });
     r
 }

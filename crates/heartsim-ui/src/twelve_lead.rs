@@ -2,6 +2,7 @@
 //! teaching view) or in the clinical 3 × 4 grid with a lead II rhythm strip underneath.
 
 use crate::strip::{StripStyle, ecg_strip};
+use crate::t;
 use egui::{Rect, Ui, Vec2};
 use heartsim_core::Lead;
 use heartsim_ecg::LeadRing;
@@ -19,11 +20,11 @@ pub enum TwelveLeadLayout {
 
 impl TwelveLeadLayout {
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self) -> String {
         match self {
-            Self::Stacked => "12 × 1",
-            Self::TwoColumn => "6 × 2",
-            Self::Clinical => "3 × 4 + rhythm",
+            Self::Stacked => t!("layout-12x1"),
+            Self::TwoColumn => t!("layout-6x2"),
+            Self::Clinical => t!("layout-3x4"),
         }
     }
 }

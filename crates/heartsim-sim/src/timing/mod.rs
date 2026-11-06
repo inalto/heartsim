@@ -213,6 +213,8 @@ const DEFAULT_SHOCK_SEED: u64 = 0x5EED_DEF1;
 const ASYSTOLE_MS: f64 = 3000.0;
 /// RR below this is a tachycardia (> 100 bpm), ms.
 const TACHYCARDIA_RR_MS: f64 = 600.0;
+/// Ventricular cycle below this, sensed from the tissue model, is fibrillation (> 240 bpm), ms.
+const VF_CYCLE_MS: f64 = 250.0;
 /// Atrial cycle below this is fibrillation / flutter (> 250 bpm), ms.
 const FLUTTER_CYCLE_MS: f64 = 240.0;
 
@@ -488,6 +490,9 @@ impl TimingEngine {
                     RhythmClass::VentricularTachycardia
                 }
                 Some(VentVia::Pacer | VentVia::PacerLv) => RhythmClass::Organised,
+                // sensed back from the tissue model: organised re-entry (VT) or fibrillation
+                Some(VentVia::Tissue) if rr < VF_CYCLE_MS => RhythmClass::VentricularFibrillation,
+                Some(VentVia::Tissue) => RhythmClass::VentricularTachycardia,
                 _ if flutter => RhythmClass::AtrialFibrillationOrFlutter,
                 _ => RhythmClass::SupraventricularTachycardia,
             },

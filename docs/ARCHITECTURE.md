@@ -31,7 +31,7 @@ heartsim-ui        egui widgets: ecg_strip (painter), twelve-lead page, Viewport
 heartsim-io        exports and imports (B20): EcgRecord excerpt, 12-lead PDF (printpdf), page/strip PNG (ui's CPU rasteriser),
                    CSV, WFDB format 16, scenario RON, deterministic share-bundle zip; CSV/WFDB/zip import for review
 heartsim-app       eframe app: model (clock, engine, synth/forward, rings), settings, persistence, audio (kira), exports, tutorials
-heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets
+heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets, openCARP bridge
 xtask              ci, asset pipeline (decimate meshes, bake hoods/fibres/W matrix), release checks
 ```
 Dependency direction is strictly downward in this list.
@@ -104,6 +104,14 @@ mapping each cell's template phase to `(u, v)`.
 * Regimes (tests): default AP keeps one rotor ≥ 2 s; the same cell on the APD-mosaic break-up preset fragments into 3–23 phase
   singularities (the Panfilov 1999 a = 0.1, μ₁ = 0.07 constants did *not* break up in 2-D); Mitchell–Schaeffer holds one stable
   rotor with τ_close = 100 < τ_open (restitution slope ∝ τ_close/τ_open; τ_close = 300 breaks up).
+
+* Re-entry presets and tier switching (brief B17, `sim::tier2::{preset, switching}`): a scenario file's `reentry:` section lists tissue
+  patches, an initiation and a switch policy; `SwitchingEngine` runs Tier 1 and continues the same simulation in Tier 2 when the scenario
+  or an action (burst pacing, S2/S3, unsynchronised shock) needs re-entry, handing back after 2 s without a ≥ 0.6 s phase-singularity run or
+  an unexplained activation at the AV-nodal input / lead tip. Changing APD or CV of calibrated tissue re-solves D on the solver's grid
+  (`calibrate::retarget`): scaling them independently stops conduction on a coarse grid. Measured: the short-APD atrial front fails to
+  conduct through the narrow atrial bridges at 3–4 mm voxels, so the AF preset runs at 2 mm; flutter, scar VT, torsades and VF could not be
+  made to survive in the heart-shaped model with any initiation tried (S1–S2, bursts, cross-field, phase-seeded wave), and are not shipped.
 
 ### 4.4 Forward ECG
 * Precompute `W[e, j]` for the 9 signal electrodes: equivalent-double-layer / dipole form

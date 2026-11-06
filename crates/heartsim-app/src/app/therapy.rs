@@ -14,6 +14,7 @@ use heartsim_core::Action;
 use heartsim_ecg::SynthModulation;
 use heartsim_sim::Engine;
 use heartsim_sim::ischaemia::CoronaryBranch;
+use heartsim_ui::t;
 use heartsim_ui::{
     DefibPanelState, IschaemiaPanelState, defib_panel, describe_shock, drug_tray, ischaemia_panel,
 };
@@ -33,6 +34,13 @@ pub(super) struct Therapy {
     highlight: Option<(CoronaryBranch, Vec<heartsim_render::GlyphInstance>)>,
 }
 
+impl Therapy {
+    /// Reduced motion (B19 settings): the defibrillator panel stops flashing after a shock.
+    pub(super) fn set_reduced_motion(&mut self, on: bool) {
+        self.defib.reduced_motion = on;
+    }
+}
+
 impl HeartSimApp {
     /// Hand an action to the 3-D heart where it is spatial (coronary lesions); the timing engine
     /// gets it separately (timeline, therapy window).
@@ -46,6 +54,9 @@ impl HeartSimApp {
 
     /// Apply a therapy action now: timing engine first, then the heart.
     fn apply_therapy(&mut self, action: &Action) {
+        if self.reentry_apply(action) {
+            return;
+        }
         let now = self.engine.now();
         if let Err(e) = self.engine.apply(action, now) {
             tracing::warn!("therapy action: {e}");
@@ -59,7 +70,9 @@ impl HeartSimApp {
     pub(super) fn therapy_step(&mut self) {
         let fx = self.engine.drug_effects();
         self.synth.modulation = SynthModulation::from_state(&fx, self.engine.ischaemia());
-        let shocks = self.engine.drain_shocks();
+        let shocks = self
+            .reentry_shocks()
+            .unwrap_or_else(|| self.engine.drain_shocks());
         if let Some(h) = &mut self.heart {
             h.engine_mut().set_drug_effects(&fx);
             for s in shocks.iter().filter(|s| s.success) {
@@ -80,25 +93,25 @@ impl HeartSimApp {
         let mut actions = Vec::new();
         let mut highlight = None;
         let now = self.engine.now().0;
-        egui::Window::new("Therapy")
+        egui::Window::new(t!("app-therapy"))
             .open(&mut open)
             .default_width(320.0)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    egui::CollapsingHeader::new("Drugs")
+                    egui::CollapsingHeader::new(t!("therapy-drugs"))
                         .default_open(true)
                         .show(ui, |ui| {
                             let active = self.engine.pharmacology().active(now);
                             let table = std::sync::Arc::clone(self.engine.pharmacology().table());
                             actions.extend(drug_tray(ui, &table, &active));
                         });
-                    egui::CollapsingHeader::new("Ischaemia").show(ui, |ui| {
+                    egui::CollapsingHeader::new(t!("therapy-ischaemia")).show(ui, |ui| {
                         let lesions = self.engine.ischaemia().lesions().to_vec();
                         let r = ischaemia_panel(ui, &mut self.therapy.ischaemia, &lesions);
                         actions.extend(r.actions);
                         highlight = r.highlight;
                     });
-                    egui::CollapsingHeader::new("Defibrillator").show(ui, |ui| {
+                    egui::CollapsingHeader::new(t!("therapy-defib")).show(ui, |ui| {
                         let r = defib_panel(ui, &mut self.therapy.defib, now, self.engine.shock_armed());
                         if r.cancel_armed {
                             self.engine.cancel_armed_shock();

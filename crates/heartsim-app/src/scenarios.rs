@@ -10,6 +10,7 @@ use crate::assets::AssetBundle;
 use eframe::egui;
 use heartsim_core::{Millis, TimedAction};
 use heartsim_ecg::Tier0Scenario;
+use heartsim_ui::t;
 #[cfg(feature = "native")]
 use std::path::{Path, PathBuf};
 
@@ -165,8 +166,8 @@ pub fn scenario_picker(
     let mut picked = None;
     let title = current
         .and_then(|i| library.entries.get(i))
-        .map_or("Custom (sliders)", |s| s.scenario.title.as_str());
-    ui.label("Rhythm:");
+        .map_or_else(|| t!("scenario-custom"), |s| s.scenario.title.clone());
+    ui.label(t!("scenario-rhythm"));
     let combo = egui::ComboBox::from_id_salt("scenario_picker")
         .selected_text(title)
         .width(320.0)
@@ -181,15 +182,18 @@ pub fn scenario_picker(
                 }
             }
         });
+    combo
+        .response
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t!("scenario-rhythm")));
     heartsim_ui::highlight::mark(&combo.response, "rhythm_picker");
     if let Some(s) = current.and_then(|i| library.entries.get(i)) {
         let r = ui
-            .button("Restart")
-            .on_hover_text("Reload the scenario from t = 0.");
+            .button(t!("scenario-restart"))
+            .on_hover_text(t!("scenario-restart-hint"));
         if r.clicked() {
             picked = current;
         }
-        ui.label("About").on_hover_ui(|ui| {
+        ui.label(t!("scenario-about")).on_hover_ui(|ui| {
             ui.set_max_width(420.0);
             ui.strong(&s.scenario.title);
             ui.label(&s.scenario.description);

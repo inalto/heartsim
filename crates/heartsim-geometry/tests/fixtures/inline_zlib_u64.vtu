@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<VTKFile type="UnstructuredGrid" version="1.0" byte_order="LittleEndian" header_type="UInt64" compressor="vtkZLibDataCompressor">
+<UnstructuredGrid>
+<Piece NumberOfPoints="5" NumberOfCells="2">
+<PointData Scalars="Vm">
+<DataArray type="Float32" Name="Vm" NumberOfComponents="1" format="binary">AgAAAAAAAAAQAAAAAAAAAAQAAAAAAAAAFAAAAAAAAAAMAAAAAAAAAA==eJxjYFh1iIFBAYhBYIEjABzJAzB4nGNg4HMCAABiAFE=</DataArray>
+</PointData>
+<CellData>
+<DataArray type="Float64" Name="Scalars_" NumberOfComponents="1" format="binary">AQAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEgAAAAAAAAA=eJxjYAABTQcwxSB7AAAE5AFH</DataArray>
+</CellData>
+<Points>
+<DataArray type="Float32" Name="Points" NumberOfComponents="3" format="binary">BAAAAAAAAAAQAAAAAAAAAAwAAAAAAAAADQAAAAAAAAANAAAAAAAAAA0AAAAAAAAADgAAAAAAAAA=eJxjYEAGVS4AAUgAv3icY2BABlUuAAFIAL94nGNgQAZVLgABSAC/eJxjYKhyYYBiAAycAjs=</DataArray>
+</Points>
+<Cells>
+<DataArray type="Int64" Name="connectivity" NumberOfComponents="1" format="binary">BAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAOAAAAAAAAAA4AAAAAAAAADgAAAAAAAAA=eJxjYIAARigNAAAYAAJ4nGNigABmKA0AAEgABnicY2SAACYoDQAAMAAEeJxjZoAAFigNAABgAAg=</DataArray>
+<DataArray type="Int64" Name="offsets" NumberOfComponents="1" format="binary">AQAAAAAAAAAQAAAAAAAAAAAAAAAAAAAADgAAAAAAAAA=eJxjYYAADigNAACQAA0=</DataArray>
+<DataArray type="UInt8" Name="types" NumberOfComponents="1" format="binary">AQAAAAAAAAAQAAAAAAAAAAIAAAAAAAAACgAAAAAAAAA=eJzj4gIAACAAFQ==</DataArray>
+</Cells>
+</Piece>
+</UnstructuredGrid>
+</VTKFile>

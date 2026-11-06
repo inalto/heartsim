@@ -75,6 +75,12 @@ printpdf = { version = "0.12.8", default-features = false }
 # Share bundles: deflate only (flate2's pure-Rust backend), no encryption or exotic codecs.
 zip = { version = "9.3.0", default-features = false, features = ["deflate-flate2"] }
 directories = "6.0.0"
+# Validation bridge (B23): VTU XML, its base64 + zlib payloads, report plots (in-memory bitmaps, embedded font, no system fonts).
+roxmltree = "0.21.2"
+base64 = "0.22.1"
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
+plotters = { version = "0.3.7", default-features = false, features = ["bitmap_backend", "ab_glyph", "line_series", "point_series"] }
+epaint_default_fonts = "0.37.0"
 
 # --- build tooling (xtask only) ----------------------------------------------
 # Text, system fonts and raster images are off: the icon is pure vector paths.
@@ -87,6 +93,10 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 clap = { version = "4.6.7", features = ["derive"] }
 pollster = "1.0.1"
+# Localisation: Project Fluent (fluent 0.17 pairs with fluent-bundle 0.16 and unic-langid 0.9)
+fluent = "0.17.0"
+unic-langid = "0.9.6"
+sys-locale = "0.3.2"
 
 # --- dev / test --------------------------------------------------------------
 proptest = "1.12.0"

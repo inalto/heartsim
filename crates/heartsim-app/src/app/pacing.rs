@@ -7,6 +7,7 @@ use eframe::egui;
 use heartsim_sim::Engine;
 use heartsim_sim::tier1::LeadProbe;
 use heartsim_sim::timing::{PacerChannel, PacerConfig};
+use heartsim_ui::t;
 use heartsim_ui::{PaceMarks, PacerPanelState, pacer_panel};
 
 /// Pacemaker UI state owned by the app.
@@ -76,7 +77,7 @@ impl HeartSimApp {
         }
         let mut open = self.pacing.open;
         let mut response = None;
-        egui::Window::new("Pacemaker")
+        egui::Window::new(t!("pacer-title"))
             .open(&mut open)
             .resizable(false)
             .show(ctx, |ui| response = Some(pacer_panel(ui, &mut self.pacing.panel)));

@@ -49,6 +49,23 @@ impl AssetBundle {
         self.files.is_empty()
     }
 
+    /// A copy holding only the files at or below one of `prefixes` (`anatomy/default`, matched on
+    /// whole path segments), for a part of the app that keeps its own copy of what it needs.
+    #[must_use]
+    pub fn subset(&self, prefixes: &[&str]) -> Self {
+        let files = self
+            .files
+            .iter()
+            .filter(|(p, _)| {
+                prefixes
+                    .iter()
+                    .any(|d| p.strip_prefix(d).is_some_and(|rest| rest.starts_with('/')))
+            })
+            .map(|(p, b)| (p.clone(), b.clone()))
+            .collect();
+        Self { files }
+    }
+
     /// Total size of all files, bytes.
     #[must_use]
     pub fn total_bytes(&self) -> usize {
@@ -148,6 +165,16 @@ mod tests {
             ["scenarios/a.ron", "scenarios/b.ron"],
             "no sub-directories, no other suffixes"
         );
+    }
+
+    #[test]
+    fn subset_matches_whole_path_segments() {
+        let mut b = bundle();
+        b.insert("tutorials-extra/x.ron", b"x".to_vec());
+        let s = b.subset(&["tutorials"]);
+        assert_eq!(s.len(), 4, "tutorials/* only, not tutorials-extra or scenarios");
+        assert!(s.get("tutorials/one/tutorial.ron").is_some());
+        assert!(s.get("tutorials-extra/x.ron").is_none());
     }
 
     #[test]

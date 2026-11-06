@@ -9,6 +9,7 @@
 | [anatomy-pack.md](anatomy-pack.md) | Anatomy pack format, coordinate frame, the procedural default pack, and how to bake one from the open Strocchi/Rodero meshes (download, licence, attribution) | geometry/sim implementers |
 | [web.md](web.md) | The browser (WebAssembly) build: how to build and serve it, what it drops, the WebGL2 fallback, size budget, smoke test and browser test matrix | implementers, testers |
 | [tutorials.md](tutorials.md) | Tutorial file format (pages, actions, checks), modes, progress, the scenario timeline editor | educators, content authors |
+| [validation-bridge.md](validation-bridge.md) | Exporting to openCARP, importing solver results, comparison reports and the Niederer slab: what they do, what was not checked against a real solver | researchers, sim implementers |
 | [briefs/](briefs/) | One self-contained implementation brief per work package, with recommended model (Opus / Sonnet / Haiku) | subagents |
 | [research/reference-apps.md](research/reference-apps.md) | Feature inventory and UX analysis of Epicardio EHS2, cardiacrhythmsim.com, ecgaxistrainer, Epicardio WebGL | product |
 | [research/electrophysiology-and-ecg-models.md](research/electrophysiology-and-ecg-models.md) | The science: cell models, eikonal activation, conduction system, ECG forward problem, meshes, numerics | sim implementers |

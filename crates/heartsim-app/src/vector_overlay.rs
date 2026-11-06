@@ -12,6 +12,7 @@ use heartsim_core::LEAD_COUNT;
 use heartsim_ecg::{HeartVectorSolver, LeadRing, LeadVectors};
 use heartsim_render::{GlyphInstance, GlyphSetId, glyph};
 use heartsim_ui::ViewportResources;
+use heartsim_ui::t;
 
 /// Default arrow length per millivolt, mm: a 1.5 mV QRS peak reaches ~70 mm, just past the
 /// ventricular surface of the default pack.
@@ -137,20 +138,20 @@ impl VectorOverlay {
     /// "see-through" switch lowers them so the arrow inside the ventricles is visible, and
     /// restores them when switched off.
     pub fn controls(&mut self, ui: &mut egui::Ui, alphas: &mut [&mut f32]) {
-        ui.strong("Heart vector");
+        ui.strong(t!("vector-heading"));
         ui.horizontal(|ui| {
-            ui.checkbox(&mut self.arrow, "Arrow");
-            ui.checkbox(&mut self.show_loop, "Loop (last beat)");
+            ui.checkbox(&mut self.arrow, t!("vec-arrow"));
+            ui.checkbox(&mut self.show_loop, t!("vec-loop"));
         });
         let mut see_through = self.saved_alpha.is_some();
         if ui
-            .checkbox(&mut see_through, "See-through heart")
-            .on_hover_text("Make the heart translucent so the vector inside it shows.")
+            .checkbox(&mut see_through, t!("vec-see-through"))
+            .on_hover_text(t!("vec-see-through-hint"))
             .changed()
         {
             self.set_see_through(see_through, alphas);
         }
-        ui.add(egui::Slider::new(&mut self.scale_mm_per_mv, 10.0..=120.0).text("mm per mV"));
+        ui.add(egui::Slider::new(&mut self.scale_mm_per_mv, 10.0..=120.0).text(t!("vec-scale")));
     }
 
     /// Lower (or restore) the layer opacities.

@@ -4,6 +4,7 @@
 
 use eframe::egui;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use heartsim_ui::t;
 use std::path::PathBuf;
 
 use crate::tutorial::{
@@ -213,15 +214,15 @@ impl Tutorials {
     /// The tutorial list with progress, the mode switch and Start / Resume.
     pub fn library_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("Mode:");
-            ui.selectable_value(&mut self.mode, Mode::SelfStudy, "Self-study")
-                .on_hover_text("Pages in order; answer each check before moving on.");
-            ui.selectable_value(&mut self.mode, Mode::Tutor, "Tutor")
-                .on_hover_text("Free navigation for presenting to a group; checks are optional.");
+            ui.label(t!("tut-mode"));
+            ui.selectable_value(&mut self.mode, Mode::SelfStudy, t!("tut-self-study"))
+                .on_hover_text(t!("tut-self-study-hint"));
+            ui.selectable_value(&mut self.mode, Mode::Tutor, t!("tut-tutor"))
+                .on_hover_text(t!("tut-tutor-hint"));
         });
         ui.separator();
         if self.library.tutorials.is_empty() {
-            ui.label("No tutorials installed (assets/tutorials).");
+            ui.label(t!("tut-none"));
         }
         let mut start = None;
         for (i, t) in self.library.tutorials.iter().enumerate() {
@@ -230,7 +231,7 @@ impl Tutorials {
                 ui.horizontal(|ui| {
                     ui.strong(&t.title);
                     if p.completed {
-                        ui.colored_label(egui::Color32::LIGHT_GREEN, "completed");
+                        ui.colored_label(egui::Color32::LIGHT_GREEN, t!("tut-completed"));
                     }
                 });
                 ui.label(&t.summary);
@@ -242,13 +243,17 @@ impl Tutorials {
                         frac
                     })
                     .desired_width(220.0)
-                    .text(format!("{} pages", t.pages.len())),
+                    .text(t!("tut-pages", count = t.pages.len().to_string())),
                 );
                 ui.horizontal(|ui| {
-                    if ui.button(format!("Start {}", t.title)).clicked() {
+                    if ui.button(t!("tut-start", title = t.title.as_str())).clicked() {
                         start = Some((i, 0));
                     }
-                    if p.page > 0 && ui.button(format!("Resume at page {}", p.page + 1)).clicked() {
+                    if p.page > 0
+                        && ui
+                            .button(t!("tut-resume", page = (p.page + 1).to_string()))
+                            .clicked()
+                    {
                         start = Some((i, p.page));
                     }
                 });
@@ -275,21 +280,32 @@ impl Tutorials {
         ui.horizontal(|ui| {
             ui.heading(&tutorial.title);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Close tutorial").clicked() {
+                if ui.button(t!("tut-close")).clicked() {
                     nav = Some(Nav::Close);
                 }
             });
         });
-        ui.add(
-            egui::ProgressBar::new((page + 1) as f32 / n as f32).text(format!("Page {} of {n}", page + 1)),
-        );
-        egui::CollapsingHeader::new("Contents")
+        ui.add(egui::ProgressBar::new((page + 1) as f32 / n as f32).text(t!(
+            "tut-page-of",
+            page = (page + 1).to_string(),
+            total = n.to_string()
+        )));
+        egui::CollapsingHeader::new(t!("tut-contents"))
             .id_salt("tutorial_contents")
             .show(ui, |ui| {
                 for (i, pg) in tutorial.pages.iter().enumerate() {
                     let enabled = self.may_visit(ti, i);
                     let done = pg.check.is_some() && self.progress_of(ti).passed.contains(&i);
-                    let label = format!("{}. {}{}", i + 1, pg.title, if done { " (passed)" } else { "" });
+                    let label = format!(
+                        "{}. {}{}",
+                        i + 1,
+                        pg.title,
+                        if done {
+                            format!(" {}", t!("tut-passed"))
+                        } else {
+                            String::new()
+                        }
+                    );
                     if ui
                         .add_enabled(enabled, egui::Button::selectable(i == page, label))
                         .clicked()
@@ -307,7 +323,7 @@ impl Tutorials {
                 CommonMarkViewer::new().show(ui, &mut self.markdown, &p.markdown);
                 if let Some(q) = &p.check {
                     ui.separator();
-                    ui.strong("Check your understanding");
+                    ui.strong(t!("tut-check"));
                     ui.label(&q.prompt);
                     for (i, c) in q.choices.iter().enumerate() {
                         if ui.selectable_label(chosen == Some(i), c).clicked() {
@@ -316,13 +332,13 @@ impl Tutorials {
                     }
                     match chosen {
                         Some(c) if c == q.answer => {
-                            ui.colored_label(egui::Color32::LIGHT_GREEN, "Correct.");
+                            ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
                             if !q.explanation.is_empty() {
                                 CommonMarkViewer::new().show(ui, &mut self.markdown, &q.explanation);
                             }
                         }
                         Some(_) => {
-                            ui.colored_label(egui::Color32::LIGHT_RED, "Not quite. Try again.");
+                            ui.colored_label(egui::Color32::LIGHT_RED, t!("tut-try-again"));
                         }
                         None => {}
                     }
@@ -331,13 +347,20 @@ impl Tutorials {
         ui.separator();
         let can_next = self.mode == Mode::Tutor || self.page_cleared(ti, page);
         ui.horizontal(|ui| {
-            if ui.add_enabled(page > 0, egui::Button::new("Previous")).clicked() {
+            if ui
+                .add_enabled(page > 0, egui::Button::new(t!("tut-previous")))
+                .clicked()
+            {
                 nav = Some(Nav::Go(page - 1));
             }
-            let next_label = if page + 1 < n { "Next" } else { "Finish" };
+            let next_label = if page + 1 < n {
+                t!("tut-next")
+            } else {
+                t!("tut-finish")
+            };
             if ui
                 .add_enabled(can_next, egui::Button::new(next_label))
-                .on_disabled_hover_text("Answer the question first.")
+                .on_disabled_hover_text(t!("tut-answer-first"))
                 .clicked()
             {
                 nav = Some(if page + 1 < n {
@@ -347,15 +370,15 @@ impl Tutorials {
                 });
             }
             if ui
-                .button("Replay")
-                .on_hover_text("Run this page's simulator actions again.")
+                .button(t!("tut-replay"))
+                .on_hover_text(t!("tut-replay-hint"))
                 .clicked()
             {
                 nav = Some(Nav::Replay);
             }
             if running {
                 ui.spinner();
-                ui.weak("running…");
+                ui.weak(t!("tut-running"));
             }
         });
         match nav {

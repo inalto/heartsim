@@ -14,6 +14,7 @@ use eframe::egui;
 use heartsim_ecg::Tier0Scenario;
 use heartsim_io::{Paper, write_files};
 use heartsim_sim::Engine as _;
+use heartsim_ui::t;
 use std::path::{Path, PathBuf};
 
 impl HeartSimApp {
@@ -33,7 +34,7 @@ impl HeartSimApp {
             self.exports.status = Some(msg);
         }
         let mut open = self.exports.open;
-        egui::Window::new("Export / Import")
+        egui::Window::new(t!("export-title"))
             .open(&mut open)
             .resizable(false)
             .default_width(380.0)
@@ -44,93 +45,96 @@ impl HeartSimApp {
     /// The tab-bar toggle that opens the window.
     pub(super) fn export_button(&mut self, ui: &mut egui::Ui) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.toggle_value(&mut self.exports.open, "Export / Import");
+            ui.toggle_value(&mut self.exports.open, t!("export-title"));
             if let Some(r) = &self.exports.review {
-                ui.colored_label(ui.visuals().warn_fg_color, format!("Reviewing {}", r.label));
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    t!("export-reviewing", label = r.label.clone()),
+                );
             }
         });
     }
 
     fn exports_ui(&mut self, ui: &mut egui::Ui) {
-        ui.strong("Export");
+        ui.strong(t!("export-heading"));
         egui::Grid::new("export_settings").num_columns(2).show(ui, |ui| {
-            ui.label("Length");
+            ui.label(t!("export-length"));
             ui.add(
                 egui::DragValue::new(&mut self.exports.window_s)
                     .range(1.0..=60.0)
                     .speed(0.5)
-                    .suffix(" s"),
+                    .suffix(format!(" {}", t!("export-seconds"))),
             );
             ui.end_row();
-            ui.label("PDF paper");
+            ui.label(t!("export-pdf-paper"));
             ui.horizontal(|ui| {
                 for p in [Paper::A4, Paper::Letter] {
                     ui.selectable_value(&mut self.exports.paper, p, p.label());
                 }
             });
             ui.end_row();
-            ui.label("Formats");
+            ui.label(t!("export-formats"));
             ui.horizontal_wrapped(|ui| {
                 let f = &mut self.exports.formats;
                 ui.checkbox(&mut f.pdf, "PDF");
                 ui.checkbox(&mut f.png, "PNG");
                 ui.checkbox(&mut f.csv, "CSV");
                 ui.checkbox(&mut f.wfdb, "WFDB");
-                ui.checkbox(&mut f.ron, "Scenario");
-                ui.checkbox(&mut f.bundle, "Share bundle (.zip)");
+                ui.checkbox(&mut f.ron, t!("export-scenario"));
+                ui.checkbox(&mut f.bundle, t!("export-bundle"));
             });
             ui.end_row();
-            ui.label("Folder");
+            ui.label(t!("export-folder"));
             ui.text_edit_singleline(&mut self.exports.dir);
             ui.end_row();
         });
-        ui.weak(format!(
-            "{} mm/s, {} mm/mV and the {} lead order from the strip; ends at the strip cursor.",
-            self.ecg.style.mm_per_s,
-            self.ecg.style.mm_per_mv,
-            self.ecg.order.label()
+        ui.weak(t!(
+            "export-settings-summary",
+            speed = self.ecg.style.mm_per_s.to_string(),
+            gain = self.ecg.style.mm_per_mv.to_string(),
+            order = self.ecg.order.label()
         ));
         ui.horizontal(|ui| {
             let reviewing = self.exports.review.is_some();
             if ui
-                .add_enabled(!reviewing, egui::Button::new("Export"))
-                .on_disabled_hover_text(
-                    "Go back to live to export: a recording under review is not a simulation.",
-                )
+                .add_enabled(!reviewing, egui::Button::new(t!("export-button")))
+                .on_disabled_hover_text(t!("export-live-hint"))
                 .clicked()
             {
                 self.export_now();
             }
             if ui
-                .button("Window screenshot")
-                .on_hover_text("PNG of the whole window, including the 3-D view.")
+                .button(t!("export-screenshot"))
+                .on_hover_text(t!("export-screenshot-hint"))
                 .clicked()
             {
                 self.request_window_screenshot(ui.ctx());
             }
         });
         ui.separator();
-        ui.strong("Import for review");
+        ui.strong(t!("import-heading"));
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.exports.import_path)
-                    .hint_text(".csv, .hea, .zip or .ron path")
+                    .hint_text(t!("import-hint"))
                     .desired_width(260.0),
             );
-            if ui.button("Import").clicked() {
+            if ui.button(t!("import-button")).clicked() {
                 let p = PathBuf::from(self.exports.import_path.trim());
                 self.import(&p);
             }
         });
-        ui.weak(
-            "Or drop a file on the window. The strip and the 12-lead page show it; calipers work as usual.",
-        );
+        ui.weak(t!("import-drop-hint"));
         if let Some(r) = &self.exports.review {
-            let text = format!("Reviewing {} ({:.1} s)", r.label, r.duration_s);
+            let text = t!(
+                "export-review-length",
+                label = r.label.clone(),
+                seconds = heartsim_ui::i18n::number(r.duration_s, 1)
+            );
             let back = ui
                 .horizontal(|ui| {
                     ui.label(text);
-                    ui.button("Back to live").clicked()
+                    ui.button(t!("export-back-live")).clicked()
                 })
                 .inner;
             if back {
@@ -173,7 +177,7 @@ impl HeartSimApp {
                 .and_then(|f| write_files(&dir, &f).map_err(|e| e.to_string()))
             {
                 Ok(written) => ExportPanel::describe(&written),
-                Err(e) => format!("Export failed: {e}"),
+                Err(e) => t!("export-failed", error = e.as_str()),
             },
         );
     }
@@ -184,8 +188,8 @@ impl HeartSimApp {
         let slot = std::sync::Arc::clone(&self.exports.screenshot);
         ctx.request_screenshot(move |img| {
             let msg = match save_png(&img, &dir, &path) {
-                Ok(()) => format!("Saved {}", path.display()),
-                Err(e) => format!("Screenshot failed: {e}"),
+                Ok(()) => t!("export-saved", path = path.display().to_string()),
+                Err(e) => t!("export-screenshot-failed", error = e.to_string()),
             };
             if let Ok(mut s) = slot.lock() {
                 *s = Some(msg);
@@ -203,16 +207,18 @@ impl HeartSimApp {
             Ok(imp) => {
                 let previous = self.exports.review.take();
                 let review = Review::begin(&mut self.rings, &mut self.pacing.marks, previous, &imp);
-                self.exports.status = Some(format!(
-                    "Reviewing {}: {:.1} s at {:.0} Hz",
-                    imp.label, review.duration_s, imp.record.sample_rate_hz
+                self.exports.status = Some(t!(
+                    "import-reviewing",
+                    label = imp.label.clone(),
+                    seconds = heartsim_ui::i18n::number(review.duration_s, 1),
+                    rate = format!("{:.0}", imp.record.sample_rate_hz)
                 ));
                 self.exports.review = Some(review);
                 self.ecg.playback.pause();
                 self.ecg.playback.set_scrub_ms(0.0, 0.0);
                 self.ecg.signal_replaced();
             }
-            Err(e) => self.exports.status = Some(format!("Import failed: {e}")),
+            Err(e) => self.exports.status = Some(t!("import-failed", error = e.to_string())),
         }
     }
 
@@ -226,16 +232,22 @@ impl HeartSimApp {
                 let title = s.scenario.title.clone();
                 let index = add_to_library(&mut self.library, s);
                 self.load_scenario(index);
-                self.exports.status = Some(format!("Running {title}"));
+                self.exports.status = Some(t!("export-running", title = title.as_str()));
             }
-            Err(e) => self.exports.status = Some(format!("Import failed: {}: {e}", path.display())),
+            Err(e) => {
+                self.exports.status = Some(t!(
+                    "import-failed-path",
+                    path = path.display().to_string(),
+                    error = e.as_str()
+                ));
+            }
         }
     }
 
     /// Put the live rings back and resume.
     fn end_review(&mut self) {
         if let Some(r) = self.exports.review.take() {
-            self.exports.status = Some(format!("Closed {}", r.label));
+            self.exports.status = Some(t!("export-closed", label = r.label.clone()));
             r.end(&mut self.rings, &mut self.pacing.marks);
             self.ecg.signal_replaced();
         }

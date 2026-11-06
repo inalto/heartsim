@@ -11,6 +11,7 @@ pub mod heart_view;
 pub mod rhythm_quiz;
 pub mod scenario_file;
 pub mod scenarios;
+pub mod settings;
 pub mod snapshot_ring;
 pub mod tutorial;
 pub mod tutorial_ui;

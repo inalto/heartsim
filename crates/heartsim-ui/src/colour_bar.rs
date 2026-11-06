@@ -4,6 +4,7 @@
 //! ramp, outside it the clamped end colours — exactly what the fragment shader does — so the
 //! legend is a faithful key to the surface colours. Two handles below the bar drag `min` and `max`.
 
+use crate::t;
 use egui::{Align2, Color32, FontId, Mesh, Pos2, Rect, Sense, Shape, Stroke, Ui, Vec2, pos2};
 use std::ops::RangeInclusive;
 
@@ -120,7 +121,7 @@ pub fn colour_bar(
                 egui::DragValue::new(min)
                     .speed(step)
                     .range(lo..=*max - min_span)
-                    .prefix("min "),
+                    .prefix(format!("{} ", t!("colour-min"))),
             )
             .changed();
         changed |= ui
@@ -128,7 +129,7 @@ pub fn colour_bar(
                 egui::DragValue::new(max)
                     .speed(step)
                     .range(*min + min_span..=hi)
-                    .prefix("max "),
+                    .prefix(format!("{} ", t!("colour-max"))),
             )
             .changed();
         ui.label(unit);

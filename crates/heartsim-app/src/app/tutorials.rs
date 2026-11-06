@@ -11,6 +11,7 @@ use eframe::egui;
 use heartsim_core::Action;
 use heartsim_render::CameraPreset;
 use heartsim_sim::Engine as _;
+use heartsim_ui::t;
 use heartsim_ui::{CameraCommand, StripWindow, TimelineEditor, highlight, timeline_editor};
 #[cfg(feature = "native")]
 use std::path::PathBuf;
@@ -124,8 +125,8 @@ impl HeartSimApp {
     pub(super) fn tutorials_tab(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("tutorials_mode").show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.timeline_tab.open, false, "Tutorials");
-                let r = ui.selectable_value(&mut self.timeline_tab.open, true, "Scenario timeline editor");
+                ui.selectable_value(&mut self.timeline_tab.open, false, t!("tab-tutorials"));
+                let r = ui.selectable_value(&mut self.timeline_tab.open, true, t!("timeline-editor-mode"));
                 highlight::mark(&r, "timeline_editor");
             });
         });
@@ -142,7 +143,7 @@ impl HeartSimApp {
 
     fn timeline_editor_ui(&mut self, ui: &mut egui::Ui) {
         let Some(index) = self.scenario else {
-            ui.label("Load a rhythm (Simulator tab, Rhythm list) to edit its timeline.");
+            ui.label(t!("timeline-load-first"));
             return;
         };
         let tt = &mut self.timeline_tab;
@@ -172,45 +173,42 @@ impl HeartSimApp {
         ui.separator();
         let timeline = tt.editor.timeline();
         if timeline.is_none() {
-            ui.colored_label(
-                egui::Color32::LIGHT_RED,
-                "A row does not parse (hover it for the error).",
-            );
+            ui.colored_label(egui::Color32::LIGHT_RED, t!("timeline-row-error"));
         }
         let mut restart = false;
         ui.horizontal(|ui| {
             if ui
-                .add_enabled(timeline.is_some(), egui::Button::new("Apply and restart"))
-                .on_hover_text("Use this timeline for the running scenario (this session only).")
+                .add_enabled(timeline.is_some(), egui::Button::new(t!("timeline-apply")))
+                .on_hover_text(t!("timeline-apply-hint"))
                 .clicked()
                 && let Some(t) = &timeline
             {
                 self.library.entries[index].scenario.timeline.clone_from(t);
                 restart = true;
             }
-            if ui.button("Revert").clicked() {
+            if ui.button(t!("timeline-revert")).clicked() {
                 tt.editing = None;
             }
         });
         #[cfg(feature = "native")]
         ui.horizontal(|ui| {
-            ui.label("File:");
+            ui.label(t!("timeline-file"));
             ui.add(egui::TextEdit::singleline(&mut tt.save_path).desired_width(420.0));
             if ui
-                .add_enabled(timeline.is_some(), egui::Button::new("Save scenario"))
+                .add_enabled(timeline.is_some(), egui::Button::new(t!("timeline-save")))
                 .clicked()
                 && let Some(t) = timeline
             {
                 let mut s = self.library.entries[index].clone();
                 s.scenario.timeline = t;
                 tt.status = Some(match save_scenario(&s, &PathBuf::from(&tt.save_path)) {
-                    Ok(()) => format!("Saved {}", tt.save_path),
-                    Err(e) => format!("Not saved: {e}"),
+                    Ok(()) => t!("export-saved", path = tt.save_path.clone()),
+                    Err(e) => t!("timeline-not-saved", error = e.to_string()),
                 });
             }
         });
         #[cfg(not(feature = "native"))]
-        ui.weak("Saving scenario files is a desktop feature.");
+        ui.weak(t!("timeline-save-desktop-only"));
         if let Some(s) = &tt.status {
             ui.weak(s);
         }
