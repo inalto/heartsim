@@ -9,6 +9,7 @@
 //!
 //! Everything except [`HeartView::viewport`] runs without a GPU, which keeps the mapping testable.
 
+#[cfg(feature = "native")]
 use anyhow::Context as _;
 use eframe::egui;
 use glam::Vec3;
@@ -24,6 +25,7 @@ use heartsim_ui::t;
 use heartsim_ui::{
     AnatomyPanelState, CameraCommand, Viewport3d, ViewportResources, anatomy_panel, colour_bar,
 };
+#[cfg(feature = "native")]
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -195,6 +197,7 @@ impl std::fmt::Debug for HeartView {
 
 /// Where the default anatomy pack is looked for, in order: `$HEARTSIM_ASSETS`, next to the
 /// executable (installed layout), macOS bundle resources, the working directory, the source tree.
+#[cfg(feature = "native")]
 #[must_use]
 pub fn default_pack_dir() -> Option<PathBuf> {
     let rel = Path::new("anatomy").join("default");
@@ -267,6 +270,7 @@ impl HeartView {
     ///
     /// # Errors
     /// When no pack is found or it fails to load.
+    #[cfg(feature = "native")]
     pub fn load_default(timing: &TimingParams) -> anyhow::Result<Self> {
         let dir = default_pack_dir().context("anatomy pack `assets/anatomy/default` not found")?;
         let pack = AnatomyPack::load(&dir).with_context(|| format!("loading {}", dir.display()))?;

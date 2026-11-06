@@ -14,8 +14,8 @@ path = "src/main.rs"
 [dependencies]
 heartsim-core.workspace = true
 heartsim-geometry.workspace = true
-heartsim-sim.workspace = true
-heartsim-ecg.workspace = true
+heartsim-sim = { workspace = true, features = ["parallel"] }
+heartsim-ecg = { workspace = true, features = ["parallel"] }
 heartsim-io.workspace = true
 heartsim-ui.workspace = true
 anyhow.workspace = true
@@ -30,7 +30,7 @@ epaint_default_fonts.workspace = true
 
 [dev-dependencies]
 # The parity test drives the app's own export path against this binary's output.
-heartsim-app.workspace = true
+heartsim-app = { workspace = true, features = ["native", "export", "parallel"] }
 
 [lints]
 workspace = true

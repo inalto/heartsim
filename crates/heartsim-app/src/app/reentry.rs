@@ -15,24 +15,58 @@
 //! runs as many 1 ms steps as fit in a time budget and the controls show the achieved speed.
 
 use super::{HeartSimApp, SAMPLE_RATE_HZ};
+use crate::assets::AssetBundle;
+#[cfg(feature = "native")]
 use crate::heart_view::default_pack_dir;
-use crate::scenarios::{Timeline, default_scenario_dir};
+use crate::scenarios::Timeline;
+#[cfg(feature = "native")]
+use crate::scenarios::default_scenario_dir;
 use eframe::egui;
 use heartsim_core::{Action, Millis};
 use heartsim_ecg::{ForwardModel, ForwardOptions};
-use heartsim_geometry::{AnatomyPack, CellCloud};
+use heartsim_geometry::CellCloud;
 use heartsim_sim::defib::ShockRecord;
 use heartsim_sim::tier2::{Preset, SwitchingEngine, Tier};
 use heartsim_sim::{Engine, EventKind};
 use heartsim_ui::i18n::number;
 use heartsim_ui::t;
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Wall-clock budget of the simulation steps of one frame.
 const FRAME_BUDGET: Duration = Duration::from_millis(14);
+
+/// Wall-clock stopwatch. `std::time::Instant` panics on `wasm32-unknown-unknown`, so the browser
+/// build reads `Date.now()` (millisecond resolution, which is enough for a 14 ms frame budget).
+struct Stopwatch {
+    #[cfg(not(target_arch = "wasm32"))]
+    start: std::time::Instant,
+    #[cfg(target_arch = "wasm32")]
+    start_ms: f64,
+}
+
+impl Stopwatch {
+    fn start() -> Self {
+        Self {
+            #[cfg(not(target_arch = "wasm32"))]
+            start: std::time::Instant::now(),
+            #[cfg(target_arch = "wasm32")]
+            start_ms: js_sys::Date::now(),
+        }
+    }
+
+    fn elapsed(&self) -> Duration {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.start.elapsed()
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            Duration::from_secs_f64(((js_sys::Date::now() - self.start_ms) / 1000.0).max(0.0))
+        }
+    }
+}
 
 /// What a preset needs from the anatomy pack.
 #[derive(Debug)]
@@ -60,23 +94,57 @@ pub(super) struct Reentry {
     runtime: Option<Runtime>,
     active: Option<Active>,
     status: Option<String>,
+    /// The downloaded anatomy pack (web build); `None` reads it from disk (`native`).
+    bundle: Option<AssetBundle>,
 }
 
 impl Reentry {
     /// Every preset of `assets/scenarios/reentry/` that parses (bad files are logged and skipped).
+    ///
+    /// Without the `native` feature there is no disk to look in: the list is empty and
+    /// [`Self::from_bundle`] is the way in.
     pub(super) fn load_default() -> Self {
-        let mut presets = Vec::new();
-        if let Some(dir) = default_scenario_dir().map(|d| d.join("reentry")) {
-            presets = load_dir(&dir);
+        #[cfg(feature = "native")]
+        {
+            let mut presets = Vec::new();
+            if let Some(dir) = default_scenario_dir().map(|d| d.join("reentry")) {
+                presets = load_dir(&dir);
+            }
+            Self {
+                presets,
+                ..Self::default()
+            }
         }
+        #[cfg(not(feature = "native"))]
+        {
+            Self::default()
+        }
+    }
+
+    /// Every preset of `scenarios/reentry/` in a downloaded bundle, same rules as
+    /// [`Self::load_default`]; the bundle's anatomy pack is kept (as a copy of just those files) for
+    /// the first time a preset starts.
+    pub(super) fn from_bundle(bundle: &AssetBundle) -> Self {
+        let mut presets: Vec<Preset> = bundle
+            .files_in("scenarios/reentry", ".ron")
+            .filter_map(|p| {
+                Preset::from_ron(&bundle.text(p)?)
+                    .inspect_err(|e| tracing::warn!("{p}: {e}"))
+                    .ok()
+                    .flatten()
+            })
+            .collect();
+        presets.sort_by(|a, b| a.scenario.title.cmp(&b.scenario.title));
         Self {
             presets,
+            bundle: Some(bundle.subset(&[crate::assets::PACK_DIR])),
             ..Self::default()
         }
     }
 }
 
-fn load_dir(dir: &Path) -> Vec<Preset> {
+#[cfg(feature = "native")]
+fn load_dir(dir: &std::path::Path) -> Vec<Preset> {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -102,10 +170,22 @@ fn load_dir(dir: &Path) -> Vec<Preset> {
 }
 
 impl Runtime {
-    fn load() -> anyhow::Result<Self> {
+    fn load(bundle: Option<&AssetBundle>) -> anyhow::Result<Self> {
         use anyhow::Context as _;
-        let dir = default_pack_dir().context("anatomy pack `assets/anatomy/default` not found")?;
-        let pack = AnatomyPack::load(&dir).with_context(|| format!("loading {}", dir.display()))?;
+        let pack = if let Some(bundle) = bundle {
+            bundle
+                .load_pack()
+                .context("loading the downloaded anatomy pack")?
+        } else {
+            #[cfg(feature = "native")]
+            {
+                let dir = default_pack_dir().context("anatomy pack `assets/anatomy/default` not found")?;
+                heartsim_geometry::AnatomyPack::load(&dir)
+                    .with_context(|| format!("loading {}", dir.display()))?
+            }
+            #[cfg(not(feature = "native"))]
+            anyhow::bail!("no anatomy pack: assets were not supplied");
+        };
         let forward = ForwardModel::build(&pack.cells, &pack.electrodes, ForwardOptions::default())
             .context("forward model")?;
         Ok(Self {
@@ -126,7 +206,7 @@ impl HeartSimApp {
     /// Start preset `index` from t = 0 (speed setting kept).
     fn start_reentry(&mut self, index: usize) {
         if self.reentry.runtime.is_none() {
-            match Runtime::load() {
+            match Runtime::load(self.reentry.bundle.as_ref()) {
                 Ok(rt) => self.reentry.runtime = Some(rt),
                 Err(e) => {
                     tracing::warn!("re-entry scenario: {e:#}");
@@ -182,7 +262,7 @@ impl HeartSimApp {
         };
         let dt = self.clock.dt;
         let period = 1000.0 / f64::from(SAMPLE_RATE_HZ);
-        let started = Instant::now();
+        let started = Stopwatch::start();
         let t0 = act.engine.now().0;
         for _ in 0..steps {
             let now = act.engine.now();
@@ -302,9 +382,10 @@ impl HeartSimApp {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "native")]
     #[test]
     fn the_shipped_presets_load_and_name_a_tier_2_scenario() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios/reentry");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios/reentry");
         let presets = load_dir(&dir);
         assert!(!presets.is_empty(), "no re-entry presets in {}", dir.display());
         for p in &presets {
@@ -317,5 +398,25 @@ mod tests {
             assert_ne!(p.scenario.title, "");
         }
         assert!(presets.iter().any(|p| p.scenario.id == "af_persistent"));
+    }
+
+    /// The web build must offer exactly the re-entry presets the desktop build offers, and keep
+    /// the anatomy pack (and nothing else) for them.
+    #[cfg(feature = "native")]
+    #[test]
+    fn bundle_presets_match_the_disk_presets() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+        let disk = load_dir(&root.join("scenarios/reentry"));
+        let bundle = AssetBundle::from_dir(&root).expect("assets dir");
+        let mem = Reentry::from_bundle(&bundle);
+        let ids = |p: &[Preset]| p.iter().map(|p| p.scenario.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&mem.presets), ids(&disk));
+        let kept = mem.bundle.expect("pack kept");
+        assert!(kept.get("anatomy/default/manifest.ron").is_some());
+        assert!(kept.files_in("scenarios", ".ron").next().is_none());
+        assert!(
+            Runtime::load(Some(&kept)).is_ok(),
+            "pack loads from the kept subset"
+        );
     }
 }

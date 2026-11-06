@@ -24,6 +24,10 @@ unic-langid.workspace = true
 sys-locale.workspace = true
 tracing.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Without `js` the locale lookup returns nothing in a browser and the UI would always be English.
+sys-locale = { workspace = true, features = ["js"] }
+
 [dev-dependencies]
 egui_kittest.workspace = true
 # egui's bundled fonts, so headless kittest harnesses can lay out text

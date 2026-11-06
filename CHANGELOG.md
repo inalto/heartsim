@@ -5,6 +5,22 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- WebAssembly build (brief B21): new `heartsim-web` crate builds the whole app for the browser with `trunk build --release`
+  (WebGPU, falling back to WebGL2), with a loading screen, a canvas that fills the window and `localStorage` persistence
+  (quiz score, tutorial progress). The wasm carries no anatomy: the page downloads `heartsim-assets.zip` (anatomy pack,
+  rhythm library, tutorials; written by `cargo xtask web-assets`) and the app loads it from memory
+  (`heartsim_app::AssetBundle`, `HeartSimApp::with_assets`, `AnatomyPack::load_with`).
+- `heartsim-app` features: `native` (disk asset discovery, user data directory, plain-file save/load), `export` (the
+  Export / Import window and `heartsim-io`) and `parallel` (rayon); all on by default. `heartsim-render` and the
+  workspace entries for `heartsim-sim` / `heartsim-ecg` get a matching `parallel` switch. The web build drops `native`,
+  `export` and `parallel`: no export or file buttons, no threads (results are identical, only slower).
+- `cargo xtask web-assets` and `cargo xtask web-budget` (wasm + assets must stay under 25 MiB); `.github/workflows/web.yml`
+  builds, checks the budget and runs a Playwright smoke test on pull requests. It uploads an artifact and does not publish.
+- Test that no shader uses storage buffers, compute or `@interpolate(linear)` (WebGL2 fallback); `docs/web.md` with the
+  browser test matrix.
+- The web build also gets the re-entry presets (`scenarios/reentry/` and the anatomy pack from the downloaded archive; the frame
+  budget reads `Date.now()` because `Instant` panics in a browser), the browser's language (`sys-locale` `js`) and the Settings
+  choices in `localStorage`.
 - Validation bridge to scientific solvers (brief B23; see `docs/validation-bridge.md`). `heartsim-cli export-opencarp` writes a scenario as an openCARP experiment:
   tetrahedral mesh, fibres, region tags, timing-engine stimuli, Aliev-Panfilov or TT06 parameters and a carputils script. `import-vtk` reads VTU, legacy VTK, PVD, IGB and
   activation `.dat` results onto the cell cloud by nearest point. `validation-report` compares them with a Tier-1 or Tier-2 run (activation RMS, per-lead ECG RMSE, QRS and

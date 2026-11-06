@@ -10,7 +10,7 @@
 
 use eframe::egui;
 use glam::Vec3;
-use heartsim_core::{Electrode, LEAD_COUNT, Lead, Scenario};
+use heartsim_core::{Electrode, LEAD_COUNT, Lead};
 use heartsim_ecg::{Cable, ExtraLead, GaussianSynth, LeadRing, Limb};
 use heartsim_geometry::{ElectrodeSet, TriMesh};
 use heartsim_render::{GlyphInstance, GlyphSetId, OrbitCamera, SceneRenderer, srgb_color};
@@ -29,6 +29,7 @@ const TORSO_ALPHA: f32 = 0.35;
 /// Distal leg electrodes are drawn just below the torso (the ankles are out of view), mm.
 const LEG_MARKER_Y_MM: f32 = -420.0;
 /// Where "Save placement" writes and "Load placement" reads.
+#[cfg(feature = "native")]
 const SCENARIO_FILE: &str = "heartsim-electrodes.ron";
 
 /// Cable colours of the AHA convention (IEC differs), sRGB.
@@ -64,6 +65,7 @@ pub struct ElectrodeTab {
     /// The other tabs' camera while this one is shown.
     saved_camera: Option<OrbitCamera>,
     dragging: Option<Cable>,
+    #[cfg(feature = "native")]
     file_status: Option<String>,
 }
 
@@ -72,24 +74,44 @@ impl ElectrodeTab {
     /// it is missing), for strips sampled at `sample_rate_hz` holding `capacity` samples.
     #[must_use]
     pub fn load_default(sample_rate_hz: f32, capacity: usize) -> Self {
-        let dir = crate::heart_view::default_pack_dir();
-        let sites = dir
-            .as_ref()
-            .and_then(|d| std::fs::read_to_string(d.join("electrodes.ron")).ok())
-            .and_then(|t| ElectrodeSet::from_ron(&t).ok())
-            .unwrap_or_else(heartsim_geometry::procedural::procedural_electrodes);
-        let torso: Option<TriMesh> = dir
-            .and_then(|d| std::fs::read(d.join("torso.glb")).ok())
-            .and_then(|b| heartsim_geometry::pack::read_glb(&b).ok());
+        #[cfg(feature = "native")]
+        {
+            let dir = crate::heart_view::default_pack_dir();
+            let sites = dir
+                .as_ref()
+                .and_then(|d| std::fs::read_to_string(d.join("electrodes.ron")).ok())
+                .and_then(|t| ElectrodeSet::from_ron(&t).ok())
+                .unwrap_or_else(heartsim_geometry::procedural::procedural_electrodes);
+            let torso: Option<TriMesh> = dir
+                .and_then(|d| std::fs::read(d.join("torso.glb")).ok())
+                .and_then(|b| heartsim_geometry::pack::read_glb(&b).ok());
+            Self::new(sites, torso.as_ref(), sample_rate_hz, capacity)
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            Self::new(
+                heartsim_geometry::procedural::procedural_electrodes(),
+                None,
+                sample_rate_hz,
+                capacity,
+            )
+        }
+    }
+
+    /// The tab for electrode `sites` on `torso` (e.g. both taken from an anatomy pack already in
+    /// memory). Without a torso the electrodes can only be edited from the panel.
+    #[must_use]
+    pub fn new(sites: ElectrodeSet, torso: Option<&TriMesh>, sample_rate_hz: f32, capacity: usize) -> Self {
         if torso.is_none() {
             tracing::warn!("no torso mesh: electrodes can be edited from the panel only");
         }
         Self {
-            editor: ElectrodeEditor::new(sites, torso.as_ref(), sample_rate_hz, capacity),
+            editor: ElectrodeEditor::new(sites, torso, sample_rate_hz, capacity),
             glyphs: None,
             camera: None,
             saved_camera: None,
             dragging: None,
+            #[cfg(feature = "native")]
             file_status: None,
         }
     }
@@ -175,6 +197,7 @@ impl ElectrodeTab {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     electrode_editor_panel(ui, &mut self.editor);
                     ui.separator();
+                    #[cfg(feature = "native")]
                     self.file_buttons(ui);
                 });
             });
@@ -184,7 +207,9 @@ impl ElectrodeTab {
         egui::CentralPanel::default().show(ui, |ui| self.viewport(ui, rs));
     }
 
+    #[cfg(feature = "native")]
     fn file_buttons(&mut self, ui: &mut egui::Ui) {
+        use heartsim_core::Scenario;
         ui.horizontal_wrapped(|ui| {
             if ui
                 .button(t!("el-save"))

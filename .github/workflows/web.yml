@@ -1,0 +1,83 @@
+name: Web
+
+# Builds the browser version (crates/heartsim-web) with trunk, checks the 25 MiB size budget and runs the
+# Playwright smoke test. It only BUILDS: the dist/ folder is uploaded as a workflow artifact and nothing is
+# published. (GitHub Pages already serves the mdBook from docs.yml; publishing the app there is a separate
+# decision, see docs/web.md.)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "crates/**"
+      - "assets/**"
+      - "xtask/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "assets/**"
+      - "xtask/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  build:
+    name: trunk build --release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: trunk
+      - name: wasm32 check (warnings are errors)
+        run: cargo check --target wasm32-unknown-unknown -p heartsim-web
+        env:
+          RUSTFLAGS: -D warnings
+      - name: trunk build --release
+        working-directory: crates/heartsim-web
+        run: trunk build --release
+      - name: Size budget (wasm + assets < 25 MiB)
+        run: cargo xtask web-budget
+      - uses: actions/upload-artifact@v4
+        with:
+          name: heartsim-web
+          path: crates/heartsim-web/dist
+          if-no-files-found: error
+
+  smoke:
+    name: browser smoke test (Chromium)
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: heartsim-web
+          path: crates/heartsim-web/dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright and Chromium
+        working-directory: crates/heartsim-web/tests/browser
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+      - name: Smoke test
+        working-directory: crates/heartsim-web/tests/browser
+        run: npm test

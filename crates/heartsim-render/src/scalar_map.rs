@@ -7,10 +7,12 @@
 //! cell state).
 
 use heartsim_geometry::Hood;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Vertices per rayon task: large enough to amortise scheduling, small enough to balance the
 /// ~20 k-vertex chamber meshes over a handful of cores.
+#[cfg(feature = "parallel")]
 const CHUNK: usize = 4096;
 
 /// Fill `out[v] = Σ_k w_vk · per_cell[cell_vk]` for every hood. `out.len()` must equal
@@ -21,6 +23,7 @@ const CHUNK: usize = 4096;
 /// If a hood references a cell outside `per_cell`, or the lengths of `out` and `hoods` differ.
 pub fn map_hoods(hoods: &[Hood], per_cell: &[f32], out: &mut [f32]) {
     assert_eq!(hoods.len(), out.len(), "one scalar per hood");
+    #[cfg(feature = "parallel")]
     out.par_chunks_mut(CHUNK)
         .zip(hoods.par_chunks(CHUNK))
         .for_each(|(o, h)| {
@@ -28,6 +31,11 @@ pub fn map_hoods(hoods: &[Hood], per_cell: &[f32], out: &mut [f32]) {
                 *o = h.interpolate(per_cell);
             }
         });
+    // Same per-vertex arithmetic, so the result is identical with and without the feature.
+    #[cfg(not(feature = "parallel"))]
+    for (o, h) in out.iter_mut().zip(hoods) {
+        *o = h.interpolate(per_cell);
+    }
 }
 
 #[cfg(test)]

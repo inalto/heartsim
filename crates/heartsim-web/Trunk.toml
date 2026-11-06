@@ -1,0 +1,20 @@
+# `trunk build --release` (from this directory, or `trunk build --release crates/heartsim-web/index.html`)
+# writes the static site to dist/. Serving it needs no special headers: there are no threads, so no COOP/COEP.
+[build]
+target = "index.html"
+dist = "dist"
+# relative URLs: the site works from any sub-path (GitHub Pages project sites) and from file-less static servers
+public_url = "./"
+# the wasm is built reproducibly from Cargo.lock; trunk downloads the wasm-bindgen CLI that matches it
+# (wasm-bindgen is pinned with `=` in the workspace manifest for this reason)
+
+# The anatomy pack, rhythm library and tutorials are packed into heartsim-assets.zip before every build.
+[[hooks]]
+stage = "pre_build"
+command = "cargo"
+command_arguments = ["xtask", "web-assets"]
+
+[serve]
+address = "127.0.0.1"
+port = 8080
+open = false

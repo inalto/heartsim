@@ -11,6 +11,19 @@ default-run = "heartsim"
 [[bin]]
 name = "heartsim"
 path = "src/main.rs"
+required-features = ["native"]
+
+[features]
+default = ["native", "export", "parallel"]
+# Desktop only: asset discovery on disk (`$HEARTSIM_ASSETS`, next to the executable), the per-user
+# data directory (tutorial progress, saved scenarios), plain-file save/load buttons and the CLI-style
+# `--version` entry. The web build (`heartsim-web`) leaves this off and gets its assets from an
+# in-memory `AssetBundle` and its settings from eframe's storage (localStorage).
+native = ["dep:directories", "dep:tracing-subscriber"]
+# Export / Import window (PDF, PNG, CSV, WFDB, bundles): needs files, so it implies `native`.
+export = ["native", "dep:heartsim-io"]
+# Rayon in the engines; the browser has no threads, so the web build turns it off.
+parallel = ["heartsim-sim/parallel", "heartsim-ecg/parallel", "heartsim-render/parallel"]
 
 [dependencies]
 heartsim-core.workspace = true
@@ -19,7 +32,7 @@ heartsim-sim.workspace = true
 heartsim-ecg.workspace = true
 heartsim-render.workspace = true
 heartsim-ui.workspace = true
-heartsim-io.workspace = true
+heartsim-io = { workspace = true, optional = true }
 eframe.workspace = true
 egui.workspace = true
 egui-wgpu.workspace = true
@@ -29,10 +42,14 @@ image.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 ron.workspace = true
-directories.workspace = true
+directories = { workspace = true, optional = true }
 egui_commonmark.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# `std::time::Instant` is unavailable in the browser: the re-entry frame budget reads `Date.now()`.
+js-sys.workspace = true
 
 [dev-dependencies]
 egui_kittest.workspace = true

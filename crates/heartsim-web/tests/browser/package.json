@@ -1,0 +1,11 @@
+{
+  "name": "heartsim-web-smoke",
+  "private": true,
+  "description": "Browser smoke test for the heartsim web build (brief B21): the canvas renders and the ECG strip advances.",
+  "scripts": {
+    "test": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

@@ -62,10 +62,30 @@ impl Tutorials {
         }
     }
 
-    /// The installed tutorials with progress in the settings directory.
+    /// The installed tutorials with progress in the settings directory (no tutorials and
+    /// in-memory progress without the `native` feature).
     #[must_use]
     pub fn load_default() -> Self {
-        Self::new(TutorialLibrary::load_default(), ProgressStore::default_path())
+        #[cfg(feature = "native")]
+        {
+            Self::new(TutorialLibrary::load_default(), ProgressStore::default_path())
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            Self::new(TutorialLibrary::default(), None)
+        }
+    }
+
+    /// The tutorials of a downloaded bundle. Progress is not written to a file: the host stores
+    /// [`ProgressStore::to_text`] (the web build: eframe's `localStorage`) and passes it back as
+    /// `saved_progress` on the next visit.
+    #[must_use]
+    pub fn from_bundle(bundle: &crate::assets::AssetBundle, saved_progress: Option<&str>) -> Self {
+        let mut t = Self::new(TutorialLibrary::from_bundle(bundle), None);
+        if let Some(text) = saved_progress {
+            t.progress = ProgressStore::from_text(text);
+        }
+        t
     }
 
     /// Index of the open tutorial and its current page.

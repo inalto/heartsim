@@ -127,6 +127,7 @@ timeline-revert = Ripristina
 timeline-file = File:
 timeline-save = Salva scenario
 timeline-not-saved = Non salvato: { $error }
+timeline-save-desktop-only = Il salvataggio dei file di scenario è disponibile solo nell’app desktop.
 
 ## Vista del cuore (heart_view.rs)
 colour-voltage = Voltaggio

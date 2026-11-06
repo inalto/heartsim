@@ -126,6 +126,7 @@ timeline-revert = Revert
 timeline-file = File:
 timeline-save = Save scenario
 timeline-not-saved = Not saved: { $error }
+timeline-save-desktop-only = Saving scenario files is a desktop feature.
 
 ## Heart view (heart_view.rs)
 colour-voltage = Voltage
