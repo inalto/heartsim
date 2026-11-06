@@ -675,6 +675,7 @@ impl HeartSimApp {
                 ui.label(t!("help-tab-heart-vector"));
                 ui.label(t!("help-tab-axis-quiz"));
                 ui.label(t!("help-tab-tutorials"));
+                ui.label(t!("help-tab-ep-lab"));
                 ui.label(t!("help-tab-rhythm-quiz"));
                 ui.separator();
                 ui.strong(t!("help-rhythms-heading"));
