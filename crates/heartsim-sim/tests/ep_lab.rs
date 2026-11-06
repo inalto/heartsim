@@ -554,3 +554,12 @@ fn a_procedure_is_deterministic() {
     };
     assert_eq!(once(), once());
 }
+
+#[test]
+fn zz_s2_sweep() {
+    for s2 in (250..=400).step_by(10) {
+        let mut l = lab("ep_ap_left_lateral");
+        let r = induce(&mut l, f64::from(s2));
+        eprintln!("zz s2 {s2}: rate {r:.0}");
+    }
+}

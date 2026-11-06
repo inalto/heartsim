@@ -27,20 +27,20 @@ Scenario(
             Patch(target: Region(CavotricuspidIsthmus), effect: Scale(apd: 1.0, cv: 0.7)),
             // the tricuspid annulus
             Patch(
-                target: Band(compartment: Atrial, centre_mm: (-47.9, 27.9, -37.6), radius_mm: 27.0, axis: (0.384, 0.039, 0.923), from_deg: 0.0, to_deg: 28.0),
+                target: Band(compartment: Atrial, centre_mm: (-53.0, 18.8, -33.3), radius_mm: 27.0, axis: (0.695, 0.483, 0.533), from_deg: 0.0, to_deg: 28.0),
                 effect: Obstacle,
             ),
             // the outer barrier of the circuit, inside the septal contact with the left atrium; one gap lets the wave out to the rest of the atria, a dead end
             Patch(
-                target: Band(compartment: Atrial, centre_mm: (-47.9, 27.9, -37.6), radius_mm: 27.0, axis: (0.384, 0.039, 0.923), from_deg: 66.0, to_deg: 80.0, gap_at_mm: Some((-60.3, 14.6, -24.8)), gap_mm: 8.0),
+                target: Band(compartment: Atrial, centre_mm: (-53.0, 18.8, -33.3), radius_mm: 27.0, axis: (0.695, 0.483, 0.533), from_deg: 66.0, to_deg: 80.0, gap_at_mm: Some((-61.3, 21.6, -12.9)), gap_mm: 8.0),
                 effect: Obstacle,
             ),
         ],
         initiation: PhaseWave(
             compartment: Atrial,
             start_ms: 600.0,
-            centre_mm: Some((-47.9, 27.9, -37.6)),
-            axis: (-0.384, -0.039, -0.923),
+            centre_mm: Some((-53.0, 18.8, -33.3)),
+            axis: (-0.695, -0.483, -0.533),
             span: 2.0,
             within: Some(PhaseWaveLimit(radius_mm: 27.0, polar_deg: (114.0, 152.0))),
         ),

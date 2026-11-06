@@ -207,8 +207,8 @@ const PA_R: f32 = 12.0;
 // (0.03, 0.59, 0.78) above the right atrium and (-0.07, -0.45, -0.88) below it.
 const SVC_A: Vec3 = Vec3::new(-30.0, 66.0, 6.0);
 const SVC_B: Vec3 = Vec3::new(-29.0, 84.0, 29.0);
-const IVC_A: Vec3 = Vec3::new(-22.0, 51.0, -23.0);
-const IVC_B: Vec3 = Vec3::new(-24.0, 37.0, -51.0);
+const IVC_A: Vec3 = Vec3::new(-29.5, 42.0, -21.0);
+const IVC_B: Vec3 = Vec3::new(-32.0, 28.5, -47.5);
 const VENA_CAVA_R: f32 = 10.0;
 const PV_R: f32 = 6.0;
 /// Where the veins leave the left atrium: backwards and outwards, close to the horizontal, the
@@ -604,8 +604,8 @@ fn conduction_geometry() -> Conduction {
     ];
     let crista = sphere_arc(
         RA_CENTRE,
-        Vec3::new(-0.5, 0.7, 0.45),
-        Vec3::new(-0.3, -0.3, -0.9),
+        Vec3::new(-0.2, 0.75, 0.6),
+        Vec3::new(-0.35, -0.85, -0.4),
         ATRIUM_MID_R,
         10,
     );
