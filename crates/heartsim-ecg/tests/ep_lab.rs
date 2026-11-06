@@ -5,7 +5,7 @@
 //! published AH upper limits run from about 105 to 140 ms, HV 35–55 ms is agreed).
 
 use heartsim_core::{Millis, Region};
-use heartsim_ecg::{EgmOptions, EgmRecorder, EgmSource};
+use heartsim_ecg::{EgmOptions, EgmRecorder, EgmSource, Tier0Scenario};
 use heartsim_geometry::{AnatomyPack, Catheter, CatheterAnatomy, CatheterKind};
 use heartsim_sim::ep::{AblationTarget, EpLab, EpPreset, Protocol, ProtocolStatus};
 use heartsim_sim::{Engine, Event, EventKind, Origin};
@@ -254,5 +254,37 @@ fn recording_does_not_change_the_rhythm_and_is_deterministic() {
         for k in 0..n {
             assert_eq!(a.rec.bipolar(c).at(k), b.rec.bipolar(c).at(k));
         }
+    }
+}
+
+#[test]
+fn every_procedure_meets_the_content_rules_of_the_scenario_library() {
+    let dir = assets().join("scenarios/ep");
+    let mut n = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let s = Tier0Scenario::from_ron(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        assert_eq!(
+            s.scenario.id,
+            path.file_stem().unwrap().to_string_lossy(),
+            "id and file name"
+        );
+        let problems = s.content_problems();
+        assert!(problems.is_empty(), "{}: {problems:?}", s.scenario.id);
+        n += 1;
+    }
+    assert_eq!(n, 5, "five procedures");
+}
+
+/// The resting rhythm of the Tier-1 procedures is what their `expected` blocks say. Those of the
+/// flutter and AF procedures describe Tier-2 arrhythmias and are checked in `heartsim-sim`.
+#[test]
+fn the_tier_1_procedures_rest_in_the_rhythm_they_declare() {
+    for id in ["ep_baseline", "ep_avnrt", "ep_ap_left_lateral"] {
+        let text = std::fs::read_to_string(assets().join(format!("scenarios/ep/{id}.ron"))).unwrap();
+        let s = Tier0Scenario::from_ron(&text).unwrap();
+        let (_, violations) = s.validate_run().unwrap();
+        assert!(violations.is_empty(), "{id}: {violations:?}");
     }
 }

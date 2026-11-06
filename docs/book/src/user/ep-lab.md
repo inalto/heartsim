@@ -61,7 +61,8 @@ Choose any bipole as the **pacing pair**, then a protocol:
   failed. If the tissue under the pair goes refractory first, the panel says so instead of giving a number, as often happens with the AV
   node when pacing the atrium. The search needs the fast engine, so it is not offered during flutter or AF.
 * **Entrainment**: measures the tachycardia cycle at the pair, paces 20 ms faster and times the first return beat. PPI − TCL ≤ 30 ms puts the
-  pair in the circuit. When pacing the RV in a supraventricular tachycardia, more than 115 ms favours AVNRT over AVRT.
+  pair in the circuit. When pacing the RV in a supraventricular tachycardia, more than 115 ms favours AVNRT over AVRT. The panel says so if some
+  stimuli did not capture, or if the pacing stopped the tachycardia instead.
 
 A pair more than 6 mm from any tissue cannot capture, and the panel says so.
 

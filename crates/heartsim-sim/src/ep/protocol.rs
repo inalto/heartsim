@@ -31,6 +31,9 @@ const WATCH_LIMIT_MS: f64 = 6000.0;
 const CAPTURE_WINDOW_MS: f64 = 15.0;
 /// A jump of at least this in A2–H2 for one coupling step means dual AV-nodal pathways, ms.
 pub const AH_JUMP_MS: f64 = 50.0;
+/// A first activation later than this many tachycardia cycles after the pacing is the next rhythm,
+/// not a return beat: the pacing stopped the tachycardia.
+const TERMINATED_CYCLES: f64 = 2.0;
 /// PPI − TCL up to this means the pacing site is in the circuit, ms.
 pub const IN_CIRCUIT_MS: f64 = 30.0;
 
@@ -157,6 +160,11 @@ pub enum ProtocolOutcome {
     },
     Erp(ErpResult),
     Entrainment(EntrainmentResult),
+    /// The pacing stopped the tachycardia: the next activation at the site came long after one
+    /// cycle, ms from the last captured stimulus. There is no post-pacing interval to read.
+    Terminated {
+        next_activation_ms: f64,
+    },
     /// Stimulus and return beats could not be timed: no rhythm to entrain, no return beat.
     NoReturn,
 }
@@ -486,14 +494,20 @@ impl ProtocolRun {
             } => {
                 if new_activation && site_activation_ms > *last_stim_ms + RETURN_BLANK_MS {
                     let ppi_ms = site_activation_ms - *last_captured_ms;
-                    self.outcome = Some(ProtocolOutcome::Entrainment(EntrainmentResult {
-                        tcl_ms: *tcl_ms,
-                        pacing_cycle_ms: *cycle_ms,
-                        captured: *captured,
-                        delivered: *delivered,
-                        ppi_ms,
-                        in_circuit: ppi_ms - *tcl_ms <= IN_CIRCUIT_MS,
-                    }));
+                    self.outcome = Some(if ppi_ms > TERMINATED_CYCLES * *tcl_ms {
+                        ProtocolOutcome::Terminated {
+                            next_activation_ms: ppi_ms,
+                        }
+                    } else {
+                        ProtocolOutcome::Entrainment(EntrainmentResult {
+                            tcl_ms: *tcl_ms,
+                            pacing_cycle_ms: *cycle_ms,
+                            captured: *captured,
+                            delivered: *delivered,
+                            ppi_ms,
+                            in_circuit: ppi_ms - *tcl_ms <= IN_CIRCUIT_MS,
+                        })
+                    });
                     self.phase = Phase::Done;
                 } else if now_ms - *last_stim_ms > WATCH_LIMIT_MS {
                     self.outcome = Some(ProtocolOutcome::NoReturn);
@@ -694,6 +708,60 @@ mod tests {
         assert_eq!(erp.erp_ms, Some(280.0));
         assert_eq!(erp.curve.len(), 3);
         assert!(!erp.limited_by_local_erp);
+    }
+
+    /// Entrain a 300 ms rhythm at a site that captures every stimulus, with the first activation
+    /// after the pacing `return_ms` after the last stimulus.
+    fn entrain_with_return(return_ms: f64) -> ProtocolOutcome {
+        let mut run = ProtocolRun::new(
+            Protocol::Entrainment {
+                offset_ms: 20.0,
+                count: 3,
+            },
+            0.0,
+        );
+        let mut activation = 0.0;
+        for k in 0..=CYCLES_OBSERVED {
+            activation = k as f64 * 300.0;
+            run.observe(activation + 1.0, &[], activation);
+        }
+        let mut now = activation;
+        let mut last_stim = 0.0;
+        while now < 10_000.0 && run.outcome().is_none() {
+            now += 1.0;
+            if let Some(t) = run.next_stimulus(now) {
+                activation = t;
+                last_stim = t;
+            }
+            if last_stim > 0.0 && matches!(run.phase, Phase::Return { .. }) {
+                activation = last_stim + return_ms;
+            }
+            let seen = if activation <= now { activation } else { f64::NAN };
+            run.observe(now, &[], seen);
+        }
+        run.outcome().cloned().expect("finished")
+    }
+
+    #[test]
+    fn a_return_beat_gives_the_ppi_and_a_late_one_means_the_pacing_stopped_the_tachycardia() {
+        let ProtocolOutcome::Entrainment(e) = entrain_with_return(310.0) else {
+            panic!("no entrainment result");
+        };
+        assert_eq!((e.captured, e.delivered), (3, 3));
+        assert_eq!(e.tcl_ms, 300.0);
+        assert_eq!(e.pacing_cycle_ms, 280.0);
+        assert_eq!(e.ppi_ms, 310.0);
+        assert!(e.in_circuit);
+        let ProtocolOutcome::Entrainment(e) = entrain_with_return(400.0) else {
+            panic!("no entrainment result");
+        };
+        assert!(!e.in_circuit, "{e:?}");
+        assert_eq!(
+            entrain_with_return(1000.0),
+            ProtocolOutcome::Terminated {
+                next_activation_ms: 1000.0
+            }
+        );
     }
 
     #[test]

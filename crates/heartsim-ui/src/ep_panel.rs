@@ -657,6 +657,9 @@ fn outcome_label(ui: &mut Ui, outcome: &ProtocolOutcome) {
         ProtocolOutcome::NoReturn => {
             ui.label(t!("ep-outcome-no-return"));
         }
+        ProtocolOutcome::Terminated { next_activation_ms } => {
+            ui.label(t!("ep-outcome-terminated", next = number(*next_activation_ms, 0)));
+        }
         ProtocolOutcome::Erp(e) => erp_label(ui, e),
         ProtocolOutcome::Entrainment(e) => entrainment_label(ui, e),
     }

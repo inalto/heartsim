@@ -78,6 +78,13 @@ fn the_circuit_keeps_turning_at_a_flutter_rate() {
         .filter(|e| e.region == Region::HisBundle && e.kind == EventKind::Conducted)
         .count();
     assert!(v > 0 && v < sensed.len(), "His {v}, atria {}", sensed.len());
+    // and the ventricular rate is the one the procedure file declares
+    let text = std::fs::read_to_string(assets().join("scenarios/ep/ep_flutter.ron")).unwrap();
+    let preset = EpPreset::from_ron(&text).unwrap().unwrap();
+    let (lo, hi) = preset.scenario.expected.unwrap().hr_bpm;
+    let rate = v as f64 * 60_000.0 / 3000.0;
+    eprintln!("ventricular rate {rate:.0}/min");
+    assert!((lo..=hi).contains(&rate), "{rate}/min, file says {lo}-{hi}");
 }
 
 #[test]

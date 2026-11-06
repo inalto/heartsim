@@ -25,6 +25,7 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - `typos` spell-check with `_typos.toml` (medical terms), run by `cargo xtask ci` when installed and in the CI workflow.
 
 ### Changed
+- Inert tissue from a scenario's Tier-2 patches no longer follows the heart back to Tier 1 as lesions; lesions made during the run still do.
 - The tutorial format and page runner moved from `heartsim-app` to `heartsim_core::tutorial` (re-exported by the app) so the CLI
   reads the same files. Tutorial ids are numbered for the teaching order: `basics` is now `01_basics` and `cardiac_axis`
   `03_cardiac_axis` (saved progress of those two starts afresh).
@@ -44,9 +45,6 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - Tier-2 patches: `PatchTarget::Band` and `Initiation::PhaseWave { within }`, used to draw a macro-re-entrant circuit on the spherical atria.
   Typical flutter exists only as this drawn, pre-seeded circuit (cycle 235 ms), a procedure of the EP lab; it is not induced by pacing.
 - `EikonalParams::cs_os_link_mm`: joins the coronary-sinus sleeve to the right atrium (off by default, so existing rhythms do not change).
-
-### Changed
-- Inert tissue from a scenario's Tier-2 patches no longer follows the heart back to Tier 1 as lesions; lesions made during the run still do.
 
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the

@@ -10,6 +10,12 @@ Scenario(
     seed: 22,
     notes: Some("Typical flutter is a macro-re-entry around the tricuspid annulus, bounded behind by the crista terminalis and the venae cavae, that must pass through the narrow isthmus between the annulus and the inferior vena cava.\nPacing a little faster than the tachycardia entrains it. If the site is in the circuit the first return beat comes after about one cycle: post-pacing interval minus tachycardia cycle length of 30 ms or less. Outside the circuit the interval is longer by the round trip to the circuit.\nA line of block across the isthmus cuts the only path: the wave dies against the line and sinus rhythm returns.\nThe model is a teaching drawing. The atria of this heart are closed spheres with no holes, so the annulus and an insulating band around the circuit are drawn as inert tissue, and the wave is pre-seeded rather than induced.\n\nSources:\n- Cosio FG et al. Radiofrequency ablation of the inferior vena cava-tricuspid valve isthmus in common atrial flutter. Am J Cardiol 1993;71:705-709.\n- Waldo AL et al. Entrainment and interruption of atrial flutter with atrial pacing: studies in man following open heart surgery. Circulation 1977;56:737-745.\n- Saoudi N et al. A classification of atrial flutter and regular atrial tachycardia according to electrophysiological mechanisms and anatomical bases. Eur Heart J 2001;22:1162-1182."),
     confused_with: ["ep_af_pvi", "atrial tachycardia with 2:1 block"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 170.0),
+        pr_ms: None,
+        qrs_ms: Some((60.0, 180.0)),
+        axis_deg: None,
+    )),
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 70.0),
         av: AvParams(fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 200.0, recovery_tau_ms: 100.0, erp_ms: 300.0, blocked: false)),

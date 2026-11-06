@@ -8,11 +8,21 @@ Scenario(
     anatomy: "default",
     seed: 22,
     notes: Some("In orthodromic AVRT the impulse goes down the AV node and up the accessory pathway. The atria are activated from the pathway's insertion, so on the CS the earliest A marks where it is. A left-lateral pathway gives a distal-to-proximal (eccentric) sequence, the reverse of the proximal-to-distal (concentric) sequence of sinus rhythm or of retrograde conduction over the AV node.\nAfter a successful ablation the tachycardia cannot be induced and ventricular pacing no longer activates the atria eccentrically.\n\nSources:\n- Jackman WM et al. Catheter ablation of accessory atrioventricular pathways (Wolff-Parkinson-White syndrome) by radiofrequency current. N Engl J Med 1991;324:1605-1611.\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.\n- Michaud GF et al. A simple criterion for differentiating atrioventricular nodal reentry from orthodromic reciprocating atrioventricular tachycardia. J Am Coll Cardiol 2001;38:1163-1167."),
-    confused_with: ["ep_avnrt"],
+    confused_with: ["ep_avnrt", "wpw_left_lateral"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 85.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((60.0, 120.0)),
+        axis_deg: None,
+    )),
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 72.0),
-        ventricular_erp_ms: 230.0,
-        accessory: Some(AccessoryPathway(delay_ms: 70.0, erp_ms: 250.0, antegrade: false, retrograde: true, ventricular_side: Left, atrial_side: Left)),
+        // refractory periods short enough, and a node recovering well enough, for the ventricle to be
+        // paced 20 ms faster than the tachycardia without blocking anywhere in the circuit
+        atrial_erp_ms: 220.0,
+        ventricular_erp_ms: 220.0,
+        av: AvParams(fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 50.0, recovery_tau_ms: 80.0, erp_ms: 100.0, blocked: false)),
+        accessory: Some(AccessoryPathway(delay_ms: 90.0, erp_ms: 220.0, antegrade: false, retrograde: true, ventricular_side: Left, atrial_side: Left)),
     ),
     ep: Some(EpSpec(goal: PathwayAblated, targets: [AccessoryPathway, AvNode])),
 )

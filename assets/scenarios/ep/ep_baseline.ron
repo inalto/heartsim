@@ -8,6 +8,13 @@ Scenario(
     anatomy: "default",
     seed: 22,
     notes: Some("A diagnostic EP study records the HRA, the His bundle, the coronary sinus and the RV apex.\nOn the His catheter, A-H is conduction through the AV node (about 50-120 ms) and H-V is conduction through the His-Purkinje system (35-55 ms). In sinus rhythm the wave reaches the CS ostium first, so CS 9-10 leads and CS 1-2 follows.\nProgrammed stimulation adds one premature stimulus (S2) after a drive train (S1) and shortens it until something fails. The longest S1-S2 that fails is that structure's effective refractory period: atrium about 170-300 ms, AV node 230-425 ms, ventricle 170-290 ms.\n\nSources:\n- Josephson ME. Clinical Cardiac Electrophysiology: Techniques and Interpretations. Lippincott Williams & Wilkins.\n- Narula OS et al. Atrioventricular block: localization and classification by His bundle recordings. Am J Med 1971;50:146-165.\n- Zipes DP, Jalife J (eds). Cardiac Electrophysiology: From Cell to Bedside. Elsevier."),
+    confused_with: ["normal sinus rhythm with a long PR", "ep_avnrt"],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 80.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((60.0, 120.0)),
+        axis_deg: None,
+    )),
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 70.0),
         av: AvParams(
