@@ -348,8 +348,7 @@ fn select<M: CellModel>(engine: &Tier2Engine<M>, target: &PatchTarget) -> Vec<u3
                         return false;
                     }
                     let angle = (r.dot(axis) / len).clamp(-1.0, 1.0).acos().to_degrees();
-                    (*from_deg..=*to_deg).contains(&angle)
-                        && gap.is_none_or(|q| p.distance(q) > *gap_mm)
+                    (*from_deg..=*to_deg).contains(&angle) && gap.is_none_or(|q| p.distance(q) > *gap_mm)
                 })
                 .collect()
         }

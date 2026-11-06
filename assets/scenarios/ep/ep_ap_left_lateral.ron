@@ -11,6 +11,7 @@ Scenario(
     confused_with: ["ep_avnrt"],
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 72.0),
+        ventricular_erp_ms: 230.0,
         accessory: Some(AccessoryPathway(delay_ms: 70.0, erp_ms: 250.0, antegrade: false, retrograde: true, ventricular_side: Left, atrial_side: Left)),
     ),
     ep: Some(EpSpec(goal: PathwayAblated, targets: [AccessoryPathway, AvNode])),

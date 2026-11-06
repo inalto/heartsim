@@ -85,6 +85,7 @@ ep-outcome-erp-limited = { $target }: the tissue at the pacing site became refra
 ep-outcome-erp-none = { $target } kept conducting down to the shortest coupling.
 ep-outcome-ah-jump = A2–H2 jump of { $jump } ms at S1–S2 { $coupling } ms: dual AV-nodal pathways.
 ep-outcome-entrainment = TCL { $tcl } ms, paced { $cycle } ms, PPI { $ppi } ms, PPI − TCL { $delta } ms.
+ep-outcome-partial-capture = Only { $captured } of { $delivered } stimuli captured: the pacing cycle is inside the refractory period, so this is not entrainment.
 ep-outcome-in-circuit = PPI − TCL ≤ 30 ms: the pacing site is in the circuit.
 ep-outcome-out-of-circuit = PPI − TCL > 30 ms: the pacing site is outside the circuit.
 ep-ablation = Ablation

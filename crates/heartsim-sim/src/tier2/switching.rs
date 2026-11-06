@@ -219,6 +219,9 @@ impl<M: CellModel> SwitchingEngine<M> {
         self.pending.extend(evs);
         let mut t2 = Tier2Engine::from_tier1(&self.t1, &self.model, self.spec.tier2.clone());
         self.spec.apply_patches(&mut t2, self.scenario_seed);
+        // a patch's inert tissue is the arrhythmia's substrate, not a lesion: it does not follow the
+        // heart back to Tier 1
+        t2.accept_tissue_as_baseline();
         if let super::preset::Initiation::CrossField {
             compartment,
             start_ms,

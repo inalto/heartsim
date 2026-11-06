@@ -204,7 +204,10 @@ mod tests {
         assert!((at_tau.lesion_radius_mm - expected).abs() < 1e-3, "{at_tau:?}");
         let late = rf.readout(1000.0 + 10.0 * p.tau_ms);
         assert!(late.lesion_radius_mm > at_tau.lesion_radius_mm);
-        assert!(late.impedance_ohm < rf.readout(1000.0).impedance_ohm, "impedance falls with heating");
+        assert!(
+            late.impedance_ohm < rf.readout(1000.0).impedance_ohm,
+            "impedance falls with heating"
+        );
         assert!(late.temperature_c > 55.0 && late.temperature_c < 70.0, "{late:?}");
     }
 
@@ -216,7 +219,11 @@ mod tests {
         assert_eq!(floating.lesion_radius_mm, 0.0);
         assert_eq!(floating.temperature_c, 37.0);
         let touching = RfApplication::new(Vec3::ZERO, 0.0, 0.0, p);
-        assert_eq!(touching.readout(100.0).lesion_radius_mm, 0.0, "tissue not hot yet");
+        assert_eq!(
+            touching.readout(100.0).lesion_radius_mm,
+            0.0,
+            "tissue not hot yet"
+        );
     }
 
     #[test]

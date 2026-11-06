@@ -181,13 +181,6 @@ impl ElectrogramModel {
     }
 
     fn build_row(&mut self, site: Vec3) -> Row {
-        let (k, vol) = (self.opts.gain_mv, self.cell_volume_mm3);
-        let (radius2, min2) = (
-            self.opts.radius_mm * self.opts.radius_mm,
-            self.opts.min_distance_mm * self.opts.min_distance_mm,
-        );
-        let mut scratch = std::mem::take(&mut self.scratch);
-        let mut touched: [Vec<u32>; SOURCES] = Default::default();
         fn add(scratch: &mut [f32], touched: &mut Vec<u32>, cell: u32, dw: f32) {
             // an exact cancellation back to 0 only re-lists the cell: deduplicated below
             if scratch[cell as usize] == 0.0 {
@@ -195,6 +188,13 @@ impl ElectrogramModel {
             }
             scratch[cell as usize] += dw;
         }
+        let (k, vol) = (self.opts.gain_mv, self.cell_volume_mm3);
+        let (radius2, min2) = (
+            self.opts.radius_mm * self.opts.radius_mm,
+            self.opts.min_distance_mm * self.opts.min_distance_mm,
+        );
+        let mut scratch = std::mem::take(&mut self.scratch);
+        let mut touched: [Vec<u32>; SOURCES] = Default::default();
         for i in 0..self.positions.len() {
             let Some(src) = self.source[i] else { continue };
             let r = site - self.positions[i];
@@ -235,9 +235,9 @@ impl ElectrogramModel {
     pub fn sample(&self, vm: &[f32], out: &mut [[f32; SOURCES]]) {
         for (row, o) in self.rows.iter().zip(out.iter_mut()) {
             let mut start = 0usize;
-            for s in 0..SOURCES {
-                let end = row.ends[s] as usize;
-                o[s] = row.cells[start..end]
+            for (potential, &end) in o.iter_mut().zip(&row.ends) {
+                let end = end as usize;
+                *potential = row.cells[start..end]
                     .iter()
                     .zip(&row.w[start..end])
                     .map(|(&c, &w)| w * vm.get(c as usize).copied().unwrap_or(0.0))
@@ -491,11 +491,7 @@ impl EgmRecorder {
             let a = self.potentials[channel.electrode_a];
             let b = self.potentials[channel.electrode_b];
             self.unipolar[c].push(a.iter().sum());
-            let mut total = 0.0;
-            for s in 0..SOURCES {
-                total += a[s] - b[s];
-            }
-            self.bipolar[c].push(total);
+            self.bipolar[c].push(a.iter().zip(&b).map(|(x, y)| x - y).sum());
             for (s, source) in [EgmSource::Atrial, EgmSource::His, EgmSource::Ventricular]
                 .into_iter()
                 .enumerate()

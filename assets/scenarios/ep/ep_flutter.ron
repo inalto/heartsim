@@ -17,26 +17,26 @@ Scenario(
     reentry: Some(ReentrySpec(
         tier2: (voxel_mm: 2.0, sense_gap_ms: 150.0),
         patches: [
-            Patch(target: Compartment(Atrial), effect: Scale(apd: 0.5, cv: 0.45)),
+            Patch(target: Compartment(Atrial), effect: Scale(apd: 0.4, cv: 0.7)),
             Patch(target: Region(CavotricuspidIsthmus), effect: Scale(apd: 1.0, cv: 0.7)),
             // the tricuspid annulus
             Patch(
-                target: Band(compartment: Atrial, centre_mm: (-47.9, 27.9, -37.6), radius_mm: 27.0, axis: (0.384, 0.039, 0.923), from_deg: 0.0, to_deg: 38.0),
+                target: Band(compartment: Atrial, centre_mm: (-47.9, 27.9, -37.6), radius_mm: 27.0, axis: (0.384, 0.039, 0.923), from_deg: 0.0, to_deg: 28.0),
                 effect: Obstacle,
             ),
-            // the outer barrier of the circuit, open towards Bachmann's bundle so the wave reaches the rest of the atria
+            // the outer barrier of the circuit, inside the septal contact with the left atrium; one gap lets the wave out to the rest of the atria, a dead end
             Patch(
-                target: Band(compartment: Atrial, centre_mm: (-47.9, 27.9, -37.6), radius_mm: 27.0, axis: (0.384, 0.039, 0.923), from_deg: 86.0, to_deg: 100.0, gap_at_mm: Some((-48.2, 50.1, -38.4)), gap_mm: 8.0),
+                target: Band(compartment: Atrial, centre_mm: (-47.9, 27.9, -37.6), radius_mm: 27.0, axis: (0.384, 0.039, 0.923), from_deg: 66.0, to_deg: 80.0, gap_at_mm: Some((-60.3, 14.6, -24.8)), gap_mm: 8.0),
                 effect: Obstacle,
             ),
         ],
         initiation: PhaseWave(
             compartment: Atrial,
-            start_ms: 1000.0,
+            start_ms: 600.0,
             centre_mm: Some((-47.9, 27.9, -37.6)),
             axis: (-0.384, -0.039, -0.923),
-            span: 1.0,
-            within: Some(PhaseWaveLimit(radius_mm: 27.0, polar_deg: (80.0, 142.0))),
+            span: 2.0,
+            within: Some(PhaseWaveLimit(radius_mm: 27.0, polar_deg: (114.0, 152.0))),
         ),
     )),
     ep: Some(EpSpec(goal: TerminateReentry, targets: [CtiLine])),

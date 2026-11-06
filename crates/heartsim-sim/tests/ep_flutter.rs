@@ -51,7 +51,9 @@ fn run(l: &mut EpLab, ms: f64) -> Vec<Event> {
 /// Atrial cycles the tissue produced, sensed at the AV-nodal input.
 fn sensed_atrial(evs: &[Event]) -> Vec<f64> {
     evs.iter()
-        .filter(|e| e.chamber == Chamber::Atrium && e.origin == Origin::Reentry && e.kind == EventKind::Automatic)
+        .filter(|e| {
+            e.chamber == Chamber::Atrium && e.origin == Origin::Reentry && e.kind == EventKind::Automatic
+        })
         .map(|e| e.at.0)
         .collect()
 }
@@ -82,6 +84,7 @@ fn the_circuit_keeps_turning_at_a_flutter_rate() {
 fn a_cti_line_terminates_flutter_and_sinus_rhythm_returns() {
     let mut l = established().clone();
     assert!(l.ablate_target(AblationTarget::CtiLine) >= 3);
+    let lesions = l.lesions().len();
     run(&mut l, 1000.0);
     let evs = run(&mut l, 5000.0);
     let late: Vec<f64> = sensed_atrial(&evs)
@@ -93,9 +96,22 @@ fn a_cti_line_terminates_flutter_and_sinus_rhythm_returns() {
     assert!(l.goal_reached());
     let sinus = evs
         .iter()
-        .filter(|e| e.region == Region::RightAtrium && e.origin == Origin::Sinus && e.kind == EventKind::Automatic)
+        .filter(|e| {
+            e.region == Region::RightAtrium && e.origin == Origin::Sinus && e.kind == EventKind::Automatic
+        })
         .count();
     assert!(sinus >= 2, "{sinus} sinus beats");
+
+    // the line outlives an engine reset: the same seeded wave now dies against it
+    l.reset();
+    assert_eq!(l.lesions().len(), lesions);
+    run(&mut l, 2000.0);
+    let evs = run(&mut l, 1500.0);
+    assert!(
+        sensed_atrial(&evs).is_empty(),
+        "flutter came back after the reset: {:?}",
+        sensed_atrial(&evs)
+    );
 }
 
 #[test]
@@ -107,7 +123,10 @@ fn a_gap_in_the_line_does_not_terminate_it() {
     l.ablate_now(sites[0], 3.0);
     run(&mut l, 500.0);
     let evs = run(&mut l, 2000.0);
-    assert!(sensed_atrial(&evs).len() >= 5, "a single lesion stopped the circuit");
+    assert!(
+        sensed_atrial(&evs).len() >= 5,
+        "a single lesion stopped the circuit"
+    );
     assert_eq!(l.engine().tier(), Tier::Two);
 }
 
@@ -132,10 +151,28 @@ fn entrainment_tells_the_isthmus_from_a_site_outside_the_circuit() {
             other => panic!("{other:?}"),
         }
     };
-    let mid = pack().cells.regions.iter().position(|r| *r == Region::CavotricuspidIsthmus);
-    let isthmus = pack().cells.positions[mid.expect("isthmus cells")];
+    // the isthmus cell in the middle of the circuit's width: halfway between the annulus and the
+    // outer barrier of the file's patches (28° and 66° from the annulus axis)
+    let (centre, axis) = (
+        Vec3::new(-47.9, 27.9, -37.6),
+        Vec3::new(0.384, 0.039, 0.923).normalize(),
+    );
+    let polar = |p: Vec3| {
+        (p - centre)
+            .normalize()
+            .dot(axis)
+            .clamp(-1.0, 1.0)
+            .acos()
+            .to_degrees()
+    };
+    let isthmus = (0..pack().cells.len())
+        .filter(|&i| pack().cells.regions[i] == Region::CavotricuspidIsthmus)
+        .map(|i| pack().cells.positions[i])
+        .min_by(|a, b| (polar(*a) - 47.0).abs().total_cmp(&(polar(*b) - 47.0).abs()))
+        .expect("isthmus cells");
     let inside = entrain(isthmus);
     eprintln!("isthmus {inside:?}");
+    assert_eq!(inside.captured, inside.delivered, "{inside:?}");
     assert!(inside.in_circuit, "{inside:?}");
     let la = pack().cells.positions[pack().cells.landmarks["la_roof"] as usize];
     let outside = entrain(la);

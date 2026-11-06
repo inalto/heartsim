@@ -27,6 +27,8 @@ const RETURN_BLANK_MS: f64 = 60.0;
 const CYCLES_OBSERVED: usize = 4;
 /// Give up waiting for a tachycardia or a return beat after this long, ms.
 const WATCH_LIMIT_MS: f64 = 6000.0;
+/// An activation of the paced cell this soon after a stimulus means that stimulus captured, ms.
+const CAPTURE_WINDOW_MS: f64 = 15.0;
 /// A jump of at least this in A2–H2 for one coupling step means dual AV-nodal pathways, ms.
 pub const AH_JUMP_MS: f64 = 50.0;
 /// PPI − TCL up to this means the pacing site is in the circuit, ms.
@@ -94,6 +96,10 @@ impl Protocol {
 }
 
 /// What one S1–S2 coupling did.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independent observations of one beat"
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct CouplingPoint {
     /// S1–S2 interval, ms.
@@ -131,7 +137,12 @@ pub struct EntrainmentResult {
     /// Tachycardia cycle length measured at the site before pacing, ms.
     pub tcl_ms: f64,
     pub pacing_cycle_ms: f64,
-    /// Post-pacing interval: last stimulus to the next activation at the site, ms.
+    /// Stimuli the site captured. Fewer than delivered means the pacing cycle was inside the
+    /// tissue's refractory period, and the PPI counts from the last stimulus that did capture.
+    pub captured: u32,
+    /// Stimuli delivered.
+    pub delivered: u32,
+    /// Post-pacing interval: last captured stimulus to the next activation at the site, ms.
     pub ppi_ms: f64,
     /// PPI − TCL ≤ [`IN_CIRCUIT_MS`].
     pub in_circuit: bool,
@@ -141,7 +152,9 @@ pub struct EntrainmentResult {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ProtocolOutcome {
     /// The stimuli were delivered.
-    Delivered { stimuli: u32 },
+    Delivered {
+        stimuli: u32,
+    },
     Erp(ErpResult),
     Entrainment(EntrainmentResult),
     /// Stimulus and return beats could not be timed: no rhythm to entrain, no return beat.
@@ -152,7 +165,10 @@ pub enum ProtocolOutcome {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProtocolStatus {
     /// Stimuli delivered so far and the current coupling or cycle, ms.
-    Pacing { delivered: u32, interval_ms: f64 },
+    Pacing {
+        delivered: u32,
+        interval_ms: f64,
+    },
     /// Watching for the tachycardia cycle or the return beat.
     Watching,
     Finished,
@@ -161,9 +177,15 @@ pub enum ProtocolStatus {
 #[derive(Debug, Clone, PartialEq)]
 enum Phase {
     /// Planned stimuli, ascending; `next` is the first not delivered.
-    Plan { times: Vec<f64>, next: usize },
+    Plan {
+        times: Vec<f64>,
+        next: usize,
+    },
     /// Continuous pacing: next stimulus time.
-    Continuous { next_ms: f64, cycle_ms: f64 },
+    Continuous {
+        next_ms: f64,
+        cycle_ms: f64,
+    },
     /// One drive of an ERP search.
     Drive {
         times: Vec<f64>,
@@ -175,17 +197,25 @@ enum Phase {
         input_at: Option<f64>,
     },
     /// Entrainment: collecting activations of the site.
-    Measure { since_ms: f64, seen: Vec<f64> },
+    Measure {
+        since_ms: f64,
+        seen: Vec<f64>,
+    },
     /// Entrainment: pacing.
     EntrainPace {
         times: Vec<f64>,
         next: usize,
         tcl_ms: f64,
         cycle_ms: f64,
+        captured: u32,
+        last_captured_ms: Option<f64>,
     },
     /// Entrainment: waiting for the return beat.
     Return {
         last_stim_ms: f64,
+        last_captured_ms: f64,
+        captured: u32,
+        delivered: u32,
         tcl_ms: f64,
         cycle_ms: f64,
     },
@@ -332,17 +362,15 @@ impl ProtocolRun {
                     _ => 0.0,
                 },
             },
-            Phase::Continuous { cycle_ms, .. } => ProtocolStatus::Pacing {
-                delivered: self.delivered,
-                interval_ms: *cycle_ms,
-            },
+            Phase::Continuous { cycle_ms, .. } | Phase::EntrainPace { cycle_ms, .. } => {
+                ProtocolStatus::Pacing {
+                    delivered: self.delivered,
+                    interval_ms: *cycle_ms,
+                }
+            }
             Phase::Drive { s2_ms, .. } => ProtocolStatus::Pacing {
                 delivered: self.delivered,
                 interval_ms: *s2_ms,
-            },
-            Phase::EntrainPace { cycle_ms, .. } => ProtocolStatus::Pacing {
-                delivered: self.delivered,
-                interval_ms: *cycle_ms,
             },
             Phase::Measure { .. } | Phase::Return { .. } => ProtocolStatus::Watching,
             Phase::Done => ProtocolStatus::Finished,
@@ -405,6 +433,8 @@ impl ProtocolRun {
                             next: 0,
                             tcl_ms: cycles,
                             cycle_ms,
+                            captured: 0,
+                            last_captured_ms: None,
                         };
                     }
                 } else if now_ms - *since_ms > WATCH_LIMIT_MS {
@@ -417,25 +447,50 @@ impl ProtocolRun {
                 next,
                 tcl_ms,
                 cycle_ms,
+                captured,
+                last_captured_ms,
             } => {
-                if *next >= times.len() {
-                    self.phase = Phase::Return {
-                        last_stim_ms: times[times.len() - 1],
-                        tcl_ms: *tcl_ms,
-                        cycle_ms: *cycle_ms,
+                if new_activation
+                    && let Some(t) = times[..*next]
+                        .iter()
+                        .rev()
+                        .find(|t| (0.0..=CAPTURE_WINDOW_MS).contains(&(site_activation_ms - **t)))
+                {
+                    *captured += 1;
+                    *last_captured_ms = Some(*t);
+                }
+                let last = times[times.len() - 1];
+                if *next >= times.len() && now_ms >= last + CAPTURE_WINDOW_MS {
+                    self.phase = if let Some(last_captured_ms) = *last_captured_ms {
+                        Phase::Return {
+                            last_stim_ms: last,
+                            last_captured_ms,
+                            captured: *captured,
+                            delivered: times.len() as u32,
+                            tcl_ms: *tcl_ms,
+                            cycle_ms: *cycle_ms,
+                        }
+                    } else {
+                        self.outcome = Some(ProtocolOutcome::NoReturn);
+                        Phase::Done
                     };
                 }
             }
             Phase::Return {
                 last_stim_ms,
+                last_captured_ms,
+                captured,
+                delivered,
                 tcl_ms,
                 cycle_ms,
             } => {
                 if new_activation && site_activation_ms > *last_stim_ms + RETURN_BLANK_MS {
-                    let ppi_ms = site_activation_ms - *last_stim_ms;
+                    let ppi_ms = site_activation_ms - *last_captured_ms;
                     self.outcome = Some(ProtocolOutcome::Entrainment(EntrainmentResult {
                         tcl_ms: *tcl_ms,
                         pacing_cycle_ms: *cycle_ms,
+                        captured: *captured,
+                        delivered: *delivered,
                         ppi_ms,
                         in_circuit: ppi_ms - *tcl_ms <= IN_CIRCUIT_MS,
                     }));
@@ -507,14 +562,16 @@ impl ProtocolRun {
         let (failed, local) = match target {
             ErpTarget::Atrium | ErpTarget::Ventricle => (!point.captured, !point.captured),
             ErpTarget::AvNode => (point.captured && !point.his, !point.captured),
-            ErpTarget::FastPathway => (point.captured && (point.slow_pathway || !point.his), !point.captured),
+            ErpTarget::FastPathway => (
+                point.captured && (point.slow_pathway || !point.his),
+                !point.captured,
+            ),
             ErpTarget::AccessoryPathway => (point.captured && point.ap_blocked, !point.captured),
         };
         let next_s2 = point.s1s2_ms - s2_step_ms;
         if failed || local || next_s2 < s2_floor_ms {
             let erp = failed.then_some(point.s1s2_ms);
-            let limited = local
-                && !matches!(target, ErpTarget::Atrium | ErpTarget::Ventricle);
+            let limited = local && !matches!(target, ErpTarget::Atrium | ErpTarget::Ventricle);
             self.outcome = Some(ProtocolOutcome::Erp(self.erp_result(erp, limited)));
             self.phase = Phase::Done;
         } else {

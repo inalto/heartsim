@@ -398,13 +398,7 @@ impl EikonalEngine {
         let n = cloud.len();
         let kinds: Vec<CellKind> = cloud.regions.iter().map(|r| CellKind::of(*r)).collect();
         let links = cs_os_link(&cloud, eik.cs_os_link_mm);
-        let graph = Graph::build_with_links(
-            &cloud,
-            &kinds,
-            eik.neighbourhood_factor,
-            eik.max_edges,
-            &links,
-        );
+        let graph = Graph::build_with_links(&cloud, &kinds, eik.neighbourhood_factor, eik.max_edges, &links);
         let apex_base = apex_base_coordinate(&cloud);
         let layer = fast_layer(&cloud, &kinds, &apex_base, &eik);
         let structure_s = structure_coordinate(&cloud);

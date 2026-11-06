@@ -46,7 +46,8 @@ fn position(c: u32) -> Vec3 {
 
 /// Atrial cell the HRA pair would pace.
 fn hra_cell(l: &EpLab) -> u32 {
-    l.capture_cell(position(cell("sa_node"))).expect("tissue at the HRA")
+    l.capture_cell(position(cell("sa_node")))
+        .expect("tissue at the HRA")
 }
 
 fn run(l: &mut EpLab, ms: f64) -> Vec<Event> {
@@ -66,12 +67,18 @@ fn run_until_done(l: &mut EpLab, limit_ms: f64) -> Vec<Event> {
         l.step(Millis(1.0));
         all.extend(l.drain_events());
     }
-    assert_eq!(l.protocol_status(), ProtocolStatus::Finished, "protocol still running");
+    assert_eq!(
+        l.protocol_status(),
+        ProtocolStatus::Finished,
+        "protocol still running"
+    );
     all
 }
 
 fn count(evs: &[Event], region: Region, kind: EventKind) -> usize {
-    evs.iter().filter(|e| e.region == region && e.kind == kind).count()
+    evs.iter()
+        .filter(|e| e.region == region && e.kind == kind)
+        .count()
 }
 
 fn his_rate_bpm(evs: &[Event], ms: f64) -> f64 {
@@ -90,11 +97,21 @@ fn a_lesion_persists_across_an_engine_reset() {
     l.reset();
     assert_eq!(l.now(), Millis::ZERO);
     assert_eq!(l.lesions().len(), 1, "the book survives");
-    assert!(l.engine().tier1().eikonal().ablated()[c as usize], "the cells survive");
+    assert!(
+        l.engine().tier1().eikonal().ablated()[c as usize],
+        "the cells survive"
+    );
     run(&mut l, 1500.0);
     let t = &l.cells().activation_ms;
-    assert!(t[c as usize].is_nan(), "lesion cell activated at {}", t[c as usize]);
-    assert!(t[far as usize].is_finite(), "the rest of the atria still activates");
+    assert!(
+        t[c as usize].is_nan(),
+        "lesion cell activated at {}",
+        t[c as usize]
+    );
+    assert!(
+        t[far as usize].is_finite(),
+        "the rest of the atria still activates"
+    );
 }
 
 #[test]
@@ -192,7 +209,11 @@ fn a_catheter_stimulus_is_decided_by_the_timing_engine_and_starts_the_front_at_i
             .any(|e| e.kind == EventKind::Blocked && e.origin == Origin::External),
         "captured inside the ERP"
     );
-    assert_eq!(f64::from(l.cells().activation_ms[c as usize]), t, "front started anyway");
+    assert_eq!(
+        f64::from(l.cells().activation_ms[c as usize]),
+        t,
+        "front started anyway"
+    );
 }
 
 #[test]
@@ -242,7 +263,10 @@ fn a_train_delivers_its_stimuli_and_captures_at_a_safe_rate() {
         },
     );
     let evs = run_until_done(&mut l, 10_000.0);
-    assert_eq!(l.protocol_outcome(), Some(&ProtocolOutcome::Delivered { stimuli: 8 }));
+    assert_eq!(
+        l.protocol_outcome(),
+        Some(&ProtocolOutcome::Delivered { stimuli: 8 })
+    );
     let captured = evs
         .iter()
         .filter(|e| e.kind == EventKind::Stimulus && e.origin == Origin::External)
@@ -311,7 +335,9 @@ fn atrial_av_nodal_and_ventricular_erps_are_found_in_the_normal_ranges() {
 
     let mut l = lab("ep_baseline");
     let node = erp(&mut l, hra, ErpTarget::AvNode);
-    let n = node.erp_ms.unwrap_or_else(|| panic!("AV-nodal ERP not found: {node:?}"));
+    let n = node
+        .erp_ms
+        .unwrap_or_else(|| panic!("AV-nodal ERP not found: {node:?}"));
     assert!((230.0..=425.0).contains(&n), "AV-nodal ERP {n}");
 
     let mut l = lab("ep_baseline");
@@ -328,7 +354,10 @@ fn the_erp_found_is_the_engine_parameter_it_should_measure() {
     let atrium = erp(&mut l, hra, ErpTarget::Atrium);
     let parameter = l.timing().params.atrial_erp_ms;
     let a = atrium.erp_ms.unwrap();
-    assert!(a < parameter && parameter <= a + 10.0, "ERP {a} for parameter {parameter}");
+    assert!(
+        a < parameter && parameter <= a + 10.0,
+        "ERP {a} for parameter {parameter}"
+    );
 }
 
 // --- AVNRT --------------------------------------------------------------------------------------
@@ -357,7 +386,9 @@ fn dual_pathways_show_a_jump_and_s2_induces_avnrt() {
     let mut l = lab("ep_avnrt");
     let hra = hra_cell(&l);
     let e = erp(&mut l, hra, ErpTarget::FastPathway);
-    let (coupling, jump) = e.ah_jump.unwrap_or_else(|| panic!("no A2-H2 jump: {:?}", e.curve));
+    let (coupling, jump) = e
+        .ah_jump
+        .unwrap_or_else(|| panic!("no A2-H2 jump: {:?}", e.curve));
     assert!(jump >= 50.0, "jump {jump} at {coupling}");
     let fast_erp = e.erp_ms.expect("fast-pathway ERP");
     assert_eq!(fast_erp, coupling, "the jump is where the fast pathway fails");
@@ -411,7 +442,10 @@ fn a_premature_stimulus_induces_avrt_and_ablating_the_pathway_ends_it_for_good()
 
     let mut l2 = l.clone();
     l2.reset();
-    assert!(l2.timing().params.accessory.is_none(), "the pathway came back after a reset");
+    assert!(
+        l2.timing().params.accessory.is_none(),
+        "the pathway came back after a reset"
+    );
     let rate = induce(&mut l2, 280.0);
     assert!(rate < 110.0, "still inducible after a reset: {rate} bpm");
 }
@@ -433,10 +467,17 @@ fn entrainment_from_the_ventricle_reads_tcl_and_ppi_during_avrt() {
     let Some(ProtocolOutcome::Entrainment(e)) = l.protocol_outcome() else {
         panic!("{:?}", l.protocol_outcome());
     };
+    assert_eq!(
+        e.captured, e.delivered,
+        "every stimulus must capture to entrain: {e:?}"
+    );
     let tcl_expected = 60_000.0 / tcl_rate;
     assert!((e.tcl_ms - tcl_expected).abs() < 40.0, "{e:?} for {tcl_expected}");
     assert!(e.ppi_ms >= e.tcl_ms - 20.0, "{e:?}");
-    assert!(e.ppi_ms - e.tcl_ms <= 115.0, "AVRT should stay under Michaud's 115 ms: {e:?}");
+    assert!(
+        e.ppi_ms - e.tcl_ms <= 115.0,
+        "AVRT should stay under Michaud's 115 ms: {e:?}"
+    );
 }
 
 #[test]
@@ -467,7 +508,7 @@ fn the_cti_line_kills_the_isthmus_on_tier_1_and_sinus_rhythm_still_conducts() {
     let isthmus: Vec<usize> = (0..cloud.len())
         .filter(|&i| cloud.regions[i] == Region::CavotricuspidIsthmus)
         .collect();
-    assert!(!isthmus.is_empty());
+    assert_ne!(isthmus.len(), 0);
     let dead = l.engine().tier1().eikonal().ablated();
     assert!(isthmus.iter().all(|&i| dead[i]), "a gap in the line");
     let evs = run(&mut l, 3000.0);

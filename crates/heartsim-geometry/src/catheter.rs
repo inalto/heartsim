@@ -516,10 +516,7 @@ impl CatheterAnatomy {
         let mut waypoints = vec![self.entry, ra_centre];
         match chamber {
             CardiacChamber::RightAtrium => {}
-            CardiacChamber::RightVentricle => {
-                waypoints.push(cavity.centre());
-            }
-            CardiacChamber::LeftAtrium => {
+            CardiacChamber::RightVentricle | CardiacChamber::LeftAtrium => {
                 waypoints.push(cavity.centre());
             }
             CardiacChamber::LeftVentricle => {
@@ -568,10 +565,7 @@ impl CatheterAnatomy {
         let depth = match site {
             CatheterSite::CsDepth(d) => d.clamp(0.0, full),
             CatheterSite::Point(p) => self.cs_depth_of(Vec3::from(*p)),
-            CatheterSite::Landmark(name) => self
-                .landmarks
-                .get(name)
-                .map_or(full, |p| self.cs_depth_of(*p)),
+            CatheterSite::Landmark(name) => self.landmarks.get(name).map_or(full, |p| self.cs_depth_of(*p)),
             CatheterSite::Default => full,
         };
         let ra_centre = self.cavity(CardiacChamber::RightAtrium).centre();
@@ -667,6 +661,9 @@ mod tests {
         assert!(!cavity.contains(Vec3::new(30.0, 0.0, 0.0)));
         let out = cavity.constrain(Vec3::new(60.0, 0.0, 0.0));
         assert!(out.length() < 24.0, "pulled back to the wall: {out}");
-        assert_eq!(cavity.constrain(Vec3::new(1.0, 1.0, 1.0)), Vec3::new(1.0, 1.0, 1.0));
+        assert_eq!(
+            cavity.constrain(Vec3::new(1.0, 1.0, 1.0)),
+            Vec3::new(1.0, 1.0, 1.0)
+        );
     }
 }

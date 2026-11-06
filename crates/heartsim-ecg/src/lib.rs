@@ -19,8 +19,8 @@
 //!   derived leads with the standard placement (B10).
 
 pub mod analysis;
-pub mod egm;
 pub mod axis_est;
+pub mod egm;
 pub mod filter;
 pub mod forward;
 pub mod leadvec;
@@ -35,13 +35,13 @@ pub use analysis::{
     WaveKind, WaveMark,
 };
 pub use axis_est::{estimate_frontal_axis, net_area_axis};
-pub use forward::{
-    ForwardError, ForwardModel, ForwardOptions, LimbPlacement, SourceModel, SurfacePatches, VentricularPhase,
-    WaveGains, WeightStats,
-};
 pub use egm::{
     ConductionIntervals, Deflection, EGM_RATE_HZ, EgmChannel, EgmOptions, EgmRecorder, EgmSource,
     ElectrogramModel,
+};
+pub use forward::{
+    ForwardError, ForwardModel, ForwardOptions, LimbPlacement, SourceModel, SurfacePatches, VentricularPhase,
+    WaveGains, WeightStats,
 };
 pub use leadvec::LeadVectors;
 pub use misplacement::{DetectorConfig, Finding, detect_misplacement};

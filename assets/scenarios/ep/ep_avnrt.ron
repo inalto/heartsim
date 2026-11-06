@@ -12,7 +12,7 @@ Scenario(
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 72.0),
         av: AvParams(
-            fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 250.0, blocked: false),
+            fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 60.0, recovery_tau_ms: 80.0, erp_ms: 250.0, blocked: false),
             slow: AvPathway(min_ms: 218.0, recovery_amplitude_ms: 100.0, recovery_tau_ms: 100.0, erp_ms: 30.0, blocked: false),
             dual_pathways: true,
             retrograde_fast: true,

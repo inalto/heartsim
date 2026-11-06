@@ -19,7 +19,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - RF ablation: lesions that grow with a time constant, with temperature and impedance read-outs (a teaching stub, not a thermal model). A lesion
   stops the cells and voxels under it and the nodal, bundle or accessory-pathway structures it touches, and it survives an engine reset.
 - Tier-2 patches: `PatchTarget::Band` and `Initiation::PhaseWave { within }`, used to draw a macro-re-entrant circuit on the spherical atria.
+  Typical flutter exists only as this drawn, pre-seeded circuit (cycle 235 ms), a procedure of the EP lab; it is not induced by pacing.
 - `EikonalParams::cs_os_link_mm`: joins the coronary-sinus sleeve to the right atrium (off by default, so existing rhythms do not change).
+
+### Changed
+- Inert tissue from a scenario's Tier-2 patches no longer follows the heart back to Tier 1 as lesions; lesions made during the run still do.
 
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the

@@ -776,6 +776,12 @@ impl<M: CellModel> Tier2Engine<M> {
             .collect()
     }
 
+    /// The tissue as it conducts now is the baseline against which [`Tier2Engine::lesion_cells`]
+    /// and `reset` compare.
+    pub fn accept_tissue_as_baseline(&mut self) {
+        self.base_conducting = self.solver.conducting().to_vec();
+    }
+
     /// Inert tissue for good within `radius_mm` of `centre`: an RF lesion (brief B22). It survives
     /// `reset` and is not reported by [`Tier2Engine::lesion_cells`], because the Tier-1 engine it
     /// would be reported to already holds it.

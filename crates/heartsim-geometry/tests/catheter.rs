@@ -42,7 +42,10 @@ fn cavities_do_not_overlap_myocardium_or_each_other() {
     assert!(!ra.contains(rv.centre()), "RV centre counted as RA");
     assert!(!rv.contains(ra.centre()), "RA centre counted as RV");
     let lv = anatomy().cavity(CardiacChamber::LeftVentricle);
-    assert!(!rv.contains(lv.centre()), "LV cavity counted as RV: the crescent test failed");
+    assert!(
+        !rv.contains(lv.centre()),
+        "LV cavity counted as RV: the crescent test failed"
+    );
     let inside_wall = cells
         .positions
         .iter()
@@ -73,7 +76,10 @@ fn the_standard_set_has_the_usual_bipoles_in_their_chambers() {
     ] {
         let c = set.iter().find(|c| c.kind == kind).unwrap();
         let d = anatomy().cavity(chamber).distance(c.tip());
-        assert!(d <= CONTACT_MM + 2.0, "{kind:?} tip {d} mm from the {chamber:?} cavity");
+        assert!(
+            d <= CONTACT_MM + 2.0,
+            "{kind:?} tip {d} mm from the {chamber:?} cavity"
+        );
     }
     // the electrode spacing of the body is kept: 2 mm within a bipole
     let hra = set.iter().find(|c| c.kind == CatheterKind::Hra).unwrap();
@@ -107,7 +113,10 @@ fn the_cs_catheter_slides_along_its_vessel_with_the_distal_pair_deepest() {
         cells.positions[cells.landmarks["cs_os"] as usize],
         cells.positions[cells.landmarks["cs_distal"] as usize],
     );
-    assert!(deep.tip().distance(distal) < 1.0, "fully in: tip at the distal end");
+    assert!(
+        deep.tip().distance(distal) < 1.0,
+        "fully in: tip at the distal end"
+    );
     assert!(deep.pair_midpoint(4).distance(os) < deep.pair_midpoint(0).distance(os));
     assert!(halfway.tip().distance(distal) > full * 0.3, "withdrawn");
     // dragging: a point near the vessel gives the depth of its nearest rail point
@@ -131,6 +140,10 @@ fn the_ablation_catheter_goes_to_the_chamber_of_the_tissue_it_touches() {
             a.cavity(chamber).distance(c.tip()) <= CONTACT_MM + 1e-3,
             "{landmark}: tip outside the {chamber:?}"
         );
-        assert!(c.tip().distance(p) < 12.0, "{landmark}: tip {} mm away", c.tip().distance(p));
+        assert!(
+            c.tip().distance(p) < 12.0,
+            "{landmark}: tip {} mm away",
+            c.tip().distance(p)
+        );
     }
 }

@@ -13,8 +13,8 @@ use heartsim_ecg::{ConductionIntervals, EgmRecorder, EgmSource, LeadRing};
 use heartsim_geometry::{Catheter, CatheterKind, CatheterSite};
 use heartsim_render::{GlyphInstance, glyph};
 use heartsim_sim::ep::{
-    AblationTarget, EntrainmentResult, ErpResult, ErpTarget, Lesion, Protocol, ProtocolOutcome, ProtocolStatus,
-    RfReadout,
+    AblationTarget, EntrainmentResult, ErpResult, ErpTarget, Lesion, Protocol, ProtocolOutcome,
+    ProtocolStatus, RfReadout,
 };
 
 use crate::i18n::number;
@@ -81,6 +81,7 @@ fn ablation_target_label(target: AblationTarget) -> String {
 }
 
 /// What the panels edit.
+#[expect(clippy::struct_excessive_bools, reason = "independent check boxes of a form")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct EpPanelState {
     /// Sweep speed, mm/s.
@@ -180,10 +181,18 @@ impl EpPanelState {
 /// What the user asked for this frame.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EpCommand {
-    MoveCatheter { catheter: usize, site: CatheterSite },
-    StartProtocol { channel: usize, protocol: Protocol },
+    MoveCatheter {
+        catheter: usize,
+        site: CatheterSite,
+    },
+    StartProtocol {
+        channel: usize,
+        protocol: Protocol,
+    },
     StopProtocol,
-    PaceOnce { channel: usize },
+    PaceOnce {
+        channel: usize,
+    },
     RfOn,
     RfOff,
     /// Put the ablation tip on a target (the first stop of a line).
@@ -237,7 +246,7 @@ pub fn egm_stack(
         trace_width: 1.0,
         ..*style
     };
-    let base_id = ui.id().with("egm_stack");
+    let base_id = ui.scope_id().with("egm_stack");
     for (k, (label, ring)) in surface.iter().enumerate() {
         let trace = StripTrace {
             label,
@@ -303,7 +312,13 @@ pub fn egm_stack(
     }
 }
 
-fn caliper_drag(state: &mut EpPanelState, response: &egui::Response, rect: Rect, now_ms: f64, px_per_ms: f32) {
+fn caliper_drag(
+    state: &mut EpPanelState,
+    response: &egui::Response,
+    rect: Rect,
+    now_ms: f64,
+    px_per_ms: f32,
+) {
     let time_at = |x: f32| now_ms - f64::from((rect.right() - x) / px_per_ms);
     if response.drag_started()
         && let Some(p) = response.interact_pointer_pos()
@@ -378,12 +393,20 @@ pub fn egm_controls(ui: &mut Ui, state: &mut EpPanelState, intervals: Option<Con
     ui.horizontal_wrapped(|ui| {
         ui.label(t!("ep-sweep"));
         for s in EGM_SPEEDS_MM_S {
-            ui.selectable_value(&mut state.sweep_mm_s, s, t!("ep-mm-s", value = number(f64::from(s), 0)));
+            ui.selectable_value(
+                &mut state.sweep_mm_s,
+                s,
+                t!("ep-mm-s", value = number(f64::from(s), 0)),
+            );
         }
         ui.separator();
         ui.label(t!("ep-gain"));
         for g in EGM_GAINS_MM_MV {
-            ui.selectable_value(&mut state.gain_mm_mv, g, t!("ep-mm-mv", value = number(f64::from(g), 0)));
+            ui.selectable_value(
+                &mut state.gain_mm_mv,
+                g,
+                t!("ep-mm-mv", value = number(f64::from(g), 0)),
+            );
         }
         ui.separator();
         ui.checkbox(&mut state.unipolar, t!("ep-unipolar"));
@@ -568,7 +591,12 @@ pub fn pes_panel(
             ms_slider(ui, &mut state.s2_ms, 200.0..=600.0, t!("ep-s2-start"));
         }
         ProtocolKind::Entrainment => {
-            ms_slider(ui, &mut state.entrain_offset_ms, 10.0..=60.0, t!("ep-entrain-offset"));
+            ms_slider(
+                ui,
+                &mut state.entrain_offset_ms,
+                10.0..=60.0,
+                t!("ep-entrain-offset"),
+            );
             ui.add(egui::Slider::new(&mut state.entrain_count, 3..=30).text(t!("ep-entrain-count")));
         }
     }
@@ -585,7 +613,10 @@ pub fn pes_panel(
                 protocol: state.protocol(),
             });
         }
-        if ui.add_enabled(running, egui::Button::new(t!("ep-stop"))).clicked() {
+        if ui
+            .add_enabled(running, egui::Button::new(t!("ep-stop")))
+            .clicked()
+        {
             commands.push(EpCommand::StopProtocol);
         }
         if ui.button(t!("ep-pace-once")).clicked() {
@@ -661,6 +692,16 @@ fn entrainment_label(ui: &mut Ui, e: &EntrainmentResult) {
         ppi = number(e.ppi_ms, 0),
         delta = number(e.ppi_ms - e.tcl_ms, 0)
     ));
+    if e.captured < e.delivered {
+        ui.colored_label(
+            Color32::LIGHT_RED,
+            t!(
+                "ep-outcome-partial-capture",
+                captured = i64::from(e.captured),
+                delivered = i64::from(e.delivered)
+            ),
+        );
+    }
     ui.strong(if e.in_circuit {
         t!("ep-outcome-in-circuit")
     } else {
@@ -669,7 +710,6 @@ fn entrainment_label(ui: &mut Ui, e: &EntrainmentResult) {
 }
 
 /// The RF generator: targets, RF on/off, read-outs, lesion count and the goal.
-#[expect(clippy::too_many_arguments, reason = "one call site, each value is read once")]
 pub fn ablation_panel(
     ui: &mut Ui,
     state: &mut EpPanelState,
@@ -716,7 +756,10 @@ pub fn ablation_panel(
             ui.colored_label(Color32::LIGHT_RED, t!("ep-rf-no-contact"));
         }
     }
-    ui.label(t!("ep-lesions", count = i64::try_from(lesions).unwrap_or(i64::MAX)));
+    ui.label(t!(
+        "ep-lesions",
+        count = i64::try_from(lesions).unwrap_or(i64::MAX)
+    ));
     if let Some(goal) = goal_text {
         ui.horizontal_wrapped(|ui| {
             ui.label(goal);

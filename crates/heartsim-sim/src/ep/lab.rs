@@ -170,7 +170,9 @@ impl<M: CellModel> EpLab<M> {
     /// Progress of the protocol.
     #[must_use]
     pub fn protocol_status(&self) -> ProtocolStatus {
-        self.run.as_ref().map_or(ProtocolStatus::Finished, ProtocolRun::status)
+        self.run
+            .as_ref()
+            .map_or(ProtocolStatus::Finished, ProtocolRun::status)
     }
 
     /// The result of the last protocol that finished.
@@ -224,7 +226,8 @@ impl<M: CellModel> EpLab<M> {
                 best = Some((d, i as u32));
             }
         }
-        best.filter(|b| b.0 <= CAPTURE_RANGE_MM * CAPTURE_RANGE_MM).map(|b| b.1)
+        best.filter(|b| b.0 <= CAPTURE_RANGE_MM * CAPTURE_RANGE_MM)
+            .map(|b| b.1)
     }
 
     /// One stimulus at `cell` now (and on the stimulus marks).
@@ -348,12 +351,9 @@ impl<M: CellModel> EpLab<M> {
             AblationTarget::PulmonaryVeins => {
                 of_actions(pvi_lesions(cloud, LINE_LESION_RADIUS_MM, Millis::ZERO))
             }
-            AblationTarget::AccessoryPathway => self
-                .accessory_insertions()
-                .first()
-                .copied()
-                .into_iter()
-                .collect(),
+            AblationTarget::AccessoryPathway => {
+                self.accessory_insertions().first().copied().into_iter().collect()
+            }
         }
     }
 

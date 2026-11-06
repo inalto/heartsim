@@ -83,13 +83,18 @@ fn the_cs_activates_proximal_to_distal_in_sinus_rhythm() {
     let beats: Vec<f64> = s
         .events
         .iter()
-        .filter(|e| e.origin == Origin::Sinus && e.region == Region::RightAtrium && e.kind == EventKind::Automatic)
+        .filter(|e| {
+            e.origin == Origin::Sinus && e.region == Region::RightAtrium && e.kind == EventKind::Automatic
+        })
         .map(|e| e.at.0)
         .collect();
     assert!(beats.len() >= 3, "{beats:?}");
     for &t0 in &beats[1..3] {
         let seq = s.cs_sequence(t0, 200.0);
-        eprintln!("sinus at {t0}: CS 1-2 … 9-10 at {:?}", seq.iter().map(|t| t - t0).collect::<Vec<_>>());
+        eprintln!(
+            "sinus at {t0}: CS 1-2 … 9-10 at {:?}",
+            seq.iter().map(|t| t - t0).collect::<Vec<_>>()
+        );
         assert!(seq[4] < seq[0], "proximal {} after distal {}", seq[4], seq[0]);
         for w in seq.windows(2) {
             assert!(w[1] <= w[0] + 2.0, "not proximal to distal: {seq:?}");
@@ -100,7 +105,10 @@ fn the_cs_activates_proximal_to_distal_in_sinus_rhythm() {
 #[test]
 fn the_cs_activates_distal_first_in_left_lateral_avrt() {
     let mut s = Study::new("ep_ap_left_lateral");
-    let hra = s.lab.capture_cell(pack().cells.positions[pack().cells.landmarks["sa_node"] as usize]).unwrap();
+    let hra = s
+        .lab
+        .capture_cell(pack().cells.positions[pack().cells.landmarks["sa_node"] as usize])
+        .unwrap();
     s.run(1000.0);
     s.lab.start_protocol(
         hra,
@@ -126,7 +134,10 @@ fn the_cs_activates_distal_first_in_left_lateral_avrt() {
     assert!(retro.len() >= 5, "AVRT not sustained: {retro:?}");
     for &t0 in &retro[retro.len() - 3..retro.len() - 1] {
         let seq = s.cs_sequence(t0 - 5.0, 120.0);
-        eprintln!("AVRT at {t0}: CS 1-2 … 9-10 at {:?}", seq.iter().map(|t| t - t0).collect::<Vec<_>>());
+        eprintln!(
+            "AVRT at {t0}: CS 1-2 … 9-10 at {:?}",
+            seq.iter().map(|t| t - t0).collect::<Vec<_>>()
+        );
         assert!(seq[0] < seq[4], "distal {} after proximal {}", seq[0], seq[4]);
         let earliest = seq
             .iter()
@@ -153,7 +164,10 @@ fn after_ablating_the_pathway_the_eccentric_sequence_is_gone() {
 fn ah_and_hv_are_in_the_normal_ranges_in_sinus_rhythm() {
     let mut s = Study::new("ep_baseline");
     s.run(4000.0);
-    let i = s.rec.conduction_intervals().expect("A, H and V on the His catheter");
+    let i = s
+        .rec
+        .conduction_intervals()
+        .expect("A, H and V on the His catheter");
     eprintln!("{i:?}");
     assert!((50.0..=120.0).contains(&i.ah_ms), "AH {}", i.ah_ms);
     assert!((35.0..=55.0).contains(&i.hv_ms), "HV {}", i.hv_ms);
@@ -207,7 +221,12 @@ fn bipolar_amplitudes_are_plausible_for_healthy_tissue_and_fall_on_a_lesion() {
             .fold(0.0f32, f32::max)
     };
     let mut healthy = Study::new("ep_baseline");
-    let hra = healthy.rec.channels().iter().position(|c| c.kind == CatheterKind::Hra).unwrap();
+    let hra = healthy
+        .rec
+        .channels()
+        .iter()
+        .position(|c| c.kind == CatheterKind::Hra)
+        .unwrap();
     healthy.run(3000.0);
     let before = amplitude(&healthy, hra);
     assert!((0.2..=30.0).contains(&before), "HRA bipole {before} mV");
@@ -217,7 +236,10 @@ fn bipolar_amplitudes_are_plausible_for_healthy_tissue_and_fall_on_a_lesion() {
     ablated.lab.ablate_now(site, 8.0);
     ablated.run(3000.0);
     let after = amplitude(&ablated, hra);
-    assert!(after < 0.7 * before, "{after} mV over a lesion, {before} mV before");
+    assert!(
+        after < 0.7 * before,
+        "{after} mV over a lesion, {before} mV before"
+    );
 }
 
 #[test]

@@ -26,7 +26,15 @@ fn the_start_button_reports_the_protocol_of_the_form_from_the_chosen_pair() {
     let channels = vec!["HRA 1-2".to_string(), "HRA 3-4".to_string()];
     let mut harness = Harness::new_ui(move |ui| {
         let mut c = Vec::new();
-        pes_panel(ui, &mut state, &channels, ProtocolStatus::Finished, None, false, &mut c);
+        pes_panel(
+            ui,
+            &mut state,
+            &channels,
+            ProtocolStatus::Finished,
+            None,
+            false,
+            &mut c,
+        );
         out.borrow_mut().extend(c);
     });
     harness.run();
@@ -49,7 +57,16 @@ fn the_rf_button_turns_rf_on_and_shows_the_generator_when_it_is_on() {
     let mut state = EpPanelState::default();
     let mut harness = Harness::new_ui(move |ui| {
         let mut c = Vec::new();
-        ablation_panel(ui, &mut state, &[AblationTarget::CtiLine], None, 0, None, false, &mut c);
+        ablation_panel(
+            ui,
+            &mut state,
+            &[AblationTarget::CtiLine],
+            None,
+            0,
+            None,
+            false,
+            &mut c,
+        );
         out.borrow_mut().extend(c);
     });
     harness.run();
@@ -83,7 +100,15 @@ fn the_panels_are_translated() {
     let channels = vec!["HRA 1-2".to_string()];
     let mut harness = Harness::new_ui(move |ui| {
         let mut c = Vec::new();
-        pes_panel(ui, &mut state, &channels, ProtocolStatus::Finished, None, false, &mut c);
+        pes_panel(
+            ui,
+            &mut state,
+            &channels,
+            ProtocolStatus::Finished,
+            None,
+            false,
+            &mut c,
+        );
     });
     harness.run();
     assert!(harness.query_by_label("Avvia").is_some());

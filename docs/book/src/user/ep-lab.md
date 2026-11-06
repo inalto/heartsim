@@ -20,6 +20,10 @@ seen three ways, and a stimulus either captured in all of them or in none.
 The flutter and AF procedures run on the slower reaction-diffusion engine; the status line shows which engine is running and how far
 behind real time it is. The other three run in real time.
 
+Measured in this model, for comparison with your own calipers: AH 77 ms and HV 41 ms in the baseline study; CS atrial activation from about 45 ms
+(`CS 9-10`) to 91 ms (`CS 1-2`) after the sinus discharge; in left-lateral AVRT from about 9 ms (`CS 1-2`) to 24 ms (`CS 9-10`) after the
+retrograde atrial activation; flutter cycle 235 ms, with PPI − TCL about −10 ms at the isthmus and about +120 ms at the left atrial roof.
+
 ## Catheters
 
 | Catheter | Electrodes | Usual site | What it shows |
@@ -71,8 +75,8 @@ lesion. The default time constant is 8 s; shorten it when the slow engine is run
 *Go* puts the tip on a target of the procedure, and *Ablate all* lays the whole target at once, which is the practical way to make a line.
 
 A lesion kills the tissue under it, and whatever conduction structure it touches: the compact AV node or the His bundle (complete block with
-a junctional escape), a nodal pathway, a bundle branch, or an accessory-pathway insertion. Lesions stay when you restart a beat sequence inside
-the engine; choosing the procedure again from the list starts over with a healthy heart.
+a junctional escape), a nodal pathway, a bundle branch, or an accessory-pathway insertion. Lesions are permanent for the rest of the procedure;
+*Restart* or choosing a procedure from the list starts over with a healthy heart.
 
 ## What is simplified
 
@@ -80,8 +84,10 @@ the engine; choosing the procedure again from the list starts over with a health
   anatomy, and a lesion either destroys such a structure or does not touch it. There is no partial slow-pathway injury.
 * The accessory pathway's insertions are fixed points on the left or right annulus. The procedure teaches reading the CS sequence, not fine
   mapping along the annulus.
-* The atria of the default heart are closed spheres with no holes. The flutter circuit's annulus and outer barrier are drawn as inert tissue,
-  and the wave is pre-seeded rather than induced, so it cannot be started or stopped by pacing as in a patient.
+* The atria of the default heart are closed spheres with no holes. The flutter circuit's annulus and outer barrier are drawn as inert tissue
+  (only while the slow engine runs), with a shortened action potential to make the wavelength fit, and the wave is pre-seeded rather than
+  induced, so it is not started by pacing as in a patient. The barrier's one gap makes the rest of the atria a dead end, so the wave depends on the
+  ring around the annulus and a complete line across the ring stops it.
 * The fast engine has no functional re-entry, and refractoriness there is one number per chamber. So the atrial and ventricular ERPs you
   measure are those numbers, independent of the drive cycle.
 * The CS sleeve joins the right atrium by a link added for the EP lab, since the model's ostium stops short of the atrial wall.

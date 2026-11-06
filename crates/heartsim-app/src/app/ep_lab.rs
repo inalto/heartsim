@@ -9,9 +9,9 @@
 use super::reentry::{FRAME_BUDGET, Runtime, Stopwatch};
 use super::{HeartSimApp, SAMPLE_RATE_HZ};
 use crate::assets::AssetBundle;
+use crate::scenarios::Timeline;
 #[cfg(feature = "native")]
 use crate::scenarios::default_scenario_dir;
-use crate::scenarios::Timeline;
 use eframe::egui;
 use glam::Vec3;
 use heartsim_core::{Action, Lead, Millis};
@@ -200,7 +200,8 @@ impl HeartSimApp {
         let t0 = act.lab.now().0;
         for _ in 0..steps {
             let now = act.lab.now();
-            let due: Vec<(Action, Millis)> = act.timeline.due(now).map(|a| (a.action.clone(), a.at)).collect();
+            let due: Vec<(Action, Millis)> =
+                act.timeline.due(now).map(|a| (a.action.clone(), a.at)).collect();
             for (a, at) in due {
                 if let Err(e) = act.lab.apply(&a, at) {
                     tracing::warn!("EP lab action at {:.0} ms: {e}", at.0);
@@ -316,7 +317,9 @@ impl HeartSimApp {
                         act.lab.target_sites(target).first().copied(),
                         act.catheters.iter_mut().find(|c| c.kind == CatheterKind::Abl),
                     ) {
-                        *c = act.anatomy.place(CatheterKind::Abl, &CatheterSite::Point(p.to_array()));
+                        *c = act
+                            .anatomy
+                            .place(CatheterKind::Abl, &CatheterSite::Point(p.to_array()));
                         moved = true;
                     }
                 }
@@ -395,7 +398,10 @@ impl HeartSimApp {
             return;
         }
         let mut commands = Vec::new();
-        let picked = self.heart.as_mut().and_then(crate::heart_view::HeartView::take_pick);
+        let picked = self
+            .heart
+            .as_mut()
+            .and_then(crate::heart_view::HeartView::take_pick);
         let Some(act) = &mut self.ep.active else {
             return;
         };
@@ -410,39 +416,41 @@ impl HeartSimApp {
         let channels: Vec<String> = act.recorder.channels().iter().map(|c| c.label.clone()).collect();
         let landmarks: Vec<String> = act.lab.cloud().landmarks.keys().cloned().collect();
         let panel = &mut self.ep.panel;
-        egui::Panel::left("ep_controls").default_size(320.0).show(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                catheter_panel(
-                    ui,
-                    &act.catheters,
-                    &landmarks,
-                    act.anatomy.cs_length_mm(),
-                    &mut commands,
-                );
-                ui.separator();
-                let status = act.lab.protocol_status();
-                pes_panel(
-                    ui,
-                    panel,
-                    &channels,
-                    status,
-                    act.lab.protocol_outcome(),
-                    act.lab.engine().tier() == Tier::Two,
-                    &mut commands,
-                );
-                ui.separator();
-                ablation_panel(
-                    ui,
-                    panel,
-                    &preset.ep.targets,
-                    act.lab.rf_readout(),
-                    act.lab.lesions().len(),
-                    goal_text(act.lab.goal()),
-                    act.lab.goal_reached(),
-                    &mut commands,
-                );
+        egui::Panel::left("ep_controls")
+            .default_size(320.0)
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    catheter_panel(
+                        ui,
+                        &act.catheters,
+                        &landmarks,
+                        act.anatomy.cs_length_mm(),
+                        &mut commands,
+                    );
+                    ui.separator();
+                    let status = act.lab.protocol_status();
+                    pes_panel(
+                        ui,
+                        panel,
+                        &channels,
+                        status,
+                        act.lab.protocol_outcome(),
+                        act.lab.engine().tier() == Tier::Two,
+                        &mut commands,
+                    );
+                    ui.separator();
+                    ablation_panel(
+                        ui,
+                        panel,
+                        &preset.ep.targets,
+                        act.lab.rf_readout(),
+                        act.lab.lesions().len(),
+                        Some(goal_text(act.lab.goal())),
+                        act.lab.goal_reached(),
+                        &mut commands,
+                    );
+                });
             });
-        });
         let surface: Vec<SurfaceRow<'_>> = SURFACE_LEADS
             .iter()
             .filter_map(|l| {
@@ -492,17 +500,20 @@ fn pair_cell(
 }
 
 fn ablation_tip(catheters: &[Catheter]) -> Option<Vec3> {
-    catheters.iter().find(|c| c.kind == CatheterKind::Abl).map(Catheter::tip)
+    catheters
+        .iter()
+        .find(|c| c.kind == CatheterKind::Abl)
+        .map(Catheter::tip)
 }
 
-fn goal_text(goal: EpGoal) -> Option<String> {
-    Some(match goal {
+fn goal_text(goal: EpGoal) -> String {
+    match goal {
         EpGoal::Study => t!("ep-goal-study"),
         EpGoal::TerminateReentry => t!("ep-goal-terminate"),
         EpGoal::SlowPathwayModified => t!("ep-goal-slow-pathway"),
         EpGoal::PathwayAblated => t!("ep-goal-pathway"),
         EpGoal::VeinsIsolated => t!("ep-goal-veins"),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -515,11 +526,21 @@ mod tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios/ep");
         let presets = load_dir(&dir);
         let ids: Vec<&str> = presets.iter().map(|p| p.scenario.id.as_str()).collect();
-        for id in ["ep_baseline", "ep_avnrt", "ep_ap_left_lateral", "ep_af_pvi", "ep_flutter"] {
+        for id in [
+            "ep_baseline",
+            "ep_avnrt",
+            "ep_ap_left_lateral",
+            "ep_af_pvi",
+            "ep_flutter",
+        ] {
             assert!(ids.contains(&id), "{id} missing from {ids:?}");
         }
         for p in presets.iter().filter(|p| p.ep.goal != EpGoal::Study) {
-            assert!(!p.ep.targets.is_empty(), "{} has nothing to ablate", p.scenario.id);
+            assert!(
+                !p.ep.targets.is_empty(),
+                "{} has nothing to ablate",
+                p.scenario.id
+            );
         }
     }
 
