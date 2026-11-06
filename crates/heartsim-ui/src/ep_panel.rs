@@ -23,6 +23,9 @@ use crate::i18n::number;
 pub const EGM_SPEEDS_MM_S: [f32; 2] = [100.0, 200.0];
 /// Electrogram gains offered, mm/mV (near-field potentials are several mV).
 pub const EGM_GAINS_MM_MV: [f32; 4] = [1.0, 2.0, 5.0, 10.0];
+/// Gain of the surface leads above the electrograms, mm/mV: half the paper standard, so that a QRS
+/// fits its row.
+const SURFACE_GAIN_MM_MV: f32 = 5.0;
 /// Lowest row height of the stack, points.
 const MIN_ROW_PX: f32 = 26.0;
 /// Radius of a catheter body, mm (≈ 7 F).
@@ -242,6 +245,7 @@ pub fn egm_stack(
     };
     let surface_style = StripStyle {
         mm_per_s: state.sweep_mm_s,
+        mm_per_mv: SURFACE_GAIN_MM_MV,
         show_grid: false,
         trace_width: 1.0,
         ..*style

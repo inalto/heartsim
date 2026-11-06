@@ -4,8 +4,11 @@ The **EP Lab** tab is a cardiac electrophysiology laboratory. Choose a procedure
 catheters go in; the heart in the middle shows them and the activation wave, and the stack on the right shows three surface leads
 and every intracardiac electrogram at 100 or 200 mm/s.
 
+![The EP lab during orthodromic AVRT: catheters in the see-through heart, electrograms on the right](../images/ep-lab-avrt.png)
+
 Everything on the screen comes from one simulation: the wave on the heart, the surface ECG and the electrograms are the same cells
-seen three ways, and a stimulus either captured in all of them or in none.
+seen three ways. A paced stimulus counts as captured only if the cell under the electrode actually activates, so a train can report
+fewer captures than stimuli delivered; in the accessory-pathway procedure, entrainment captures about five of eight.
 
 ## Procedures
 
@@ -21,8 +24,8 @@ The flutter and AF procedures run on the slower reaction-diffusion engine; the s
 behind real time it is. The other three run in real time.
 
 Measured in this model, for comparison with your own calipers: AH 77 ms and HV 41 ms in the baseline study; CS atrial activation from about 45 ms
-(`CS 9-10`) to 91 ms (`CS 1-2`) after the sinus discharge; in left-lateral AVRT from about 9 ms (`CS 1-2`) to 24 ms (`CS 9-10`) after the
-retrograde atrial activation; flutter cycle 235 ms, with PPI − TCL about −10 ms at the isthmus and about +120 ms at the left atrial roof.
+(`CS 9-10`) to 91 ms (`CS 1-2`) after the sinus discharge; in left-lateral AVRT from about 9 ms (`CS 1-2`) to 25 ms (`CS 9-10`) after the
+retrograde atrial activation, tachycardia cycle about 253 ms and PPI − TCL about 29 ms from the RVA; flutter cycle 235 ms, with PPI − TCL about −10 ms at the isthmus and about +120 ms at the left atrial roof.
 
 ## Catheters
 

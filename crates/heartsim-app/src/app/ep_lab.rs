@@ -163,6 +163,9 @@ impl HeartSimApp {
             h.retime(&preset.timing);
             h.set_external_cells(Some(lab.cells()));
             h.set_pick_mode(true);
+            // the catheters are inside the chambers
+            let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+            self.vector.set_see_through(true, &mut alphas);
         }
         self.ep.panel.caliper = None;
         self.ep.status = None;
@@ -177,6 +180,17 @@ impl HeartSimApp {
         });
     }
 
+    /// For the screenshot tour: procedure `id` with a tachycardia-inducing S2 from the HRA.
+    pub(super) fn start_ep_tour(&mut self, id: &str) {
+        let Some(index) = self.ep.presets.iter().position(|p| p.scenario.id == id) else {
+            return;
+        };
+        self.start_ep(index);
+        self.ep.panel.s2_ms = 280.0;
+        let protocol = self.ep.panel.protocol();
+        self.apply_ep_commands(vec![EpCommand::StartProtocol { channel: 0, protocol }]);
+    }
+
     /// Leave the procedure: the 3-D heart goes back to its own engine.
     pub(super) fn stop_ep(&mut self) {
         if self.ep.active.take().is_some()
@@ -185,6 +199,8 @@ impl HeartSimApp {
             h.set_external_cells(None);
             h.set_pick_mode(false);
             h.set_catheter_glyphs(Vec::new(), Vec::new());
+            let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+            self.vector.set_see_through(false, &mut alphas);
         }
     }
 
