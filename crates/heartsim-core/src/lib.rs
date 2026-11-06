@@ -6,11 +6,13 @@
 //! * everything that ends up in a scenario file derives `serde` and is versioned.
 
 pub mod axis;
+pub mod case;
 pub mod lead;
 pub mod params;
 pub mod region;
 pub mod scenario;
 pub mod time;
+pub mod tutorial;
 
 pub use axis::{AxisClass, FrontalAxis};
 pub use lead::{ELECTRODE_COUNT, Electrode, ElectrodePotentials, LEAD_COUNT, Lead, TwelveLead};

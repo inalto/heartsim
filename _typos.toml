@@ -1,0 +1,40 @@
+# Spell-check configuration for `typos` (https://github.com/crate-ci/typos).
+# Run `typos` in the repository root; `cargo xtask ci` does it when the tool is installed
+# (`cargo install typos-cli --locked`). It checks the English teaching content (scenarios, tutorials,
+# cases, drug table, English UI strings) and the documentation; source code, other languages, binary
+# data and research notes quoting other authors are out of scope.
+[files]
+extend-exclude = [
+    "Cargo.lock",
+    "*.snap",
+    "crates/**",
+    "xtask/**",
+    "scripts/**",
+    "packaging/**",
+    "assets/anatomy/**",
+    "assets/validation/**",
+    "assets/generated/**",
+    "assets/locales/de/**",
+    "assets/locales/es/**",
+    "assets/locales/fr/**",
+    "assets/locales/it/**",
+    "docs/images/**",
+    "docs/research/**",
+    "epicardio/**",
+    "epicardio-extracted/**",
+    "target/**",
+]
+
+[default]
+# file ids such as `avb_2nd_mobitz1`
+extend-ignore-identifiers-re = ["^avb_2nd_.*$"]
+# plural of PNG, the ATPase enzyme name
+extend-ignore-re = ["PNGs", "ATPase"]
+
+[default.extend-words]
+# Medical terms and abbreviations that look like misspellings.
+laf = "laf"       # left anterior fascicle
+lpf = "lpf"       # left posterior fascicle
+terminalis = "terminalis"   # crista terminalis, sulcus terminalis
+pointes = "pointes"         # torsades de pointes
+Comput = "Comput"           # journal abbreviation (PLoS Comput Biol)

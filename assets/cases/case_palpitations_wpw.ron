@@ -1,0 +1,168 @@
+// heartsim patient case: palpitations in a young adult with pre-excitation. Original text by the
+// heartsim authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_palpitations_wpw",
+    title: "A racing heart in a student",
+    summary: "A fit young man has episodes of sudden, fast palpitations that stop abruptly. Follow the attack, its treatment, the normal ECG between attacks, and the pathway behind it.",
+    patient: "22-year-old medical student, fit and well, episodes of sudden-onset racing heartbeat since the age of 16, lasting 10 to 30 minutes, ending abruptly.",
+    references: [
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 14).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: Wolff-Parkinson-White syndrome, AVRT, adenosine. litfl.com/ecg-library.",
+    ],
+    stages: [
+        Stage(
+            title: "The attack",
+            markdown: r#"
+**Daniel** comes to the emergency department in the middle of another episode. He is anxious but
+his blood pressure is 118/76 mmHg and he is not short of breath. The monitor shows a **regular
+tachycardia at about 200 bpm** with a **narrow QRS**. A small P wave can be seen after each QRS.
+
+(In the simulator the tachycardia starts after about three seconds, with one premature atrial beat.)
+"#,
+            actions: [
+                Ui(LoadScenario("avrt_orthodromic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the most likely rhythm?",
+                    choices: [
+                        "A re-entrant supraventricular tachycardia (AVRT or AVNRT)",
+                        "Ventricular tachycardia",
+                        "Atrial fibrillation",
+                        "Sinus tachycardia",
+                    ],
+                    answer: 0,
+                    explanation: "A regular narrow-complex tachycardia of abrupt onset and offset at about 200 bpm in a young patient is a re-entrant SVT. Ventricular tachycardia is wide, atrial fibrillation is irregular, and sinus tachycardia rarely reaches 200 bpm at rest and changes gradually.",
+                ),
+                Question(
+                    prompt: "A P wave is visible about 120 ms after each QRS. Which re-entrant circuit does this favour?",
+                    choices: [
+                        "AV re-entry through an accessory pathway (AVRT)",
+                        "AV-nodal re-entry (AVNRT)",
+                        "Atrial flutter",
+                        "Ventricular tachycardia",
+                    ],
+                    answer: 0,
+                    explanation: "In AVNRT the atria and ventricles are activated almost together, so the P wave is hidden in or right after the QRS (RP under about 70 ms). In AVRT the impulse has to travel through the ventricle and back up the pathway, so the P wave comes later, in the ST segment.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Stopping the attack",
+            markdown: r#"
+He is stable. A modified Valsalva manoeuvre fails. The simulator now gives **adenosine 6 mg** as a
+rapid bolus into a large vein, about eight seconds after the start.
+"#,
+            actions: [
+                Ui(LoadScenario("avrt_orthodromic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Drug(name: "adenosine", dose: 1.0)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Why does adenosine stop this tachycardia?",
+                    choices: [
+                        "It blocks the AV node, which is one limb of the circuit, for a few seconds",
+                        "It blocks the accessory pathway permanently",
+                        "It slows the sinus node only",
+                        "It shortens the QT interval",
+                    ],
+                    answer: 0,
+                    explanation: "Orthodromic AVRT needs the AV node. A few seconds of AV block break the circuit, and the sinus node restarts the rhythm. The pathway is unaffected, so the tachycardia can come back.",
+                ),
+                Question(
+                    prompt: "What should the patient be told to expect when adenosine is given?",
+                    choices: [
+                        "A brief feeling of chest tightness, flushing or doom, lasting seconds",
+                        "Nothing at all",
+                        "Several hours of nausea",
+                        "A permanent slowing of the heart",
+                    ],
+                    answer: 0,
+                    explanation: "Adenosine has a half-life of seconds. The short pause it causes is often felt as chest tightness or flushing, and the patient should be warned beforehand.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The ECG between attacks",
+            markdown: r#"
+After the attack he is back in sinus rhythm at 72 bpm. His 12-lead ECG is **completely normal**: the
+PR interval is normal and there is no delta wave.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "How can a patient with an accessory pathway have a normal resting ECG?",
+                    choices: [
+                        "The pathway is concealed: it conducts only backwards, so there is no pre-excitation",
+                        "The pathway is in the sinus node",
+                        "The ECG machine was faulty",
+                        "Accessory pathways cannot cause tachycardia",
+                    ],
+                    answer: 0,
+                    explanation: "A pathway that conducts only from ventricle to atrium cannot pre-excite the ventricles, so sinus rhythm looks normal. It can still carry the return limb of an AV re-entrant circuit.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "When the pathway shows: pre-excitation",
+            markdown: r#"
+His cousin has a similar story, but her resting ECG shows a **short PR interval** and a **slurred start
+of the QRS** (a delta wave). In the simulator the pathway is **blocked** after six seconds, which has the
+effect of a successful catheter ablation.
+"#,
+            actions: [
+                Ui(LoadScenario("wpw_left_lateral")),
+                Ui(FocusPanel(TwelveLead)),
+                Ui(WaitForEvent(ElapsedMs(6000.0))),
+                Sim(Block(region: AccessoryPathway, blocked: true)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What do the short PR and the delta wave show?",
+                    choices: [
+                        "Ventricular pre-excitation through an accessory pathway",
+                        "Left bundle-branch block",
+                        "First-degree AV block",
+                        "An old inferior infarct",
+                    ],
+                    answer: 0,
+                    explanation: "A bridge of muscle between atrium and ventricle lets part of the ventricle be activated early, without the delay of the AV node. That gives a short PR and a delta wave. With tachycardia it is the Wolff-Parkinson-White syndrome.",
+                ),
+                Question(
+                    prompt: "What is the definitive treatment for a symptomatic accessory pathway?",
+                    choices: [
+                        "Catheter ablation of the pathway",
+                        "Lifelong verapamil",
+                        "A pacemaker",
+                        "Avoiding caffeine",
+                    ],
+                    answer: 0,
+                    explanation: "Catheter ablation destroys the pathway and cures most patients. Drugs only reduce the number of attacks and cannot remove the pathway.",
+                ),
+                Question(
+                    prompt: "If a patient with a manifest pathway developed atrial fibrillation with a wide, very fast, irregular rhythm, which drugs must be avoided?",
+                    choices: [
+                        "AV-nodal blockers such as verapamil, diltiazem, digoxin and beta-blockers",
+                        "Procainamide or ibutilide",
+                        "Electrical cardioversion",
+                        "Fluids",
+                    ],
+                    answer: 0,
+                    explanation: "In pre-excited atrial fibrillation the accessory pathway conducts the fast atrial rate to the ventricles. Blocking the AV node pushes more impulses down the pathway, which can lead to ventricular fibrillation. Cardioversion or drugs acting on the pathway are used instead.",
+                ),
+            ],
+        ),
+    ],
+)

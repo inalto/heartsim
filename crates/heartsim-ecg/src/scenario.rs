@@ -131,7 +131,7 @@ impl Tier0Scenario {
     }
 
     /// Static checks of the teaching content (non-empty texts, ≥ 2 differentials, an
-    /// `expected` block). Returns the problems found.
+    /// `expected` block, at least one reference). Returns the problems found.
     #[must_use]
     pub fn content_problems(&self) -> Vec<String> {
         let s = &self.scenario;
@@ -153,6 +153,9 @@ impl Tier0Scenario {
         }
         if s.expected.is_none() {
             p.push("no expected block".into());
+        }
+        if s.citations().is_empty() {
+            p.push("no references (use the `references` field)".into());
         }
         p
     }

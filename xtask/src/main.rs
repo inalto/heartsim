@@ -107,6 +107,17 @@ fn main() -> Result<()> {
             } else {
                 eprintln!("cargo-deny not installed; skipping licence/advisory check");
             }
+            // spell-check of the teaching content and the docs (`_typos.toml` holds the medical terms)
+            if Command::new("typos")
+                .arg("--version")
+                .output()
+                .is_ok_and(|o| o.status.success())
+            {
+                let status = Command::new("typos").current_dir(repo_root()).status()?;
+                anyhow::ensure!(status.success(), "typos found misspellings");
+            } else {
+                eprintln!("typos not installed (cargo install typos-cli --locked); skipping spell-check");
+            }
             Ok(())
         }
         Task::Fmt => run(&["fmt", "--all"]),

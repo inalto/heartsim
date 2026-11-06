@@ -15,7 +15,7 @@ cargo xtask web-budget                # wasm + assets must be < 25 MiB
 ```
 
 `trunk` runs `cargo xtask web-assets` first (a `pre_build` hook in `Trunk.toml`). That writes
-`heartsim-assets.zip`: the default anatomy pack, the rhythm library and the tutorials, laid out like `assets/`. The wasm itself
+`heartsim-assets.zip`: the default anatomy pack, the rhythm library, the tutorials and the patient cases, laid out like `assets/`. The wasm itself
 carries no anatomy. The page downloads the archive while the loading screen is up, unpacks it with the `zip` crate and hands it
 to `HeartSimApp::with_assets` as an in-memory `AssetBundle`. If the download fails the app still starts, with the placeholder
 sphere and no rhythm library.

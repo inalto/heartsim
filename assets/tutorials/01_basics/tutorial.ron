@@ -2,9 +2,14 @@
 // MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-app/src/tutorial.rs.
 Tutorial(
     format_version: 1,
-    id: "basics",
+    id: "01_basics",
     title: "Basics: from one heartbeat to the ECG",
     summary: "Follow a single beat through the conduction system, freeze it on the strip, read the heart rate and meet your first abnormal rhythm.",
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 1-2).",
+        "Kligfield P et al. Recommendations for the standardization and interpretation of the electrocardiogram, part I. Circulation 2007;115:1306-1324.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ECG basics. litfl.com/ecg-library.",
+    ],
     pages: [
         Page(
             title: "Welcome",
@@ -45,6 +50,7 @@ Watch one beat travel through the heart:
 6. The ventricles recover: the broad **T wave**.
 "#,
             actions: [
+                Ui(LoadScenario("sinus_normal")),
                 Ui(SetSpeed(0.2)),
                 Ui(Highlight("speed")),
             ],
@@ -61,6 +67,7 @@ wave and compare the colour of the atria with that of the ventricles.
 Press **Run** (the highlighted button) when you want the simulation to continue.
 "#,
             actions: [
+                Ui(LoadScenario("sinus_normal")),
                 Ui(SetSpeed(0.5)),
                 Ui(WaitForEvent(Qrs)),
                 Ui(WaitForEvent(ElapsedMs(40.0))),

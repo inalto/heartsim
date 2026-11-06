@@ -52,8 +52,9 @@ impl HeartSimApp {
         }
     }
 
-    /// Apply a therapy action now: timing engine first, then the heart.
-    fn apply_therapy(&mut self, action: &Action) {
+    /// Apply a therapy action now (the therapy window, tutorial pages, patient cases): the re-entry
+    /// engine when one runs, else the timing engine first, then the heart.
+    pub(super) fn apply_therapy(&mut self, action: &Action) {
         if self.reentry_apply(action) {
             return;
         }

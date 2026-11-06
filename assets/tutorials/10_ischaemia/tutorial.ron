@@ -1,0 +1,274 @@
+// heartsim tutorial: ischaemia and infarction on the ST segment. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "10_ischaemia",
+    title: "Ischaemia and infarction",
+    summary: "The ST segment as the injury current: ST elevation by coronary territory, reciprocal change, posterior and subendocardial patterns, pericarditis as the great mimic, and what reperfusion does.",
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Ibanez B et al. 2017 ESC Guidelines for the management of acute myocardial infarction in patients presenting with ST-segment elevation. Eur Heart J 2018;39:119-177.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Adler Y et al. 2015 ESC Guidelines for the diagnosis and management of pericardial diseases. Eur Heart J 2015;36:2921-2964.",
+        "Reimer KA, Jennings RB. The wavefront phenomenon of myocardial ischemic cell death. II. Transmural progression of necrosis. Lab Invest 1979;40:633-644.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: STEMI, reciprocal changes, posterior MI, pericarditis. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "The ST segment",
+            markdown: r#"
+Between the end of the QRS (the **J point**) and the start of the T wave lies the **ST segment**.
+In a healthy heart all ventricular cells are depolarised during this time, no current flows, and the
+segment lies on the **baseline** (the level of the PR segment).
+
+Injured muscle breaks that rule: its resting membrane is leaky and it depolarises early, so an **injury
+current** flows and the ST segment moves up or down in the leads that face the injured area.
+
+**Rule of thumb for STEMI:** new ST elevation at the J point of at least **0.1 mV (1 mm)** in two
+neighbouring leads (in V2 and V3 at least 0.15 to 0.25 mV, depending on age and sex).
+
+The simulator shows a normal heart. Open the 12-lead view and check that every ST segment is flat.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which level is the reference for measuring ST deviation?",
+                choices: [
+                    "The PR segment (the baseline before the QRS)",
+                    "The peak of the T wave",
+                    "The top of the R wave",
+                    "The P wave",
+                ],
+                answer: 0,
+                explanation: "ST deviation is the difference between the J point (or just after it) and the isoelectric baseline, which is the PR or TP segment.",
+            )),
+        ),
+        Page(
+            title: "Anterior STEMI",
+            markdown: r#"
+The simulator now **occludes the left anterior descending artery (LAD)**. It supplies the front
+of the left ventricle, the septum and the apex.
+
+Look at the 12-lead trace: the ST segment rises over the chest leads **V1 to V4** (and in the
+simulator also V5, V6, I and aVL). In III and aVF the ST segment is **lowered**. That is **reciprocal
+change**, the mirror image seen from the opposite side of the heart. It suggests a **proximal**
+occlusion, which threatens a large area.
+
+The simulator draws only the ST shift. In real infarcts Q waves and T-wave changes follow.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_anterior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "ST elevation in V1 to V4 points to occlusion of which artery?",
+                choices: [
+                    "The left anterior descending artery",
+                    "The right coronary artery",
+                    "The left circumflex artery",
+                    "The pulmonary artery",
+                ],
+                answer: 0,
+                explanation: "The chest leads V1 to V4 face the anterior wall and septum, which the LAD supplies. The right coronary artery supplies the inferior wall.",
+            )),
+        ),
+        Page(
+            title: "Inferior STEMI",
+            markdown: r#"
+Now the **right coronary artery (RCA)** is blocked. It supplies the inferior wall, which leads
+**II, III and aVF** look at. They show ST elevation; the opposite leads, **aVL and aVR**, show
+reciprocal depression.
+
+Two clinical points:
+
+* The RCA usually feeds the **AV node**, so inferior infarcts often cause AV block, normally temporary.
+* Check for **right ventricular** involvement with right-sided leads (V4R) before giving nitrates.
+
+The simulator also lifts the ST segment a little in the chest leads. In patients the chest-lead
+changes of an inferior STEMI are usually small, so base the diagnosis on the limb leads.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_inferior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which leads show ST elevation in an inferior STEMI?",
+                choices: ["Leads II, III and aVF", "V1 to V4", "I and aVL", "aVR only"],
+                answer: 0,
+                explanation: "Leads II, III and aVF face the inferior wall. Reciprocal depression appears in aVL and often in I.",
+            )),
+        ),
+        Page(
+            title: "Lateral STEMI",
+            markdown: r#"
+A branch of the circumflex artery, the **obtuse marginal**, is occluded. It supplies the **lateral
+wall**, which **leads I and aVL and V5-V6** face. The ST segment rises there (in the simulator V4
+too), and lead III shows the reciprocal depression.
+
+Lateral infarcts can be subtle: the lateral wall is partly "electrically silent" in many leads, so
+a small ST change in a patient with typical pain still counts.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_lateral")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "ST elevation in I, aVL and V5-V6 with reciprocal depression in III suggests which wall?",
+                choices: ["The lateral wall", "The inferior wall", "The septum", "The right ventricle"],
+                answer: 0,
+                explanation: "Leads I, aVL and V5-V6 face the lateral wall of the left ventricle. Lead III looks from the opposite direction, so it shows the mirror image.",
+            )),
+        ),
+        Page(
+            title: "Posterior infarction: the mirror image",
+            markdown: r#"
+No standard lead faces the **posterior wall**. When it is infarcted, the leads on the opposite side
+(V1 to V3, on the front of the chest) show the mirror image: **ST depression**, greatest in V1 and V2.
+
+This is a **STEMI equivalent**. The proof is ST elevation in the extra posterior leads **V7 to V9**,
+recorded on the back. The simulator shows the ST depression in V1 to V3 (the tall R waves of the
+established pattern are not modelled).
+
+Because the ST depression is in the chest leads, a posterior infarct is easily mistaken for
+simple ischaemia.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_posterior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "ST depression in V1 to V3 in a patient with ongoing chest pain should make you think of:",
+                choices: [
+                    "Posterior myocardial infarction",
+                    "Pericarditis",
+                    "Right bundle-branch block",
+                    "Normal early repolarisation",
+                ],
+                answer: 0,
+                explanation: "The chest leads V1 to V3 look at the posterior wall from the front, so its ST elevation appears as depression. Posterior leads V7 to V9 confirm it.",
+            )),
+        ),
+        Page(
+            title: "Subendocardial ischaemia",
+            markdown: r#"
+When a coronary narrowing is severe but flow is not completely blocked, or when the heart's demand
+outruns its supply, the **innermost layer** of the wall suffers first. The injury current then
+points away from the leads, giving **ST depression**, and **ST elevation in aVR**, which looks at the
+heart from the right shoulder.
+
+This pattern is not specific to one artery. Horizontal or downsloping depression of at least
+**0.05 mV in two neighbouring leads** is significant. Troponin separates unstable angina from a
+non-ST-elevation infarction.
+
+ST elevation in aVR with widespread depression can point to **left main or multivessel disease**
+and needs urgent assessment.
+"#,
+            actions: [
+                Ui(LoadScenario("nstemi_subendocardial")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "What is the usual ECG finding in subendocardial ischaemia?",
+                choices: [
+                    "ST depression in many leads, with ST elevation in aVR",
+                    "ST elevation in the leads of one territory only",
+                    "A wide QRS with a delta wave",
+                    "A prolonged PR interval",
+                ],
+                answer: 0,
+                explanation: "Injury of the inner layer produces a current pointing away from most leads, so the ST segment falls widely and rises only in aVR.",
+            )),
+        ),
+        Page(
+            title: "Pericarditis: the great mimic",
+            markdown: r#"
+Inflammation of the **pericardium** injures the outer layer of both ventricles at once. The ST
+segment rises in **most leads** (here I, II, aVF and V2 to V6) and falls in **aVR**. The elevation
+does not follow one coronary artery, and it is usually **concave upwards** ("saddle-shaped").
+
+Compared with STEMI:
+
+* elevation is **diffuse**, with no reciprocal depression except in aVR (and sometimes V1),
+* the pain is sharp, **worse on breathing in and lying flat**, and eases on sitting forward,
+* the PR segment is often depressed (the simulator does not show this).
+
+If you cannot tell the two apart, treat the patient as having an acute coronary syndrome until it
+is excluded.
+"#,
+            actions: [
+                Ui(LoadScenario("pericarditis")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding favours pericarditis over STEMI?",
+                choices: [
+                    "ST elevation in many leads without reciprocal depression, except in aVR",
+                    "ST elevation confined to V1 to V4 with depression in III and aVF",
+                    "ST depression in V1 to V3 only",
+                    "A new left bundle-branch block",
+                ],
+                answer: 0,
+                explanation: "Pericarditis affects the whole epicardial surface, so the elevation is widespread and not confined to the territory of one artery. In STEMI the lead groups that face away from the injury show reciprocal depression.",
+            )),
+        ),
+        Page(
+            title: "An infarct evolving",
+            markdown: r#"
+Ischaemia can progress. In this run a **partial LAD narrowing** begins at 5 seconds and the chest
+leads show a small **ST depression** in V1 to V3 (inner layer only; the model draws only a slight dip). At 10 seconds the artery **occludes** and the full
+thickness of the wall is injured: the ST segment **rises**.
+
+This is the **wavefront phenomenon**: the inner layer is the most vulnerable and is hit first.
+In a patient it explains why unstable angina can become a STEMI in minutes, and why the ECG is
+repeated every 15 to 30 minutes while the pain continues.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_evolving")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Why does a partial narrowing produce ST depression while a complete occlusion produces ST elevation?",
+                choices: [
+                    "A partial narrowing injures only the inner layer; occlusion injures the whole wall thickness",
+                    "A partial narrowing affects the right ventricle",
+                    "Occlusion stops the sinus node",
+                    "The ECG leads are reversed",
+                ],
+                answer: 0,
+                explanation: "The inner layer is most sensitive to reduced flow. Its injury alone gives ST depression; when the whole thickness is injured (transmural), the injury current reverses to ST elevation.",
+            )),
+        ),
+        Page(
+            title: "Reperfusion",
+            markdown: r#"
+Opening the artery stops the injury. The simulator occludes the LAD and, after eight seconds,
+**reopens it**, as primary PCI would. Watch the ST segments come **back to the baseline**.
+
+In patients ST resolution of more than half within 60 to 90 minutes of treatment is a marker of
+successful reperfusion. **Time is muscle**: the sooner the artery opens, the less heart is lost.
+Primary PCI is the preferred treatment when it can be done within the time limits set by the
+guidelines (120 minutes from diagnosis); otherwise fibrinolysis is given.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_anterior")),
+                Ui(FocusPanel(TwelveLead)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Stenosis(branch: "all", severity: 0.0)),
+            ],
+            check: Some(Question(
+                prompt: "What does the return of the ST segment towards the baseline after PCI suggest?",
+                choices: [
+                    "Successful reperfusion",
+                    "A new infarct",
+                    "Pericarditis",
+                    "Left bundle-branch block",
+                ],
+                answer: 0,
+                explanation: "When the occluded artery reopens the injury current fades and the ST segment falls back. It is a marker of reperfusion, not a guarantee that no muscle was lost.",
+            )),
+        ),
+    ],
+)

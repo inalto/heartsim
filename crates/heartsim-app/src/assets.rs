@@ -2,7 +2,7 @@
 //! page downloads one archive and hands its files over as an [`AssetBundle`].
 //!
 //! Paths are relative to the repository's `assets/` directory and use `/` on every platform
-//! (`anatomy/default/manifest.ron`, `scenarios/sinus_normal.ron`, `tutorials/basics/tutorial.ron`),
+//! (`anatomy/default/manifest.ron`, `scenarios/sinus_normal.ron`, `tutorials/01_basics/tutorial.ron`),
 //! so the same loaders can be tested natively against a bundle read from disk.
 
 use heartsim_geometry::pack::PackError;

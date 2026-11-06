@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "atrial_tachycardia_150",
+    title: "Ectopic atrial tachycardia, 150 bpm",
+    description: "A focus in the left atrium fires at 150 bpm and overrides the sinus node: a P wave of different shape precedes every narrow QRS, conducted one to one.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In focal atrial tachycardia a small area of atrial muscle fires repeatedly (automaticity or triggered activity). The P wave has a different shape from the sinus P wave because the atria are activated from another site; a left-atrial focus gives a P wave that is negative or biphasic in V1 and often in lead I.\nThe AV node is a spectator, so adenosine does not end the tachycardia: it only blocks conduction for a few seconds and shows the atrial rhythm on its own. Causes include digoxin toxicity, lung disease and structural heart disease.\nDifferential: sinus tachycardia (gradual change, sinus P wave), AVNRT and AVRT (abrupt onset, P wave hidden or after the QRS), atrial flutter with 2:1 conduction."),
+    confused_with: ["sinus_tachy_130", "avnrt_150", "avrt_orthodromic", "atrial flutter with 2:1 block"],
+    references: [
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: atrial tachycardia, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (140.0, 160.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        foci: [Focus(region: LeftAtrium, mode: Automatic(rate_bpm: 150.0, entrance_block: false, exit_block_ratio: 0))],
+    ),
+)

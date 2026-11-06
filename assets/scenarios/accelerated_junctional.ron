@@ -1,0 +1,29 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "accelerated_junctional",
+    title: "Accelerated junctional rhythm, 85 bpm",
+    description: "A focus in the AV junction fires at 85 bpm and overrides the 60 bpm sinus node: narrow regular QRS complexes with AV dissociation.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The AV junction normally escapes at 40 to 60 bpm. When its rate rises to 60-100 bpm (accelerated junctional rhythm) it can outpace the sinus node. The QRS is narrow and regular, with no P wave before it, or with P waves dissociated from it, or with a retrograde P wave just after it.\nCauses: digoxin toxicity, inferior myocardial infarction, myocarditis, cardiac surgery and increased sympathetic drive. Above 100 bpm it is called junctional tachycardia.\nDifferential: sinus rhythm with a missing P wave, AVNRT (faster and with abrupt onset), junctional escape rhythm (slower)."),
+    confused_with: ["junctional_rhythm", "avnrt_150", "sinus_normal", "aivr"],
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: accelerated junctional rhythm, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (75.0, 100.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 125.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 60.0),
+        av: AvParams(retrograde_fast: true, retrograde_delay_ms: 100.0),
+        foci: [Focus(region: Junctional, mode: Automatic(rate_bpm: 85.0, entrance_block: false, exit_block_ratio: 0))],
+    ),
+)

@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "wpw_right_type_b",
+    title: "WPW pattern, right-sided accessory pathway",
+    description: "Sinus rhythm at 72 bpm with pre-excitation through a right-sided pathway: short PR, a delta wave that is negative in V1 (type B), and a wide QRS.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A right-sided Kent bundle activates the right ventricle early, so the early slow forces point leftwards and backwards: the delta wave is negative in V1 and the QRS looks like left bundle-branch block (type B). A right free-wall pathway lies near the sinus node, so pre-excitation is marked and the PR is short.\nDelta waves can imitate infarct Q waves (an inferior delta wave looks like an inferior infarct) and bundle-branch block. Pre-excitation with tachycardia is the Wolff-Parkinson-White syndrome."),
+    confused_with: ["wpw_left_lateral", "lbbb", "paced_vvi", "inferior myocardial infarction"],
+    references: [
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: Wolff-Parkinson-White syndrome, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((60.0, 120.0)),
+        qrs_ms: Some((110.0, 200.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        accessory: Some(AccessoryPathway(delay_ms: 55.0, erp_ms: 300.0, antegrade: true, retrograde: true, ventricular_side: Right, atrial_side: Right)),
+    ),
+)

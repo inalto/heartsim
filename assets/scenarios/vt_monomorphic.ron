@@ -1,0 +1,29 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "vt_monomorphic",
+    title: "Monomorphic ventricular tachycardia, 150 bpm",
+    description: "A left-ventricular focus drives the ventricles at 150 bpm: regular, wide, bizarre QRS complexes while the sinus P waves carry on unrelated to them (AV dissociation).",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Ventricular tachycardia (VT) is three or more consecutive ventricular beats faster than 100 bpm; it is sustained when it lasts more than 30 s or causes collapse. Monomorphic VT has one QRS shape because one focus or circuit drives it. Here a left-ventricular focus fires at 150 bpm.\nClues that favour VT over a supraventricular rhythm with aberrant conduction: AV dissociation (P waves unrelated to the QRS), capture and fusion beats, a very wide QRS (over 160 ms) and structural heart disease in the history. A wide-complex tachycardia of uncertain origin is treated as VT.\nA patient with a pulse who is unstable needs synchronised cardioversion; pulseless VT is defibrillated.\nPolymorphic VT, torsades de pointes and ventricular fibrillation are not part of this preset."),
+    confused_with: ["rate_dependent_rbbb", "avnrt_150", "aivr", "nsvt_runs"],
+    references: [
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Al-Khatib SM et al. 2017 AHA/ACC/HRS guideline for management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Circulation 2018;138:e272-e391.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ventricular tachycardia, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (130.0, 180.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 220.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        foci: [Focus(region: LeftVentricle, mode: Automatic(rate_bpm: 150.0, entrance_block: true, exit_block_ratio: 0))],
+    ),
+)

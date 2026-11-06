@@ -2,9 +2,15 @@
 // MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-app/src/tutorial.rs.
 Tutorial(
     format_version: 1,
-    id: "cardiac_axis",
+    id: "03_cardiac_axis",
     title: "Cardiac axis",
     summary: "What the electrical axis is, how to estimate it from leads I and aVF, and what left and right axis deviation look like.",
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 7).",
+        "Mason JW, Hancock EW, Gettes LS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part II. Circulation 2007;115:1325-1332.",
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ECG axis interpretation, left and right axis deviation. litfl.com/ecg-library.",
+    ],
     pages: [
         Page(
             title: "What is the axis?",

@@ -1,0 +1,273 @@
+// heartsim tutorial: bundle-branch and fascicular blocks. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "04_conduction",
+    title: "Conduction abnormalities",
+    summary: "How the His-Purkinje system makes a narrow QRS, and what happens when a bundle branch or fascicle stops conducting: RBBB, LBBB, LAFB, LPFB, bifascicular block and rate-related aberrancy.",
+    references: [
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 8, 9).",
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Durrer D et al. Total excitation of the isolated human heart. Circulation 1970;41:899-912.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: right and left bundle branch block, fascicular blocks, bifascicular block, aberrant conduction. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "The conduction system",
+            markdown: r#"
+After the AV node the impulse enters the **His bundle**, which divides into a **right bundle
+branch** and a **left bundle branch**. The left branch splits again into an **anterior** and a
+**posterior fascicle**. Fine **Purkinje fibres** carry the impulse at several metres per second to
+the muscle of both ventricles.
+
+Because this tree is so fast, the two ventricles are activated almost together. The whole of
+ventricular depolarisation takes less than about 0.10 s: that is why a normal **QRS is narrow**.
+
+The simulator now runs in slow motion. Watch the activation spread over the heart.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(CameraPreset(Ap)),
+                Ui(SetSpeed(0.2)),
+            ],
+            check: Some(Question(
+                prompt: "Why is the normal QRS complex narrow?",
+                choices: [
+                    "The Purkinje network activates both ventricles almost at the same time",
+                    "The ventricles are very small",
+                    "The AV node is very fast",
+                    "The QRS only records the septum",
+                ],
+                answer: 0,
+                explanation: "The His-Purkinje system delivers the impulse to many points of both ventricles at once, so depolarisation is over in about 100 ms. The AV node is the slowest part of the pathway, not the fastest.",
+            )),
+        ),
+        Page(
+            title: "Block the right bundle",
+            markdown: r#"
+After four seconds of normal rhythm the simulator **blocks the right bundle branch**.
+
+The impulse still reaches the left ventricle through the left bundle, so the septum and the left
+ventricle are activated normally and the initial part of the QRS does not change. The **right
+ventricle** is then activated late, slowly, by cell-to-cell spread from the left. That extra
+time adds a **wide terminal wave** and the QRS lengthens.
+
+Open the 12-lead view and watch V1 change shape when the block starts.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(SetSpeed(1.0)),
+                Ui(FocusPanel(TwelveLead)),
+                Ui(WaitForEvent(ElapsedMs(4000.0))),
+                Sim(Block(region: RightBundleBranch, blocked: true)),
+            ],
+            check: Some(Question(
+                prompt: "In right bundle-branch block, which part of the ventricles is activated last?",
+                choices: ["The right ventricle", "The left ventricle", "The septum", "The atria"],
+                answer: 0,
+                explanation: "With the right bundle blocked the right ventricle waits for the impulse to cross from the left side through ordinary muscle. That late right-sided activation makes the terminal R' in V1 and the wide S in lead I.",
+            )),
+        ),
+        Page(
+            title: "Recognising RBBB",
+            markdown: r#"
+The criteria for **right bundle-branch block (RBBB)**:
+
+* QRS **0.12 s or longer** (0.11 to 0.12 s is *incomplete* RBBB),
+* an **rSR' ("rabbit ears") pattern in V1**, or a broad R wave,
+* a **wide, slurred S wave in leads I and V6**,
+* the ST segment and T wave pointing away from the late R' (an inverted T in V1 to V3 is expected).
+
+RBBB is often harmless: it can be found in healthy people. In a patient with breathlessness or
+chest pain it can point to pulmonary embolism or right-heart strain.
+"#,
+            actions: [
+                Ui(LoadScenario("rbbb")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which lead shows the typical rSR' pattern of RBBB?",
+                choices: ["V1", "aVF", "V6", "aVR"],
+                answer: 0,
+                explanation: "V1 lies over the right ventricle. The late right-ventricular activation travels towards it, giving the final positive R' after the small initial r and the S wave.",
+            )),
+        ),
+        Page(
+            title: "Block the left bundle",
+            markdown: r#"
+Now the **left bundle branch** is blocked, again after four seconds.
+
+The left ventricle is the thick, powerful one, and it now has to wait. The impulse crosses the
+septum from **right to left**, so the small normal septal q wave in leads I, V5 and V6 disappears,
+and the left ventricle is then activated slowly by cell-to-cell spread. The QRS becomes wide and
+changes shape completely, not only at the end.
+
+Watch V1 and V6 in the 12-lead view.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(SetSpeed(1.0)),
+                Ui(FocusPanel(TwelveLead)),
+                Ui(WaitForEvent(ElapsedMs(4000.0))),
+                Sim(Block(region: LeftBundleBranch, blocked: true)),
+            ],
+            check: Some(Question(
+                prompt: "Which normal feature disappears in LBBB because the septum is activated from right to left?",
+                choices: [
+                    "The small septal q wave in leads I, V5 and V6",
+                    "The P wave",
+                    "The T wave in all leads",
+                    "The R wave in V1",
+                ],
+                answer: 0,
+                explanation: "Normally the septum is activated from left to right, which gives a small q wave in the left-sided leads. In LBBB the septal vector reverses, so that q is lost.",
+            )),
+        ),
+        Page(
+            title: "Recognising LBBB",
+            markdown: r#"
+The criteria for **left bundle-branch block (LBBB)**:
+
+* QRS **0.12 s or longer**,
+* a **broad, notched or slurred R wave in leads I, aVL, V5 and V6**, with no q wave,
+* a **QS or rS pattern in V1**,
+* ST segment and T wave **opposite** to the main QRS direction (this "discordance" is expected, not
+  ischaemia).
+
+LBBB makes the ST segment hard to read, so a **new LBBB in a patient with chest pain** needs urgent
+assessment for a heart attack. LBBB is also seen in cardiomyopathy and in aortic valve
+disease.
+"#,
+            actions: [
+                Ui(LoadScenario("lbbb")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "A 60-year-old has crushing chest pain and a QRS of 150 ms with a broad notched R in V6 and QS in V1. What is the ECG pattern?",
+                choices: [
+                    "Left bundle-branch block, which needs urgent ischaemia assessment",
+                    "Right bundle-branch block",
+                    "Left anterior fascicular block",
+                    "Normal variant, no action needed",
+                ],
+                answer: 0,
+                explanation: "A wide QRS with a notched R in V6 and QS in V1 is LBBB. In a patient with typical chest pain it cannot be dismissed as a normal variant, because the block also hides ST-segment changes.",
+            )),
+        ),
+        Page(
+            title: "Left anterior fascicular block",
+            markdown: r#"
+Sometimes only **one fascicle** of the left bundle stops conducting. Then the QRS stays
+**narrow (under 0.12 s)**, because the other fascicle and the Purkinje network still carry the
+impulse, but the order of activation changes: the inferior and posterior wall are activated first
+and the **anterosuperior wall last**.
+
+The vector turns upwards and to the left, so the **frontal axis moves to between −45° and −90°**
+(marked left axis deviation). Leads II, III and aVF become predominantly negative (rS), while I
+and aVL show a small q and a tall R.
+
+Use the axis wheel in your head: lead I positive, lead aVF negative, lead II negative.
+"#,
+            actions: [
+                Ui(LoadScenario("lafb")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding is typical of left anterior fascicular block?",
+                choices: [
+                    "Left axis deviation (−45° to −90°) with a QRS under 120 ms",
+                    "Right axis deviation with a wide QRS",
+                    "A short PR interval with a delta wave",
+                    "A normal axis with a notched R wave in V6",
+                ],
+                answer: 0,
+                explanation: "Block of one fascicle shifts the axis but leaves the QRS narrow, because the rest of the His-Purkinje tree still conducts. The axis moves towards the blocked area: up and to the left for the anterior fascicle.",
+            )),
+        ),
+        Page(
+            title: "Left posterior fascicular block",
+            markdown: r#"
+The **posterior fascicle** is thicker and has a double blood supply, so **isolated block of it is
+rare**. When it happens the sequence is reversed: the anterosuperior wall is activated first and
+the **inferoposterior wall last**. The axis swings to the **right** (+90° to +180°), with an rS
+pattern in I and aVL and a qR pattern in III and aVF.
+
+Because a right axis also arises from right ventricular overload, lung disease and a tall, thin
+body shape, you can diagnose left posterior fascicular block only **after excluding those causes**.
+"#,
+            actions: [
+                Ui(LoadScenario("lpfb")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Why must other causes of right axis deviation be excluded before diagnosing left posterior fascicular block?",
+                choices: [
+                    "Right ventricular overload and a vertical heart position give the same axis",
+                    "The QRS is too wide to read",
+                    "The PR interval is too short",
+                    "The T wave is always inverted",
+                ],
+                answer: 0,
+                explanation: "Right axis deviation is not specific. Right ventricular hypertrophy, lung disease, a lateral infarct and a normal tall thin body can all produce it, so the fascicular block is a diagnosis of exclusion.",
+            )),
+        ),
+        Page(
+            title: "Two fascicles blocked",
+            markdown: r#"
+**Bifascicular block** means two of the three divisions of the conduction system are blocked.
+The common form is **RBBB plus left anterior fascicular block**: a wide QRS with an rSR' in V1
+*and* left axis deviation.
+
+Only the **posterior fascicle** is left to carry every impulse to the ventricles. Most people
+with this pattern never progress, but if a patient with bifascicular block **faints**, the first
+suspicion is intermittent complete heart block, and they need prompt specialist assessment for a
+pacemaker.
+"#,
+            actions: [
+                Ui(LoadScenario("bifascicular")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "A patient with RBBB and left axis deviation has an unexplained faint. What is the main concern?",
+                choices: [
+                    "Intermittent complete heart block",
+                    "Sinus tachycardia",
+                    "Atrial flutter",
+                    "A benign finding that needs no follow-up",
+                ],
+                answer: 0,
+                explanation: "RBBB with left anterior fascicular block leaves one fascicle conducting. Failure of that last fascicle produces complete heart block with pauses, which can cause syncope.",
+            )),
+        ),
+        Page(
+            title: "Block that depends on the rate",
+            markdown: r#"
+A bundle branch that conducts normally at a slow rate can fail at a fast rate, because it has not
+had time to **recover** from the previous beat. The right bundle branch has the longest
+refractory period, so rate-related block is usually of RBBB type. This is **aberrant
+conduction**.
+
+The simulator starts at 80 bpm with a normal QRS. After six seconds the sinus rate rises to
+140 bpm and the QRS becomes wide, with no change in the beats' origin. The P wave is still there
+before every complex.
+"#,
+            actions: [
+                Ui(LoadScenario("rate_dependent_rbbb")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "A wide QRS appears when the sinus rate passes 115 bpm and disappears when it falls. What is the likely explanation?",
+                choices: [
+                    "Rate-related (aberrant) bundle-branch block",
+                    "Ventricular fibrillation",
+                    "Complete heart block",
+                    "Atrial fibrillation",
+                ],
+                answer: 0,
+                explanation: "A bundle branch that is still refractory at short cycle lengths blocks only fast beats. The P waves and the PR interval are unchanged, so this is aberrancy in a sinus rhythm.",
+            )),
+        ),
+    ],
+)

@@ -1,0 +1,29 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "pac_blocked",
+    title: "Blocked premature atrial contractions",
+    description: "Every third P wave is premature and hidden in the T wave, but the AV node is still refractory: no QRS follows, and a pause appears.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A PAC that arrives while the AV node is refractory is not conducted: a P wave, often deforming the preceding T wave, is followed by no QRS. The PAC also resets the sinus node, so the next beat comes after a pause shorter than two normal cycles.\nBlocked PACs are the commonest cause of unexplained pauses in otherwise normal rhythm. Look at the T wave before the pause for a notch or a peak. Differential: sinoatrial exit block (no extra P wave), Mobitz II block (the P wave is on time), sinus arrest."),
+    confused_with: ["pac_frequent", "sa_exit_block", "avb_2nd_mobitz2_3to1"],
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: blocked PACs, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (50.0, 85.0),
+        pr_ms: Some((120.0, 220.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        av: AvParams(fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 250.0, blocked: false)),
+        foci: [Focus(region: RightAtrium, mode: Coupled(coupling_ms: 300.0, every_n_beats: 3, count: 1, run_cycle_ms: 400.0))],
+    ),
+)

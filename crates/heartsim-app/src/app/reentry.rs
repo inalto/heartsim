@@ -246,6 +246,15 @@ impl HeartSimApp {
         });
     }
 
+    /// Start the preset whose scenario id is `id` (a tutorial or case asks for it by name).
+    pub(super) fn start_reentry_by_id(&mut self, id: &str) {
+        if let Some(i) = self.reentry.presets.iter().position(|p| p.scenario.id == id) {
+            self.start_reentry(i);
+        } else {
+            tracing::warn!("tutorial: no re-entry preset {id}");
+        }
+    }
+
     /// Leave the re-entry scenario (the 3-D heart goes back to its own engine).
     pub(super) fn stop_reentry(&mut self) {
         if self.reentry.active.take().is_some()

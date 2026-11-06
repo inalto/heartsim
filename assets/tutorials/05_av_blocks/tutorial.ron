@@ -1,0 +1,273 @@
+// heartsim tutorial: AV blocks, sinus pauses and bradycardias. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "05_av_blocks",
+    title: "AV blocks and bradycardias",
+    summary: "The PR interval as the AV node's delay, then first-degree, Wenckebach, Mobitz II and complete block, escape rhythms, sinus pauses, and how a dual-chamber pacemaker restores AV synchrony.",
+    references: [
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 17).",
+        "Glikson M et al. 2021 ESC Guidelines on cardiac pacing and cardiac resynchronization therapy. Eur Heart J 2021;42:3427-3520.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: first-degree, Mobitz I, Mobitz II and third-degree AV block, junctional and ventricular escape rhythms, sinus pause. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "The PR interval is the AV node's delay",
+            markdown: r#"
+The AV node is a **gatekeeper**. It delays every impulse by about a tenth of a second so that the
+ventricles can fill before they contract. On the ECG that delay is the **PR interval**, measured from
+the start of the P wave to the start of the QRS complex.
+
+* Normal PR: **0.12 to 0.20 s** (120 to 200 ms).
+* A block is a failure of the gate: the impulse is delayed (1st degree), only sometimes stopped
+  (2nd degree), or never passes (3rd degree).
+
+Normal sinus rhythm is loaded. Find the PR interval in lead II: it is well inside the normal range.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "A PR interval of 0.16 s is:",
+                choices: ["Normal", "First-degree AV block", "A short PR, suggesting pre-excitation", "Complete heart block"],
+                answer: 0,
+                explanation: "0.16 s is 160 ms, inside the normal range of 120 to 200 ms. Over 200 ms is first-degree block; under 120 ms suggests pre-excitation or a junctional rhythm.",
+            )),
+        ),
+        Page(
+            title: "First degree: a longer PR",
+            markdown: r#"
+In **first-degree AV block** every P wave is followed by a QRS, but the **PR interval is longer than
+0.20 s** and stays the same from beat to beat. Nothing is dropped; the gatekeeper is just slow.
+
+It is often harmless. Causes: high vagal tone, athletes, beta-blockers, calcium-channel blockers,
+digoxin, inferior myocardial infarction, and ageing of the conduction system.
+
+This strip has a PR of about 230 ms. Measure it against the 5 small boxes (0.20 s) of the grid.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_1st")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "In first-degree AV block, how many P waves fail to conduct?",
+                choices: ["None, the PR is just prolonged", "Every second P wave", "Every P wave", "Only after a premature beat"],
+                answer: 0,
+                explanation: "First-degree block is a delay, not a failure: every P is followed by a QRS, with a constant PR interval above 0.20 s.",
+            )),
+        ),
+        Page(
+            title: "Second degree, Mobitz I (Wenckebach)",
+            markdown: r#"
+In **Mobitz type I** the AV node tires: the **PR interval lengthens beat after beat** until one P
+wave is not conducted and a QRS is dropped. The node rests during the pause and the cycle starts
+again with a short PR.
+
+Two clues on the strip:
+
+* "longer, longer, longer, drop",
+* the R–R intervals get *shorter* before the pause (the PR increases by smaller steps), which gives
+  **grouped beating**.
+
+The block is almost always **in the AV node**, with a narrow QRS. It is often benign, seen in
+athletes and during sleep, and needs a pacemaker only if it causes symptoms.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_2nd_mobitz1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "What is the key finding of Mobitz type I block?",
+                choices: [
+                    "A PR interval that progressively lengthens until a P wave is dropped",
+                    "A constant PR interval with a sudden dropped QRS",
+                    "P waves with no relationship to the QRS",
+                    "A PR interval over 0.20 s in every beat",
+                ],
+                answer: 0,
+                explanation: "Progressive PR lengthening before a dropped beat is the Wenckebach pattern. A constant PR with a sudden dropped beat is Mobitz II, and no relationship at all is complete block.",
+            )),
+        ),
+        Page(
+            title: "Second degree, Mobitz II",
+            markdown: r#"
+In **Mobitz type II** the PR interval is **constant** in all the conducted beats, and then, without
+warning, a P wave is not followed by a QRS.
+
+The block is usually **below the AV node**, in the His bundle or the bundle branches, so the QRS is
+often **wide**. It cannot be predicted and it can suddenly become complete heart block, so Mobitz II
+usually needs a **permanent pacemaker**, even when the patient feels well.
+
+In the simulator three of every four P waves are conducted with a bundle-branch block pattern. The
+PR does not change before the pause.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_2nd_mobitz2_4to3")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Why is Mobitz II more worrying than Mobitz I?",
+                choices: [
+                    "The block is below the AV node and can progress suddenly to complete heart block",
+                    "It always makes the heart rate faster",
+                    "It is always caused by drugs",
+                    "It only occurs in athletes",
+                ],
+                answer: 0,
+                explanation: "Infranodal block does not warn with a lengthening PR and has no reliable escape rhythm if it becomes complete. Mobitz I is nodal, usually stable and benign.",
+            )),
+        ),
+        Page(
+            title: "Complete block with a junctional escape",
+            markdown: r#"
+In **third-degree (complete) AV block** no impulse crosses the node. The atria keep beating at the
+sinus rate; the ventricles are driven by an **escape pacemaker**. The two rhythms are **independent**:
+this is **AV dissociation**, and P waves march through the QRS complexes with a changing PR interval.
+
+When the block is in the AV node, the escape comes from the **junction**: a narrow QRS at **40 to
+60 beats per minute**. Here the P waves run at 80 and the QRS complexes at 45.
+
+Pick one P wave and one QRS: their distance is different every time.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_3rd_junctional")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "P waves at 80 bpm, narrow QRS complexes at 45 bpm, and a different PR interval on every beat. What is this?",
+                choices: [
+                    "Complete AV block with a junctional escape rhythm",
+                    "First-degree AV block",
+                    "Mobitz I block",
+                    "Sinus bradycardia",
+                ],
+                answer: 0,
+                explanation: "Atria and ventricles beat independently at their own rates, so the PR interval changes continuously. The narrow QRS at 45 bpm is a junctional escape.",
+            )),
+        ),
+        Page(
+            title: "Complete block with a ventricular escape",
+            markdown: r#"
+When the block is **below the AV junction**, the junction is cut off too and the escape pacemaker
+lies in the ventricular muscle or Purkinje fibres. It is **slower (20 to 40 beats per minute)**,
+less reliable, and the **QRS is wide**.
+
+This is an emergency. The patient may faint or go into cardiac arrest. Atropine works on the AV node,
+so it often fails when the block is infranodal. The rescue is **pacing**, first with a temporary
+wire or external pads, then a permanent device.
+
+Compare with the previous page: the same P waves, but now the QRS is wide and the rate lower.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_3rd_ventricular")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "What does a wide-complex escape rhythm at 35 bpm tell you about the site of the block?",
+                choices: [
+                    "It is below the AV node, and the escape is unreliable",
+                    "It is in the SA node",
+                    "It is in the atria",
+                    "It is a normal variant",
+                ],
+                answer: 0,
+                explanation: "A wide, slow escape arises in the ventricles, which means the junction is not available as a backup. This is a high-risk block that needs pacing.",
+            )),
+        ),
+        Page(
+            title: "A pause with no P wave",
+            markdown: r#"
+A problem in the sinus node itself gives **pauses without any P wave**. In **sinus arrest** the node
+simply stops firing for a while and then restarts at an unrelated time, so the pause is **not a
+multiple of the normal P–P interval**.
+
+If the pause is long enough, a lower pacemaker takes over. Here the AV junction produces narrow
+**escape beats** at 45 bpm during a 3-second pause, with no P wave in front of them.
+
+Pauses of 3 seconds or more, or any pause with symptoms, deserve investigation.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_arrest_junctional_escape")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "During a sinus pause a narrow QRS appears with no P wave before it. What is it?",
+                choices: [
+                    "A junctional escape beat",
+                    "A premature atrial beat",
+                    "A ventricular premature beat",
+                    "A paced beat",
+                ],
+                answer: 0,
+                explanation: "When the sinus node fails, the AV junction becomes the pacemaker after a delay. Its beats are narrow, late rather than early, and have no preceding P wave.",
+            )),
+        ),
+        Page(
+            title: "A pause that fits the P-P interval",
+            markdown: r#"
+In **sinoatrial exit block** the node keeps firing regularly, but some impulses never leave it. The
+inside clock is not disturbed, so the pause is **exactly a multiple of the basic P–P interval**: two,
+three, or more.
+
+That is the difference from sinus arrest. Measure the P–P interval around the pause and compare it
+with the normal P–P interval: here every third impulse fails and the pause is exactly twice the
+normal P–P.
+"#,
+            actions: [
+                Ui(LoadScenario("sa_exit_block")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "How does the pause of SA exit block differ from that of sinus arrest?",
+                choices: [
+                    "It is an exact multiple of the normal P-P interval",
+                    "It is always longer than 3 seconds",
+                    "It always has an escape beat",
+                    "It has a wide QRS",
+                ],
+                answer: 0,
+                explanation: "In exit block the sinus clock keeps its rhythm and the missing P wave falls exactly where it was due. In arrest the clock stops and restarts, so the pause has no fixed relationship to the P-P interval.",
+            )),
+        ),
+        Page(
+            title: "A pacemaker restores AV synchrony",
+            markdown: r#"
+A **dual-chamber (DDD) pacemaker** has a wire in the right atrium that **senses** each P wave and a
+wire in the right ventricle that **paces** it after a programmed **AV delay**, here 150 ms. The
+heart again follows the sinus rate, and atria and ventricles contract in order.
+
+Look for the thin vertical **pacing spike** before every wide QRS, and notice that the QRS rate
+equals the P-wave rate. Complete heart block is still there underneath: the device is doing the
+conduction.
+"#,
+            actions: [
+                Ui(LoadScenario("paced_ddd")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(Highlight("pacemaker")),
+            ],
+            check: Some(Question(
+                prompt: "In DDD pacing with complete heart block, what triggers each ventricular spike?",
+                choices: [
+                    "The sensed P wave, followed by the AV delay",
+                    "A fixed timer that ignores the atria",
+                    "The previous QRS complex",
+                    "The T wave",
+                ],
+                answer: 0,
+                explanation: "A DDD pacemaker tracks the atrium. It senses the P wave and delivers a ventricular pulse after the programmed AV delay, so the ventricles keep pace with the sinus node.",
+            )),
+        ),
+    ],
+)
