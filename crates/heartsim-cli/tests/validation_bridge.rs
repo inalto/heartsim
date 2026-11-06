@@ -31,11 +31,47 @@ fn cli(args: &[&str]) -> std::process::Output {
     out
 }
 
-fn fresh_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("heartsim_b23_{}_{name}", std::process::id()));
+/// A scratch directory that is removed when the test ends, whether it passes or panics.
+struct Scratch(PathBuf);
+
+impl std::ops::Deref for Scratch {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// An empty directory under cargo's `target/tmp`, named after the process so parallel test processes (nextest)
+/// never share one. Directories held in a `static` are never dropped, so each process first removes the
+/// leftovers of earlier runs that are more than an hour old.
+fn fresh_dir(name: &str) -> Scratch {
+    static SWEPT: OnceLock<()> = OnceLock::new();
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR"));
+    SWEPT.get_or_init(|| {
+        let stale = |e: &std::fs::DirEntry| {
+            e.file_name().to_string_lossy().starts_with("b23_")
+                && e.metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|age| age.as_secs() > 3600)
+        };
+        for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
+            if stale(&entry) {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    });
+    let dir = root.join(format!("b23_{}_{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    dir
+    Scratch(dir)
 }
 
 fn text(path: &Path) -> String {
@@ -72,7 +108,7 @@ fn param<'a>(par: &'a str, key: &str) -> &'a str {
 
 /// The idealised heart's sinus beat, exported once for all tests.
 fn exported_heart() -> &'static Path {
-    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    static DIR: OnceLock<Scratch> = OnceLock::new();
     DIR.get_or_init(|| {
         let dir = fresh_dir("heart");
         cli(&[
