@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-06
+Fourth tagged release: the education content (55 scenarios, ten tutorials, three patient cases), the cardiac EP lab with
+catheters, electrograms, programmed stimulation and ablation, and the browser version published on GitHub Pages (briefs B18, B22).
+
 ### Added
 - The browser version is published on GitHub Pages under `/app/`, next to the guide: `docs.yml` now builds the guide and, on
   `master`, the web app, and deploys both. The guide's introduction links to it.
@@ -23,14 +27,6 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - `crates/heartsim-ecg/tests/ischaemia_scenarios.rs` pins which leads rise and fall in each ischaemia scenario (the statements of
   the tutorial); `crates/heartsim-cli/tests/content.rs` runs the scenario validator, every tutorial, and the cases.
 - `typos` spell-check with `_typos.toml` (medical terms), run by `cargo xtask ci` when installed and in the CI workflow.
-
-### Changed
-- Inert tissue from a scenario's Tier-2 patches no longer follows the heart back to Tier 1 as lesions; lesions made during the run still do.
-- The tutorial format and page runner moved from `heartsim-app` to `heartsim_core::tutorial` (re-exported by the app) so the CLI
-  reads the same files. Tutorial ids are numbered for the teaching order: `basics` is now `01_basics` and `cardiac_axis`
-  `03_cardiac_axis` (saved progress of those two starts afresh).
-- Tutorial `Sim` actions go through the same path as the therapy window (re-entry engine if one runs, timing engine, then the 3-D
-  heart), so a coronary lesion set by a page also reaches the heart view.
 - Cardiac EP lab (brief B22, F-16, F-33): a new **EP Lab** tab with five procedures in `assets/scenarios/ep/` (baseline study, AVNRT and
   slow-pathway modification, left-lateral accessory pathway, typical flutter and CTI ablation, AF and pulmonary-vein isolation). See the
   user-guide page *The EP lab*.
@@ -45,6 +41,14 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - Tier-2 patches: `PatchTarget::Band` and `Initiation::PhaseWave { within }`, used to draw a macro-re-entrant circuit on the spherical atria.
   Typical flutter exists only as this drawn, pre-seeded circuit (cycle 235 ms), a procedure of the EP lab; it is not induced by pacing.
 - `EikonalParams::cs_os_link_mm`: joins the coronary-sinus sleeve to the right atrium (off by default, so existing rhythms do not change).
+
+### Changed
+- Inert tissue from a scenario's Tier-2 patches no longer follows the heart back to Tier 1 as lesions; lesions made during the run still do.
+- The tutorial format and page runner moved from `heartsim-app` to `heartsim_core::tutorial` (re-exported by the app) so the CLI
+  reads the same files. Tutorial ids are numbered for the teaching order: `basics` is now `01_basics` and `cardiac_axis`
+  `03_cardiac_axis` (saved progress of those two starts afresh).
+- Tutorial `Sim` actions go through the same path as the therapy window (re-entry engine if one runs, timing engine, then the 3-D
+  heart), so a coronary lesion set by a page also reaches the heart view.
 
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the
