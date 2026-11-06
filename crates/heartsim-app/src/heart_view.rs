@@ -175,6 +175,13 @@ pub struct HeartView {
     lead_glyphs: Vec<GlyphInstance>,
     /// Extra markers drawn with the lead glyphs (coronary territory highlight, B14).
     overlay_glyphs: Vec<GlyphInstance>,
+    /// EP catheters and lesions (B22): glyph set, spheres, tubes, and whether to upload them.
+    catheter_set: Option<GlyphSetId>,
+    catheter_glyphs: (Vec<GlyphInstance>, Vec<GlyphInstance>),
+    catheter_dirty: bool,
+    /// Clicks only report where they hit ([`HeartView::take_pick`]) instead of stimulating.
+    pick_mode: bool,
+    pick: Option<Vec3>,
     /// Per-cell values to show instead of the live engine state (scrubbing a paused strip).
     scrub_cells: Option<Vec<f32>>,
     /// Cell state of the Tier-2 engine while a re-entry scenario runs (B17): shown instead of
@@ -359,6 +366,11 @@ impl HeartView {
             lead_set: None,
             lead_glyphs: Vec::new(),
             overlay_glyphs: Vec::new(),
+            catheter_set: None,
+            catheter_glyphs: (Vec::new(), Vec::new()),
+            catheter_dirty: false,
+            pick_mode: false,
+            pick: None,
             scrub_cells: None,
             external: None,
             pending_actions: Vec::new(),
@@ -391,6 +403,23 @@ impl HeartView {
     /// Extra markers drawn with the lead glyphs (replaced every call).
     pub fn set_overlay_glyphs(&mut self, glyphs: Vec<GlyphInstance>) {
         self.overlay_glyphs = glyphs;
+    }
+
+    /// Show EP catheters and lesions on the heart (spheres, tubes).
+    pub fn set_catheter_glyphs(&mut self, spheres: Vec<GlyphInstance>, tubes: Vec<GlyphInstance>) {
+        self.catheter_glyphs = (spheres, tubes);
+        self.catheter_dirty = true;
+    }
+
+    /// Let clicks report their position instead of acting on the heart (placing the ablation tip).
+    pub fn set_pick_mode(&mut self, on: bool) {
+        self.pick_mode = on;
+        self.pick = None;
+    }
+
+    /// The last click in pick mode, once.
+    pub fn take_pick(&mut self) -> Option<Vec3> {
+        self.pick.take()
     }
 
     /// Put the pacemaker leads at the sites of `cfg` (B13); only the channels its mode uses are
@@ -778,6 +807,14 @@ impl HeartView {
             }
         }
 
+        if self.catheter_dirty
+            && let Some(id) = self.catheter_set
+        {
+            scene.set_spheres(&rs.device, &rs.queue, id, &self.catheter_glyphs.0);
+            scene.set_tubes(&rs.device, &rs.queue, id, &self.catheter_glyphs.1);
+            self.catheter_dirty = false;
+        }
+
         let uv = |p: egui::Pos2| {
             (
                 (p.x - rect.left()) / rect.width(),
@@ -793,8 +830,12 @@ impl HeartView {
         if response.clicked()
             && let Some(hit) = response.interact_pointer_pos().and_then(|p| scene.pick(uv(p)))
         {
-            let ablate = self.tool == ClickTool::Ablate || ui.input(|i| i.modifiers.shift);
-            self.click(hit.position, ablate, timing);
+            if self.pick_mode {
+                self.pick = Some(hit.position);
+            } else {
+                let ablate = self.tool == ClickTool::Ablate || ui.input(|i| i.modifiers.shift);
+                self.click(hit.position, ablate, timing);
+            }
         }
         if self.panel.labels {
             let painter = ui.painter_at(rect);
@@ -847,6 +888,7 @@ impl HeartView {
             l.id = Some(id);
         }
         self.lead_set = Some(scene.add_glyph_set("Pacing leads"));
+        self.catheter_set = Some(scene.add_glyph_set("EP catheters"));
         scene.frame_scene();
         let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
         for m in &self.pack_meshes {

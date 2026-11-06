@@ -113,6 +113,12 @@ mapping each cell's template phase to `(u, v)`.
   conduct through the narrow atrial bridges at 3–4 mm voxels, so the AF preset runs at 2 mm; flutter, scar VT, torsades and VF could not be
   made to survive in the heart-shaped model with any initiation tried (S1–S2, bursts, cross-field, phase-seeded wave), and are not shipped.
 
+* EP lab (brief B22, `sim::ep`): `EpLab` wraps `SwitchingEngine` and adds no physiology. A protocol (`ProtocolRun`) is a pure state machine fed
+  by timing events and the paced cell's activation time. A catheter stimulus goes to `TimingEngine::stimulate_region` and the mesh front starts
+  only on the capture event; in Tier 2 the tissue decides. Lesions go to cells (`ablate_cells_permanently`), voxels, and the timing graph (`Block`,
+  `AccessoryPathway`), so they persist across `reset`. Electrograms (`ecg::egm`) are the forward model's dipole kernel on the cells within 15 mm of
+  each electrode, summed per source so A, H and V can be labelled exactly.
+
 ### 4.4 Forward ECG
 * Precompute `W[e, j]` for the 9 signal electrodes: equivalent-double-layer / dipole form
   `φ_e = Σ_j w_ej · V_m,j`, `w_ej = −(σ_i/4πσ_b) · (A_j n_j · (r_e − x_j)) / |r_e − x_j|³` for surface cells, falling back to `1/|r|^p`

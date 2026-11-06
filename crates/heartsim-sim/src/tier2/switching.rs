@@ -232,6 +232,7 @@ impl<M: CellModel> SwitchingEngine<M> {
             centre_mm,
             axis,
             span,
+            within,
             ..
         } = self.spec.initiation
         {
@@ -240,6 +241,7 @@ impl<M: CellModel> SwitchingEngine<M> {
                 centre_mm.map(glam::Vec3::from),
                 glam::Vec3::from(axis),
                 span,
+                within,
             );
         }
         if let Some(state) = &self.seed_state {
@@ -310,6 +312,33 @@ impl<M: CellModel> SwitchingEngine<M> {
         match &mut self.t2 {
             Some(t2) => t2.drain_shocks(),
             None => self.t1.drain_shocks(),
+        }
+    }
+
+    /// A catheter stimulus at `cell` (brief B22). In Tier 1 the timing engine decides capture
+    /// ([`Tier1Engine::stimulate_cell`]). In Tier 2 the tissue decides: its refractoriness is real
+    /// there, and the activation it produces reaches the timing engine through the sensing
+    /// sites, so a stimulus never moves the simulation between tiers by itself.
+    pub fn stimulate_cell(&mut self, cell: u32, at: Millis) -> Result<(), ActionError> {
+        match &mut self.t2 {
+            Some(t2) => t2.apply(
+                &Action::Stimulate {
+                    site: heartsim_core::StimSite::Cell(cell),
+                    strength: 1.0,
+                    duration_ms: 2.0,
+                },
+                at,
+            ),
+            None => self.t1.stimulate_cell(cell, at),
+        }
+    }
+
+    /// A permanent lesion (brief B22): `cells` and the voxels within `radius_mm` of `centre` stop
+    /// conducting, in the running tier and the idle one, and stay so across [`Engine::reset`].
+    pub fn ablate_permanently(&mut self, cells: &[u32], centre: glam::Vec3, radius_mm: f32) {
+        self.t1.eikonal_mut().ablate_cells_permanently(cells);
+        if let Some(t2) = &mut self.t2 {
+            t2.ablate_sphere_permanently(centre, radius_mm);
         }
     }
 

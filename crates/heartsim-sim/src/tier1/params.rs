@@ -44,6 +44,14 @@ pub struct EikonalParams {
     pub probe_rearm_ms: f64,
     /// Distance from the AV-node cells within which atrial cells count as the nodal input, mm.
     pub av_input_radius_mm: f32,
+    /// Join the coronary-sinus sleeve to the nearest right-atrial cell at the ostium, if one lies
+    /// within this distance, mm (0 = off). The sleeve is continuous with the atrial muscle at the
+    /// ostium (Chauvin et al. 2000), which is what makes the CS activate proximal to distal in
+    /// sinus rhythm; the idealised pack leaves its sinus ostium ≈ 11 mm from the right atrium, so
+    /// without this link the sleeve fills from the left atrium at its middle. The EP lab turns
+    /// it on; off by default so that the rhythm library's ECGs do not depend on it.
+    #[serde(default)]
+    pub cs_os_link_mm: f32,
 }
 
 impl Default for EikonalParams {
@@ -61,6 +69,7 @@ impl Default for EikonalParams {
             min_apd_fraction: 0.3,
             probe_rearm_ms: 200.0,
             av_input_radius_mm: 6.0,
+            cs_os_link_mm: 0.0,
         }
     }
 }

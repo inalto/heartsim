@@ -45,6 +45,22 @@ pub enum PatchTarget {
     Box { lo_mm: [f32; 3], hi_mm: [f32; 3] },
     /// Every voxel of a compartment.
     Compartment(PatchCompartment),
+    /// A band of a spherical wall: voxels within `radius_mm` of `centre_mm` whose direction from
+    /// the centre makes an angle in `from_deg..=to_deg` with `axis`, except those within `gap_mm`
+    /// of `gap_at_mm`. It draws a tricuspid-annulus opening or an insulating barrier on the
+    /// spherical atria of the idealised pack (they have no anatomical holes of their own).
+    Band {
+        compartment: PatchCompartment,
+        centre_mm: [f32; 3],
+        radius_mm: f32,
+        axis: [f32; 3],
+        from_deg: f32,
+        to_deg: f32,
+        #[serde(default)]
+        gap_at_mm: Option<[f32; 3]>,
+        #[serde(default)]
+        gap_mm: f32,
+    },
 }
 
 /// Serializable twin of [`Compartment`].
@@ -83,6 +99,14 @@ pub enum PatchEffect {
 pub struct Patch {
     pub target: PatchTarget,
     pub effect: PatchEffect,
+}
+
+/// The conducting voxels a [`Initiation::PhaseWave`] seeds: within `radius_mm` of its centre and at
+/// an angle from its axis in `polar_deg`. The rest of the chamber is left at rest.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PhaseWaveLimit {
+    pub radius_mm: f32,
+    pub polar_deg: (f32, f32),
 }
 
 /// How the arrhythmia is started.
@@ -126,6 +150,9 @@ pub enum Initiation {
         centre_mm: Option<[f32; 3]>,
         axis: [f32; 3],
         span: f32,
+        /// Seed only part of the compartment (`None` = all of it): a wave confined to one circuit.
+        #[serde(default)]
+        within: Option<PhaseWaveLimit>,
     },
     /// Start from a pre-seeded state ([`super::Tier2Snapshot`] file, relative to the scenario
     /// directory) instead of waiting for the initiation to develop. The caller reads the file
@@ -293,6 +320,37 @@ fn select<M: CellModel>(engine: &Tier2Engine<M>, target: &PatchTarget) -> Vec<u3
             let c = Compartment::from(*c);
             (0..g.len() as u32)
                 .filter(|&v| g.compartment[v as usize] == c)
+                .collect()
+        }
+        PatchTarget::Band {
+            compartment,
+            centre_mm,
+            radius_mm,
+            axis,
+            from_deg,
+            to_deg,
+            gap_at_mm,
+            gap_mm,
+        } => {
+            let c = Compartment::from(*compartment);
+            let centre = Vec3::from(*centre_mm);
+            let axis = Vec3::from(*axis).normalize_or_zero();
+            let gap = gap_at_mm.map(Vec3::from);
+            (0..g.len() as u32)
+                .filter(|&v| {
+                    if g.compartment[v as usize] != c {
+                        return false;
+                    }
+                    let p = g.position(v);
+                    let r = p - centre;
+                    let len = r.length();
+                    if len > *radius_mm || len < 1e-3 {
+                        return false;
+                    }
+                    let angle = (r.dot(axis) / len).clamp(-1.0, 1.0).acos().to_degrees();
+                    (*from_deg..=*to_deg).contains(&angle)
+                        && gap.is_none_or(|q| p.distance(q) > *gap_mm)
+                })
                 .collect()
         }
     }

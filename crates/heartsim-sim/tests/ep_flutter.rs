@@ -1,0 +1,144 @@
+//! B22 acceptance test on Tier 2: a line across the cavotricuspid isthmus terminates typical
+//! flutter, and entrainment tells a site in the circuit from one outside it.
+//!
+//! Established flutter is computed once and every test continues from a clone of it, so the file
+//! costs a few simulated seconds per test.
+
+use glam::Vec3;
+use heartsim_core::{Millis, Region};
+use heartsim_geometry::AnatomyPack;
+use heartsim_sim::ep::{AblationTarget, EpLab, EpPreset, Protocol, ProtocolOutcome, ProtocolStatus};
+use heartsim_sim::tier2::Tier;
+use heartsim_sim::{Chamber, Engine, Event, EventKind, Origin};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
+
+fn assets() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets")
+}
+
+fn pack() -> &'static AnatomyPack {
+    static PACK: OnceLock<AnatomyPack> = OnceLock::new();
+    PACK.get_or_init(|| AnatomyPack::load(&assets().join("anatomy/default")).expect("default pack loads"))
+}
+
+/// Flutter started at 1 s and established by 4 s.
+fn established() -> &'static EpLab {
+    static LAB: OnceLock<EpLab> = OnceLock::new();
+    LAB.get_or_init(|| {
+        let text = std::fs::read_to_string(assets().join("scenarios/ep/ep_flutter.ron")).unwrap();
+        let preset = EpPreset::from_ron(&text).unwrap().expect("ep section");
+        let mut l = preset.build(
+            Arc::new(pack().cells.clone()),
+            &pack().landmarks.sets,
+            &pack().aha_segments,
+        );
+        run(&mut l, 4000.0);
+        l
+    })
+}
+
+fn run(l: &mut EpLab, ms: f64) -> Vec<Event> {
+    let end = l.now().0 + ms;
+    let mut all = Vec::new();
+    while l.now().0 + 0.5 < end {
+        l.step(Millis(1.0));
+        all.extend(l.drain_events());
+    }
+    all
+}
+
+/// Atrial cycles the tissue produced, sensed at the AV-nodal input.
+fn sensed_atrial(evs: &[Event]) -> Vec<f64> {
+    evs.iter()
+        .filter(|e| e.chamber == Chamber::Atrium && e.origin == Origin::Reentry && e.kind == EventKind::Automatic)
+        .map(|e| e.at.0)
+        .collect()
+}
+
+#[test]
+fn the_circuit_keeps_turning_at_a_flutter_rate() {
+    let mut l = established().clone();
+    assert_eq!(l.engine().tier(), Tier::Two);
+    let evs = run(&mut l, 3000.0);
+    assert_eq!(l.engine().tier(), Tier::Two, "{:?}", l.engine().switches());
+    let sensed = sensed_atrial(&evs);
+    assert!(sensed.len() >= 8, "{} activations in 3 s", sensed.len());
+    let cycle: Vec<f64> = sensed.windows(2).map(|w| w[1] - w[0]).collect();
+    let mean = cycle.iter().sum::<f64>() / cycle.len() as f64;
+    let sd = (cycle.iter().map(|c| (c - mean).powi(2)).sum::<f64>() / cycle.len() as f64).sqrt();
+    eprintln!("flutter cycle {mean:.0} ms ± {sd:.1}");
+    assert!((180.0..=350.0).contains(&mean), "cycle {mean} ms: {cycle:?}");
+    assert!(sd < 25.0, "not a regular macro-re-entry: {cycle:?}");
+    // the AV node filters it: fewer ventricular than atrial beats
+    let v = evs
+        .iter()
+        .filter(|e| e.region == Region::HisBundle && e.kind == EventKind::Conducted)
+        .count();
+    assert!(v > 0 && v < sensed.len(), "His {v}, atria {}", sensed.len());
+}
+
+#[test]
+fn a_cti_line_terminates_flutter_and_sinus_rhythm_returns() {
+    let mut l = established().clone();
+    assert!(l.ablate_target(AblationTarget::CtiLine) >= 3);
+    run(&mut l, 1000.0);
+    let evs = run(&mut l, 5000.0);
+    let late: Vec<f64> = sensed_atrial(&evs)
+        .into_iter()
+        .filter(|t| *t > l.now().0 - 3000.0)
+        .collect();
+    assert!(late.is_empty(), "the wave went on after the line: {late:?}");
+    assert_eq!(l.engine().tier(), Tier::One, "{:?}", l.engine().switches());
+    assert!(l.goal_reached());
+    let sinus = evs
+        .iter()
+        .filter(|e| e.region == Region::RightAtrium && e.origin == Origin::Sinus && e.kind == EventKind::Automatic)
+        .count();
+    assert!(sinus >= 2, "{sinus} sinus beats");
+}
+
+#[test]
+fn a_gap_in_the_line_does_not_terminate_it() {
+    let mut l = established().clone();
+    let sites = l.target_sites(AblationTarget::CtiLine);
+    assert!(sites.len() >= 3);
+    // only the stop at one end of the line
+    l.ablate_now(sites[0], 3.0);
+    run(&mut l, 500.0);
+    let evs = run(&mut l, 2000.0);
+    assert!(sensed_atrial(&evs).len() >= 5, "a single lesion stopped the circuit");
+    assert_eq!(l.engine().tier(), Tier::Two);
+}
+
+#[test]
+fn entrainment_tells_the_isthmus_from_a_site_outside_the_circuit() {
+    let entrain = |site: Vec3| {
+        let mut l = established().clone();
+        let cell = l.capture_cell(site).expect("tissue");
+        l.start_protocol(
+            cell,
+            Protocol::Entrainment {
+                offset_ms: 20.0,
+                count: 6,
+            },
+        );
+        while l.protocol_status() != ProtocolStatus::Finished && l.now().0 < 16_000.0 {
+            l.step(Millis(1.0));
+            l.drain_events();
+        }
+        match l.protocol_outcome() {
+            Some(ProtocolOutcome::Entrainment(e)) => *e,
+            other => panic!("{other:?}"),
+        }
+    };
+    let mid = pack().cells.regions.iter().position(|r| *r == Region::CavotricuspidIsthmus);
+    let isthmus = pack().cells.positions[mid.expect("isthmus cells")];
+    let inside = entrain(isthmus);
+    eprintln!("isthmus {inside:?}");
+    assert!(inside.in_circuit, "{inside:?}");
+    let la = pack().cells.positions[pack().cells.landmarks["la_roof"] as usize];
+    let outside = entrain(la);
+    eprintln!("LA roof {outside:?}");
+    assert!(!outside.in_circuit, "{outside:?}");
+}

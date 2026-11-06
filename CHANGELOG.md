@@ -4,6 +4,21 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Cardiac EP lab (brief B22, F-16, F-33): a new **EP Lab** tab with five procedures in `assets/scenarios/ep/` (baseline study, AVNRT and
+  slow-pathway modification, left-lateral accessory pathway, typical flutter and CTI ablation, AF and pulmonary-vein isolation). See the
+  user-guide page *The EP lab*.
+- Catheters (`heartsim_geometry::catheter`): HRA, His, CS decapolar, RVA and ablation catheters as polylines with electrodes, placed on landmarks
+  or along the coronary sinus and held inside chamber cavities computed from the cell cloud.
+- Electrograms (`heartsim_ecg::egm`): unipolar and bipolar local potentials from the forward model restricted to nearby cells, displayed at
+  100–200 mm/s, with A, H and V deflections labelled by source; AH, HV and cycle-length measurements and the activation sequence along a catheter.
+- Programmed stimulation (`heartsim_sim::ep`) from any bipole: continuous, S1×n / S2 / S3, decremental, automatic ERP search with A2–H2 jump
+  detection, entrainment with PPI and PPI − TCL. In Tier 1 the timing engine decides capture and only a capture starts the mesh front.
+- RF ablation: lesions that grow with a time constant, with temperature and impedance read-outs (a teaching stub, not a thermal model). A lesion
+  stops the cells and voxels under it and the nodal, bundle or accessory-pathway structures it touches, and it survives an engine reset.
+- Tier-2 patches: `PatchTarget::Band` and `Initiation::PhaseWave { within }`, used to draw a macro-re-entrant circuit on the spherical atria.
+- `EikonalParams::cs_os_link_mm`: joins the coronary-sinus sleeve to the right atrium (off by default, so existing rhythms do not change).
+
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the
 WebAssembly build and the validation bridge to scientific solvers (briefs B17, B19, B21, B23).

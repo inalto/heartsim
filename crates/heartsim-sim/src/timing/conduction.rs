@@ -66,6 +66,17 @@ impl TimingEngine {
                 StimTarget::Atrium(r) => {
                     self.activate_atrium(t, r, EventKind::Stimulus, Origin::External, AtrialVia::External);
                 }
+                StimTarget::AtrialSite { region, delay_ms } => {
+                    self.site_delay_ms = Some(delay_ms);
+                    self.activate_atrium(
+                        t,
+                        region,
+                        EventKind::Stimulus,
+                        Origin::External,
+                        AtrialVia::External,
+                    );
+                    self.site_delay_ms = None;
+                }
                 StimTarget::His => self.on_his(t, Origin::External, HisVia::Junctional),
                 StimTarget::Ventricle(r) => {
                     self.activate_ventricle(t, r, EventKind::Stimulus, Origin::External, VentVia::External);
@@ -163,6 +174,8 @@ impl TimingEngine {
         // A front sensed on the tissue model is already at the nodal input.
         let atrial_delay = if via == AtrialVia::Tissue {
             0.0
+        } else if let Some(d) = self.site_delay_ms {
+            d / self.drug.atrial_cv_scale
         } else {
             self.atrial_delay()
         };

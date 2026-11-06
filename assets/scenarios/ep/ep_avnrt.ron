@@ -1,0 +1,24 @@
+// EP-lab procedure (brief B22): typical AVNRT and slow-pathway modification.
+Scenario(
+    format_version: 1,
+    id: "ep_avnrt",
+    title: "EP lab: AVNRT and slow-pathway modification",
+    description: "Dual AV-nodal physiology. Decrement S2 from the HRA to find the A2-H2 jump and induce slow-fast AVNRT, then ablate the slow pathway at the inferior edge of Koch's triangle without damaging the compact node.",
+    tier: Eikonal,
+    anatomy: "default",
+    seed: 22,
+    notes: Some("The fast pathway has a long refractory period and the slow pathway a short one. When S2 falls inside the fast pathway's ERP, conduction jumps to the slow pathway (A2-H2 rises by 50 ms or more for a 10 ms shorter S1-S2) and can return up the fast pathway: an echo, then a tachycardia with A and V nearly simultaneous.\nAblating the slow pathway's atrial insertion leaves the fast pathway and the PR interval intact and makes the tachycardia non-inducible. Ablate too close to the compact node and you cause complete heart block, which is why the target is low in Koch's triangle.\n\nSources:\n- Jackman WM et al. Treatment of supraventricular tachycardia due to atrioventricular nodal reentry by radiofrequency catheter ablation of slow-pathway conduction. N Engl J Med 1992;327:313-318.\n- Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.\n- Josephson ME. Clinical Cardiac Electrophysiology."),
+    confused_with: ["ep_ap_left_lateral"],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        av: AvParams(
+            fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 250.0, blocked: false),
+            slow: AvPathway(min_ms: 218.0, recovery_amplitude_ms: 100.0, recovery_tau_ms: 100.0, erp_ms: 30.0, blocked: false),
+            dual_pathways: true,
+            retrograde_fast: true,
+            retrograde_delay_ms: 50.0,
+            reentry_delay_ms: 50.0,
+        ),
+    ),
+    ep: Some(EpSpec(goal: SlowPathwayModified, targets: [SlowPathway, AvNode])),
+)

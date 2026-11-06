@@ -9,6 +9,7 @@
 - [A tour of the window](user/ui-tour.md)
 - [Rhythm scenarios](user/scenarios.md)
 - [Re-entry presets: AF, flutter, VT, VF](user/reentry.md)
+- [The EP lab](user/ep-lab.md)
 - [Tutorials](user/tutorials.md)
 - [Quizzes](user/quizzes.md)
 - [Exporting and reviewing ECGs](user/exports.md)
