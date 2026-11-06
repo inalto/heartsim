@@ -2,8 +2,8 @@ name: Web
 
 # Builds the browser version (crates/heartsim-web) with trunk, checks the 25 MiB size budget and runs the
 # Playwright smoke test. It only BUILDS: the dist/ folder is uploaded as a workflow artifact and nothing is
-# published. (GitHub Pages already serves the mdBook from docs.yml; publishing the app there is a separate
-# decision, see docs/web.md.)
+# published here. docs.yml builds the app again on master and publishes it under /app/ of the GitHub Pages
+# site, next to the guide (see docs/web.md).
 
 on:
   push:

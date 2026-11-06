@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- The browser version is published on GitHub Pages under `/app/`, next to the guide: `docs.yml` now builds the guide and, on
+  `master`, the web app, and deploys both. The guide's introduction links to it.
+
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the
 WebAssembly build and the validation bridge to scientific solvers (briefs B17, B19, B21, B23).
