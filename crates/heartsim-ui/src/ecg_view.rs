@@ -8,7 +8,8 @@ use crate::t;
 use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, page_cells};
 use egui::{Rect, Ui};
 use heartsim_core::Lead;
-use heartsim_ecg::{Analysis, Analyzer, LeadRing};
+use heartsim_ecg::artefact::INTENSITY_RANGE;
+use heartsim_ecg::{Analysis, Analyzer, DisplayConfig, DisplayStage, FilterMode, LeadRing, MainsFrequency};
 
 /// How often (in signal time) the wave labels and intervals are re-measured, ms.
 pub const ANALYSIS_PERIOD_MS: f64 = 250.0;
@@ -23,6 +24,9 @@ pub struct EcgView {
     pub show_waves: bool,
     /// Draw PR and RR brackets.
     pub show_intervals: bool,
+    /// Bandwidth filter and artefacts applied to what the painters draw (F-15). The analyser, the
+    /// calipers' reading of wave positions and the default exports keep using the raw rings.
+    display: DisplayStage,
     analyzer: Analyzer,
     annotations: Option<EcgAnnotations>,
     strip_calipers: CaliperSet,
@@ -42,6 +46,7 @@ impl Default for EcgView {
             order: LeadOrder::Standard,
             show_waves: true,
             show_intervals: true,
+            display: DisplayStage::default(),
             analyzer: Analyzer::default(),
             annotations: None,
             strip_calipers: CaliperSet::default(),
@@ -109,6 +114,8 @@ impl EcgView {
         if rings.len() < heartsim_core::LEAD_COUNT {
             return;
         }
+        // the display copies follow the raw rings; the analysis below reads the raw ones
+        self.display.sync(rings);
         let head = self.head(rings);
         let period = (ANALYSIS_PERIOD_MS * f64::from(fs_of(rings)) / 1000.0) as u64;
         let due = self
@@ -125,6 +132,7 @@ impl EcgView {
     /// paused view would keep showing the old read-out.
     pub fn signal_replaced(&mut self) {
         self.annotations = None;
+        self.display.invalidate();
         self.strip_calipers.reset();
         self.page_calipers.iter_mut().for_each(CaliperSet::reset);
     }
@@ -197,6 +205,62 @@ impl EcgView {
                 }
             }
         });
+        self.display_controls(ui);
+    }
+
+    /// The display filter and artefact controls (F-15). They change only what is drawn.
+    pub fn display_controls(&mut self, ui: &mut Ui) {
+        let mut cfg = *self.display.config();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(t!("ecg-filter"));
+            for m in FilterMode::ALL {
+                let label = match m {
+                    FilterMode::Off => t!("ecg-filter-off"),
+                    FilterMode::Diagnostic => t!("ecg-filter-diagnostic"),
+                    FilterMode::Monitor => t!("ecg-filter-monitor"),
+                };
+                ui.selectable_value(&mut cfg.filter, m, label)
+                    .on_hover_text(t!("ecg-filter-hint"));
+            }
+            ui.separator();
+            ui.label(t!("ecg-artefacts"));
+            let a = &mut cfg.artefacts;
+            ui.checkbox(&mut a.baseline_wander, t!("ecg-art-wander"));
+            ui.checkbox(&mut a.respiration, t!("ecg-art-respiration"));
+            ui.checkbox(&mut a.mains, t!("ecg-art-mains"));
+            if a.mains {
+                for hz in MainsFrequency::ALL {
+                    ui.selectable_value(&mut a.mains_hz, hz, format!("{:.0} Hz", hz.hz()));
+                }
+            }
+            ui.checkbox(&mut a.muscle, t!("ecg-art-muscle"));
+            if a.any() {
+                ui.add(
+                    egui::Slider::new(&mut a.intensity, INTENSITY_RANGE.0..=INTENSITY_RANGE.1)
+                        .text(t!("ecg-art-intensity"))
+                        .max_decimals(2),
+                );
+            }
+        });
+        self.display.set_config(cfg);
+    }
+
+    /// The rings the painters (and a "save what is shown" export) read: `raw` filtered and with the
+    /// artefacts added, or `raw` itself when the display is untouched.
+    #[must_use]
+    pub fn display_rings<'a>(&'a self, raw: &'a [LeadRing]) -> &'a [LeadRing] {
+        self.display.rings(raw)
+    }
+
+    /// The display filter and artefacts now in effect.
+    #[must_use]
+    pub fn display_config(&self) -> &DisplayConfig {
+        self.display.config()
+    }
+
+    /// Replace the display filter and artefacts (tests and scripted tours).
+    pub fn set_display_config(&mut self, config: DisplayConfig) {
+        self.display.set_config(config);
     }
 
     /// Moves the scrub cursor `ms` further back in time (negative = forward) while paused; the
@@ -234,8 +298,9 @@ impl EcgView {
     /// One interactive strip of `lead` filling `rect`. Returns its window.
     pub fn strip(&mut self, ui: &mut Ui, rect: Rect, rings: &[LeadRing], lead: Lead) -> StripWindow {
         let id = ui.scope_id().with("ecg_view_strip");
-        let ring = &rings[lead as usize];
         let head = self.head(rings);
+        let rings = self.display.rings(rings);
+        let ring = &rings[lead as usize];
         let win = draw_strip(
             ui,
             id,
@@ -264,6 +329,7 @@ impl EcgView {
         }
         self.page_rect = Some(rect);
         let head = self.head(rings);
+        let rings = self.display.rings(rings);
         let base = ui.scope_id().with("ecg_view_page");
         let mut wins = Vec::with_capacity(cells.len());
         for (i, cell) in cells.iter().enumerate() {
@@ -288,15 +354,24 @@ impl EcgView {
         size_px: [u32; 2],
         px_per_point: f32,
     ) -> Result<Vec<u8>, image::ImageError> {
-        let img = crate::snapshot::render_page(
-            rings,
+        let head = self.head(rings);
+        // the snapshot shows what the screen shows: the processed trace, and it says so
+        let mut img = crate::snapshot::render_page(
+            self.display.rings(rings),
             &self.style,
             layout,
             self.order,
-            self.head(rings),
+            head,
             size_px,
             px_per_point,
         );
+        if let Some(note) = self.display.config().describe() {
+            let style = StripStyle {
+                px_per_mm: self.style.px_per_mm * px_per_point,
+                ..self.style
+            };
+            crate::snapshot::stamp_caption(&mut img, &style, &note);
+        }
         crate::snapshot::encode_png(&img)
     }
 

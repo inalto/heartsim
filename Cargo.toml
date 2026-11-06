@@ -51,7 +51,7 @@ gltf = { version = "1.4.1", features = ["names", "utils"] }
 crc32fast = "1.5.3"
 
 # --- audio -------------------------------------------------------------------
-kira = "0.12.6"
+kira = { version = "0.12.6", default-features = false, features = ["cpal"] }
 
 # --- web (heartsim-web, wasm32 only) --------------------------------------------
 # wasm-bindgen is pinned exactly: the `wasm-bindgen` CLI that trunk runs must be the same version as this

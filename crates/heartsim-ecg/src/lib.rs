@@ -12,14 +12,20 @@
 //! * [`analysis`] — QRS/P/T detection, intervals, QTc, axes, wave marks and the heart vector.
 //! * [`scenario`] — running a scenario file on the timing engine + Tier-0 synthesiser and checking
 //!   it against its expected findings.
-//! * [`filter`] — simple first-order IIR filters (baseline high-pass, low-pass) and noise.
+//! * [`filter`] — the diagnostic (0.05–150 Hz) and monitor (0.5–40 Hz) display bandwidths as
+//!   Butterworth cascades, first-order sections and deterministic noise.
+//! * [`artefact`] — seeded baseline wander, respiration, 50/60 Hz mains and muscle tremor.
+//! * [`display`] — the display stage that applies both to copies of the strip rings, leaving the
+//!   simulation, the analysis and the default exports unfiltered (F-15).
 //! * [`placement`] — electrode placement: positions, presets, misplacement exercises, landmark
 //!   snapping, and the lead vectors / forward-model rows a placement implies (B10).
 //! * [`misplacement`] — detecting cable reversals and displaced electrodes by comparing the
 //!   derived leads with the standard placement (B10).
 
 pub mod analysis;
+pub mod artefact;
 pub mod axis_est;
+pub mod display;
 pub mod egm;
 pub mod filter;
 pub mod forward;
@@ -34,11 +40,14 @@ pub use analysis::{
     Analysis, AnalysisConfig, Analyzer, Beat, HeartVectorSolver, Regularity, SignalQuality, WaveBounds,
     WaveKind, WaveMark,
 };
+pub use artefact::{ArtefactConfig, ArtefactGenerator, MainsFrequency};
 pub use axis_est::{estimate_frontal_axis, net_area_axis};
+pub use display::{DisplayConfig, DisplayStage};
 pub use egm::{
     ConductionIntervals, Deflection, EGM_RATE_HZ, EgmChannel, EgmOptions, EgmRecorder, EgmSource,
     ElectrogramModel,
 };
+pub use filter::{BandFilter, Biquad, FilterMode};
 pub use forward::{
     ForwardError, ForwardModel, ForwardOptions, LimbPlacement, SourceModel, SurfacePatches, VentricularPhase,
     WaveGains, WeightStats,

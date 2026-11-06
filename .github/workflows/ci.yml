@@ -24,6 +24,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Clippy with the monitor-beep audio output (kira + ALSA)
+        run: cargo clippy -p heartsim-app --features audio --all-targets -- -D warnings
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
@@ -59,6 +61,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
       - uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace --no-fail-fast
+      - name: Check the monitor-beep audio output (WASAPI / CoreAudio)
+        if: runner.os != 'Linux'
+        run: cargo check -p heartsim-app --features audio --locked
       - run: cargo build --workspace --release --bin heartsim --bin heartsim-cli
       - name: Smoke test CLI
         run: cargo run --release -p heartsim-cli -- synth --seconds 2 --out ecg.csv && head -3 ecg.csv

@@ -77,6 +77,90 @@ fn draw_label(img: &mut RgbaImage, r: Rect, style: &StripStyle, label: &str) {
     }
 }
 
+/// 5 × 7 bitmap of a caption character: upper-case letters, digits and `. , - + : / = ( )`.
+fn caption_glyph(c: char) -> Option<[u8; 7]> {
+    Some(match c.to_ascii_uppercase() {
+        'A' => [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
+        'B' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
+        'C' => [0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110],
+        'D' => [0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110],
+        'E' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111],
+        'F' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000],
+        'G' => [0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01111],
+        'H' => [0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
+        'I' => [0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+        'J' => [0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100],
+        'K' => [0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001],
+        'L' => [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
+        'M' => [0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001],
+        'N' => [0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001, 0b10001],
+        'O' => [0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
+        'P' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000],
+        'Q' => [0b01110, 0b10001, 0b10001, 0b10001, 0b10101, 0b10010, 0b01101],
+        'R' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
+        'S' => [0b01111, 0b10000, 0b10000, 0b01110, 0b00001, 0b00001, 0b11110],
+        'T' => [0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
+        'U' => [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
+        'V' => [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
+        'W' => [0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b10101, 0b01010],
+        'X' => [0b10001, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001],
+        'Y' => [0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100],
+        'Z' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111],
+        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
+        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
+        '2' => [0b01110, 0b10001, 0b00001, 0b00010, 0b00100, 0b01000, 0b11111],
+        '3' => [0b11111, 0b00010, 0b00100, 0b00010, 0b00001, 0b10001, 0b01110],
+        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
+        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
+        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
+        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
+        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
+        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
+        '.' => [0, 0, 0, 0, 0, 0b01100, 0b01100],
+        ',' => [0, 0, 0, 0, 0b01100, 0b00100, 0b01000],
+        '-' => [0, 0, 0, 0b11111, 0, 0, 0],
+        '+' => [0, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0],
+        ':' => [0, 0b01100, 0b01100, 0, 0b01100, 0b01100, 0],
+        '/' => [0b00001, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b10000],
+        '=' => [0, 0, 0b11111, 0, 0b11111, 0, 0],
+        '(' => [0b00010, 0b00100, 0b01000, 0b01000, 0b01000, 0b00100, 0b00010],
+        ')' => [0b01000, 0b00100, 0b00010, 0b00010, 0b00010, 0b00100, 0b01000],
+        ' ' => [0; 7],
+        _ => return None,
+    })
+}
+
+/// Stamp `text` (plain ASCII; other characters leave a gap) in small block letters along the
+/// bottom edge of `img`, wrapped to the image width. Exports and snapshots of a filtered trace
+/// use it to say so on the picture itself, where a shared PNG cannot lose it. `style` supplies the
+/// scale (`px_per_mm`) and the colour.
+pub fn stamp_caption(img: &mut RgbaImage, style: &StripStyle, text: &str) {
+    let block = (style.px_per_mm * 0.3).round().max(1.0);
+    let advance = 6.0 * block;
+    let line_h = 9.0 * block;
+    let (w, h) = (img.width() as f32, img.height() as f32);
+    let margin = 2.0 * block;
+    let per_line = (((w - 2.0 * margin) / advance).floor() as usize).max(1);
+    let chars: Vec<char> = text.chars().collect();
+    let lines: Vec<&[char]> = chars.chunks(per_line).collect();
+    let top = h - margin - lines.len() as f32 * line_h;
+    for (row, line) in lines.iter().enumerate() {
+        let y = top + row as f32 * line_h;
+        for (col, &c) in line.iter().enumerate() {
+            let Some(bitmap) = caption_glyph(c) else { continue };
+            let x = margin + col as f32 * advance;
+            for (r, bits) in bitmap.iter().enumerate() {
+                for k in 0..5 {
+                    if bits & (0b10000 >> k) != 0 {
+                        let min = Pos2::new(x + k as f32 * block, y + r as f32 * block);
+                        fill(img, Rect::from_min_size(min, Vec2::splat(block)), style.trace);
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn draw_cell(
     img: &mut RgbaImage,
     win: &StripWindow,
@@ -220,6 +304,41 @@ mod tests {
         x.flat_map(|x| y.clone().map(move |y| (x, y)))
             .filter(|&(x, y)| img.get_pixel(x, y).0[0] < 100)
             .count()
+    }
+
+    #[test]
+    fn captions_cover_the_characters_of_a_filter_statement() {
+        let text = "Display filter: monitor 0.5-40 Hz. Artefacts added: baseline wander, respiration, 50 Hz mains, muscle tremor (intensity 1.0, seed 12345678901234567890).";
+        for c in text.chars() {
+            assert!(caption_glyph(c).is_some(), "no glyph for {c:?}");
+        }
+    }
+
+    #[test]
+    fn a_caption_leaves_ink_along_the_bottom_edge_only() {
+        let style = StripStyle {
+            px_per_mm: 5.0,
+            ..StripStyle::paper()
+        };
+        let mut img = RgbaImage::from_pixel(600, 200, px(style.paper));
+        stamp_caption(&mut img, &style, "Display filter: monitor 0.5-40 Hz.");
+        let bottom = dark_pixels(&img, 0..600, 150..200);
+        let top = dark_pixels(&img, 0..600, 0..100);
+        assert!(bottom > 50, "caption has no ink: {bottom}");
+        assert_eq!(top, 0);
+    }
+
+    #[test]
+    fn a_long_caption_wraps_instead_of_running_off_the_image() {
+        let style = StripStyle {
+            px_per_mm: 5.0,
+            ..StripStyle::paper()
+        };
+        let long = "MAINS ".repeat(60);
+        let mut img = RgbaImage::from_pixel(400, 300, px(style.paper));
+        stamp_caption(&mut img, &style, &long);
+        // wrapped onto several lines, so ink reaches well above the last line's height
+        assert!(dark_pixels(&img, 0..400, 200..260) > 0);
     }
 
     #[test]

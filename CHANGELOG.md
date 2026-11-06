@@ -4,6 +4,26 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- QRS-synchronous monitor beep (cargo feature `audio` of `heartsim-app`, desktop only): a 1 kHz tone synthesised in code and played
+  through `kira` at each ventricular activation, with a switch and a volume slider in Settings (off by default; at most one beep per
+  180 ms of simulated time; silent without an audio device; never in the browser build).
+- First-run medical disclaimer and About (requirement N-09): a modal dialog with the guide's disclaimer must be acknowledged once
+  (remembered through the settings, which also work in the browser), and an *About* window shows the same text with the version.
+- ECG display filters and artefacts (requirement F-15): diagnostic 0.05–150 Hz and monitor 0.5–40 Hz bandwidths (Butterworth
+  cascades, `heartsim_ecg::filter`), and seeded baseline wander, respiration, 50/60 Hz mains and muscle tremor
+  (`heartsim_ecg::artefact`), switched on above the strip and the 12-lead page. They are a display stage only: the engine, the
+  measurements and the default exports stay unfiltered. An export "as displayed" (and the 12-lead *Save PNG*) states the filter and
+  artefacts in the PDF, PNGs, CSV (`# trace:` line), WFDB header and bundle README.
+- Quiz gaps of brief B8: the axis drill never asks a north-west axis or one within 7° of a class boundary
+  (`heartsim_core::axis::draw_drill_axis`, property-tested over 10 000 draws), shows its streak and explains every answer
+  ("lead I positive and lead II positive → normal axis"); a new **Interval Drill** tab (measure PR, QRS or QT with calipers,
+  tolerance grading); and the rhythm quiz shows the teaching notes, the "often confused with" list and what the chosen rhythm is
+  after every answer.
+
+### Changed
+- Tab shortcuts: `0` opens the tenth tab (EP Lab); the new Interval Drill tab sits before Tutorials, so Tutorials is now `9`.
+
 ## [0.5.0] — 2026-11-06
 Fourth tagged release: the education content (55 scenarios, ten tutorials, three patient cases), the cardiac EP lab with
 catheters, electrograms, programmed stimulation and ablation, and the browser version published on GitHub Pages (briefs B18, B22).

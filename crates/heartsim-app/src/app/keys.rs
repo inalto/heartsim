@@ -1,4 +1,4 @@
-//! Keyboard shortcuts (B19): Space pauses, ←/→ scrub while paused, +/− change speed, 1–9 open tabs.
+//! Keyboard shortcuts (B19): Space pauses, ←/→ scrub while paused, +/− change speed, 1–9 and 0 open tabs.
 //!
 //! Shortcuts are ignored while a text box or any other widget has keyboard focus, so typing and
 //! Tab/Space on a focused button keep their usual meaning.
@@ -12,7 +12,7 @@ const SPEED_STEP: f64 = 1.25;
 const SCRUB_STEP_MS: f64 = 100.0;
 const SCRUB_STEP_SHIFT_MS: f64 = 1000.0;
 
-const TAB_KEYS: [Key; 9] = [
+const TAB_KEYS: [Key; 10] = [
     Key::Num1,
     Key::Num2,
     Key::Num3,
@@ -22,6 +22,7 @@ const TAB_KEYS: [Key; 9] = [
     Key::Num7,
     Key::Num8,
     Key::Num9,
+    Key::Num0,
 ];
 
 impl HeartSimApp {
