@@ -201,6 +201,25 @@ tut-replay = Replay
 tut-replay-hint = Run this page's simulator actions again.
 tut-running = running…
 
+## Patient cases (case_ui.rs)
+case-heading = Patient cases
+case-intro = Short scripted stories: read the vignette, look at the ECG the simulator shows, answer the questions.
+case-none = No cases installed (assets/cases).
+case-best = best { $correct } / { $total }
+case-size = { $stages } stages · { $questions } questions
+case-start = Start { $title }
+case-close = Close case
+case-score = { $correct } correct of { $answered } answered (of { $total })
+case-finished = Case finished
+case-final-score = You answered { $correct } of { $total } questions correctly at the first try.
+case-first-try-hint = Only the first answer to each question counts. Start the case again to improve your score.
+case-stage-of = Stage { $stage } of { $total }: { $title }
+case-question-of = Question { $question } of { $total }
+case-wrong = Not quite. The answer is: { $answer }
+case-finish = Finish case
+case-continue = Continue
+case-answer-first = Answer the question first.
+
 ## Heart vector overlay (vector_overlay.rs)
 vec-arrow = Arrow
 vec-loop = Loop (last beat)

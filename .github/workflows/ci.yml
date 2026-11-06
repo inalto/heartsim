@@ -27,6 +27,8 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
+      - name: Spell-check the teaching content and docs
+        uses: crate-ci/typos@v1.52.0
 
   actionlint:
     name: actionlint (workflows)
