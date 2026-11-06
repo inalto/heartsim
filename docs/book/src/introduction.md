@@ -9,7 +9,8 @@ conduction blocks, accessory pathways, ectopic beats, pacing, electrode placemen
 The ECG strip and the colours on the heart come from the same simulation step, so they cannot disagree: pause the strip,
 drag back to any instant, and the heart shows that instant.
 
-heartsim runs on Windows, macOS and Linux. It is free software (MIT or Apache-2.0) and was written from the published
+heartsim runs on Windows, macOS and Linux, and [in a web browser](app/) without installing anything (the browser version has
+no export or file features and is slower). It is free software (MIT or Apache-2.0) and was written from the published
 literature; it contains no code or data from any other simulator.
 
 **This guide has two parts.**

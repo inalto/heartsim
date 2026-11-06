@@ -1,13 +1,20 @@
 name: Docs
 
-# Builds the mdBook guide (docs/book) on every change to the docs and publishes it to GitHub Pages
-# from master. Pages must be enabled once in the repository settings with source "GitHub Actions".
+# Builds the mdBook guide (docs/book) and, on master, the browser version of the app (crates/heartsim-web),
+# and publishes both to GitHub Pages: the guide at the site root, the app under /app/. A Pages site has one
+# source, so one workflow deploys both. Pull requests build the guide only (web.yml checks the app there).
+# Pages must be enabled once in the repository settings with source "GitHub Actions".
 
 on:
   push:
     branches: [master]
     paths:
       - "docs/**"
+      - "crates/**"
+      - "assets/**"
+      - "xtask/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -24,11 +31,13 @@ concurrency:
 
 env:
   MDBOOK_VERSION: 0.5.4
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   build:
-    name: build the guide
-    runs-on: ubuntu-22.04
+    name: build the guide and the web app
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install mdBook
@@ -46,6 +55,32 @@ jobs:
             echo "::error::mdBook reported warnings"
             exit 1
           fi
+      # The browser app (same steps as web.yml), only where it is published.
+      - uses: dtolnay/rust-toolchain@stable
+        if: github.event_name != 'pull_request'
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        if: github.event_name != 'pull_request'
+      - uses: taiki-e/install-action@v2
+        if: github.event_name != 'pull_request'
+        with:
+          tool: trunk
+      - name: trunk build --release
+        if: github.event_name != 'pull_request'
+        working-directory: crates/heartsim-web
+        run: trunk build --release
+      - name: Size budget (wasm + assets < 25 MiB)
+        if: github.event_name != 'pull_request'
+        run: cargo xtask web-budget
+      - name: Put the app under /app/
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          test ! -e docs/book/book/app
+          cp -r crates/heartsim-web/dist docs/book/book/app
+          test -f docs/book/book/app/index.html
+          test -f docs/book/book/app/heartsim-assets.zip
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/book/book

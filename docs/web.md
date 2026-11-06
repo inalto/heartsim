@@ -95,7 +95,12 @@ tab. Safari and Firefox are listed because the brief asks for them; they have no
 
 ## Publishing
 
-`.github/workflows/web.yml` builds, checks the budget and runs the smoke test; it uploads `dist/` as an artifact and publishes
-nothing. GitHub Pages already serves the mdBook (`docs.yml`), and a Pages site has one source, so putting the app there means
-choosing a layout first (for example the book at `/` and the app under `/app/`, deployed by one workflow). Any static host
-works for `dist/`.
+GitHub Pages serves the guide at <https://inalto.github.io/heartsim/> and the app at
+<https://inalto.github.io/heartsim/app/>. A Pages site has one source, so one workflow deploys both:
+`.github/workflows/docs.yml` builds the mdBook, and on `master` also runs `trunk build --release` and the size budget, copies
+`dist/` into the book's output as `app/`, and deploys the result. It runs on every push to `master` that touches the docs, the
+crates, the assets or the lock file. The app's URLs are relative, so it works from that sub-path unchanged.
+
+`.github/workflows/web.yml` is the check for pull requests: it builds, checks the budget and runs the smoke test, uploads
+`dist/` as an artifact and publishes nothing. The deployed copy is therefore built by `docs.yml`, not the one the smoke test
+ran against; both come from the same commit. Any static host works for `dist/`.

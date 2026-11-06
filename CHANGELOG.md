@@ -5,6 +5,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- The browser version is published on GitHub Pages under `/app/`, next to the guide: `docs.yml` now builds the guide and, on
+  `master`, the web app, and deploys both. The guide's introduction links to it.
 - Cardiac EP lab (brief B22, F-16, F-33): a new **EP Lab** tab with five procedures in `assets/scenarios/ep/` (baseline study, AVNRT and
   slow-pathway modification, left-lateral accessory pathway, typical flutter and CTI ablation, AF and pulmonary-vein isolation). See the
   user-guide page *The EP lab*.
