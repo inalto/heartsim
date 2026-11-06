@@ -17,12 +17,13 @@ Scenario(
     )),
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 72.0),
-        // refractory periods short enough, and a node recovering well enough, for the ventricle to be
-        // paced 20 ms faster than the tachycardia without blocking anywhere in the circuit
-        atrial_erp_ms: 220.0,
+        // A node recovering well and refractory periods short enough to pace the ventricle 20 ms faster
+        // than the tachycardia without block in the circuit. The atrial ERP stays just above the 225 ms
+        // from a sinus P to its retrograde P, or every sinus beat would start the tachycardia.
+        atrial_erp_ms: 230.0,
         ventricular_erp_ms: 220.0,
         av: AvParams(fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 50.0, recovery_tau_ms: 80.0, erp_ms: 100.0, blocked: false)),
-        accessory: Some(AccessoryPathway(delay_ms: 90.0, erp_ms: 220.0, antegrade: false, retrograde: true, ventricular_side: Left, atrial_side: Left)),
+        accessory: Some(AccessoryPathway(delay_ms: 70.0, erp_ms: 220.0, antegrade: false, retrograde: true, ventricular_side: Left, atrial_side: Left)),
     ),
     ep: Some(EpSpec(goal: PathwayAblated, targets: [AccessoryPathway, AvNode])),
 )
