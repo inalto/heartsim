@@ -26,6 +26,6 @@ Scenario(
             Patch(target: Compartment(Atrial), effect: Scale(apd: 0.4, cv: 0.3)),
             Patch(target: Region(PulmonaryVeinSleeves), effect: Scale(apd: 0.8, cv: 0.8)),
         ],
-        initiation: Protocol(site: Point((-10.0, 42.0, -72.0)), start_ms: 2000.0, s1_cycle_ms: 130.0, s1_count: 15, s2_ms: None, s3_ms: None),
+        initiation: Protocol(site: Landmark("la_pv_antrum"), start_ms: 2000.0, s1_cycle_ms: 130.0, s1_count: 15, s2_ms: None, s3_ms: None),
     )),
 )

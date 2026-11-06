@@ -27,6 +27,7 @@ use crate::leadvec::LeadVectors;
 use crate::misplacement::Finding;
 use glam::{DMat3, DVec3, Vec3};
 use heartsim_core::{ELECTRODE_COUNT, Electrode, LEAD_COUNT, Lead, Scenario};
+use heartsim_geometry::procedural::torso::TORSO_CENTRE_MM;
 use heartsim_geometry::{ElectrodeSet, TriMesh};
 use std::collections::BTreeMap;
 
@@ -35,6 +36,10 @@ use std::collections::BTreeMap;
 pub const EINTHOVEN_DISTANCE_MM: f64 = 125.0;
 /// A position within this distance of a [`Limb::anchor_mm`] is "on that limb", mm.
 pub const LIMB_CAPTURE_MM: f32 = 50.0;
+/// Distance of a wrist electrode from the torso axis, mm.
+const WRIST_OFFSET_MM: f32 = 200.0;
+/// Distance of an ankle electrode from the torso axis, mm.
+const ANKLE_OFFSET_MM: f32 = 75.0;
 /// Radius of the Tier-0 precordial correction, mm: beyond about two of these from every standard
 /// precordial site an electrode sees the plain dipole field.
 const CORRECTION_RADIUS_MM: f64 = 60.0;
@@ -101,15 +106,17 @@ impl Limb {
     }
 
     /// Nominal electrode position (wrists beside the hips and ankles, anatomical position), heart
-    /// frame mm. Outside the torso; it only stores "on this limb" as a position.
+    /// frame mm, relative to the procedural torso's axis. Outside the torso; it only stores "on this
+    /// limb" as a position.
     #[must_use]
     pub fn anchor_mm(self) -> Vec3 {
-        match self {
-            Limb::RightArm => Vec3::new(-265.0, -330.0, -35.0),
-            Limb::LeftArm => Vec3::new(195.0, -330.0, -35.0),
-            Limb::LeftLeg => Vec3::new(40.0, -1150.0, -35.0),
-            Limb::RightLeg => Vec3::new(-110.0, -1150.0, -35.0),
-        }
+        let (x, y) = match self {
+            Limb::RightArm => (-WRIST_OFFSET_MM, -330.0),
+            Limb::LeftArm => (WRIST_OFFSET_MM, -330.0),
+            Limb::LeftLeg => (ANKLE_OFFSET_MM, -1150.0),
+            Limb::RightLeg => (-ANKLE_OFFSET_MM, -1150.0),
+        };
+        Vec3::new(TORSO_CENTRE_MM.x + x, y, TORSO_CENTRE_MM.z)
     }
 
     /// The limb whose anchor is within [`LIMB_CAPTURE_MM`] of `p`.

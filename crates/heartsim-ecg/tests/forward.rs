@@ -217,9 +217,13 @@ fn single_dipole_axis_and_anterior_precordials() {
     let front = [Lead::V1, Lead::V2, Lead::V3].map(|v| l.get(v));
     assert!(front.iter().all(|v| *v > 0.0), "V1–V3 positive: {front:?}");
     let biggest = front.iter().copied().fold(0.0, f64::max);
+    // Not exactly zero, because V5 and V6 are not exactly in the transverse plane of the heart
+    // centre: 15 mm in front of it and 30 mm behind it, at 78 and 87 mm (V3 is at 82 mm). The
+    // geometry alone gives 0.21 and 0.31 of V3, hence 0.35 rather than the 0.15 of the first version
+    // of the pack, whose V5 and V6 were 130 and 145 mm away.
     for v in [Lead::V5, Lead::V6] {
         assert!(
-            l.get(v).abs() < 0.15 * biggest,
+            l.get(v).abs() < 0.35 * biggest,
             "{} near zero: {:.4} vs {biggest:.4}",
             v.label(),
             l.get(v)
@@ -293,17 +297,10 @@ fn sinus_beat_waves() {
     }
 }
 
-/// Brief B05 literally asks for the R *amplitude* to grow V1 → V5. In the default pack R peaks in
-/// V2–V3 (measured R: V1 0.9, V2 1.7, V3 1.7, V4 1.2, V5 0.9 mV) because of the electrode
-/// geometry, not the activation sequence: the nearest heart cell is 41 mm from V2 but 63, 87 and
-/// 101 mm from V4, V5 and V6, so the RV and anterior LV walls under V1–V3 dominate. With the same
-/// activation and every precordial electrode moved to 40 mm from the heart, R grows V1 → V6 but
-/// for a dip at V4 (1.1, 1.7, 2.2, 1.9, 2.2, 2.3 mV). No activation variant tried (Purkinje CV
-/// 1–3 m/s, depth 0.15–0.45, base coverage 0.8–1.0, RBB delay 30–50 ms, isolated fascicle
-/// territories) lifted R(V5) above 0.9 mV or brought R(V2) below 1.1 mV. Fix in the pack's
-/// electrode sites.
+/// Brief B05: R amplitude grows from V1 to V5. This depends on the anatomy: the LV free wall has to
+/// face V5 and the septum and RV V1–V2, and V4–V6 have to be about as close to the heart as V2–V3
+/// (`procedural::torso`).
 #[test]
-#[ignore = "electrode geometry: V5/V6 are 87/101 mm from the heart, V2 41 mm (see doc comment)"]
 fn r_wave_amplitude_progression() {
     let rec = sinus();
     let r: Vec<f64> = [Lead::V1, Lead::V2, Lead::V3, Lead::V4, Lead::V5]
@@ -410,18 +407,35 @@ fn qrs_axis(rec: &Recording) -> f64 {
     FrontalAxis::from_i_avf(net(Lead::I), net(Lead::AVF)).degrees
 }
 
-/// Brief B05 asks for LAFB ≤ −45° and LPFB ≥ +90°. The forward model's limb leads are exact
-/// hexaxial projections of the heart vector; the activation gives a sinus axis of ≈ −2°, LAFB
-/// ≈ −14° and LPFB ≈ −3°. Blocking a fascicle does delay its territory by 25–30 ms, but in the
-/// default pack the territories face the wrong way for the frontal plane: the LAF and LPF PMJ sets
-/// sit anterosuperior (centroid (5, 10, 19) mm) and posteroinferior ((9, −18, −13) mm), and the
-/// LV lateral wall faces left-superior (the procedural heart is tilted by a minimal rotation,
-/// with no roll about its long axis). Isolating the territories (no Purkinje cross-conduction)
-/// moves both axes the wrong way, and moving the PMJ patches to anterolateral / inferoposterior
-/// LV sites keeps both within 20° of sinus. Fix in the pack's heart orientation and fascicle
-/// sites.
+/// Brief B05 asks for LAFB ≤ −45° and LPFB ≥ +90°. This is not met: with the anatomical heart
+/// orientation the pack gives sinus ≈ +30°, LAFB ≈ +24° and LPFB ≈ +39° (both blocks now shift the
+/// right way, by 6° and 9°).
+///
+/// Why orientation and sites cannot deliver it. The net QRS area of the heart vector is
+/// `k ∮ t_act n dS`, so a block changes it by `k ∮ Δt_act n dS`. A territory delayed by a uniform 30 ms
+/// across a 10 mm wall contributes only through the area difference between epicardium and
+/// endocardium: at most ≈ 10–13 mV·ms in the model's units, against a sinus net vector of ≈ 23 mV·ms.
+/// Rotating the heart turns all three vectors together, so the frontal axes spread by 135° only if
+/// the sinus vector nearly vanishes in the frontal plane. Reaching −45° / +90° needs a sinus net
+/// vector of about the size of the block's shift.
+///
+/// What was measured (a numpy replica of the Tier-1 engine and forward model that reproduces the
+/// old pack within 1° and 3 %; 800 fascicle/RBB seed variants and every long-axis direction within
+/// one SD of Engblom 2005, roll −60…+60°):
+/// * with the RV septal RBB seeds, the best of all variants that keep rS in V1: LAFB ≈ +11°,
+///   LPFB ≈ +35° (margin to the targets ≈ −55°), and even 5 RV septal seed cells give this,
+///   because the RV-side fast layer then activates the whole septal face at once;
+/// * with RBB seeds only at the anterior papillary muscle (no septal cells), the sinus net vector
+///   falls to ≈ 14 mV·ms and the targets are reached (frontal 37°, transverse 48°, roll −25°, LAF
+///   (85°, −15 mm), LPF (245°, −30 mm), 20 mm patches: sinus +63°, LAFB −53°, LPFB +96°), but
+///   the unopposed left-to-right septal front then makes V1 R > S (1.5 / 0.3 mV), V2 R 3.4 mV and
+///   R(II) 0.3 mV, which fails `sinus_beat_waves` and `calibration_gives_normal_amplitudes`.
+///
+/// So rS in V1 and these axes exclude each other in this model. Patients have both, so something
+/// is missing rather than misplaced. Candidates not tried: the boundary-element torso and blood-cavity
+/// effects, an explicit Purkinje tree. The thresholds stay as the brief states them.
 #[test]
-#[ignore = "pack geometry: fascicle territories face anterior/posterior (see doc comment)"]
+#[ignore = "net-area shift of a block is below the sinus vector while V1 keeps rS (see doc comment)"]
 fn fascicular_block_axes() {
     let mut lafb = TimingParams::default();
     lafb.his_purkinje.laf.blocked = true;
@@ -440,6 +454,10 @@ fn fascicular_blocks_shift_the_axis_the_right_way() {
     lafb.his_purkinje.laf.blocked = true;
     let a = qrs_axis(&record(lafb, &Parameters::default()));
     assert!(a < sinus - 5.0, "LAFB {a:.0}° left of sinus {sinus:.0}°");
+    let mut lpfb = TimingParams::default();
+    lpfb.his_purkinje.lpf.blocked = true;
+    let a = qrs_axis(&record(lpfb, &Parameters::default()));
+    assert!(a > sinus + 5.0, "LPFB {a:.0}° right of sinus {sinus:.0}°");
 }
 
 // --- electrodes ------------------------------------------------------------------------------------

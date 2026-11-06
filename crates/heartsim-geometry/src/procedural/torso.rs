@@ -1,15 +1,23 @@
 //! Procedural adult torso and the standard electrode sites, in the heart frame.
 //!
 //! The torso is a superellipsoid (rounded-rectangular cross-section, flattened shoulders and
-//! pelvis) placed so that the heart frame origin — the ventricular centroid — sits where an adult
-//! heart does: about 35 mm left of the midline, in the anterior half of the thorax, at the level of
-//! the fifth intercostal space. Electrode sites are found by shooting a ray from the torso axis at
-//! the site's height and azimuth and intersecting the surface, so every site lies exactly on the
-//! mesh. Standard positions follow the AHA/ACC recommendations (Kligfield et al. 2007): V1/V2 in
-//! the 4th intercostal space either side of the sternum, V4 in the 5th space at the mid-clavicular
-//! line, V3 midway, V5 anterior axillary and V6 mid-axillary at the V4 level; V7–V9 continue the
-//! V6 level posteriorly; V3R/V4R mirror V3/V4. Limb electrodes are at the Mason–Likar torso
-//! positions (infraclavicular fossae, iliac crests) which is what a torso forward model needs.
+//! pelvis) placed so that the heart frame origin — the ventricular centroid — sits in the left
+//! anterior thorax at the level of the fifth intercostal space. With the heart's long axis
+//! (`procedural::heart`) this puts the apex about 95 mm left of the midline, under the fifth
+//! intercostal space just inside the mid-clavicular line, where the apex beat is palpated. Electrode
+//! sites are found by shooting a ray from the torso axis at the site's height and azimuth and
+//! intersecting the surface, so every site lies exactly on the mesh. Standard positions follow the
+//! AHA/ACC recommendations (Kligfield et al. 2007): V1/V2 in the 4th intercostal space either side
+//! of the sternum, V4 in the 5th space at the mid-clavicular line, V3 midway, V5 anterior axillary and
+//! V6 mid-axillary at the V4 level; V7–V9 continue the V6 level posteriorly; V3R/V4R mirror V3/V4.
+//! Limb electrodes are at the Mason–Likar torso positions (infraclavicular fossae, iliac crests) which
+//! is what a torso forward model needs.
+//!
+//! The nearest heart cell is 68, 42, 32, 38, 34 and 43 mm from V1…V6. These are the distances the
+//! infinite-medium forward model needs for R to grow from V1 to V5 as in patients; they are not
+//! measured values. The real chest wall lies closer to the RV under V1 (the model's heart is small
+//! for its chest and sits further left), and the lungs and torso boundary that attenuate near-field
+//! potentials in a patient are absent here.
 
 use crate::electrodes::ElectrodeSet;
 use crate::implicit::{polygonise, superellipsoid};
@@ -25,11 +33,12 @@ pub struct Torso {
     pub electrodes: ElectrodeSet,
 }
 
-/// Torso centre in the heart frame (mm): midline is 35 mm to the patient's right of the
-/// ventricular centroid and 35 mm posterior; the mid-torso is 60 mm below it.
-pub const TORSO_CENTRE_MM: Vec3 = Vec3::new(-35.0, -60.0, -35.0);
-/// Half extents: 175 mm half-width, 320 mm half-height, 115 mm half-depth.
-pub const TORSO_HALF_EXTENTS_MM: Vec3 = Vec3::new(175.0, 320.0, 115.0);
+/// Torso centre in the heart frame (mm): the midline is 65 mm to the patient's right of the
+/// ventricular centroid and the centre of the chest 30 mm behind it; the mid-torso is 60 mm below it.
+pub const TORSO_CENTRE_MM: Vec3 = Vec3::new(-65.0, -60.0, -30.0);
+/// Half extents: 145 mm half-width, 320 mm half-height, 120 mm half-depth: a 290 × 240 mm chest,
+/// the width-to-depth ratio of an adult.
+pub const TORSO_HALF_EXTENTS_MM: Vec3 = Vec3::new(145.0, 320.0, 120.0);
 const CROSS_SECTION_EXPONENT: f32 = 2.5;
 const VERTICAL_EXPONENT: f32 = 6.0;
 
@@ -130,7 +139,8 @@ mod tests {
         let v8 = e.get("V8").unwrap();
         assert!(v1.z > 60.0 && v2.z > 60.0, "V1/V2 anterior");
         assert!(v1.x < v2.x, "V1 right of V2");
-        assert!(v6.x > 120.0, "V6 lateral");
+        // heart frame: the midline is 65 mm right of the origin, so V6 on a 145 mm half-width is 80
+        assert!(v6.x > 70.0, "V6 lateral");
         assert!(v8.z < -80.0, "V8 posterior");
         assert!(e.get("LL").unwrap().y < -250.0);
         assert!(e.get("RA").unwrap().x < e.get("LA").unwrap().x);

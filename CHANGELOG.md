@@ -4,6 +4,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Known limitations
+- Fascicular blocks shift the frontal axis the right way but not as far as in patients (sinus ≈ +30°, LAFB ≈ +24°, LPFB ≈ +39°; brief B05
+  asks for ≤ −45° and ≥ +90°). `fascicular_block_axes` stays ignored; its doc comment records what was tried and why rS in V1 and these
+  axes exclude each other in this model.
+
 ### Added
 - The browser version is published on GitHub Pages under `/app/`, next to the guide: `docs.yml` now builds the guide and, on
   `master`, the web app, and deploys both. The guide's introduction links to it.
@@ -25,6 +30,13 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - `typos` spell-check with `_typos.toml` (medical terms), run by `cargo xtask ci` when installed and in the CI workflow.
 
 ### Changed
+- The default anatomy pack's heart now sits in the thorax as measured: the LV long axis at the CMR population mean (frontal 36°,
+  transverse 46°; Engblom 2005, Kayyali 2025) with the septum facing right and anterior (Narumi 2022), so the LV free wall faces left
+  and posterior and the "anterior" wall faces cranially. The torso is narrower and the heart further left, the LAF and LPF terminals
+  are at Durrer's paraseptal breakthrough sites with 25 mm junction patches, and `ForwardOptions::gain_mv` is recalibrated from 5.0
+  to 4.5. The R wave now grows from V1 to V5 (brief B05), and left posterior fascicular block now moves the axis to the right of
+  sinus. The coronary territories follow: the LAD now owns the anterior apical part of the RV free wall (`segments.bin` value 18,
+  pack format version 2), which is what keeps ST elevation in V2–V4 for an LAD occlusion, and not in an RCA one.
 - The tutorial format and page runner moved from `heartsim-app` to `heartsim_core::tutorial` (re-exported by the app) so the CLI
   reads the same files. Tutorial ids are numbered for the teaching order: `basics` is now `01_basics` and `cardiac_axis`
   `03_cardiac_axis` (saved progress of those two starts afresh).

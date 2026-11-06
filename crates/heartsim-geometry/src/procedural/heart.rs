@@ -21,15 +21,25 @@
 //! pulmonary-vein sleeves, appendage, septum) are labelled by position.
 //!
 //! **Frame.** Everything is modelled with the LV long axis vertical ("canonical" coordinates) and
-//! finally rotated so that the apex points left, inferior and anterior (≈ 45° in the frontal
-//! plane, 20° anterior tilt) and translated so the ventricular centroid is the origin — the heart
-//! frame of `docs/ARCHITECTURE.md` §7.
+//! finally rotated into the thorax and translated so the ventricular centroid is the origin — the
+//! heart frame of `docs/ARCHITECTURE.md` §7. The rotation fixes two directions:
+//! * the long axis (mitral annulus → apex) at the population mean measured by cardiac MR in 94
+//!   healthy adults: frontal +38° ± 10°, transverse +46° ± 7° (0° = patient's left; Engblom et al.,
+//!   *Am Heart J* 2005;150:507, confirmed in UK Biobank by Kayyali et al., *PLoS Comput Biol*
+//!   2025;21:e1013161: 39° ± 12°, 49° ± 9°). Here 36° and 46°;
+//! * the roll about that axis, from the septum: it is seen on edge in a left anterior oblique view
+//!   of about 45–60° (CT: 53° ± 9°, Narumi et al., *Open Heart* 2022;9:e002009), so its normal points
+//!   right and anterior, and it tilts 15° cranially (no direct measurement found: chosen inside the
+//!   range implied by the axial angiographic views of Bargeron et al., *Circulation* 1977;56:1075).
+//!
+//! So the LV free wall faces left and posterior, the "anterior" AHA wall faces cranially and
+//! anteriorly, the "inferior" wall rests on the diaphragm, and the RV lies behind the sternum.
 
 use crate::cloud::CellCloud;
 use crate::implicit::{capsule, ellipsoid, half_space, polygonise, sphere, subtract, torus, union};
 use crate::mesh::TriMesh;
-use crate::territory::aha_segment;
-use glam::{Quat, Vec3};
+use crate::territory::{RV_ANTERIOR_SEGMENT, aha_segment};
+use glam::{Mat3, Quat, Vec3};
 use heartsim_core::Region;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -96,7 +106,8 @@ pub struct IdealisedHeart {
     pub cells: CellCloud,
     /// Purkinje–myocardial junction seed cells per fascicle: `rbb`, `laf`, `lpf`.
     pub pmj_seeds: BTreeMap<String, Vec<u32>>,
-    /// AHA 17-segment index per cell (0 = not part of the LV model).
+    /// AHA 17-segment index per cell (0 = not part of the LV model; on the RV free wall,
+    /// [`crate::territory::RV_ANTERIOR_SEGMENT`] marks the LAD's zone).
     pub aha_segments: Vec<u8>,
     /// Rotation from canonical (long axis = −y) to heart-frame coordinates.
     pub rotation: Quat,
@@ -129,7 +140,7 @@ pub const IDEALISED_REGIONS: [Region; 21] = [
 ];
 
 /// Landmarks every procedural pack defines.
-pub const LANDMARKS: [&str; 22] = [
+pub const LANDMARKS: [&str; 23] = [
     "sa_node",
     "av_node",
     "his",
@@ -152,6 +163,7 @@ pub const LANDMARKS: [&str; 22] = [
     "ra_lateral",
     "la_roof",
     "laa",
+    "la_pv_antrum",
 ];
 
 // ----------------------------------------------------------------------------------------------
@@ -168,13 +180,17 @@ const RV_ENDO: Vec3 = Vec3::new(36.0, 44.0, 32.0);
 const RV_EPI: Vec3 = Vec3::new(40.0, 48.0, 36.0);
 const RV_BASE_Y: f32 = 22.0;
 
-const RA_CENTRE: Vec3 = Vec3::new(-26.0, 51.0, -14.0);
-const LA_CENTRE: Vec3 = Vec3::new(16.0, 50.0, -30.0);
+// The atria sit on the base with a small offset towards the inferior wall. Canonical +z becomes
+// mostly cranial in the thorax (+0.88 of it, see `heart_rotation`), so a larger offset would put them
+// level with the apex; in a real axial CT all four chambers share a slice through the mid ventricles
+// and the pulmonary veins enter at or above it.
+const RA_CENTRE: Vec3 = Vec3::new(-26.0, 51.0, -6.0);
+const LA_CENTRE: Vec3 = Vec3::new(16.0, 50.0, -18.0);
 const ATRIUM_EPI_R: f32 = 24.0;
 const ATRIUM_ENDO_R: f32 = 20.5;
 const ATRIUM_MID_R: f32 = 22.25;
 
-const LAA_CENTRE: Vec3 = Vec3::new(32.0, 59.0, -10.0);
+const LAA_CENTRE: Vec3 = Vec3::new(32.0, 59.0, 2.0);
 const LAA_EPI_R: f32 = 9.5;
 const LAA_ENDO_R: f32 = 6.5;
 
@@ -187,18 +203,25 @@ const PA_B: Vec3 = Vec3::new(-10.0, 65.0, 24.0);
 const PA_LEFT: Vec3 = Vec3::new(12.0, 72.0, 14.0);
 const PA_RIGHT: Vec3 = Vec3::new(-34.0, 72.0, 12.0);
 const PA_R: f32 = 12.0;
-const SVC_A: Vec3 = Vec3::new(-28.0, 71.0, -14.0);
-const SVC_B: Vec3 = Vec3::new(-28.0, 98.0, -14.0);
-const IVC_A: Vec3 = Vec3::new(-30.0, 33.0, -18.0);
-const IVC_B: Vec3 = Vec3::new(-34.0, 8.0, -36.0);
+// The caval veins run cranio-caudally in the thorax: in canonical coordinates that is along
+// (0.03, 0.59, 0.78) above the right atrium and (-0.07, -0.45, -0.88) below it.
+const SVC_A: Vec3 = Vec3::new(-30.0, 66.0, 6.0);
+const SVC_B: Vec3 = Vec3::new(-29.0, 84.0, 29.0);
+const IVC_A: Vec3 = Vec3::new(-22.0, 51.0, -23.0);
+const IVC_B: Vec3 = Vec3::new(-24.0, 37.0, -51.0);
 const VENA_CAVA_R: f32 = 10.0;
 const PV_R: f32 = 6.0;
+/// Where the veins leave the left atrium: backwards and outwards, close to the horizontal, the
+/// superior pair above the inferior one. In the thorax these are (±0.6, ±0.25, −0.75).
 const PV_DIRS: [Vec3; 4] = [
-    Vec3::new(0.6, 0.3, -0.74),
-    Vec3::new(0.6, -0.3, -0.74),
-    Vec3::new(-0.6, 0.3, -0.74),
-    Vec3::new(-0.6, -0.3, -0.74),
+    Vec3::new(0.96, 0.22, 0.08),
+    Vec3::new(0.926, -0.005, -0.358),
+    Vec3::new(0.07, 0.96, -0.214),
+    Vec3::new(0.036, 0.74, -0.654),
 ];
+/// The posterior left-atrial wall between the four veins, where a pulmonary-vein trigger or an
+/// antral isolation line acts (the mean of `PV_DIRS`).
+const PV_ANTRUM_DIR: Vec3 = Vec3::new(0.498, 0.479, -0.286);
 
 const MITRAL_CENTRE: Vec3 = Vec3::new(3.0, 25.5, -10.0);
 const AORTIC_CENTRE: Vec3 = Vec3::new(10.0, 25.5, 10.0);
@@ -208,8 +231,30 @@ const PULMONARY_CENTRE: Vec3 = Vec3::new(-32.0, 22.5, 26.0);
 /// Azimuth (degrees, atan2(z, x)) of the septal direction from the LV axis.
 const SEPTAL_AZIMUTH_DEG: f32 = 160.0;
 
-/// Apex direction in the heart frame: left, inferior, anterior.
-const APEX_DIRECTION: Vec3 = Vec3::new(0.60, -0.70, 0.38);
+/// Direction of the LV long axis in the heart frame (mitral annulus → apex): `(1, −tan 36°, tan 46°)`
+/// normalised, see the module documentation for the sources. A literal, so the bake does not depend
+/// on the platform's `tan`.
+const APEX_DIRECTION: Vec3 = Vec3::new(0.62015, -0.45057, 0.64219);
+
+/// Direction from the LV axis to the middle of the septum in the heart frame: the horizontal
+/// right-anterior normal of the long axis, tilted 15° cranially (see the module documentation).
+const SEPTAL_DIRECTION: Vec3 = Vec3::new(-0.61381, 0.23106, 0.75487);
+
+/// Terminal of the left anterior fascicle (azimuth°, height mm on the LV endocardium), and the
+/// same for the left posterior fascicle. Durrer et al. 1970 (*Circulation* 41:899) found the LV
+/// breaking through first high on the anterior paraseptal wall, on the central septum, and on the
+/// posterior paraseptal wall about a third of the way from apex to base: y = −25 mm is a third of
+/// the −55…+25 mm long axis.
+const LAF_TERMINAL: (f32, f32) = (95.0, -5.0);
+/// See [`LAF_TERMINAL`].
+const LPF_TERMINAL: (f32, f32) = (245.0, -25.0);
+/// Radius of a left fascicle's Purkinje–myocardial junction patch around its terminal, mm. Each
+/// fascicle's network serves a broad endocardial territory rather than a point (Demoulin & Kulbertus,
+/// *Br Heart J* 1972;34:807); 25 mm covers roughly its half of the lower two thirds of the LV.
+const LEFT_PMJ_PATCH_RADIUS_MM: f32 = 25.0;
+
+/// RV free-wall cells at a smaller azimuth (seen from the LV axis) than this are on its anterior side.
+const RV_LAD_AZIMUTH_LIMIT_DEG: f32 = 165.0;
 
 const CONDUCTION_SPACING_MM: f32 = 1.5;
 
@@ -495,7 +540,8 @@ struct Conduction {
 }
 
 fn conduction_geometry() -> Conduction {
-    let sa_point = on_sphere(RA_CENTRE, Vec3::new(-0.4, 0.85, -0.35), ATRIUM_MID_R);
+    // The SVC–RA junction: superior, lateral and slightly posterior in the thorax.
+    let sa_point = on_sphere(RA_CENTRE, Vec3::new(-0.2, 0.75, 0.6), ATRIUM_MID_R);
     let avn_point = on_sphere(RA_CENTRE, Vec3::new(0.7, -0.7, 0.15), ATRIUM_MID_R);
     let septum_top = lv_surface_point(
         SEPTAL_AZIMUTH_DEG,
@@ -531,8 +577,8 @@ fn conduction_geometry() -> Conduction {
         }
         v
     };
-    let laf = fascicle(95.0, -15.0);
-    let lpf = fascicle(235.0, -25.0);
+    let laf = fascicle(LAF_TERMINAL.0, LAF_TERMINAL.1);
+    let lpf = fascicle(LPF_TERMINAL.0, LPF_TERMINAL.1);
 
     let rbb_septal: Vec<Vec3> = (0..=10)
         .map(|i| lv_surface_point(SEPTAL_AZIMUTH_DEG, 22.0 - 47.0 * i as f32 / 10.0, LV_EPI, 1.02))
@@ -548,9 +594,9 @@ fn conduction_geometry() -> Conduction {
         6,
     );
     let coronary_sinus = vec![
-        Vec3::new(-10.0, 26.0, -32.0),
-        Vec3::new(6.0, 27.0, -35.0),
-        Vec3::new(22.0, 27.0, -27.0),
+        Vec3::new(-10.0, 26.0, -24.0),
+        Vec3::new(6.0, 27.0, -27.0),
+        Vec3::new(22.0, 27.0, -19.0),
     ];
     let bachmann = vec![
         on_sphere(RA_CENTRE, Vec3::new(0.35, 0.6, 0.7), ATRIUM_MID_R),
@@ -558,8 +604,8 @@ fn conduction_geometry() -> Conduction {
     ];
     let crista = sphere_arc(
         RA_CENTRE,
-        Vec3::new(-0.55, 0.75, -0.35),
-        Vec3::new(-0.45, -0.8, -0.4),
+        Vec3::new(-0.5, 0.7, 0.45),
+        Vec3::new(-0.3, -0.3, -0.9),
         ATRIUM_MID_R,
         10,
     );
@@ -597,6 +643,18 @@ fn ventricular_aha(p: Vec3) -> u8 {
     aha_segment(apex_base, p.z.atan2(p.x).to_degrees())
 }
 
+/// [`RV_ANTERIOR_SEGMENT`] on the anterior half of the RV free wall below the LV's equator, 0 elsewhere.
+/// (37 % of the free wall: the zone that makes an LAD occlusion raise ST in V2 and V3, which lie
+/// over it, and an RCA occlusion not to. See `docs/anatomy-pack.md`.)
+fn rv_segment(p: Vec3) -> u8 {
+    let azimuth = p.z.atan2(p.x).to_degrees().rem_euclid(360.0);
+    if azimuth < RV_LAD_AZIMUTH_LIMIT_DEG && p.y < 0.0 {
+        RV_ANTERIOR_SEGMENT
+    } else {
+        0
+    }
+}
+
 /// Classify one lattice point; `None` outside the myocardium.
 fn classify_lattice_point(p: Vec3, con: &Conduction) -> Option<(Region, Vec3, f32, u8)> {
     if lv_wall(p) < 0.0 {
@@ -616,7 +674,7 @@ fn classify_lattice_point(p: Vec3, con: &Conduction) -> Option<(Region, Vec3, f3
     if rv_wall(p) < 0.0 {
         let d = ellipsoid_depth(p, RV_CENTRE, RV_ENDO, RV_EPI);
         let f = helix_fibre(p, RV_CENTRE, RV_ENDO, RV_EPI, d);
-        return Some((Region::RightVentricle, f, d, 0));
+        return Some((Region::RightVentricle, f, d, rv_segment(p)));
     }
     let in_ra = ra_wall(p) < 0.0;
     let in_la = la_wall(p) < 0.0;
@@ -675,6 +733,22 @@ fn nearest_cell(cells: &Cells, p: Vec3, pred: impl Fn(Region) -> bool) -> Option
         }
     }
     best.map(|b| b.1)
+}
+
+/// Rotation from canonical coordinates into the heart frame: the canonical apex (−y) goes to
+/// [`APEX_DIRECTION`] and the canonical septal direction to [`SEPTAL_DIRECTION`].
+fn heart_rotation() -> Quat {
+    let apex = APEX_DIRECTION.normalize();
+    let septal = (SEPTAL_DIRECTION - apex * SEPTAL_DIRECTION.dot(apex)).normalize();
+    let (s, c) = SEPTAL_AZIMUTH_DEG.to_radians().sin_cos();
+    let canonical_septal = Vec3::new(c, 0.0, s);
+    let target = Mat3::from_cols(septal, apex, septal.cross(apex));
+    let source = Mat3::from_cols(
+        canonical_septal,
+        Vec3::NEG_Y,
+        canonical_septal.cross(Vec3::NEG_Y),
+    );
+    Quat::from_mat3(&(target * source.transpose())).normalize()
 }
 
 /// Build the idealised heart at `resolution`.
@@ -854,13 +928,21 @@ pub fn idealised_heart(resolution: Resolution) -> IdealisedHeart {
         "la_roof",
         nearest_cell(
             &cells,
-            on_sphere(LA_CENTRE, Vec3::new(0.2, 1.0, -0.2), ATRIUM_MID_R),
+            on_sphere(LA_CENTRE, Vec3::new(0.07, 0.45, 0.88), ATRIUM_MID_R),
             |r| r == Region::LeftAtrium,
         ),
     );
     put(
         "laa",
         nearest_cell(&cells, LAA_CENTRE, |r| r == Region::LeftAtrialAppendage),
+    );
+    put(
+        "la_pv_antrum",
+        nearest_cell(
+            &cells,
+            on_sphere(LA_CENTRE, PV_ANTRUM_DIR, ATRIUM_MID_R),
+            |r| r == Region::LeftAtrium,
+        ),
     );
 
     // --- PMJ seed sets ---------------------------------------------------------------------
@@ -897,7 +979,7 @@ pub fn idealised_heart(resolution: Resolution) -> IdealisedHeart {
                     cells.regions[i],
                     Region::LeftVentricle | Region::VentricularSeptum
                 ) && cells.depth[i] < 0.3
-                    && p.distance(terminal) < 15.0
+                    && p.distance(terminal) < LEFT_PMJ_PATCH_RADIUS_MM
             }),
         );
     }
@@ -910,7 +992,7 @@ pub fn idealised_heart(resolution: Resolution) -> IdealisedHeart {
         .filter(|(_, r)| r.is_ventricular())
         .fold((Vec3::ZERO, 0usize), |(s, c), (p, _)| (s + *p, c + 1));
     let centroid = if count > 0 { sum / count as f32 } else { Vec3::ZERO };
-    let rotation = Quat::from_rotation_arc(Vec3::NEG_Y, APEX_DIRECTION.normalize());
+    let rotation = heart_rotation();
     let xf = |p: Vec3| rotation * (p - centroid);
     let positions: Vec<Vec3> = cells.positions.iter().map(|p| xf(*p)).collect();
     let fibres: Vec<Vec3> = cells
@@ -1052,6 +1134,25 @@ mod tests {
             "mid-wall fibre is circumferential"
         );
         assert!(endo.y > 0.8 && epi.y < -0.8, "±60° helix");
+    }
+
+    #[test]
+    fn rotation_puts_the_long_axis_and_the_septum_where_measured() {
+        let r = heart_rotation();
+        let apex = r * Vec3::NEG_Y;
+        // Engblom 2005 hexaxial convention: 0° = patient's left, + towards the feet / the front.
+        let frontal = (-apex.y).atan2(apex.x).to_degrees();
+        let transverse = apex.z.atan2(apex.x).to_degrees();
+        assert!((frontal - 36.0).abs() < 0.1, "frontal {frontal}°");
+        assert!((transverse - 46.0).abs() < 0.1, "transverse {transverse}°");
+        // the LV free wall faces left and posterior, the "anterior" wall cranial and anterior
+        let lateral = r * Vec3::X;
+        assert!(lateral.x > 0.5 && lateral.z < -0.5, "lateral wall {lateral:?}");
+        let anterior = r * Vec3::Z;
+        assert!(anterior.y > 0.7 && anterior.z > 0.2, "anterior wall {anterior:?}");
+        let (s, c) = SEPTAL_AZIMUTH_DEG.to_radians().sin_cos();
+        let septal = r * Vec3::new(c, 0.0, s);
+        assert!(septal.distance(SEPTAL_DIRECTION) < 1e-3, "septum {septal:?}");
     }
 
     #[test]

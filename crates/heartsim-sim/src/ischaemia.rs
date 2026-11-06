@@ -42,6 +42,7 @@
 use crate::tier1::{CellKind, Graph};
 use heartsim_core::{Action, Region};
 use heartsim_geometry::CellCloud;
+use heartsim_geometry::territory::RV_ANTERIOR_SEGMENT;
 use serde::{Deserialize, Serialize};
 
 /// Normalised resting-potential rise at full injury (20 mV of a ≈ 100 mV AP).
@@ -78,9 +79,10 @@ pub enum CoronaryBranch {
     LeftMain,
     /// Left anterior descending, occluded proximally (before the first diagonal): anterior wall,
     /// anterior septum, apex (AHA 1, 2, 7, 8, 13, 14, 17) and the diagonal-supplied anterolateral
-    /// wall (6, 12 — "LAD or LCx" in Cerqueira et al. 2002). The superior-leftward extent is
-    /// what gives the reciprocal inferior ST depression of proximal LAD occlusion (Birnbaum et
-    /// al., *Am Heart J* 1993;126:1273).
+    /// wall (6, 12 — "LAD or LCx" in Cerqueira et al. 2002), plus the anterior apical RV free wall
+    /// its right ventricular branches supply. The superior-leftward extent is what gives the
+    /// reciprocal inferior ST depression of proximal LAD occlusion (Birnbaum et al., *Am Heart J*
+    /// 1993;126:1273).
     Lad,
     /// Left circumflex: lateral and inferolateral wall (5, 6, 11, 12, 16).
     Lcx,
@@ -88,7 +90,8 @@ pub enum CoronaryBranch {
     ObtuseMarginal,
     /// Posterolateral branch (LCx/RCA): inferolateral ("posterior") wall (5, 11).
     Posterolateral,
-    /// Right coronary: inferior wall, inferior septum and the RV free wall (3, 4, 9, 10, 15 + RV).
+    /// Right coronary: inferior wall, inferior septum and the RV free wall other than the LAD's zone
+    /// (3, 4, 9, 10, 15 + RV).
     Rca,
     /// Posterior descending (RCA in right dominance): inferior wall and inferior septum, no RV.
     Pda,
@@ -158,11 +161,23 @@ impl CoronaryBranch {
             CoronaryBranch::LeftMain => {
                 CoronaryBranch::Lad.perfuses(region, segment) || CoronaryBranch::Lcx.perfuses(region, segment)
             }
-            CoronaryBranch::Lad => !rv && matches!(segment, 1 | 2 | 6 | 7 | 8 | 12 | 13 | 14 | 17),
+            CoronaryBranch::Lad => {
+                if rv {
+                    segment == RV_ANTERIOR_SEGMENT
+                } else {
+                    matches!(segment, 1 | 2 | 6 | 7 | 8 | 12 | 13 | 14 | 17)
+                }
+            }
             CoronaryBranch::Lcx => !rv && matches!(segment, 5 | 6 | 11 | 12 | 16),
             CoronaryBranch::ObtuseMarginal => !rv && matches!(segment, 6 | 12 | 16),
             CoronaryBranch::Posterolateral => !rv && matches!(segment, 5 | 11),
-            CoronaryBranch::Rca => rv || matches!(segment, 3 | 4 | 9 | 10 | 15),
+            CoronaryBranch::Rca => {
+                if rv {
+                    segment != RV_ANTERIOR_SEGMENT
+                } else {
+                    matches!(segment, 3 | 4 | 9 | 10 | 15)
+                }
+            }
             CoronaryBranch::Pda => !rv && matches!(segment, 3 | 4 | 9 | 10 | 15),
             CoronaryBranch::Global => !rv && segment != 0,
             CoronaryBranch::Pericardium => region != Region::VentricularSeptum,
