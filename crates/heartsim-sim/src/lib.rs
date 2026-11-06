@@ -12,10 +12,13 @@
 //! * [`pharma`] — drugs and electrolyte disturbances as parameter-modifier sets with onset /
 //!   offset kinetics (`assets/drugs.ron`), [`ischaemia`] — coronary stenosis and infarction by
 //!   territory, [`defib`] — synchronised cardioversion / defibrillation outcomes (brief B14).
+//! * [`ep`] — the EP lab (brief B22): programmed stimulation, ERP search, entrainment and RF
+//!   lesions on top of the tier-switching engine.
 
 pub mod ap;
 pub mod defib;
 pub mod engine;
+pub mod ep;
 pub mod ischaemia;
 pub mod pharma;
 pub mod tier1;

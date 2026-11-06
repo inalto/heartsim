@@ -16,7 +16,8 @@ compared with real time.
 |---|---|---|
 | Atrial fibrillation (persistent) | Remodelled atria: action potential 0.4 × and conduction 0.3 × normal, the pulmonary-vein sleeves slightly more so; a burst of rapid pacing from the veins starts it | No P waves, a fibrillatory baseline of about 0.15 mV in V1, an irregularly irregular ventricular rate of about 100–130/min (the AV node filters the atrial activity) |
 
-Flutter, scar-related VT, torsades de pointes and VF presets are **not in this release**: the Tier-2 engine runs them
+Typical flutter is a procedure of the [EP lab](ep-lab.md), on a circuit drawn into the atrium, not a preset here.
+Scar-related VT, torsades de pointes and VF presets are **not in this release**: the Tier-2 engine runs them
 as tissue models, but none of the induction protocols tried (programmed stimulation, burst pacing, cross-field stimulation,
 a pre-seeded rotating wave) produced a rotor that survives in the heart-shaped model, so they would not do what their names say.
 The tools for building them — tissue patches, cross-field and pre-seeded-wave initiation, ablation lines — are in place.
