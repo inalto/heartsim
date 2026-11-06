@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "stemi_anterior",
+    title: "Anterior ST-elevation myocardial infarction (proximal LAD)",
+    description: "Sinus rhythm at 78 bpm with an occluded left anterior descending artery: ST elevation across V1 to V6 and in leads I and aVL, with reciprocal ST depression in III and aVF.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("An occluded proximal left anterior descending artery (LAD) injures the anterior wall, septum and apex: the injury current raises the ST segment in the chest leads V1 to V4, spreading to V5-V6, I and aVL when the occlusion is proximal to the first diagonal branch. Reciprocal ST depression in the inferior leads (here III and aVF) is a mirror image and suggests a proximal occlusion.\nSTEMI criteria (Fourth Universal Definition): new ST elevation at the J point in two contiguous leads of at least 0.1 mV, except V2-V3, where at least 0.2 mV in men aged 40 or over, 0.25 mV in men under 40 and 0.15 mV in women are required. The diagnosis is made on the ECG and the history; reperfusion should not wait for the troponin result.\nHere the ST vector is modelled as a shift of the whole ST segment; Q waves, hyperacute and inverted T waves are not drawn.\nDifferential: early repolarisation (benign, concave, no reciprocal change), pericarditis (diffuse, no territory), left ventricular aneurysm, LBBB, Takotsubo cardiomyopathy."),
+    confused_with: ["stemi_lateral", "pericarditis", "lbbb", "early repolarisation", "Takotsubo cardiomyopathy"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: anterior STEMI, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "LAD", severity: 0.9)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)

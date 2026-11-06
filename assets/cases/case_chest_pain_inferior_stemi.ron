@@ -1,0 +1,147 @@
+// heartsim patient case: inferior ST-elevation infarction with AV block. Original text by the heartsim
+// authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_chest_pain_inferior_stemi",
+    title: "Chest pain on the golf course",
+    summary: "A middle-aged man with crushing chest pain: read the ST segments, meet the slow pulse that follows, and see what reperfusion changes.",
+    patient: "58-year-old man, 40 minutes of crushing central chest pain spreading to the jaw, sweating and nausea, smoker, treated hypertension.",
+    references: [
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Ibanez B et al. 2017 ESC Guidelines for the management of acute myocardial infarction in patients presenting with ST-segment elevation. Eur Heart J 2018;39:119-177.",
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: inferior STEMI, reciprocal changes, AV block in MI. litfl.com/ecg-library.",
+    ],
+    stages: [
+        Stage(
+            title: "The 12-lead ECG",
+            markdown: r#"
+**Mr Bianchi** is pale, sweaty and in pain. His blood pressure is 128/84 mmHg and his pulse is 76
+and regular. The ambulance crew recorded a 12-lead ECG before arrival. It shows sinus rhythm with
+**ST-segment elevation in the inferior leads**.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_inferior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which leads show ST elevation in an inferior myocardial infarction?",
+                    choices: ["II, III and aVF", "V1 to V4", "I and aVL", "aVR only"],
+                    answer: 0,
+                    explanation: "Leads II, III and aVF look at the inferior wall of the left ventricle. ST elevation in two or more contiguous leads of this group is an inferior STEMI.",
+                ),
+                Question(
+                    prompt: "Which artery is most often responsible for an inferior STEMI?",
+                    choices: [
+                        "The right coronary artery",
+                        "The left anterior descending artery",
+                        "The left main stem",
+                        "The pulmonary artery",
+                    ],
+                    answer: 0,
+                    explanation: "In most people (right-dominant circulation) the right coronary artery supplies the inferior wall through the posterior descending branch. In others the left circumflex does.",
+                ),
+                Question(
+                    prompt: "What is the right first step for a STEMI?",
+                    choices: [
+                        "Immediate reperfusion, preferably by primary PCI",
+                        "Wait for the troponin result before deciding",
+                        "Discharge with outpatient stress testing",
+                        "Start a rate-control drug",
+                    ],
+                    answer: 0,
+                    explanation: "In STEMI the diagnosis is made on the ECG and the clinical picture. Delay costs heart muscle, so the patient goes straight to primary PCI or, if that is not available in time, to fibrinolysis.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The pulse slows",
+            markdown: r#"
+While waiting for the catheter laboratory his **pulse drops to 42**, his blood pressure to 88/55 mmHg
+and he feels faint. The monitor shows P waves at 78 bpm and **narrow QRS complexes at about 45 bpm**
+with no fixed relation to the P waves. The ST elevation persists.
+
+(The simulator now blocks the AV node, on top of the inferior infarction.)
+"#,
+            actions: [
+                Sim(Block(region: AvNodeCompact, blocked: true)),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the rhythm?",
+                    choices: [
+                        "Complete AV block with a junctional escape rhythm",
+                        "Sinus bradycardia",
+                        "Ventricular tachycardia",
+                        "Atrial fibrillation",
+                    ],
+                    answer: 0,
+                    explanation: "The P waves and the narrow QRS complexes beat independently. A narrow escape at 40 to 60 bpm comes from the AV junction.",
+                ),
+                Question(
+                    prompt: "Why is AV block common in inferior infarction?",
+                    choices: [
+                        "The right coronary artery usually supplies the AV node, and vagal tone rises",
+                        "The left ventricle is too weak to conduct",
+                        "The atria become infarcted",
+                        "The sinus node is always destroyed",
+                    ],
+                    answer: 0,
+                    explanation: "The AV node artery usually comes from the right coronary artery, so the same occlusion that causes the infarct reduces the node's blood flow. A vagal reflex adds to the effect.",
+                ),
+                Question(
+                    prompt: "He is symptomatic and hypotensive. What is a reasonable first drug?",
+                    choices: [
+                        "Atropine, because the block is in the node and the escape is narrow",
+                        "Adenosine",
+                        "Verapamil",
+                        "Nothing: all drugs are contraindicated",
+                    ],
+                    answer: 0,
+                    explanation: "Block in the AV node, with a narrow junctional escape, often responds to atropine. If it does not, temporary pacing is used. Adenosine and verapamil would deepen the block.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "After the stent",
+            markdown: r#"
+Primary PCI opens the occluded right coronary artery within 70 minutes of arrival. In the simulator the
+**artery is reopened and the AV block recovers**. The ST segments come back towards the baseline.
+"#,
+            actions: [
+                Sim(Stenosis(branch: "all", severity: 0.0)),
+                Sim(Block(region: AvNodeCompact, blocked: false)),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What does the return of the ST segments towards the baseline suggest?",
+                    choices: [
+                        "Successful reperfusion of the infarct-related artery",
+                        "That the infarct never happened",
+                        "A new infarct in another territory",
+                        "Pericarditis",
+                    ],
+                    answer: 0,
+                    explanation: "ST resolution after PCI is a marker of reperfusion. It is not proof that no muscle was lost, but it is a good sign.",
+                ),
+                Question(
+                    prompt: "Will he probably need a permanent pacemaker for this AV block?",
+                    choices: [
+                        "Probably not: AV block of inferior infarction is usually transient",
+                        "Yes, always, before he leaves the hospital",
+                        "Yes, but only if the ST segments stay elevated",
+                        "Only if he is under 60",
+                    ],
+                    answer: 0,
+                    explanation: "AV block in an inferior infarction is usually nodal and recovers within days, especially after reperfusion. Permanent pacing is considered only if the block persists and is not caused by a reversible factor.",
+                ),
+            ],
+        ),
+    ],
+)

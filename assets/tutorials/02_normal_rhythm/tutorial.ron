@@ -1,0 +1,198 @@
+// heartsim tutorial: reading a normal rhythm strip. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "02_normal_rhythm",
+    title: "Normal rhythm",
+    summary: "A five-step routine for reading a rhythm strip: rate, regularity, P waves, PR interval and QRS width, with normal sinus rhythm, bradycardia, tachycardia and sinus arrhythmia.",
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 1-3, 13).",
+        "Kligfield P et al. Recommendations for the standardization and interpretation of the electrocardiogram, part I. Circulation 2007;115:1306-1324.",
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: sinus rhythm, sinus bradycardia, sinus tachycardia, sinus arrhythmia. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "Normal sinus rhythm",
+            markdown: r#"
+Every heartbeat should start in the **sinoatrial (SA) node**. When it does, the strip shows a
+fixed pattern, repeated again and again:
+
+1. a small rounded **P wave** (the atria contract),
+2. a short flat stretch while the impulse crosses the AV node,
+3. a narrow, tall **QRS complex** (the ventricles contract),
+4. a rounded **T wave** (the ventricles recover).
+
+A sinus P wave is **upright in leads I and II** and **inverted in aVR**, because the impulse
+travels from the SA node, at the top right of the atria, down and to the left.
+
+The simulator is running a healthy heart at 70 beats per minute. Watch the strip in lead II and
+name each wave as it passes.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(SetSpeed(1.0)),
+                Ui(Resume),
+            ],
+            check: Some(Question(
+                prompt: "Which wave is produced when the ventricles depolarise?",
+                choices: ["The P wave", "The QRS complex", "The T wave", "The PR interval"],
+                answer: 1,
+                explanation: "The QRS complex is ventricular depolarisation. The P wave is atrial depolarisation, the T wave is ventricular repolarisation, and the PR interval is a time, not a wave.",
+            )),
+        ),
+        Page(
+            title: "Step 1: the rate",
+            markdown: r#"
+The first question about any strip is *how fast?* Count the QRS complexes in a 6-second stretch
+and multiply by 10, or divide 300 by the number of large (5 mm) boxes between two R waves.
+
+The normal adult resting rate is **60 to 100 beats per minute**.
+
+The simulator first sets the sinus rate to **50 bpm** and, six seconds later, to **90 bpm**.
+Neither is abnormal: a slow normal rate is common in fit people, and a faster one after a coffee
+or a flight of stairs. Watch how the R–R distance changes while every beat keeps its shape.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Sim(SetGlobalSinusRate(bpm: 50.0)),
+                Ui(WaitForEvent(ElapsedMs(6000.0))),
+                Sim(SetGlobalSinusRate(bpm: 90.0)),
+            ],
+            check: Some(Question(
+                prompt: "The R waves are 4 large boxes (0.8 s) apart. What is the rate?",
+                choices: ["About 60 bpm", "About 75 bpm", "About 100 bpm", "About 150 bpm"],
+                answer: 1,
+                explanation: "300 divided by 4 large boxes is 75 beats per minute. Check: 0.8 s per beat means 60 / 0.8 = 75 beats in a minute.",
+            )),
+        ),
+        Page(
+            title: "A slow sinus rhythm",
+            markdown: r#"
+A sinus rhythm slower than **60 bpm** is **sinus bradycardia**. Everything else is normal: a P
+wave before every QRS, the same PR interval, a narrow QRS. Only the pauses between beats are
+longer.
+
+It is normal in athletes and during sleep, and it is caused by drugs such as beta-blockers,
+by an underactive thyroid, and by raised vagal tone. It matters when it causes symptoms such as
+dizziness or fainting.
+
+This scenario runs at 45 bpm. Find the P wave in front of every QRS.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_brady_45")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A fit 25-year-old marathon runner has a regular rhythm at 48 bpm, a P wave before every QRS and no symptoms. What is the best description?",
+                choices: [
+                    "Sinus bradycardia, a normal finding for an athlete",
+                    "Complete heart block",
+                    "Junctional escape rhythm",
+                    "Sinus arrest",
+                ],
+                answer: 0,
+                explanation: "A P wave before every QRS with a constant PR interval means every beat comes from the sinus node. At 48 bpm it is sinus bradycardia, which is normal when the person is fit and well.",
+            )),
+        ),
+        Page(
+            title: "A fast sinus rhythm",
+            markdown: r#"
+A sinus rhythm faster than **100 bpm** is **sinus tachycardia**. The beats still start in the SA
+node, so the P waves look the same; they just crowd closer to the preceding T wave.
+
+Sinus tachycardia is an *answer*, not a disease. Look for the question: fever, pain, anxiety,
+anaemia, blood loss, low oxygen, an overactive thyroid, a pulmonary embolism, or a stimulant.
+
+At rest an adult sinus rate rarely goes far above **150 bpm**. A rate stuck at exactly 150 should
+make you think of another rhythm, which later tutorials will show.
+
+Here the sinus rate is 130 bpm.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_tachy_130")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "What is the right first response to sinus tachycardia?",
+                choices: [
+                    "Look for and treat the cause",
+                    "Give a drug to slow the sinus node",
+                    "Deliver a shock",
+                    "Ignore it, it is always harmless",
+                ],
+                answer: 0,
+                explanation: "The sinus node is speeding up for a reason. Treating the fever, pain, bleeding or hypoxia settles the rate; slowing the rate directly can be harmful when the body needs the extra output.",
+            )),
+        ),
+        Page(
+            title: "Step 2: regularity",
+            markdown: r#"
+Next, are the R–R intervals even? In a healthy young person they are **not quite**: the sinus
+rate speeds up as you breathe in and slows as you breathe out. This is **respiratory sinus
+arrhythmia**, a sign of a healthy, well-regulated heart.
+
+How to tell it from a real arrhythmia:
+
+* the P waves all look the same,
+* the PR interval is constant,
+* the rate changes *gradually*, in step with breathing,
+* it fades with age and when the person holds their breath.
+
+The scenario shows the rate waxing and waning twelve times a minute.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_arrhythmia")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding makes an irregular rhythm a normal sinus arrhythmia?",
+                choices: [
+                    "Identical P waves and a gradual change of rate with breathing",
+                    "No P waves at all",
+                    "Wide QRS complexes appearing early",
+                    "A fixed 3:1 relationship between P waves and QRS",
+                ],
+                answer: 0,
+                explanation: "Identical P waves with a constant PR interval show a single sinus source. A gradual speeding and slowing with breathing is respiratory sinus arrhythmia. The other choices describe atrial fibrillation, ventricular ectopics and AV block.",
+            )),
+        ),
+        Page(
+            title: "Steps 3 to 5: P, PR and QRS",
+            markdown: r#"
+Three more checks complete the routine.
+
+* **P wave:** is there one before every QRS, and one QRS after every P?
+* **PR interval:** from the start of the P wave to the start of the QRS. Normal is
+  **0.12 to 0.20 s** (3 to 5 small boxes, 120 to 200 ms).
+* **QRS width:** normally **under about 0.10 to 0.11 s**. A QRS of **0.12 s or more** points to a
+  bundle-branch pattern, a ventricular beat, or pacing.
+
+The simulator is back at a normal 60 bpm. Open the 12-lead view and check that every beat passes
+all five tests.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Sim(SetGlobalSinusRate(bpm: 60.0)),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which strip passes all five tests: rate, regularity, P waves, PR interval, QRS width?",
+                choices: [
+                    "72 bpm, regular, a P before each QRS, PR 160 ms, QRS 90 ms",
+                    "72 bpm, regular, a P before each QRS, PR 280 ms, QRS 90 ms",
+                    "72 bpm, regular, no visible P waves, QRS 90 ms",
+                    "72 bpm, regular, a P before each QRS, PR 160 ms, QRS 150 ms",
+                ],
+                answer: 0,
+                explanation: "Only the first strip is normal. A PR of 280 ms is first-degree AV block, a missing P wave means the rhythm is not sinus, and a QRS of 150 ms is a wide-complex rhythm.",
+            )),
+        ),
+    ],
+)

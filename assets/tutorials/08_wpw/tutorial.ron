@@ -1,0 +1,169 @@
+// heartsim tutorial: Wolff-Parkinson-White pre-excitation. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "08_wpw",
+    title: "WPW and pre-excitation",
+    summary: "How an accessory pathway makes a short PR and a delta wave, how its position changes the delta wave, how it sustains AV re-entrant tachycardia, and what closing it does.",
+    references: [
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 14).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: Wolff-Parkinson-White syndrome, delta wave, accessory pathway localisation. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "A bridge around the AV node",
+            markdown: r#"
+In most hearts the only electrical connection between atria and ventricles is the AV node and
+His bundle. In some people there is a second, abnormal strand of muscle, an **accessory pathway**
+(a *bundle of Kent*), that bridges the gap.
+
+It conducts **without the AV node's delay**, so part of the ventricle starts to be activated early
+(**pre-excitation**). On the ECG this gives:
+
+* a **short PR interval** (under 0.12 s),
+* a **delta wave**: a slurred start of the QRS,
+* a **wide QRS**, because the early slow front fuses with the normal fast one.
+
+The simulator shows sinus rhythm with a left-sided pathway.
+"#,
+            actions: [
+                Ui(LoadScenario("wpw_left_lateral")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which three ECG findings define the WPW pattern?",
+                choices: [
+                    "Short PR, delta wave, wide QRS",
+                    "Long PR, dropped beats, narrow QRS",
+                    "Short PR, narrow QRS, inverted T waves",
+                    "Normal PR, rSR' in V1, wide QRS",
+                ],
+                answer: 0,
+                explanation: "Pre-excitation gives a short PR, a delta wave and a wide QRS. A long PR with dropped beats is AV block, and an rSR' in V1 with a normal PR is right bundle-branch block.",
+            )),
+        ),
+        Page(
+            title: "The delta wave has a direction",
+            markdown: r#"
+The delta wave points **away from the place where the ventricle is activated first**, so its shape
+tells you where the pathway enters.
+
+* **Left-sided** pathway: the delta wave is **positive in V1** (type A).
+* **Right-sided** pathway: the delta wave is **negative in V1**, with a pattern like a left
+  bundle-branch block (type B).
+
+This page shows a right-sided pathway. Compare V1 with the left-sided pathway of the previous
+page. Delta waves can also mimic **infarct Q waves**, which is a classical trap.
+"#,
+            actions: [
+                Ui(LoadScenario("wpw_right_type_b")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "A delta wave is negative in V1. Where is the pathway likely to be?",
+                choices: ["On the right side", "On the left side", "In the AV node", "In the sinus node"],
+                answer: 0,
+                explanation: "A right-sided pathway activates the right ventricle first, which sends the early forces away from V1 (a negative delta wave). A left-sided pathway gives a positive one.",
+            )),
+        ),
+        Page(
+            title: "Closing the bridge",
+            markdown: r#"
+The simulator shows the left-sided pathway for six seconds and then **blocks it**, as a successful
+**catheter ablation** would.
+
+Watch the PR interval **lengthen to normal**, the delta wave **vanish**, and the QRS **narrow**:
+every impulse now goes through the AV node and the normal fast conduction system.
+
+In real life the pathway is found by mapping with a catheter and destroyed with radiofrequency
+energy or cold (cryoablation). It cures most patients.
+"#,
+            actions: [
+                Ui(LoadScenario("wpw_left_lateral")),
+                Ui(FocusPanel(TwelveLead)),
+                Ui(WaitForEvent(ElapsedMs(6000.0))),
+                Sim(Block(region: AccessoryPathway, blocked: true)),
+            ],
+            check: Some(Question(
+                prompt: "What happens to the ECG when the pathway is ablated?",
+                choices: [
+                    "The PR lengthens, the delta wave disappears and the QRS narrows",
+                    "The PR shortens further",
+                    "The QRS widens",
+                    "Nothing changes",
+                ],
+                answer: 0,
+                explanation: "Without the bypass the ventricles are activated only through the AV node and Purkinje system. The PR returns to normal, there is no early slow front, and the QRS is narrow.",
+            )),
+        ),
+        Page(
+            title: "The pathway that starts a tachycardia",
+            markdown: r#"
+The danger of an accessory pathway is the **circuit** it makes with the AV node. After a premature
+atrial beat arrives at a moment when the pathway is still refractory, the impulse goes **down the AV
+node and back up the pathway**, and keeps circulating: **orthodromic AV re-entrant tachycardia
+(AVRT)**, at 150 to 250 bpm.
+
+During the tachycardia the ventricles are activated through the normal system, so the **QRS is
+narrow**. The loop is longer than in AVNRT, so the retrograde P wave comes later after the QRS.
+
+The pathway in this scenario is *concealed*: it conducts only backwards, so there is **no delta wave**
+and the ECG is normal between attacks. One premature atrial beat starts the tachycardia after about
+three seconds.
+"#,
+            actions: [
+                Ui(LoadScenario("avrt_orthodromic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Why is the QRS narrow during orthodromic AVRT?",
+                choices: [
+                    "The impulse goes down the normal conduction system",
+                    "The pathway is blocked in both directions",
+                    "The ventricles are not activated",
+                    "The heart rate is too fast to see the delta wave",
+                ],
+                answer: 0,
+                explanation: "In orthodromic AVRT the impulse goes down the AV node and His-Purkinje system and returns up the pathway. The ventricles are activated in the usual way, so the QRS is narrow.",
+            )),
+        ),
+        Page(
+            title: "Breaking the circuit",
+            markdown: r#"
+**Adenosine** blocks the AV node for a few seconds, which breaks the circuit of orthodromic AVRT.
+The simulator gives it eight seconds after the start, when the tachycardia is established. Watch
+the circuit stop and the sinus rhythm come back after a pause.
+
+The pathway is still there afterwards, so the tachycardia can return: this is why an ablation is
+offered to patients with repeated attacks.
+
+**Warning.** If a patient with a *manifest* pathway develops **atrial fibrillation**, the pathway can
+conduct the fast atrial rate directly to the ventricles. Drugs that block only the AV node
+(verapamil, diltiazem, digoxin, beta-blockers) can then make the ventricular rate faster and are
+avoided. The simulator has no pre-excited fibrillation to show this.
+"#,
+            actions: [
+                Ui(LoadScenario("avrt_orthodromic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Drug(name: "adenosine", dose: 1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Why can the tachycardia come back after adenosine has stopped it?",
+                choices: [
+                    "Adenosine breaks the circuit but the accessory pathway is still present",
+                    "Adenosine creates a new pathway",
+                    "The patient has become resistant to adenosine at once",
+                    "The AV node was destroyed",
+                ],
+                answer: 0,
+                explanation: "Adenosine acts on the AV node and does not affect the accessory pathway. The substrate remains, and the next premature beat can start the circuit again.",
+            )),
+        ),
+    ],
+)

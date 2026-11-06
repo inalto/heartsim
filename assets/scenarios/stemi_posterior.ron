@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "stemi_posterior",
+    title: "Posterior (inferolateral) ST-elevation myocardial infarction",
+    description: "Sinus rhythm at 78 bpm with an occluded posterolateral branch: ST depression in V1 to V3, the mirror image of the posterior wall, with ST elevation in the lateral limb leads.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("No standard lead faces the posterior wall. Its infarction shows as the mirror image in the leads that face the opposite way: horizontal ST depression in V1-V3 (greatest in V1 and V2). It usually accompanies an inferior or lateral infarct and is treated as a STEMI equivalent.\nConfirm with the posterior leads V7-V9, where ST elevation of at least 0.05 mV (0.1 mV in men under 40) is expected. Tall R waves and upright T waves in V1-V3 also occur in the established pattern; the preset shows only the ST depression.\nDifferential: anterior subendocardial ischaemia (ST depression, but not isolated to V1-V3), right ventricular hypertrophy, digoxin effect."),
+    confused_with: ["nstemi_subendocardial", "stemi_inferior", "stemi_lateral", "digoxin effect"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: posterior myocardial infarction, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "PL", severity: 0.9)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)

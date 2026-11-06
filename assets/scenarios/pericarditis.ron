@@ -1,0 +1,30 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "pericarditis",
+    title: "Acute pericarditis (diffuse ST elevation)",
+    description: "Sinus rhythm at 78 bpm with inflamed pericardium: ST elevation in most leads (I, II, aVF, V2 to V6) with ST depression in aVR, in no coronary territory.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Inflammation of the outer layer of both ventricles produces an injury current that is not limited to one coronary territory: the ST segment is raised in most leads (typically concave upward) and lowered in aVR. In pericarditis the PR segment is also depressed in many leads; this preset does not draw it.\nPointers away from STEMI: elevation in many leads that do not fit one artery, no reciprocal depression except in aVR (and sometimes V1), a concave shape, and sharp pleuritic chest pain that eases on sitting forward. If in doubt treat as an acute coronary syndrome until it is excluded.\nDiagnosis needs two of: pericarditic chest pain, a rub, the typical ECG changes, a new or worsening pericardial effusion.\nDifferential: STEMI, early repolarisation, myocarditis, Brugada pattern."),
+    confused_with: ["stemi_anterior", "stemi_inferior", "early repolarisation", "myocarditis"],
+    references: [
+        "Adler Y et al. 2015 ESC Guidelines for the diagnosis and management of pericardial diseases. Eur Heart J 2015;36:2921-2964.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: pericarditis, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "pericardium", severity: 1.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)

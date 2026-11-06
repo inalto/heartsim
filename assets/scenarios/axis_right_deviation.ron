@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "axis_right_deviation",
+    title: "Right axis deviation (isolated)",
+    description: "Sinus rhythm at 72 bpm with the frontal QRS axis rotated to about +130 degrees: lead I negative, lead aVF positive; the QRS stays narrow.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Right axis deviation is a frontal axis between +90 and +180 degrees: lead I is predominantly negative and aVF positive. Causes: right ventricular hypertrophy or overload (pulmonary embolism, pulmonary hypertension, chronic lung disease), left posterior fascicular block, lateral myocardial infarction, dextrocardia, and a normal tall thin build in the young.\nCheck for reversed arm electrodes before diagnosing: a negative P wave and QRS in lead I with a normal precordial progression is the typical sign.\nThis preset only rotates the heart's vector; see lpfb for the conduction cause."),
+    confused_with: ["lpfb", "bifascicular", "lbbb", "lateral myocardial infarction"],
+    references: [
+        "Mason JW et al. Recommendations for the standardization and interpretation of the electrocardiogram, part II. Circulation 2007;115:1325-1332.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: right axis deviation, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((95.0, 180.0)),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+    ),
+    morphology: MorphologyOverrides(axis_shift_deg: 70.0),
+)

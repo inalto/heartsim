@@ -1,0 +1,27 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "pvc_parasystole",
+    title: "Ventricular parasystole",
+    description: "A ventricular focus fires at a fixed 38 bpm protected from the sinus rhythm: PVCs with changing coupling intervals appear among normal beats.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A parasystolic focus has entrance block: the sinus impulses cannot reset it, so it discharges at its own fixed rate whenever the ventricle is excitable. The classical signs are PVCs with varying coupling intervals, interectopic intervals that are multiples of a common period (here about 1.58 s), and fusion beats.\nOrdinary PVCs have a fixed coupling interval to the preceding beat; changing coupling intervals are the clue. Parasystole is usually benign.\nDifferential: multifocal PVCs, a ventricular escape rhythm, AIVR."),
+    confused_with: ["pvc_bigeminy", "pvc_multifocal", "aivr", "idioventricular"],
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ventricular parasystole, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 120.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [Focus(region: LeftVentricle, mode: Automatic(rate_bpm: 38.0, entrance_block: true, exit_block_ratio: 0))],
+    ),
+)

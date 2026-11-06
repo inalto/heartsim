@@ -1,0 +1,30 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "avb_2nd_mobitz2_4to3",
+    title: "Second-degree AV block, Mobitz II (4:3) with LBBB",
+    description: "Sinus rhythm at 80 bpm; every fourth P wave is not conducted. The PR of the conducted beats is constant and the QRS shows left bundle-branch block.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In Mobitz II the PR interval is constant in all conducted beats and a QRS is dropped suddenly, without the progressive lengthening of Wenckebach. The block is usually below the AV node, so the QRS is wide (here left bundle-branch block). Here three of every four P waves are conducted.\nMobitz II can progress without warning to complete heart block, and an infranodal escape rhythm is slow and unreliable, so permanent pacing is usually recommended. Atropine is unlikely to help because the block is not under vagal control.\nDifferential: Mobitz I (PR lengthens before the drop), blocked PACs (the P wave is early), 2:1 block (cannot tell I from II without a longer strip)."),
+    confused_with: ["avb_2nd_mobitz1", "avb_2nd_mobitz2_3to1", "pac_blocked", "avb_3rd_ventricular"],
+    references: [
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Glikson M et al. 2021 ESC Guidelines on cardiac pacing and cardiac resynchronization therapy. Eur Heart J 2021;42:3427-3520.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: Mobitz type II AV block, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (45.0, 70.0),
+        pr_ms: Some((120.0, 220.0)),
+        qrs_ms: Some((120.0, 180.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+        av: AvParams(mobitz2_ratio: 4, mobitz2_conducted: 0),
+        his_purkinje: HisPurkinjeParams(lbb: BundleEdge(delay_ms: 10.0, blocked: true, block_above_rate_bpm: 0.0)),
+        escape: EscapeParams(junctional_bpm: 0.0, ventricular_bpm: 25.0),
+    ),
+)

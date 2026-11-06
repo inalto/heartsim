@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "pvc_couplets",
+    title: "Premature ventricular contractions in couplets",
+    description: "After every third sinus beat two PVCs follow each other: a couplet of wide beats, then a pause before the next sinus beat.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Two consecutive PVCs are a couplet; three or more make a run (non-sustained VT if faster than 100 bpm). Both ventricular beats are wide with no P wave and a T wave opposite to the main QRS direction, and the sinus rhythm resumes after a pause.\nCouplets are more frequent when the ventricle is irritable (ischaemia, cardiomyopathy, low potassium, stimulants). In a structurally normal heart they are usually benign, and the burden of ectopy over 24 h matters more than the pattern.\nDifferential: a PVC followed by an escape beat, two aberrantly conducted PACs, short NSVT."),
+    confused_with: ["pvc_bigeminy", "nsvt_runs", "pvc_multifocal"],
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: premature ventricular complexes, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 120.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 500.0, every_n_beats: 3, count: 2, run_cycle_ms: 450.0))],
+    ),
+)

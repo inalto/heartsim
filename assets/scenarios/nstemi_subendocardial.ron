@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "nstemi_subendocardial",
+    title: "Subendocardial ischaemia (diffuse ST depression)",
+    description: "Sinus rhythm at 78 bpm with a severe but incomplete coronary narrowing: ST depression in II, aVF and V3 to V6 with ST elevation in aVR.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("When a coronary narrowing is severe but flow is not completely blocked, or when demand outruns supply (fast rate, anaemia, low blood pressure), the inner layer of the ventricular wall is the first to suffer. The injury current then points away from the chest leads: ST depression in many leads, most in V4-V6 and II, with ST elevation in aVR.\nHorizontal or down-sloping ST depression of at least 0.05 mV in two contiguous leads is significant. The troponin decides between unstable angina and non-ST-elevation myocardial infarction; ST depression alone does not localise the artery.\nWidespread depression with ST elevation in aVR can point to left main or multivessel disease and deserves urgent assessment.\nDifferential: digoxin effect, hypokalaemia, left ventricular hypertrophy with strain, posterior infarction, rate-related changes."),
+    confused_with: ["stemi_posterior", "pericarditis", "digoxin effect", "left ventricular hypertrophy"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Rautaharju PM et al. Recommendations for the standardization and interpretation of the electrocardiogram, part IV: the ST segment, T and U waves, and the QT interval. Circulation 2009;119:e241-e250.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: myocardial ischaemia, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "global", severity: 0.6)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)
