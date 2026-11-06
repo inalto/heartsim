@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-05
+Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the
+WebAssembly build and the validation bridge to scientific solvers (briefs B17, B19, B21, B23).
+
 ### Added
 - WebAssembly build (brief B21): new `heartsim-web` crate builds the whole app for the browser with `trunk build --release`
   (WebGPU, falling back to WebGL2), with a loading screen, a canvas that fills the window and `localStorage` persistence
