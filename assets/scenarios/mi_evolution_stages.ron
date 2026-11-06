@@ -1,0 +1,38 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "mi_evolution_stages",
+    title: "Infarct stages in compressed time",
+    description: "One anterior infarct through its ECG stages, with hours and days compressed to seconds: ST elevation, then Q waves, then T inversion as the ST settles, then the old Q-wave pattern.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A timeline of the stages of an anterior infarct. Time is compressed for teaching: the real sequence takes hours to weeks and is not the same in every patient.\n0 s: acute occlusion, ST elevation only.\n5 s: Q waves appear in V1 to V4 while the ST segment stays up.\n10 s: the ST segment has nearly settled and the T waves invert.\n16 s: the T waves recover and the Q waves stay.\nThe 3-D heart gets the same lesion changes at the same times: acute injury first, then a silent core."),
+    confused_with: ["stemi_anterior", "mi_anterior_evolved", "mi_old_anterior", "stemi_evolving"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017 (ch. 8, 9).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: pathological Q waves, myocardial infarction evolution, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "LAD", severity: 1.0)),
+        TimedAction(at: 5000.0, action: Stenosis(branch: "LAD infarct", severity: 1.0)),
+        TimedAction(at: 10000.0, action: Stenosis(branch: "LAD", severity: 0.0)),
+        TimedAction(at: 10000.0, action: Stenosis(branch: "LAD infarct", severity: 0.0)),
+        TimedAction(at: 10000.0, action: Stenosis(branch: "LAD evolving", severity: 1.0)),
+        TimedAction(at: 16000.0, action: Stenosis(branch: "LAD evolving", severity: 0.0)),
+        TimedAction(at: 16000.0, action: Stenosis(branch: "LAD infarct", severity: 1.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+    ),
+)

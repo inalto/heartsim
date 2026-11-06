@@ -22,13 +22,14 @@ pub mod dsp;
 pub mod heart_vector;
 pub mod marks;
 pub mod qrs;
+pub mod rhythm;
 
 use crate::axis_est;
 use crate::leadvec::LeadVectors;
 use crate::ring::LeadRing;
 use glam::DVec3;
 pub use heart_vector::HeartVectorSolver;
-use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead};
+use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead, RhythmKind};
 pub use marks::{WaveKind, WaveMark};
 
 /// Onset, extremum and offset of one P or T wave, as sample indices in the analysed window.
@@ -154,6 +155,14 @@ pub struct Analysis {
     pub heart_vector: Vec<DVec3>,
     /// Window index of the first `heart_vector` sample.
     pub heart_vector_start: usize,
+    /// The rhythm, for the few the waveform alone names (see [`rhythm`]); `None` otherwise.
+    pub rhythm: Option<RhythmKind>,
+    /// Atrial rate of flutter, per minute.
+    pub atrial_rate_bpm: Option<f64>,
+    /// Fixed AV ratio of flutter (2 = 2:1); `None` when the block varies or for other rhythms.
+    pub av_ratio: Option<u32>,
+    /// Dominant frequency of a polymorphic or fibrillating ventricular rhythm, Hz.
+    pub dominant_frequency_hz: Option<f64>,
 }
 
 impl Analysis {
@@ -184,6 +193,10 @@ impl Analysis {
             marks: Vec::new(),
             heart_vector: Vec::new(),
             heart_vector_start: 0,
+            rhythm: None,
+            atrial_rate_bpm: None,
+            av_ratio: None,
+            dominant_frequency_hz: None,
         }
     }
 }
@@ -284,7 +297,26 @@ impl Analyzer {
                 .map_or(1, |(i, _)| i)
         };
         let ref_lead = Lead::ALL[ref_idx];
-        let det = qrs::detect(&raw[ref_idx], fs);
+
+        // Polymorphic and fibrillating rhythms have no stable complex to delineate.
+        if let Some(v) = rhythm::ventricular_chaos(&raw, fs) {
+            let quality = if v.rhythm == RhythmKind::VentricularFibrillation {
+                SignalQuality::NoQrs
+            } else {
+                SignalQuality::Good
+            };
+            let mut a = Analysis::empty(fs, n, quality, ref_lead);
+            a.rhythm = Some(v.rhythm);
+            a.dominant_frequency_hz = Some(v.dominant_hz);
+            if v.rhythm != RhythmKind::VentricularFibrillation {
+                a.hr_bpm = Some(v.rate_bpm);
+                a.rr_ms = Some(60_000.0 / v.rate_bpm);
+                a.regularity = v.regularity;
+            }
+            return a;
+        }
+
+        let mut det = qrs::detect(&raw[ref_idx], fs);
         if det.peaks.is_empty() {
             let q = if emax * fs * fs < 1e-4 {
                 SignalQuality::NoSignal
@@ -292,6 +324,12 @@ impl Analyzer {
                 SignalQuality::NoQrs
             };
             return Analysis::empty(fs, n, q, ref_lead);
+        }
+        // One lead's energy threshold can hide a run of broad beats behind a few narrow, much
+        // steeper ones: pre-excited AF is such a mixture. All 12 leads together still see them.
+        let deflections = rhythm::deflections(&raw, fs);
+        if deflections.len() >= rhythm::MIN_DEFLECTIONS && det.peaks.len() * 5 < deflections.len() {
+            det.peaks = qrs::refine_peaks(&raw[ref_idx], &deflections, fs);
         }
 
         // 3. Spatial signals.
@@ -354,7 +392,7 @@ impl Analyzer {
             .collect();
 
         // 4. Delineation.
-        let mut beats = self.delineate_qrs(&det.peaks, &vel, noise_v, fs, n);
+        let mut beats = self.delineate_qrs(&det.peaks, &vel, noise_v, 0.0, fs, n);
         self.delineate_t(&mut beats, &mag_sm, noise_m, fs, n);
         self.delineate_p(&mut beats, &mag_sm, noise_m, fs);
 
@@ -378,13 +416,38 @@ impl Analyzer {
                 Regularity::Regular
             };
         }
-        let measured = &beats[beats.len().saturating_sub(k)..];
-        a.qrs_ms = median_f64(
-            &mut measured
-                .iter()
-                .map(|b| ms(b.qrs_offset - b.qrs_onset, fs))
-                .collect::<Vec<_>>(),
-        );
+        let qrs_of = |beats: &[Beat]| {
+            median_f64(
+                &mut beats[beats.len().saturating_sub(k)..]
+                    .iter()
+                    .map(|b| ms(b.qrs_offset - b.qrs_onset, fs))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        // The atria first: flutter and f waves are not P waves, and the QRS has to be told from
+        // them, not from a flat line.
+        let found = rhythm::atrial_activity(&raw, &beats, fs, a.regularity, a.hr_bpm);
+        if found.is_some() || a.regularity == Regularity::Irregular {
+            let floor = rhythm::baseline_velocity(&vel, &beats, fs);
+            let mut remeasured = self.delineate_qrs(&det.peaks, &vel, noise_v, floor, fs, n);
+            let excited = rhythm::pre_excited(a.regularity, a.hr_bpm, qrs_of(&remeasured));
+            if let Some(f) = excited.or(found) {
+                self.delineate_t(&mut remeasured, &mag_sm, noise_m, fs, n);
+                beats = remeasured;
+                a.rhythm = Some(f.rhythm);
+                a.atrial_rate_bpm = f.atrial_rate_bpm;
+                a.av_ratio = f.av_ratio;
+                // Flutter waves leave no T end to find.
+                if f.rhythm == RhythmKind::AtrialFlutter {
+                    for b in &mut beats {
+                        b.t = None;
+                    }
+                }
+            }
+        }
+        let measured_from = beats.len().saturating_sub(k);
+        let measured = &beats[measured_from..];
+        a.qrs_ms = qrs_of(&beats);
         let with_p: Vec<&Beat> = measured.iter().filter(|b| b.p.is_some()).collect();
         a.p_wave_present = !measured.is_empty() && with_p.len() * 5 >= measured.len() * 3;
         if a.p_wave_present {
@@ -440,7 +503,7 @@ impl Analyzer {
     /// QRS onset/offset from the spatial velocity: walk outwards from the R peak until the
     /// velocity stays below the threshold for 12 ms.
     #[allow(clippy::cast_possible_wrap)]
-    fn delineate_qrs(&self, peaks: &[usize], vel: &[f32], noise_v: f32, fs: f32, n: usize) -> Vec<Beat> {
+    fn delineate_qrs(&self, peaks: &[usize], vel: &[f32], noise_v: f32, floor: f32, fs: f32, n: usize) -> Vec<Beat> {
         let hold = samples_of(12.0, fs).max(1);
         let core = samples_of(60.0, fs);
         let reach_l = samples_of(150.0, fs);
@@ -457,8 +520,8 @@ impl Analyzer {
             let lo_core = r.saturating_sub(core);
             let hi_core = (r + core).min(n - 1);
             let smax = vel[lo_core..=hi_core].iter().copied().fold(0.0_f32, f32::max);
-            let thr = (self.config.qrs_slope_fraction * smax).max(0.4 * noise_v);
-            let tail_thr = (self.config.qrs_tail_fraction * smax).max(0.4 * noise_v);
+            let thr = (self.config.qrs_slope_fraction * smax).max(0.4 * noise_v).max(floor);
+            let tail_thr = (self.config.qrs_tail_fraction * smax).max(0.4 * noise_v).max(floor);
             let in_range = |i: i64, dir: i64, limit: usize| {
                 i >= 0
                     && (i as usize) < n

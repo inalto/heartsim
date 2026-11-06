@@ -20,6 +20,7 @@ Flutter, scar-related VT, torsades de pointes and VF presets are **not in this r
 as tissue models, but none of the induction protocols tried (programmed stimulation, burst pacing, cross-field stimulation,
 a pre-seeded rotating wave) produced a rotor that survives in the heart-shaped model, so they would not do what their names say.
 The tools for building them — tissue patches, cross-field and pre-seeded-wave initiation, ablation lines — are in place.
+The ordinary [rhythm library](scenarios.md) draws those rhythms at the timing level instead, with no tissue model behind them.
 
 ## What you can do to it
 

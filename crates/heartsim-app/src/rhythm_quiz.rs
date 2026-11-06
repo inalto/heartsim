@@ -307,7 +307,7 @@ mod tests {
         let mut rng = 7;
         let mut prev = None;
         let mut answers = std::collections::BTreeSet::new();
-        for _ in 0..500 {
+        for _ in 0..2000 {
             let q = make_question(&lib, &mut rng, prev).unwrap();
             assert_eq!(q.options.len(), OPTIONS);
             assert!(q.options.contains(&q.answer));
@@ -320,6 +320,29 @@ mod tests {
             answers.insert(q.answer);
         }
         assert_eq!(answers.len(), lib.len(), "every rhythm gets asked");
+    }
+
+    #[test]
+    fn the_arrhythmias_with_their_own_wave_types_can_be_asked() {
+        let lib = library();
+        for id in [
+            "flutter_2to1",
+            "flutter_4to1",
+            "flutter_variable",
+            "atrial_fibrillation",
+            "af_preexcited",
+            "vf_coarse",
+            "vf_fine",
+            "torsades",
+            "polymorphic_vt",
+            "mi_anterior_evolved",
+            "mi_inferior_evolved",
+            "mi_lateral_evolved",
+        ] {
+            let i = lib.index_of(id).unwrap_or_else(|| panic!("{id} is not in the library"));
+            let rec = lib.entries[i].record(RECORD_S).unwrap_or_else(|e| panic!("{id}: {e}"));
+            assert_eq!(rec.leads.len(), LEAD_COUNT);
+        }
     }
 
     #[test]

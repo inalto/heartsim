@@ -7,14 +7,34 @@
 //! same beat), pre-excited, ectopic or paced QRS–T. Scenario files tune the shapes through
 //! [`MorphologyOverrides`]; drugs, electrolytes and coronary lesions of the timing engine reach
 //! every new beat through [`SynthModulation`] (brief B14).
+//!
+//! **Sustained arrhythmias.** A cycle of the timing engine's atrial or ventricular driver
+//! (`Origin::Circuit`) spawns one wave, so the strip follows the engine event by event:
+//!
+//! * flutter: a sawtooth, negative in II, III and aVF and positive in V1 (counter-clockwise
+//!   cavotricuspid flutter);
+//! * atrial fibrillation: a small biphasic f wave of varying size and direction;
+//! * ventricular fibrillation: a biphasic deflection in a random direction, no QRS or T wave;
+//! * torsades de pointes: a large wide deflection whose direction turns a little with every beat,
+//!   so a lead sees the complexes shrink, flip and grow again;
+//! * polymorphic VT: the same deflection in a new random direction every beat.
+//!
+//! The biphasic waves have no net area, so a train of them keeps the baseline where it was. Their
+//! randomness is a pure function of the event's time ([`event_noise`]), and that time comes from
+//! the seeded engine, so a scenario and its seed fix the strip.
+//!
+//! **Infarction.** A necrotic lesion adds three per-lead waves to each conducted beat: a Q wave,
+//! the loss of R, and the inversion of T, in the leads over the territory
+//! (`heartsim_sim::ischaemia::InfarctPattern`).
 
 use crate::leadvec::LeadVectors;
 use glam::DVec3;
 use heartsim_core::{FrontalAxis, LEAD_COUNT, Lead, Millis, Region, TwelveLead};
-use heartsim_sim::ischaemia::IschaemiaState;
+use heartsim_sim::defib::ShockRng;
+use heartsim_sim::ischaemia::{InfarctForces, IschaemiaState};
 use heartsim_sim::pharma::DrugEffects;
 use heartsim_sim::timing::{MarkerKind, PacerMarker};
-use heartsim_sim::{Event, EventKind, Origin};
+use heartsim_sim::{Circuit, Event, EventKind, Origin};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -146,6 +166,22 @@ pub enum Template {
     /// narrower than RV pacing, with a dominant R in V1 and a negative lead I (right-superior
     /// axis); T discordant (Barold & Herweg, *Cardiol J* 2011;18:610–628).
     Biventricular,
+    /// One turn of a typical atrial-flutter circuit: the slow descending ramp and steep rise of
+    /// the sawtooth in II, III and aVF, with no isoelectric segment between waves. Zero net area,
+    /// so a run of them does not shift the baseline.
+    FlutterWave,
+    /// One fibrillatory atrial wavelet: a low biphasic deflection (f wave) in place of a P wave.
+    FibrillatoryWave,
+    /// One ventricular fibrillation wavelet: a biphasic deflection with no QRS and no T; each
+    /// event varies in size and axis, so the strip has no repeating complex.
+    VfWave,
+    /// One beat of a polymorphic ventricular tachycardia or of torsades: a broad biphasic complex
+    /// whose T is merged into the next beat. The event sets its size and axis.
+    PolymorphicBeat,
+    /// Fully pre-excited QRS–T of a left-sided accessory pathway: delta, broad R, discordant T.
+    PreexcitedLv,
+    /// Fully pre-excited QRS–T of a right-sided accessory pathway: delta, broad R, discordant T.
+    PreexcitedRv,
 }
 
 /// Rotation of the QRS forces in left anterior fascicular block, degrees: the unopposed
@@ -208,6 +244,40 @@ pub fn template_waves(t: Template) -> Vec<WaveSpec> {
             wave("R2", 0.8, 12.0, 72.0, -110.0, 0.6),
             wave("T", -0.4, 55.0, 320.0, -130.0, 0.6),
         ],
+        // Direction: superior and anterior, so II, III and aVF see it inverted and V1 upright.
+        // The three components have no net area (a train of them has a level baseline) and start
+        // ≥ 3 σ after their event, so a new wave enters without a step.
+        Template::FlutterWave => vec![
+            wave("F", 0.17, 34.0, 110.0, -90.0, 0.9),
+            wave("F2", 0.07, 12.0, 160.0, -90.0, 0.9),
+            wave("F3", -0.2546, 26.0, 200.0, -90.0, 0.9),
+        ],
+        // Coarse by default: over 0.1 mV in V1, the usual dividing line. The event picks the direction.
+        Template::FibrillatoryWave => vec![
+            wave("f", 0.11, 20.0, 65.0, 40.0, 0.9),
+            wave("f2", -0.11, 20.0, 125.0, 40.0, 0.9),
+        ],
+        // Coarse by default: over 0.2 mV peak to peak (Weaver et al. 1985). The event picks the
+        // direction and scales the size.
+        Template::VfWave => vec![
+            wave("VF", 0.4, 24.0, 75.0, 60.0, 0.0),
+            wave("VF2", -0.4, 24.0, 150.0, 60.0, 0.0),
+        ],
+        // Wide and large; the two lobes are QRS and T together, as they are at this rate.
+        Template::PolymorphicBeat => vec![
+            wave("R", 1.3, 34.0, 105.0, 60.0, 0.25),
+            wave("R2", -1.3, 34.0, 210.0, 60.0, 0.25),
+        ],
+        Template::PreexcitedLv => vec![
+            wave("D", 0.8, 22.0, 48.0, 110.0, 0.7),
+            wave("R", 1.3, 28.0, 115.0, 110.0, 0.7),
+            wave("T", -0.35, 50.0, 320.0, 110.0, 0.7),
+        ],
+        Template::PreexcitedRv => vec![
+            wave("D", 0.8, 22.0, 48.0, -10.0, -0.6),
+            wave("R", 1.3, 28.0, 115.0, -10.0, -0.6),
+            wave("T", -0.35, 50.0, 320.0, -10.0, -0.6),
+        ],
     }
 }
 
@@ -217,7 +287,12 @@ impl Template {
     pub fn is_ventricular(self) -> bool {
         !matches!(
             self,
-            Template::SinusP | Template::EctopicP | Template::RetrogradeP | Template::Spike
+            Template::SinusP
+                | Template::EctopicP
+                | Template::RetrogradeP
+                | Template::Spike
+                | Template::FlutterWave
+                | Template::FibrillatoryWave
         )
     }
 }
@@ -308,6 +383,8 @@ pub struct SynthModulation {
     /// ST injury vector (heart frame, mV): ST deviation from J to T in every lead is its
     /// projection.
     pub st_vector_mv: DVec3,
+    /// Necrotic lesions in effect: Q waves, loss of R and T inversion of conducted beats.
+    pub infarct: InfarctForces,
 }
 
 impl Default for SynthModulation {
@@ -328,6 +405,12 @@ impl SynthModulation {
         st_scoop_mv: 0.0,
         u_wave_mv: 0.0,
         st_vector_mv: DVec3::ZERO,
+        infarct: InfarctForces {
+            q_limb: [0.0; 2],
+            q_precordial: [0.0; 6],
+            t_limb: [0.0; 2],
+            t_precordial: [0.0; 6],
+        },
     };
 
     /// The morphology of a drug effect and a set of coronary lesions (research §3.5 table).
@@ -345,6 +428,7 @@ impl SynthModulation {
             st_scoop_mv: 0.12 * drug.plateau_sag,
             u_wave_mv: 0.15 * drug.u_wave,
             st_vector_mv: DVec3::new(st[0], st[1], st[2]),
+            infarct: ischaemia.infarct_forces(),
         }
     }
 }
@@ -363,6 +447,49 @@ fn wave_direction(v: DVec3) -> (f64, f64) {
 struct ActiveWave {
     spec: WaveSpec,
     t0: Millis,
+}
+
+/// A Gaussian with its own gain per lead: what a regional lesion adds to a beat. The limb gains
+/// come from a frontal vector, so Einthoven's law holds; the precordial leads are near-field and
+/// carry a weight each.
+#[derive(Debug, Clone, Copy)]
+struct LeadWave {
+    t0: Millis,
+    offset_ms: f64,
+    width_ms: f64,
+    gains: [f64; LEAD_COUNT],
+}
+
+/// Depth of a pathological Q wave at full weight, mV, and its timing. σ 14 ms at 24 ms makes the
+/// initial negative deflection last over 40 ms where the R is lost with it, so the criteria of
+/// Thygesen et al. 2018 (≥ 20 ms in V2–V3; ≥ 30 ms and ≥ 0.1 mV elsewhere) are met.
+const INFARCT_Q_MV: f64 = 0.45;
+const INFARCT_Q_WIDTH_MS: f64 = 14.0;
+const INFARCT_Q_OFFSET_MS: f64 = 24.0;
+/// Fraction of the R wave lost in a lead that faces the infarct (Q or QS pattern).
+const INFARCT_R_LOSS: f64 = 0.9;
+/// R wave gained in a lead that sees the infarct from behind (posterior infarct in V1–V3), mV.
+const INFARCT_TALL_R_MV: f64 = 0.5;
+/// Depth of an inverted T wave at full weight, mV, and how much narrower than the T it replaces
+/// (the symmetric "coronary" T).
+const INFARCT_T_MV: f64 = 0.4;
+const INFARCT_T_WIDTH_SCALE: f64 = 0.8;
+/// How long ago the last torsades beat must be for a new episode to restart the twist, ms.
+const TWIST_RESTART_MS: f64 = 1500.0;
+/// Frontal angle a torsades episode starts from, degrees.
+const TWIST_START_DEG: f64 = 60.0;
+/// Mean turn of the QRS vector per torsades beat, degrees: half a turn, and so one polarity run in
+/// a lead, in about 10 beats (reported range 5–20 beats; see `docs/research/tier0-rhythm-criteria.md`).
+const TWIST_STEP_DEG: f64 = 18.0;
+/// An AP beat within this time of an atrial circuit event is pre-excited AF: the pathway activates
+/// the ventricles alone (fully pre-excited QRS), ms.
+const PREEXCITED_AF_WINDOW_MS: f64 = 500.0;
+
+/// Random numbers in `[0, 1)` tied to one event: the same event always draws the same wave. Only
+/// IEEE arithmetic on the time's bits, so it is the same on every platform.
+fn event_noise<const N: usize>(at_ms: f64) -> [f64; N] {
+    let mut rng = ShockRng::new(at_ms.to_bits());
+    std::array::from_fn(|_| rng.next_f64())
 }
 
 /// Bundle-branch block events seen since the last His activation (bit set).
@@ -404,6 +531,16 @@ pub struct GaussianSynth {
     last_paced_v: Option<(Millis, u8)>,
     /// Time of the last captured ventricular pace, ms.
     last_pace_ms: Option<f64>,
+    /// Per-lead waves in flight.
+    active_lead: Vec<LeadWave>,
+    /// Time of the last atrial-driver cycle, ms.
+    last_atrial_circuit_ms: Option<f64>,
+    /// Time of the last fully pre-excited beat, ms.
+    last_preexcited_ms: Option<f64>,
+    /// Frontal angle of the QRS vector in torsades, degrees.
+    twist_deg: f64,
+    /// Time of the last torsades beat, ms.
+    last_twist_ms: Option<f64>,
 }
 
 impl GaussianSynth {
@@ -421,6 +558,12 @@ impl GaussianSynth {
             Template::EctopicRv,
             Template::Spike,
             Template::Biventricular,
+            Template::FlutterWave,
+            Template::FibrillatoryWave,
+            Template::VfWave,
+            Template::PolymorphicBeat,
+            Template::PreexcitedLv,
+            Template::PreexcitedRv,
         ]
         .into_iter()
         .map(|t| (t, template_waves(t)))
@@ -440,6 +583,11 @@ impl GaussianSynth {
             last_rr_ms: None,
             last_paced_v: None,
             last_pace_ms: None,
+            active_lead: Vec::new(),
+            last_atrial_circuit_ms: None,
+            last_preexcited_ms: None,
+            twist_deg: TWIST_START_DEG,
+            last_twist_ms: None,
         }
     }
 
@@ -515,6 +663,10 @@ impl GaussianSynth {
             match ev.region {
                 Region::HisBundle => self.branch_blocks = 0,
                 r if r.is_atrial() => {
+                    if let Origin::Circuit(c) = ev.origin {
+                        self.on_atrial_circuit(c, ev);
+                        continue;
+                    }
                     let t = match (ev.kind, ev.origin) {
                         (EventKind::Automatic, Origin::Sinus) => Template::SinusP,
                         (EventKind::Automatic, _) => Template::EctopicP,
@@ -534,7 +686,88 @@ impl GaussianSynth {
         }
     }
 
+    /// One cycle of the atrial driver.
+    fn on_atrial_circuit(&mut self, c: Circuit, ev: &Event) {
+        self.last_atrial_circuit_ms = Some(ev.at.0);
+        match c {
+            Circuit::AtrialFibrillation => {
+                // Mostly along the mean f-wave direction (best seen in V1 and II), varying in size.
+                let [size, axis, anterior] = event_noise::<3>(ev.at.0);
+                self.spawn_circuit(
+                    Template::FibrillatoryWave,
+                    ev.at,
+                    0.6 + 0.8 * size,
+                    40.0 + 120.0 * (axis - 0.5),
+                    0.9 + anterior - 0.5,
+                );
+            }
+            _ => self.spawn(Template::FlutterWave, ev.at, 0.0, 1.0),
+        }
+    }
+
+    /// One cycle of the ventricular driver.
+    fn on_ventricular_circuit(&mut self, c: Circuit, ev: &Event) {
+        let t = ev.at.0;
+        self.last_rr_ms = self.last_beat_ms.map(|l| t - l);
+        self.last_beat_ms = Some(t);
+        self.branch_blocks = 0;
+        let [a, b, size] = event_noise::<3>(t);
+        match c {
+            Circuit::Torsades => {
+                if self.last_twist_ms.is_none_or(|l| t - l > TWIST_RESTART_MS) {
+                    self.twist_deg = TWIST_START_DEG;
+                }
+                self.last_twist_ms = Some(t);
+                self.twist_deg += TWIST_STEP_DEG * (0.7 + 0.6 * a);
+                let axis = self.twist_deg;
+                self.spawn_circuit(Template::PolymorphicBeat, ev.at, 0.85 + 0.3 * size, axis, 0.25);
+            }
+            Circuit::PolymorphicVt => {
+                self.spawn_circuit(
+                    Template::PolymorphicBeat,
+                    ev.at,
+                    0.7 + 0.6 * size,
+                    360.0 * a,
+                    2.0 * b - 1.0,
+                );
+            }
+            _ => {
+                // Slowly waxing and waning size on top of the wave-to-wave variation.
+                let envelope = 0.85 + 0.3 * (t / 1900.0 * std::f64::consts::TAU).sin();
+                self.spawn_circuit(
+                    Template::VfWave,
+                    ev.at,
+                    envelope * (0.6 + 0.8 * size),
+                    360.0 * a,
+                    2.0 * b - 1.0,
+                );
+            }
+        }
+    }
+
+    /// Spawn every wave of `tpl` with its size scaled and its direction replaced.
+    fn spawn_circuit(&mut self, tpl: Template, t0: Millis, size: f64, axis_deg: f64, anterior: f64) {
+        let specs = self.waves(tpl).to_vec();
+        for w in specs {
+            self.active.push(ActiveWave {
+                spec: WaveSpec {
+                    amplitude: w.amplitude * size,
+                    axis_deg,
+                    anterior,
+                    ..w
+                },
+                t0,
+            });
+        }
+    }
+
     fn on_ventricular(&mut self, ev: &Event) {
+        if let Origin::Circuit(c) = ev.origin
+            && c.is_ventricular()
+        {
+            self.on_ventricular_circuit(c, ev);
+            return;
+        }
         let t = ev.at.0;
         match self.last_beat_ms {
             Some(last) if t - last < SAME_BEAT_MS => {}
@@ -549,6 +782,32 @@ impl GaussianSynth {
             Template::EctopicLv
         };
         match (ev.kind, ev.origin) {
+            // Pre-excited AF: nothing to fuse with on most beats, so the pathway's front is the
+            // whole QRS. A front arriving just after an earlier one of the same beat adds nothing.
+            (EventKind::Conducted, Origin::AccessoryPathway)
+                if self
+                    .last_atrial_circuit_ms
+                    .is_some_and(|a| t - a < PREEXCITED_AF_WINDOW_MS) =>
+            {
+                let same_beat = self.beat_started_before(t);
+                self.branch_blocks = 0;
+                if !same_beat {
+                    self.last_preexcited_ms = Some(t);
+                    let tpl = if ev.region == Region::RightVentricle {
+                        Template::PreexcitedRv
+                    } else {
+                        Template::PreexcitedLv
+                    };
+                    self.spawn(tpl, ev.at, 0.0, 1.0);
+                }
+            }
+            (EventKind::Conducted, _)
+                if self
+                    .last_preexcited_ms
+                    .is_some_and(|p| (0.0..SAME_BEAT_MS).contains(&(t - p))) =>
+            {
+                self.branch_blocks = 0;
+            }
             (EventKind::Conducted, Origin::AccessoryPathway) => {
                 let d = if ev.region == Region::RightVentricle {
                     Template::DeltaRv
@@ -612,6 +871,12 @@ impl GaussianSynth {
             }
             _ => self.spawn(ectopic, ev.at, 0.0, 1.0),
         }
+    }
+
+    /// `true` when the beat at `t` already began before `t` (`on_ventricular` has recorded when
+    /// the current beat started), so the event is a later front of the same beat.
+    fn beat_started_before(&self, t: f64) -> bool {
+        self.last_beat_ms.is_some_and(|b| b < t)
     }
 
     /// Feed the pacemaker marker channel: a stimulus that did not capture still leaves its
@@ -703,7 +968,90 @@ impl GaussianSynth {
                 new.push(ActiveWave { spec, t0 });
             }
         }
+        if matches!(tpl, Template::Normal | Template::Rbbb) && !m.infarct.is_none() {
+            self.spawn_infarct(&new, t0, scale);
+        }
         self.active.extend(new);
+    }
+
+    /// The Q wave, loss of R and T inversion a necrotic lesion adds to one conducted beat, from
+    /// the beat's own R and T waves: each lead loses what it had.
+    fn spawn_infarct(&mut self, beat: &[ActiveWave], t0: Millis, qrs_scale: f64) {
+        let forces = self.modulation.infarct;
+        let vector = |name: &str| {
+            beat.iter()
+                .find(|w| w.spec.name == name)
+                .map(|w| w.spec)
+        };
+        // Sum over the leads of `gain · (frontal part along v) + weight · (precordial part)`.
+        let gains = |limb: [f64; 2], limb_along: &dyn Fn(DVec3) -> f64, precordial: &dyn Fn(usize) -> f64| {
+            let v = DVec3::new(limb[0], limb[1], 0.0);
+            let length = v.length();
+            let along = if length > 0.0 { limb_along(v / length) } else { 0.0 };
+            let mut out = [0.0; LEAD_COUNT];
+            for (i, g) in out.iter_mut().enumerate() {
+                *g = if i < 6 {
+                    self.leads.vectors[i].dot(v) * along
+                } else {
+                    precordial(i - 6)
+                };
+            }
+            out
+        };
+        let q = gains(forces.q_limb, &|_| -INFARCT_Q_MV, &|i| {
+            -INFARCT_Q_MV * forces.q_precordial[i]
+        });
+        let mut waves = vec![LeadWave {
+            t0,
+            offset_ms: INFARCT_Q_OFFSET_MS * qrs_scale,
+            width_ms: INFARCT_Q_WIDTH_MS * qrs_scale,
+            gains: q,
+        }];
+        if let Some(r) = vector("R") {
+            let r_vec = r.direction() * r.amplitude;
+            let r_leads = self.leads.project(r_vec);
+            let g = gains(
+                forces.q_limb,
+                &|u| -INFARCT_R_LOSS * r_vec.dot(u).max(0.0),
+                &|i| {
+                    let w = forces.q_precordial[i];
+                    if w >= 0.0 {
+                        -INFARCT_R_LOSS * w * r_leads[i + 6]
+                    } else {
+                        -w * INFARCT_TALL_R_MV
+                    }
+                },
+            );
+            waves.push(LeadWave {
+                t0,
+                offset_ms: r.offset_ms,
+                width_ms: r.width_ms,
+                gains: g,
+            });
+        }
+        if let Some(t) = vector("T") {
+            let t_vec = t.direction() * t.amplitude;
+            let t_leads = self.leads.project(t_vec);
+            let g = gains(
+                forces.t_limb,
+                &|u| -(t_vec.dot(u).max(0.0) + INFARCT_T_MV),
+                &|i| {
+                    let w = forces.t_precordial[i];
+                    if w >= 0.0 {
+                        -w * (t_leads[i + 6].max(0.0) + INFARCT_T_MV)
+                    } else {
+                        -w * 0.5 * INFARCT_T_MV
+                    }
+                },
+            );
+            waves.push(LeadWave {
+                t0,
+                offset_ms: t.offset_ms,
+                width_ms: t.width_ms * INFARCT_T_WIDTH_SCALE,
+                gains: g,
+            });
+        }
+        self.active_lead.extend(waves);
     }
 
     /// Sample the 12 leads at time `t` and drop finished waves.
@@ -721,7 +1069,21 @@ impl GaussianSynth {
             }
             true
         });
-        TwelveLead(self.leads.project(dipole))
+        let mut leads = self.leads.project(dipole);
+        self.active_lead.retain(|w| {
+            let dt = t.0 - w.t0.0 - w.offset_ms;
+            if dt > 5.0 * w.width_ms {
+                return false;
+            }
+            if dt > -5.0 * w.width_ms {
+                let g = (-(dt * dt) / (2.0 * w.width_ms * w.width_ms)).exp();
+                for (lead, gain) in leads.iter_mut().zip(w.gains) {
+                    *lead += gain * g;
+                }
+            }
+            true
+        });
+        TwelveLead(leads)
     }
 
     /// Mean frontal QRS axis implied by the configured waves, degrees on the hexaxial circle.
@@ -768,7 +1130,45 @@ const _: () = assert!(LEAD_COUNT == 12);
 mod tests {
     use super::*;
     use heartsim_core::{FrontalAxis, SimClock};
+    use heartsim_sim::timing::{AtrialDriver, AtrialDriverKind};
     use heartsim_sim::{Engine, TimingEngine, TimingParams};
+
+    #[test]
+    fn a_train_of_flutter_waves_keeps_the_baseline_level() {
+        let area: f64 = template_waves(Template::FlutterWave)
+            .iter()
+            .map(|w| w.amplitude * w.width_ms)
+            .sum();
+        assert!(area.abs() < 1e-2, "net area {area}");
+        for t in [Template::FibrillatoryWave, Template::VfWave, Template::PolymorphicBeat] {
+            let area: f64 = template_waves(t).iter().map(|w| w.amplitude * w.width_ms).sum();
+            assert!(area.abs() < 1e-9, "{t:?}: net area {area}");
+        }
+    }
+
+    #[test]
+    fn the_same_engine_events_draw_the_same_strip() {
+        let run = || {
+            let mut eng = TimingEngine::new(TimingParams {
+                atrial_driver: Some(AtrialDriver {
+                    kind: AtrialDriverKind::Fibrillation,
+                    cycle_ms: 160.0,
+                    cycle_jitter: 0.3,
+                    start_ms: 0.0,
+                }),
+                ..TimingParams::default()
+            });
+            let mut s = GaussianSynth::textbook();
+            (0..3000)
+                .map(|_| {
+                    eng.step(Millis(1.0));
+                    s.on_events(&eng.drain_events());
+                    s.sample(eng.now()).get(Lead::V1)
+                })
+                .collect::<Vec<f64>>()
+        };
+        assert_eq!(run(), run());
+    }
 
     /// Run timing + synth for `secs` seconds at 1 kHz; returns lead II samples and all leads.
     fn run(secs: f64, synth: &mut GaussianSynth) -> Vec<TwelveLead> {

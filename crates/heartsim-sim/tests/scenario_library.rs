@@ -46,6 +46,11 @@ fn every_timing_section_runs_at_its_expected_rate() {
         let text = std::fs::read_to_string(&path).unwrap();
         let s = Scenario::from_ron(&text).unwrap();
         let p = TimingParams::from_scenario_ron(&text).unwrap();
+        // a rhythm with no countable beats (ventricular fibrillation) has no rate to check
+        if s.expected.as_ref().is_some_and(|e| !e.rate_is_criterion()) {
+            n += 1;
+            continue;
+        }
         let v = ventricular_times(&s, p, 20.0);
         let last: Vec<f64> = v.iter().copied().filter(|t| *t >= 10_000.0).collect();
         assert!(last.len() >= 3, "{}: {} beats in the last 10 s", s.id, last.len());

@@ -6,7 +6,9 @@
 //! * **Synchronised** (cardioversion): armed, then delivered [`SYNC_DELAY_MS`] after the next
 //!   ventricular activation — the R wave, which the timing engine knows exactly (the same beats
 //!   the B4 QRS detector finds on the strip). With no R wave (asystole, VF) it never fires, as a
-//!   real defibrillator in sync mode refuses to.
+//!   real defibrillator in sync mode refuses to. Polymorphic VT and torsades are treated the same
+//!   way: their QRS changes from beat to beat, so a synchroniser has no reliable R wave and these
+//!   rhythms are shocked unsynchronised.
 //!
 //! The outcome depends on the rhythm class at delivery and the energy:
 //! `p(E) = p_max · (1 − exp(−E / E_c))` ([`success_probability`]), drawn from the engine's
@@ -39,12 +41,17 @@ pub const ENERGY_STEPS_J: [f64; 9] = [5.0, 10.0, 20.0, 50.0, 70.0, 100.0, 120.0,
 pub enum RhythmClass {
     /// Ventricular fibrillation (Tier 2 only).
     VentricularFibrillation,
-    /// Ventricular tachycardia (ventricular origin, rate > 100 bpm).
+    /// Monomorphic ventricular tachycardia (ventricular origin, rate > 100 bpm).
     VentricularTachycardia,
+    /// Polymorphic ventricular tachycardia or torsades de pointes: treated like VF.
+    PolymorphicVentricularTachycardia,
     /// Re-entrant or ectopic supraventricular tachycardia (rate > 100 bpm).
     SupraventricularTachycardia,
-    /// Atrial fibrillation or flutter (atrial rate > 250 bpm).
+    /// Atrial fibrillation or flutter (atrial rate > 250 bpm) when the two are not told apart.
     AtrialFibrillationOrFlutter,
+    /// Atrial flutter from the timing engine's own circuit: an organised macro-re-entry that
+    /// needs less energy than AF.
+    AtrialFlutter,
     /// Sinus, bradycardia, paced or escape rhythm: nothing to terminate.
     Organised,
     /// No ventricular activity: not shockable.
@@ -57,8 +64,10 @@ impl RhythmClass {
         match self {
             RhythmClass::VentricularFibrillation => "VF",
             RhythmClass::VentricularTachycardia => "VT",
+            RhythmClass::PolymorphicVentricularTachycardia => "polymorphic VT",
             RhythmClass::SupraventricularTachycardia => "SVT",
             RhythmClass::AtrialFibrillationOrFlutter => "AF / flutter",
+            RhythmClass::AtrialFlutter => "flutter",
             RhythmClass::Organised => "organised rhythm",
             RhythmClass::Asystole => "asystole",
         }
@@ -69,8 +78,10 @@ impl RhythmClass {
         match self {
             RhythmClass::VentricularFibrillation => (0.95, 60.0),
             RhythmClass::VentricularTachycardia => (0.97, 30.0),
+            RhythmClass::PolymorphicVentricularTachycardia => (0.95, 60.0),
             RhythmClass::SupraventricularTachycardia => (0.97, 25.0),
             RhythmClass::AtrialFibrillationOrFlutter => (0.92, 60.0),
+            RhythmClass::AtrialFlutter => (0.97, 25.0),
             RhythmClass::Organised => (1.0, 0.0),
             RhythmClass::Asystole => (0.0, 1.0),
         }
@@ -233,6 +244,11 @@ mod tests {
         let af = success_probability(RhythmClass::AtrialFibrillationOrFlutter, 200.0);
         assert!((0.8..=0.92).contains(&af), "AF @200 J {af}");
         assert!(success_probability(RhythmClass::SupraventricularTachycardia, 100.0) >= 0.9);
+        assert!(success_probability(RhythmClass::AtrialFlutter, 100.0) >= 0.9);
+        assert_eq!(
+            success_probability(RhythmClass::PolymorphicVentricularTachycardia, 150.0),
+            success_probability(RhythmClass::VentricularFibrillation, 150.0)
+        );
         assert_eq!(success_probability(RhythmClass::Asystole, 360.0), 0.0);
         assert_eq!(success_probability(RhythmClass::Organised, 5.0), 1.0);
     }

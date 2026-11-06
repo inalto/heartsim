@@ -1,0 +1,35 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "torsades",
+    title: "Torsades de pointes, pause-dependent",
+    description: "Long QT interval with ventricular bigeminy; a short-long-short sequence ends in a premature beat on the T wave, and polymorphic VT begins with QRS complexes twisting around the baseline at about 200 bpm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Torsades de pointes (TdP) is a polymorphic ventricular tachycardia in the setting of a long QT interval. It runs at about 160 to 240 bpm, and the QRS complexes change in size and polarity as if twisting around the baseline. The twist may not be visible in every lead.\nDrug-induced TdP usually starts with a short-long-short sequence: a premature beat (short), its pause (long), a sinus beat with an even longer QT, then a premature beat that falls near the peak of its T wave. This preset plays that sequence: the QTc is above 500 ms, and the episode begins on the first such beat after 5 seconds.\nIt often stops by itself, slowing over the last 2 or 3 beats, and it can return or turn into VF. Here an episode lasts about 18 seconds and may return 8 seconds later, and a shock ends it for those 8 seconds, because the long QT is still there. Treatment is magnesium, correcting potassium and stopping the drug, faster pacing to prevent pauses, and a shock if it does not stop. Magnesium is not in the simulator's drug table yet.\nThe 3-D heart shows the fronts coming from either ventricle, not the mechanism of the twist."),
+    confused_with: ["polymorphic_vt", "vf_coarse", "vt_monomorphic", "pvc_r_on_t"],
+    references: [
+        "Drew BJ et al. Prevention of torsade de pointes in hospital settings: a scientific statement from the American Heart Association and the American College of Cardiology Foundation. Circulation 2010;121:1047-1060.",
+        "Dessertenne F. La tachycardie ventriculaire a deux foyers opposes variables. Arch Mal Coeur Vaiss 1966;59:263-272.",
+        "Kay GN et al. Torsade de pointes: the long-short initiating sequence and other clinical features. J Am Coll Cardiol 1983;2:806-817.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: polymorphic VT and torsades de pointes, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (160.0, 240.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+        rhythm: Some(TorsadesDePointes),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 68.0),
+        ventricular_erp_ms: 440.0,
+        foci: [Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 450.0, every_n_beats: 1, count: 1, run_cycle_ms: 400.0))],
+        ventricular_driver: Some(VentricularDriver(kind: Torsades, cycle_ms: 300.0, cycle_jitter: 0.15, start: PauseDependentRonT(not_before_ms: 5000.0), duration_ms: 18000.0, recur_after_ms: 8000.0)),
+    ),
+    morphology: MorphologyOverrides(waves: [
+        WaveOverride(template: Normal, wave: "T", offset_ms: Some(480.0), width_ms: Some(60.0)),
+    ]),
+)

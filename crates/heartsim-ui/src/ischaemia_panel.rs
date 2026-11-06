@@ -68,7 +68,7 @@ fn lesion_of(lesions: &[Lesion], b: CoronaryBranch) -> Option<&Lesion> {
     lesions
         .iter()
         .filter(|l| l.branch == b)
-        .min_by_key(|l| l.kind == LesionKind::Infarct)
+        .min_by_key(|l| l.kind.is_necrotic())
 }
 
 fn distance_to_segment(p: Pos2, a: Pos2, b: Pos2) -> f32 {
@@ -114,7 +114,7 @@ pub fn coronary_tree(
             continue;
         }
         let colour = match lesion_of(lesions, b) {
-            Some(l) if l.kind == LesionKind::Infarct => Color32::from_gray(110),
+            Some(l) if l.kind.is_necrotic() => Color32::from_gray(110),
             Some(l) => Color32::from_rgb(220, (200.0 * (1.0 - l.severity)) as u8 + 30, 40),
             None => Color32::from_rgb(220, 120, 110),
         };
@@ -157,6 +157,7 @@ pub fn stenosis_target(branch: CoronaryBranch, kind: LesionKind) -> String {
     match kind {
         LesionKind::Acute => branch.id().to_string(),
         LesionKind::Infarct => format!("{} infarct", branch.id()),
+        LesionKind::Evolving => format!("{} evolving", branch.id()),
     }
 }
 
@@ -230,6 +231,7 @@ pub fn ischaemia_panel(
             let kind = match l.kind {
                 LesionKind::Acute => t!("ischaemia-acute"),
                 LesionKind::Infarct => t!("ischaemia-infarct-kind"),
+                LesionKind::Evolving => t!("ischaemia-evolving-kind"),
             };
             ui.label(t!(
                 "ischaemia-lesion-line",

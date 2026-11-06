@@ -43,6 +43,11 @@ pub struct TimingParams {
     pub accessory: Option<AccessoryPathway>,
     /// Optional artificial pacemaker.
     pub pacer: Option<PacerConfig>,
+    /// Sustained atrial arrhythmia carried by the timing graph (flutter, fibrillation).
+    pub atrial_driver: Option<AtrialDriver>,
+    /// Sustained or paroxysmal ventricular arrhythmia carried by the timing graph (ventricular
+    /// fibrillation, torsades de pointes, polymorphic VT).
+    pub ventricular_driver: Option<VentricularDriver>,
 }
 
 /// The `timing` section of a scenario file (`assets/scenarios/*.ron`). The struct is named
@@ -77,6 +82,8 @@ impl Default for TimingParams {
             foci: Vec::new(),
             accessory: None,
             pacer: None,
+            atrial_driver: None,
+            ventricular_driver: None,
         }
     }
 }
@@ -535,6 +542,84 @@ impl AccessoryPathway {
             Side::Right => Region::RightAtrium,
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sustained arrhythmias carried by the timing graph
+// ---------------------------------------------------------------------------------------------
+
+/// What kind of sustained atrial activity an [`AtrialDriver`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AtrialDriverKind {
+    /// One macro-re-entrant revolution per cycle: a very regular atrial rate of about 300/min.
+    Flutter,
+    /// Wandering wavelets: an irregular atrial cycle, randomly in either atrium.
+    Fibrillation,
+}
+
+/// Sustained atrial arrhythmia. Each cycle is an atrial activation that overdrives the sinus
+/// node and meets the AV node (and an accessory pathway, if any), so the ventricular response
+/// follows from the same nodal recovery curve as every other rhythm: flutter at 2:1 or 4:1
+/// depends on the node's `erp_ms` and `concealment_fraction`, not on a stated ratio.
+///
+/// The Tier-2 tissue model has no working flutter preset; this is the timing-level description of
+/// the same rhythm, with no anatomical circuit behind it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AtrialDriver {
+    pub kind: AtrialDriverKind,
+    /// Mean atrial cycle length, ms. Typical flutter 170–240 (250–350/min); fibrillation
+    /// 100–200 (300–600/min).
+    pub cycle_ms: f64,
+    /// Each cycle is drawn uniformly within `cycle_ms · (1 ± cycle_jitter)`. Flutter ≤ 0.02,
+    /// fibrillation 0.2–0.4.
+    #[serde(default)]
+    pub cycle_jitter: f64,
+    /// Time of the first cycle, ms.
+    #[serde(default)]
+    pub start_ms: f64,
+}
+
+/// What kind of ventricular arrhythmia a [`VentricularDriver`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VentricularDriverKind {
+    /// Ventricular fibrillation: no organised beat and no P waves on the strip.
+    Fibrillation,
+    /// Torsades de pointes: polymorphic VT at 160–240/min with an orderly twist of the axis.
+    Torsades,
+    /// Polymorphic VT with beat-to-beat changes of the axis.
+    Polymorphic,
+}
+
+/// How a [`VentricularDriver`] starts.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum DriverStart {
+    /// At a stated time, ms.
+    AtMs(f64),
+    /// On the first ectopic beat at or after `not_before_ms` that closes a short-long-short
+    /// sequence and lands in the vulnerable period of the beat before it (the usual start of
+    /// drug-induced torsades, Drew et al. 2010).
+    PauseDependentRonT { not_before_ms: f64 },
+}
+
+/// Ventricular arrhythmia carried by the timing graph. While it runs, every other ventricular
+/// front (sinus, escape, ectopic, paced) is blocked. A shock that succeeds stops it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VentricularDriver {
+    pub kind: VentricularDriverKind,
+    /// Mean cycle length, ms. VF under 240 (over 250/min), torsades 250–375 (160–240/min).
+    pub cycle_ms: f64,
+    /// Each cycle is drawn uniformly within `cycle_ms · (1 ± cycle_jitter)`.
+    #[serde(default)]
+    pub cycle_jitter: f64,
+    pub start: DriverStart,
+    /// Length of an episode, ms; 0 = runs until a shock. An episode that ends by itself slows
+    /// over its last beats (Drew et al. 2010).
+    #[serde(default)]
+    pub duration_ms: f64,
+    /// A pause-dependent start may fire again this long after an episode ended by itself or by a
+    /// shock, because the substrate is still there, ms. 0 = one episode only.
+    #[serde(default)]
+    pub recur_after_ms: f64,
 }
 
 // ---------------------------------------------------------------------------------------------

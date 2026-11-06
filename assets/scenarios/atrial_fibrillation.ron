@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "atrial_fibrillation",
+    title: "Atrial fibrillation with a controlled ventricular rate",
+    description: "No P waves, a fine irregular fibrillatory baseline and an irregularly irregular narrow QRS at about 100 bpm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In atrial fibrillation (AF) the atria have no common beat. On the ECG there are no P waves, the baseline shows irregular f waves (best seen in V1 and II), and the R-R intervals have no pattern. The f waves count as coarse above about 0.1 mV.\nThe atrial cycle here varies between about 100 and 240 ms, and concealed conduction in the AV node makes the ventricular rhythm irregular: a blocked impulse still leaves the node partly refractory for the next one.\nThis preset is a timing-level description and runs in real time. For the tissue model with wavelets on the mesh, open the re-entry preset af_persistent. Here the 3-D heart shows random wavelets starting in both atria each cycle, without a mapped re-entrant source.\nCardioversion of AF needs a synchronised shock and, if it has lasted over 48 hours, anticoagulation first."),
+    confused_with: ["flutter_variable", "pac_frequent", "sick_sinus_tachy_brady", "af_preexcited"],
+    references: [
+        "Hindricks G et al. 2020 ESC Guidelines for the diagnosis and management of atrial fibrillation. Eur Heart J 2021;42:373-498.",
+        "Joglar JA et al. 2023 ACC/AHA/ACCP/HRS guideline for the diagnosis and management of atrial fibrillation. Circulation 2024;149:e1-e156.",
+        "Nault I et al. Clinical value of fibrillatory wave amplitude on surface ECG in patients with persistent atrial fibrillation. J Interv Card Electrophysiol 2009;26:11-19.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: atrial fibrillation, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 130.0),
+        pr_ms: None,
+        qrs_ms: Some((60.0, 120.0)),
+        axis_deg: None,
+        rhythm: Some(AtrialFibrillation),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        av: AvParams(concealment_fraction: 0.6, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 100.0, recovery_tau_ms: 100.0, erp_ms: 240.0, blocked: false)),
+        atrial_driver: Some(AtrialDriver(kind: Fibrillation, cycle_ms: 170.0, cycle_jitter: 0.4)),
+    ),
+)

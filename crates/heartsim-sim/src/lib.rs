@@ -22,6 +22,6 @@ pub mod tier1;
 pub mod tier2;
 pub mod timing;
 
-pub use engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+pub use engine::{CellState, Chamber, Circuit, Engine, Event, EventKind, Origin};
 pub use tier1::{EikonalEngine, EikonalParams, SeedMap, Tier1Engine};
 pub use timing::{ActionError, LadderSample, TimingEngine, TimingParams};

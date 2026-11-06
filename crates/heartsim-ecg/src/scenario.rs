@@ -251,7 +251,9 @@ pub fn violations(e: &ExpectedFindings, a: &Analysis) -> Vec<String> {
             }
         }
     };
-    check("HR bpm", Some(e.hr_bpm), a.hr_bpm);
+    if e.rate_is_criterion() {
+        check("HR bpm", Some(e.hr_bpm), a.hr_bpm);
+    }
     check("PR ms", e.pr_ms, a.pr_ms);
     check("QRS ms", e.qrs_ms, a.qrs_ms);
     if let Some(r) = e.axis_deg {
@@ -260,6 +262,11 @@ pub fn violations(e: &ExpectedFindings, a: &Analysis) -> Vec<String> {
             Some(ax) => v.push(format!("axis {:.0}° outside {}..{}", ax.degrees, r.0, r.1)),
             None => v.push(format!("axis not measured (expected {}..{})", r.0, r.1)),
         }
+    }
+    if let Some(want) = e.rhythm
+        && a.rhythm != Some(want)
+    {
+        v.push(format!("rhythm {:?}, expected {want:?}", a.rhythm));
     }
     v
 }

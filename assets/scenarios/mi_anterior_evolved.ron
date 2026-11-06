@@ -1,0 +1,32 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "mi_anterior_evolved",
+    title: "Evolved anterior infarction: Q waves and T inversion",
+    description: "Hours to days after an LAD occlusion: Q or QS complexes and inverted T waves in V1 to V4 (and aVL), with little ST elevation left.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("After the acute stage of an anterior infarction the ST segment settles back and the permanent marks appear in the leads over the anterior wall: V1 to V4, with aVL when the occlusion was proximal.\nA pathological Q wave (Fourth Universal Definition): in V2-V3, any Q of at least 0.02 s or a QS complex; elsewhere, Q of at least 0.03 s and 0.1 mV deep, in two contiguous leads. It marks a region of dead tissue that no longer gives electrical forces, so the leads over it see the opposite wall activating away from them.\nThe inverted T waves are deep and symmetric, in the same leads. In a patient, Q waves appear over hours and T waves invert as the ST segment settles, over hours to days; Q waves usually persist. Timing varies between patients.\nThe lesion here is the same one the 3-D heart turns into a silent core with a slow border zone, so strip and heart show one state. Differential: LBBB and LV hypertrophy give poor R progression without an infarct; a persisting ST elevation with Q waves suggests an LV aneurysm."),
+    confused_with: ["stemi_anterior", "mi_old_anterior", "lbbb", "wpw_left_lateral"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017 (ch. 8, 9).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: pathological Q waves, myocardial infarction evolution, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "LAD evolving", severity: 1.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+    ),
+)

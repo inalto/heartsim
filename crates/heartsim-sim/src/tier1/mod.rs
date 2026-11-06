@@ -58,7 +58,8 @@ pub use params::EikonalParams;
 pub use seeds::{SeedMap, lead_cells, resolve_site, side_index};
 
 use crate::ap::ApTemplate;
-use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+use crate::defib::ShockRng;
+use crate::engine::{CellState, Chamber, Circuit, Engine, Event, EventKind, Origin};
 use crate::ischaemia::{InjuryField, IschaemiaState, injury_field};
 use crate::pharma::DrugEffects;
 use crate::timing::{ActionError, HisPurkinjeParams, PacerConfig, Side};
@@ -75,6 +76,14 @@ const VM_CHUNK: usize = 8192;
 /// Resolution of the V_m lookup tables (0.3 ms at APD 300 ms).
 const VM_LUT: usize = 1024;
 const REGIONS: usize = Region::ALL.len();
+/// APD multiplier of the tissue during flutter (cycle ≈ 200 ms): keeps the atria following 1:1.
+const CIRCUIT_APD_FLUTTER: f32 = 0.7;
+/// APD multiplier during fibrillation (atria and ventricles).
+const CIRCUIT_APD_FIBRILLATION: f32 = 0.5;
+/// APD multiplier during torsades and polymorphic VT (cycle ≈ 300 ms).
+const CIRCUIT_APD_POLYMORPHIC: f32 = 0.75;
+/// Random wavelets started by one fibrillatory event.
+const CIRCUIT_WAVELETS: usize = 3;
 const NO_PROBE: u8 = u8::MAX;
 /// Probe indices.
 const PROBE_AV: u8 = 0;
@@ -314,6 +323,9 @@ pub struct EikonalEngine {
     user_cv_scale: Vec<f32>,
     /// `user_apd_scale` was handed out mutably: recombine before the next step.
     modifiers_dirty: bool,
+    /// APD multiplier of the atria `[0]` and ventricles `[1]` while a sustained arrhythmia of the
+    /// timing engine runs in them.
+    circuit_apd_scale: [f32; 2],
     /// AHA segment per cell (0 = none) for coronary territories; empty until set.
     aha_segments: Vec<u8>,
     ischaemia: IschaemiaState,
@@ -422,6 +434,7 @@ impl EikonalEngine {
             user_apd_scale: vec![1.0; n],
             user_cv_scale: vec![1.0; n],
             modifiers_dirty: false,
+            circuit_apd_scale: [1.0; 2],
             aha_segments: Vec::new(),
             ischaemia: IschaemiaState::default(),
             injury: InjuryField::healthy(n),
@@ -823,8 +836,16 @@ impl EikonalEngine {
         let d = &self.drug;
         for i in 0..self.cloud.len() {
             let (cv, apd, myocardium) = match self.kinds[i] {
-                CellKind::Atrial => (d.atrial_cv_scale, d.atrial_apd_scale, true),
-                CellKind::Ventricular => (d.ventricular_cv_scale, d.ventricular_apd_scale, true),
+                CellKind::Atrial => (
+                    d.atrial_cv_scale,
+                    d.atrial_apd_scale * f64::from(self.circuit_apd_scale[0]),
+                    true,
+                ),
+                CellKind::Ventricular => (
+                    d.ventricular_cv_scale,
+                    d.ventricular_apd_scale * f64::from(self.circuit_apd_scale[1]),
+                    true,
+                ),
                 CellKind::Purkinje => (d.his_purkinje_cv_scale, 1.0, false),
                 CellKind::SinusNode | CellKind::Driven => (1.0, 1.0, false),
             };
@@ -1006,7 +1027,54 @@ impl EikonalEngine {
         }
     }
 
+    /// A cycle of a sustained arrhythmia of the timing engine on the mesh. The event says when;
+    /// the heart's own refractoriness decides what the front can reach. This draws what the strip
+    /// shows and no more: a schematic of the chamber's activation, with no anatomical circuit or
+    /// spiral wave behind it (those belong to Tier 2).
+    ///
+    /// * Flutter: a front from the right atrium every cycle.
+    /// * Torsades and polymorphic VT: a front from the ventricle the event names.
+    /// * Fibrillation: a few wavelets from random cells of the chamber, which collide with each
+    ///   other and with refractory tissue, so the chamber has no common beat.
+    ///
+    /// Short cycles shorten the action potential (restitution), and in fibrillation remodelling
+    /// does too (Wijffels et al. 1995), so the tissue follows the rate instead of dropping every
+    /// other cycle. A successful shock restores it ([`EikonalEngine::shock`]).
+    fn ingest_circuit(&mut self, c: Circuit, e: &Event, t: f64) {
+        let (index, scale) = match c {
+            Circuit::AtrialFlutter => (0, CIRCUIT_APD_FLUTTER),
+            Circuit::AtrialFibrillation => (0, CIRCUIT_APD_FIBRILLATION),
+            Circuit::VentricularFibrillation => (1, CIRCUIT_APD_FIBRILLATION),
+            Circuit::Torsades | Circuit::PolymorphicVt => (1, CIRCUIT_APD_POLYMORPHIC),
+        };
+        if (self.circuit_apd_scale[index] - scale).abs() > f32::EPSILON {
+            self.circuit_apd_scale[index] = scale;
+            self.modifiers_dirty = true;
+        }
+        match c {
+            Circuit::AtrialFlutter | Circuit::Torsades | Circuit::PolymorphicVt => {
+                self.seed_set(SeedSet::Chamber(e.region), t, 0, e.origin);
+            }
+            Circuit::AtrialFibrillation | Circuit::VentricularFibrillation => {
+                let mut rng = ShockRng::new(t.to_bits());
+                for _ in 0..CIRCUIT_WAVELETS {
+                    let cells = &self.region_cells[e.region as usize];
+                    if cells.is_empty() {
+                        return;
+                    }
+                    let k = (rng.next_f64() * cells.len() as f64) as usize;
+                    let cell = cells[k.min(cells.len() - 1)];
+                    self.push_seed(cell, t, 0, e.origin);
+                }
+            }
+        }
+    }
+
     fn ingest_atrial(&mut self, e: &Event, t: f64) {
+        if let Origin::Circuit(c) = e.origin {
+            self.ingest_circuit(c, e, t);
+            return;
+        }
         let set = match (e.kind, e.origin) {
             (EventKind::Stimulus, Origin::External) => return,
             (EventKind::Automatic, Origin::Sinus) => SeedSet::Sinus,
@@ -1063,6 +1131,12 @@ impl EikonalEngine {
     }
 
     fn ingest_ventricular(&mut self, e: &Event, t: f64) {
+        if let Origin::Circuit(c) = e.origin
+            && c.is_ventricular()
+        {
+            self.ingest_circuit(c, e, t);
+            return;
+        }
         let set = match (e.kind, e.origin) {
             // Delivered by the His–Purkinje system: the fascicle events already seeded it.
             (EventKind::Conducted, Origin::AccessoryPathway) => {
@@ -1173,6 +1247,10 @@ impl EikonalEngine {
         let at = at.0.max(self.now);
         self.queue.clear();
         self.stimuli.clear();
+        if self.circuit_apd_scale != [1.0; 2] {
+            self.circuit_apd_scale = [1.0; 2];
+            self.refresh_modifiers();
+        }
         for j in 0..self.hot.len() {
             let h = &mut self.hot[j];
             h.tentative = f64::INFINITY;
@@ -1522,6 +1600,10 @@ impl Engine for EikonalEngine {
     fn reset(&mut self) {
         let n = self.t_act.len();
         self.now = 0.0;
+        if self.circuit_apd_scale != [1.0; 2] {
+            self.circuit_apd_scale = [1.0; 2];
+            self.refresh_modifiers();
+        }
         for h in &mut self.hot {
             *h = Hot {
                 region: h.region,

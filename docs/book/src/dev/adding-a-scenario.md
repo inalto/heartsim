@@ -62,3 +62,19 @@ cargo run -p heartsim-cli -- run assets/scenarios/sinus_brady_45.ron --seconds 2
 The first prints HR, PR, QRS and axis of every scenario and fails on any violated `expected` range; the second writes the
 PDF and PNGs so you can look at the result. `cargo test -p heartsim-sim --test scenario_library` runs the same checks in the
 test suite. If the scenario changes a golden snapshot on purpose, update the snapshot in the same commit.
+
+## Sustained arrhythmias and infarct stages
+
+Sections that are optional in every file, so older files load unchanged and `format_version` stays 1:
+
+* `timing.atrial_driver`: `AtrialDriver(kind: Flutter, cycle_ms: 200.0, cycle_jitter: 0.0)` or `kind: Fibrillation`. The AV ratio is
+  not stated: it follows from `timing.av`.
+* `timing.ventricular_driver`: `VentricularDriver(kind: Fibrillation, cycle_ms: 180.0, cycle_jitter: 0.25, start: AtMs(2000.0))`, or
+  `kind: Torsades` / `Polymorphic`. `start: PauseDependentRonT(not_before_ms: 5000.0)` waits for a short-long-short sequence ending
+  in an ectopic beat on the T wave. `duration_ms` and `recur_after_ms` make an episode end by itself and return.
+* `Stenosis(branch: "LAD evolving", severity: 1.0)` draws Q waves and inverted T waves in the territory's leads; `"LAD infarct"` draws
+  the Q waves of a healed infarct; both are a silent core on the 3-D heart.
+* In `expected`, `rhythm: Some(AtrialFlutter)` requires the analyser to name the rhythm, and `hr_bpm` may be left out for a rhythm with
+  no countable beats.
+
+The wave shapes can be overridden like any other: `WaveOverride(template: VfWave, wave: "VF", amplitude_mv: Some(0.08))`.
