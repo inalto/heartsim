@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "sick_sinus_tachy_brady",
+    title: "Sick sinus syndrome (tachycardia-bradycardia)",
+    description: "The sinus node alternates every six seconds between a fast phase at 130 bpm and a slow phase at 38 bpm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In the tachycardia-bradycardia form of sick sinus syndrome a diseased sinus node swings between bursts of fast atrial rhythm and slow rates or long pauses, often with junctional escape beats. Dizziness, fainting and palpitations come from the slow phase and from pauses after the fast phase ends.\nDrugs that slow the fast phase (beta-blockers, calcium-channel blockers, digoxin) deepen the slow phase, so a pacemaker usually comes first. Atrial fibrillation is a common partner and raises the stroke risk.\nThe preset alternates between two rates for clarity. Real episodes are irregular.\nDifferential: sinus arrhythmia (small, gradual changes), sinoatrial exit block, drug effect."),
+    confused_with: ["sinus_arrhythmia", "sa_exit_block", "sinus_arrest_junctional_escape", "sinus_brady_45"],
+    references: [
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Glikson M et al. 2021 ESC Guidelines on cardiac pacing and cardiac resynchronization therapy. Eur Heart J 2021;42:3427-3520.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: sick sinus syndrome, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (50.0, 140.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0, tachy_brady_period_s: 6.0, tachy_rate_bpm: 130.0, brady_rate_bpm: 38.0),
+        escape: EscapeParams(junctional_bpm: 30.0, ventricular_bpm: 25.0),
+    ),
+)

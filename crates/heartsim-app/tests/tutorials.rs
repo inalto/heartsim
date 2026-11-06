@@ -89,7 +89,7 @@ fn navigation_self_study_gating_and_tutor_mode() {
     let mut h = harness();
     frames(&mut h);
     let basics = h.state().tutorials.library.tutorials[0].clone();
-    assert_eq!(basics.id, "basics");
+    assert_eq!(basics.id, "01_basics");
 
     click(&mut h, &format!("Start {}", basics.title));
     assert_eq!(page(&h), Some(0));
@@ -117,7 +117,7 @@ fn navigation_self_study_gating_and_tutor_mode() {
     let _ = h.get_by_label("Correct.");
     button(&mut h, "Next");
     assert_eq!(page(&h), Some(3));
-    let progress = h.state().tutorials.progress.get("basics");
+    let progress = h.state().tutorials.progress.get("01_basics");
     assert!(progress.passed.contains(&2));
     assert_eq!(progress.furthest, 3);
     assert!(!progress.completed);

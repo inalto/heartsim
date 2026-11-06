@@ -1,269 +1,20 @@
-//! Guided tutorials (brief B15): `assets/tutorials/<id>/tutorial.ron`, an ordered list of pages,
-//! each a Markdown text, the actions that set the simulator up for it, and an optional knowledge
-//! check.
+//! Guided tutorials (brief B15) in the application: progress, the library of installed tutorials
+//! and the reader's mode.
 //!
-//! **Actions are data.** A page's [`Step::Sim`] carries a scenario [`Action`] verbatim and is handed
-//! to the host exactly like a scenario timeline entry, so every intervention the engines learn
-//! (drugs, shocks, ischaemia, …) works in tutorials without a change here. [`Step::Ui`] covers what
-//! only the application can do: open a rhythm, switch panels, move the camera, pause.
-//!
-//! The [`PageRun`] executes a page's steps in order through the [`TutorialHost`] trait, stopping at
-//! [`UiAction::WaitForEvent`] until simulated time or the heart catches up; the application and
-//! the tests implement the same trait, so a page drives the model exactly as applying its actions
-//! one by one would.
+//! The file format and the page runner ([`Tutorial`], [`Page`], [`Step`], [`UiAction`],
+//! [`PageRun`], [`TutorialHost`], …) live in `heartsim_core::tutorial` so that the headless
+//! `heartsim-cli run-tutorial` reads and runs the very same files; they are re-exported here.
 
-use heartsim_core::{Action, Lead};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 #[cfg(feature = "native")]
 use std::path::PathBuf;
 
-pub const TUTORIAL_FORMAT_VERSION: u32 = 1;
-
-/// A guided tutorial.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Tutorial {
-    pub format_version: u32,
-    /// Stable id, equal to the directory name; keys the saved progress.
-    pub id: String,
-    pub title: String,
-    /// One or two sentences for the tutorial list.
-    pub summary: String,
-    pub pages: Vec<Page>,
-}
-
-/// One page: what the learner reads, what the simulator does on entering it, and an optional
-/// question that must be answered correctly before moving on in self-study mode.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Page {
-    /// Short title for the page index.
-    pub title: String,
-    /// CommonMark text.
-    pub markdown: String,
-    /// Run in order when the page is entered.
-    #[serde(default)]
-    pub actions: Vec<Step>,
-    #[serde(default)]
-    pub check: Option<Question>,
-}
-
-/// A page action: a scenario intervention (same vocabulary as scenario timelines) or an
-/// application command.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Step {
-    Sim(Action),
-    Ui(UiAction),
-}
-
-/// What only the application can do.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum UiAction {
-    /// Load a rhythm from the scenario library by id (restarts the clock at zero).
-    LoadScenario(String),
-    /// Bring a panel to the front.
-    FocusPanel(Panel),
-    /// Outline a control so the learner finds it; cleared on the next page. Ids are listed in
-    /// `heartsim_ui::highlight` (e.g. `"pause"`, `"speed"`, `"rhythm_picker"`, `"axis_dial"`).
-    Highlight(String),
-    /// Move the 3-D camera to a standard view.
-    CameraPreset(CameraView),
-    /// Simulation speed relative to real time (0.05–2).
-    SetSpeed(f64),
-    Pause,
-    Resume,
-    /// Hold the remaining steps of the page until this happens.
-    WaitForEvent(WaitEvent),
-    /// Rotate the frontal QRS axis to this angle, degrees (the Axis Trainer's dial).
-    SetQrsAxis(f64),
-    /// Lead shown on the single-lead strip.
-    SelectLead(Lead),
-}
-
-/// Panels a tutorial can bring forward (the application's tabs).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Panel {
-    Simulator,
-    TwelveLead,
-    HeartVector,
-    AxisTrainer,
-    AxisQuiz,
-    Electrodes,
-    RhythmQuiz,
-    Tutorials,
-}
-
-/// Standard radiological views of the heart.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CameraView {
-    Ap,
-    Pa,
-    Lao,
-    Rao,
-    Left,
-    Cranial,
-    Caudal,
-    /// Zoom to fit the whole heart.
-    Frame,
-}
-
-/// What [`UiAction::WaitForEvent`] waits for, counted from the moment the wait starts.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum WaitEvent {
-    /// This much simulated time, ms.
-    ElapsedMs(f64),
-    /// The next ventricular activation (QRS onset).
-    Qrs,
-}
-
-/// A multiple-choice knowledge check.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Question {
-    pub prompt: String,
-    pub choices: Vec<String>,
-    /// Index into `choices`.
-    pub answer: usize,
-    /// Shown once answered (Markdown).
-    #[serde(default)]
-    pub explanation: String,
-}
-
-impl Tutorial {
-    /// Parse a tutorial file.
-    ///
-    /// # Errors
-    /// Malformed RON, a format newer than this build, or content errors (see [`Self::problems`]).
-    pub fn from_ron(text: &str) -> Result<Self, TutorialError> {
-        let t: Self = ron::from_str(text)?;
-        if t.format_version > TUTORIAL_FORMAT_VERSION {
-            return Err(TutorialError::Version(t.format_version));
-        }
-        if let Some(p) = t.problems().into_iter().next() {
-            return Err(TutorialError::Content(p));
-        }
-        Ok(t)
-    }
-
-    /// Pretty RON with struct names, as the files are written.
-    ///
-    /// # Errors
-    /// Only if serialisation itself fails.
-    pub fn to_ron(&self) -> Result<String, ron::Error> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true))
-    }
-
-    /// Content errors: no pages, a question without choices or whose answer is out of range.
-    #[must_use]
-    pub fn problems(&self) -> Vec<String> {
-        let mut out = Vec::new();
-        if self.pages.is_empty() {
-            out.push(format!("{}: no pages", self.id));
-        }
-        for (i, p) in self.pages.iter().enumerate() {
-            if let Some(q) = &p.check
-                && q.answer >= q.choices.len()
-            {
-                out.push(format!(
-                    "{} page {}: answer {} of {} choices",
-                    self.id,
-                    i + 1,
-                    q.answer,
-                    q.choices.len()
-                ));
-            }
-        }
-        out
-    }
-}
-
-#[derive(Debug)]
-pub enum TutorialError {
-    Parse(ron::error::SpannedError),
-    Version(u32),
-    Content(String),
-}
-
-impl std::fmt::Display for TutorialError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Parse(e) => write!(f, "tutorial parse error: {e}"),
-            Self::Version(v) => write!(
-                f,
-                "tutorial format version {v} is newer than supported ({TUTORIAL_FORMAT_VERSION})"
-            ),
-            Self::Content(s) => f.write_str(s),
-        }
-    }
-}
-
-impl std::error::Error for TutorialError {}
-
-impl From<ron::error::SpannedError> for TutorialError {
-    fn from(e: ron::error::SpannedError) -> Self {
-        Self::Parse(e)
-    }
-}
-
-/// The model a tutorial page drives. Implemented by the application and by test doubles.
-pub trait TutorialHost {
-    /// Apply a scenario intervention now, as a timeline entry due at this instant would be.
-    fn apply_action(&mut self, action: &Action);
-    /// Carry out an application command. Never called with [`UiAction::WaitForEvent`].
-    fn apply_ui(&mut self, action: &UiAction);
-    /// Simulated time, ms.
-    fn sim_now_ms(&self) -> f64;
-    /// Time of the latest ventricular activation, ms (anything before the start if none yet).
-    fn last_qrs_ms(&self) -> f64;
-}
-
-/// Execution state of one page's steps.
-#[derive(Debug, Clone, Default)]
-pub struct PageRun {
-    steps: Vec<Step>,
-    next: usize,
-    /// Simulated time at which the current wait started.
-    waiting_since_ms: Option<f64>,
-}
-
-impl PageRun {
-    #[must_use]
-    pub fn new(page: &Page) -> Self {
-        Self {
-            steps: page.actions.clone(),
-            next: 0,
-            waiting_since_ms: None,
-        }
-    }
-
-    /// Run every step that is due: all of them up to the first wait that is not over yet.
-    /// Returns `true` once the page's steps are all done. Call once per frame.
-    pub fn poll(&mut self, host: &mut impl TutorialHost) -> bool {
-        while let Some(step) = self.steps.get(self.next) {
-            match step {
-                Step::Sim(a) => host.apply_action(a),
-                Step::Ui(UiAction::WaitForEvent(ev)) => {
-                    let since = *self.waiting_since_ms.get_or_insert(host.sim_now_ms());
-                    let over = match *ev {
-                        WaitEvent::ElapsedMs(ms) => host.sim_now_ms() - since >= ms,
-                        WaitEvent::Qrs => host.last_qrs_ms() > since,
-                    };
-                    if !over {
-                        return false;
-                    }
-                    self.waiting_since_ms = None;
-                }
-                Step::Ui(a) => host.apply_ui(a),
-            }
-            self.next += 1;
-        }
-        true
-    }
-
-    #[must_use]
-    pub fn is_finished(&self) -> bool {
-        self.next >= self.steps.len()
-    }
-}
+pub use heartsim_core::tutorial::{
+    CameraView, Page, PageRun, Panel, Question, Step, TUTORIAL_FORMAT_VERSION, Tutorial, TutorialError,
+    TutorialHost, UiAction, WaitEvent,
+};
 
 /// How the learner moves through a tutorial.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -428,7 +179,7 @@ impl TutorialLibrary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use heartsim_core::{Region, StimSite};
+    use heartsim_core::{Action, Region, StimSite};
     use heartsim_sim::{Engine, TimingEngine, TimingParams};
 
     fn sample() -> Tutorial {
@@ -437,6 +188,7 @@ mod tests {
             id: "t".into(),
             title: "T".into(),
             summary: "s".into(),
+            references: Vec::new(),
             pages: vec![
                 Page {
                     title: "one".into(),

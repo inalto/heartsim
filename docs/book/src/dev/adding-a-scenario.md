@@ -18,8 +18,9 @@ Scenario(
     tier: Template,
     anatomy: "default",
     seed: 42,
-    notes: Some("Why it looks like this, what it is confused with, and the sources.\n\nSources:\n- …"),
+    notes: Some("Why it looks like this, and what it is confused with."),
     confused_with: ["sinus_arrest_junctional_escape", "sa_exit_block", "junctional_rhythm"],
+    references: ["Author et al. Title. Journal Year;Vol:Pages.", "Burns E, Buttner R. Life in the Fast Lane ECG Library: topic, litfl.com/ecg-library."],
     expected: Some(ExpectedFindings(
         hr_bpm: (40.0, 59.0),
         pr_ms: Some((120.0, 200.0)),
@@ -36,7 +37,7 @@ Scenario(
 ## 2. The sections
 
 * **Common fields** (`heartsim_core::Scenario`): `id`, `title`, `description` (one sentence shown in the picker),
-  `notes` (teaching text with literature sources: required), `confused_with` (at least two other scenario ids, used as quiz
+  `notes` (the teaching explanation: required), `references` (at least one open literature source the clinical statements were checked against: required; the first 33 presets keep theirs in a `Sources:` block at the end of `notes`, which is read too), `confused_with` (at least two other scenario ids, used as quiz
   distractors), `expected` (the textbook ranges the run must satisfy), `timeline` (timed `Action`s such as stimuli or
   parameter changes), `electrodes_mm` (placement overrides), `seed`.
 * **`timing`** (`heartsim_sim::TimingParams`): sinus rate and respiration, AV conduction and blocks, His–Purkinje and bundle

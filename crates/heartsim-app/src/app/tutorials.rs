@@ -33,10 +33,9 @@ pub(super) struct TimelineTab {
 
 impl TutorialHost for HeartSimApp {
     fn apply_action(&mut self, action: &Action) {
-        let now = self.engine.now();
-        if let Err(e) = self.engine.apply(action, now) {
-            tracing::warn!("tutorial action: {e}");
-        }
+        // the therapy path: re-entry engine if one runs, timing engine, then the 3-D heart (a
+        // coronary lesion is spatial), so the strip and the colour map follow the same action
+        self.apply_therapy(action);
     }
 
     fn apply_ui(&mut self, action: &UiAction) {
@@ -48,6 +47,7 @@ impl TutorialHost for HeartSimApp {
                     tracing::warn!("tutorial: no scenario {id}");
                 }
             }
+            UiAction::StartReentry(id) => self.start_reentry_by_id(id),
             UiAction::FocusPanel(p) => {
                 self.tab = match p {
                     Panel::Simulator => Tab::Simulator,
@@ -111,11 +111,21 @@ impl HeartSimApp {
             run.poll(self);
             self.tutorials.restore_run(run);
         }
+        if let Some(mut run) = self.cases.take_run() {
+            run.poll(self);
+            self.cases.restore_run(run);
+        }
         if self.tutorials.is_open() {
             egui::Panel::right("tutorial_reader")
                 .resizable(true)
                 .default_size(360.0)
                 .show(ui, |ui| self.tutorials.reader_ui(ui));
+        } else if self.cases.is_open() {
+            crate::tutorial_ui::publish_highlight(ui.ctx(), None);
+            egui::Panel::right("case_reader")
+                .resizable(true)
+                .default_size(360.0)
+                .show(ui, |ui| self.cases.reader_ui(ui));
         } else {
             crate::tutorial_ui::publish_highlight(ui.ctx(), None);
         }
@@ -136,6 +146,15 @@ impl HeartSimApp {
                     self.timeline_editor_ui(ui);
                 } else {
                     self.tutorials.library_ui(ui);
+                    if self.tutorials.is_open() {
+                        self.cases.close();
+                    }
+                    ui.add_space(12.0);
+                    ui.separator();
+                    self.cases.library_ui(ui);
+                    if self.cases.is_open() {
+                        self.tutorials.close();
+                    }
                 }
             });
         });

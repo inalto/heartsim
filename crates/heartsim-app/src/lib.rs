@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod assets;
+pub mod case_ui;
 pub mod electrode_tab;
 #[cfg(feature = "export")]
 pub mod export_panel;

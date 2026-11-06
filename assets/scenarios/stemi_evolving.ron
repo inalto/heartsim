@@ -1,0 +1,32 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "stemi_evolving",
+    title: "Evolving anterior infarction: from ST depression to ST elevation",
+    description: "Sinus rhythm at 78 bpm. At 5 s a partial LAD narrowing causes a small ST depression in V1 to V3; at 10 s the artery occludes and the ST segment rises across the chest leads.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The inner layer of the ventricular wall is the most vulnerable to a drop in flow. A severe but incomplete narrowing (here severity 0.55) injures only the subendocardium and shows as ST depression (a small shift in V1-V3 here, with the opposite shift in the inferior leads); a complete occlusion (here 0.9) injures the full thickness of the wall and the injury current reverses to ST elevation. This is the wavefront phenomenon of ischaemic injury (Reimer and Jennings).\nCompare the chest leads before 5 s, between 5 s and 10 s (small dip) and after 10 s (clear elevation). In practice a patient can go from unstable angina to STEMI in minutes, which is why serial ECGs are repeated during ongoing chest pain.\nThe analysis window of the validator covers the last 10 s, after the occlusion."),
+    confused_with: ["stemi_anterior", "nstemi_subendocardial", "pericarditis"],
+    references: [
+        "Reimer KA, Jennings RB. The wavefront phenomenon of myocardial ischemic cell death. II. Transmural progression of necrosis within the framework of ischemic bed size and collateral flow. Lab Invest 1979;40:633-644.",
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ECG changes in acute coronary syndromes, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 5000.0, action: Stenosis(branch: "LAD", severity: 0.55)),
+        TimedAction(at: 10000.0, action: Stenosis(branch: "LAD", severity: 0.9)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)

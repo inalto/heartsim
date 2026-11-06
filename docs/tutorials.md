@@ -3,12 +3,12 @@
 A tutorial is `assets/tutorials/<id>/tutorial.ron`: an ordered list of pages, each with Markdown text, the actions that set the
 simulator up when the page is entered, and an optional multiple-choice check. The app lists every tutorial in the **Tutorials** tab
 (sorted by directory name) and shows the open one in a reader panel beside whichever tab is in front. Format and runner:
-`crates/heartsim-app/src/tutorial.rs`; examples: `assets/tutorials/basics`, `assets/tutorials/cardiac_axis`.
+`crates/heartsim-app/src/tutorial.rs`; examples: `assets/tutorials/01_basics`, `assets/tutorials/03_cardiac_axis`.
 
 ```ron
 Tutorial(
     format_version: 1,
-    id: "basics",                       // = directory name; keys the saved progress
+    id: "01_basics",                    // = directory name; keys the saved progress, and its sort order
     title: "Basics: from one heartbeat to the ECG",
     summary: "One or two sentences for the list.",
     pages: [
@@ -62,3 +62,48 @@ restart* runs the edited timeline; *Save scenario* writes a complete scenario fi
 directory or any path.
 
 Text in shipped tutorials must be original (see `ASSETS-LICENSES.md`).
+
+## Rules for shipped tutorials (brief B18)
+
+* One idea per page; **every page has at least one action that changes the simulation** (a `Sim` action, `LoadScenario`,
+  `StartReentry` or `SetQrsAxis`; moving the camera or a panel does not count). Start each page with the `LoadScenario` it needs,
+  so that **Replay** puts the heart back in the page's starting state.
+* A tutorial lists the open literature the clinical statements were checked against in `references` (guideline, textbook
+  chapter, LITFL page). Checks need three or more distinct choices and an explanation.
+* Write only what the simulator shows. Tier-0 renders a coronary lesion as an ST vector (no Q waves or T inversion), the drugs of
+  `assets/drugs.ron` take tens of seconds to minutes of simulated time to act (adenosine takes seconds), and only the re-entry
+  presets in `assets/scenarios/reentry/` fibrillate.
+* Tutorial ids are numbered (`01_basics`, `02_normal_rhythm`, …) because the list is sorted by directory name.
+* `heartsim-cli run-tutorial` (all installed tutorials by default, or a file, directory or id) checks these rules and executes every
+  page's actions headlessly on the timing engine and synthesiser; it fails on an action the engine refuses, an unknown rhythm or
+  highlight id, or a wait that never ends. `cargo test -p heartsim-cli --test content` runs it over every tutorial and case.
+
+## Patient cases
+
+A **case** is a short scripted story in `assets/cases/<id>.ron` (format: `crates/heartsim-core/src/case.rs`, `format_version: 1`).
+It has a `patient` line, `references`, and `stages`. A stage has a Markdown vignette, `actions` (the same vocabulary as tutorial
+pages) and `questions`, each a multiple-choice `Question` with an explanation:
+
+```ron
+Case(
+    format_version: 1,
+    id: "case_syncope_heart_block",
+    title: "Collapse in the supermarket",
+    summary: "…",
+    patient: "74-year-old woman, …",
+    references: ["…"],
+    stages: [
+        Stage(
+            title: "The first ECG",
+            markdown: r#"…"#,
+            actions: [Ui(LoadScenario("bifascicular")), Ui(FocusPanel(TwelveLead))],
+            questions: [Question(prompt: "…", choices: ["…", "…", "…"], answer: 0, explanation: "…")],
+        ),
+    ],
+)
+```
+
+The Tutorials tab lists the cases below the tutorials. A case is played in the reader panel: the vignette, then each question once
+(the first answer counts for the score; the explanation is shown either way), then the final score. Rules checked by
+`heartsim-cli validate-cases assets/cases`: at least five questions per case, three to five distinct choices each, an explanation
+for every question, `references`, and a first stage that loads a rhythm.

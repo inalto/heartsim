@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "nsvt_runs",
+    title: "Non-sustained ventricular tachycardia (runs of eight beats)",
+    description: "Sinus rhythm at 75 bpm interrupted every few beats by a run of eight fast, wide ventricular beats at about 176 bpm that stops by itself.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Non-sustained VT (NSVT) is three or more consecutive ventricular beats faster than 100 bpm lasting less than 30 s. Each run here starts with a late-coupled premature beat and stops spontaneously; the sinus P waves keep their rhythm underneath.\nSingle PVCs in a healthy heart are common and benign. NSVT is a marker of risk in a patient with a scarred or weak ventricle, an inherited arrhythmia syndrome or electrolyte disturbance, and it prompts imaging, rhythm monitoring and a search for the cause.\nDifferential: aberrantly conducted atrial runs, PVC couplets (only two beats) and artefact."),
+    confused_with: ["pvc_couplets", "vt_monomorphic", "rate_dependent_rbbb"],
+    references: [
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: non-sustained ventricular tachycardia, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 120.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        foci: [Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 450.0, every_n_beats: 6, count: 8, run_cycle_ms: 340.0))],
+    ),
+)

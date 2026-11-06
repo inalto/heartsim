@@ -176,6 +176,11 @@ pub struct Scenario {
     /// differential), e.g. `["avb_2nd_mobitz2_3to1", "blocked PACs"]`.
     #[serde(default)]
     pub confused_with: Vec<String>,
+    /// Open literature the teaching text was checked against (guideline, textbook chapter, LITFL
+    /// page), one citation per entry. Older files keep theirs in a `Sources:` block at the end of
+    /// `notes`; [`Scenario::citations`] reads both.
+    #[serde(default)]
+    pub references: Vec<String>,
     /// Textbook measurement ranges the rhythm must satisfy (golden tests, quiz answers).
     #[serde(default)]
     pub expected: Option<ExpectedFindings>,
@@ -203,8 +208,27 @@ impl Scenario {
             seed: 42,
             notes: None,
             confused_with: Vec::new(),
+            references: Vec::new(),
             expected: None,
         }
+    }
+
+    /// The citations of the teaching text: the `references` field plus the `- ` lines of a
+    /// trailing `Sources:` block in `notes` (the layout of the first 33 presets).
+    #[must_use]
+    pub fn citations(&self) -> Vec<String> {
+        let mut out = self.references.clone();
+        if let Some(notes) = &self.notes
+            && let Some((_, block)) = notes.split_once("\n\nSources:")
+        {
+            out.extend(
+                block
+                    .lines()
+                    .filter_map(|l| l.trim().strip_prefix("- "))
+                    .map(|l| l.trim().to_string()),
+            );
+        }
+        out
     }
 
     pub fn to_ron(&self) -> Result<String, ron::Error> {
@@ -280,6 +304,15 @@ mod tests {
         assert!(!ExpectedFindings::axis_contains(e.axis_deg.unwrap(), 0.0));
         assert!(ExpectedFindings::axis_contains((-30.0, 90.0), 60.0));
         assert!(!ExpectedFindings::axis_contains((-30.0, 90.0), 120.0));
+    }
+
+    #[test]
+    fn citations_come_from_the_field_and_the_notes_block() {
+        let mut s = Scenario::sinus_normal();
+        assert_eq!(s.citations(), Vec::<String>::new());
+        s.notes = Some("Teaching text.\n\nSources:\n- A et al. 2001.\n- B 2002.".into());
+        s.references = vec!["C 2003.".into()];
+        assert_eq!(s.citations(), ["C 2003.", "A et al. 2001.", "B 2002."]);
     }
 
     #[test]

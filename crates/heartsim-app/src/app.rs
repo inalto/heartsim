@@ -76,6 +76,8 @@ pub struct HeartSimApp {
     tour: Option<tour::Tour>,
     /// Guided tutorials (B15) and the scenario timeline editor.
     tutorials: crate::tutorial_ui::Tutorials,
+    /// Scripted patient cases (B18), played in the same reader panel as the tutorials.
+    cases: crate::case_ui::Cases,
     timeline_tab: tutorials::TimelineTab,
     /// Export / Import window and the recording under review (B20).
     #[cfg(feature = "export")]
@@ -287,6 +289,10 @@ impl HeartSimApp {
             rhythm_quiz,
             tour: tour::Tour::from_env(),
             tutorials: Self::load_tutorials(cc, assets),
+            cases: assets.map_or_else(
+                crate::case_ui::Cases::load_default,
+                crate::case_ui::Cases::from_bundle,
+            ),
             timeline_tab: tutorials::TimelineTab::default(),
             #[cfg(feature = "export")]
             exports: crate::export_panel::ExportPanel::default(),

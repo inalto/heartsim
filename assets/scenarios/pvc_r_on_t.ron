@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "pvc_r_on_t",
+    title: "PVC with R-on-T timing",
+    description: "Every fifth beat a PVC arrives only 320 ms after the previous QRS, on the peak of the preceding T wave, in an otherwise normal sinus rhythm at 72 bpm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A PVC that falls on the T wave ('R-on-T') meets ventricular muscle that is only partly recovered, the vulnerable period, and can start re-entry that becomes VT or VF. The risk is greatest in an unstable substrate: acute ischaemia, a long QT interval, hypokalaemia or a cardiomyopathy. In a healthy heart an R-on-T PVC is usually harmless.\nCompare the coupling interval with the PVCs of the bigeminy preset (600 ms, late in diastole): the earlier the coupling, the closer to the T wave."),
+    confused_with: ["pvc_bigeminy", "pvc_couplets", "pac_frequent"],
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: R-on-T phenomenon, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 100.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [Focus(region: LeftVentricle, mode: Coupled(coupling_ms: 300.0, every_n_beats: 5, count: 1, run_cycle_ms: 400.0))],
+    ),
+)

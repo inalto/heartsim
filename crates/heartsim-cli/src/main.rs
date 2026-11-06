@@ -1,4 +1,5 @@
 mod bridge;
+mod content;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -42,6 +43,25 @@ enum Cmd {
     /// the last 10 s with the file's `expected` block. Fails if any scenario fails.
     ValidateScenarios {
         /// Scenario directory (e.g. `assets/scenarios`).
+        dir: PathBuf,
+    },
+    /// Load a tutorial (a `tutorial.ron`, a directory of tutorials, an installed tutorial id, or `all`),
+    /// check its content rules (every page changes the simulation, checks are well formed, references
+    /// given) and execute every page action headlessly on the timing engine and synthesiser. Fails on
+    /// any error: an action the engine refuses, an unknown rhythm or highlight, a wait that never ends.
+    RunTutorial {
+        /// Tutorial file, directory of tutorials, id, or `all` for the installed library.
+        #[arg(default_value = "all")]
+        tutorial: String,
+        /// The `assets/` directory (default: `$HEARTSIM_ASSETS`, `./assets`, the source tree).
+        #[arg(long)]
+        assets: Option<PathBuf>,
+    },
+    /// Load every `*.ron` patient case in a directory (e.g. `assets/cases`), check ids, references,
+    /// question counts and explanations, and execute every stage's actions headlessly. Fails if any
+    /// case does.
+    ValidateCases {
+        /// Case directory (a sibling `scenarios/` folder holds the rhythms).
         dir: PathBuf,
     },
     /// Run a scenario headless and write the same exports as the app's Export window: 12-lead PDF,
@@ -532,6 +552,8 @@ fn main() -> Result<()> {
         })?,
         Cmd::AnatomyInfo { pack } => anatomy_info(&pack)?,
         Cmd::ValidateScenarios { dir } => validate_scenarios(&dir)?,
+        Cmd::RunTutorial { tutorial, assets } => content::run_tutorials(&tutorial, assets.as_deref())?,
+        Cmd::ValidateCases { dir } => content::validate_cases(&dir)?,
         Cmd::ExportOpencarp {
             scenario,
             out,

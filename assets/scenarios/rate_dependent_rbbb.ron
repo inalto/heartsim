@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "rate_dependent_rbbb",
+    title: "Rate-related right bundle-branch block (aberrancy)",
+    description: "Sinus rhythm at 80 bpm with a narrow QRS; at 6 s the rate rises to 140 bpm and the right bundle branch, which has not recovered in time, blocks: the QRS becomes wide.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A bundle branch that conducts normally at a slow rate can fail at a fast rate because it has not recovered from the previous beat (phase 3 block). The right bundle branch has the longest refractory period, so rate-related aberrancy is most often of RBBB type. Here the right bundle fails above 115 bpm.\nThe P wave before every QRS and the typical RBBB shape (rSR' in V1, wide S in lead I) show that the rhythm is supraventricular. When the rate falls the QRS narrows again.\nIn a wide-complex tachycardia of uncertain origin assume VT, because treating VT as aberrancy is the dangerous mistake."),
+    confused_with: ["vt_monomorphic", "rbbb", "sinus_tachy_130", "avnrt_150"],
+    references: [
+        "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
+        "Al-Khatib SM et al. 2017 AHA/ACC/HRS guideline for management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Circulation 2018;138:e272-e391.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: aberrant conduction, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (130.0, 150.0),
+        pr_ms: None,
+        qrs_ms: Some((120.0, 180.0)),
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 6000.0, action: SetGlobalSinusRate(bpm: 140.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+        his_purkinje: HisPurkinjeParams(rbb: BundleEdge(delay_ms: 30.0, blocked: false, block_above_rate_bpm: 115.0)),
+    ),
+)

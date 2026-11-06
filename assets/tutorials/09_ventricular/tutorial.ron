@@ -1,0 +1,279 @@
+// heartsim tutorial: ventricular arrhythmias. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "09_ventricular",
+    title: "Ventricular arrhythmias",
+    summary: "Premature ventricular beats, couplets and R-on-T, non-sustained and sustained ventricular tachycardia with its cardioversion, the benign accelerated idioventricular rhythm, and the wide-complex tachycardia question.",
+    references: [
+        "Al-Khatib SM et al. 2017 AHA/ACC/HRS guideline for management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Circulation 2018;138:e272-e391.",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Panchal AR et al. Part 3: Adult basic and advanced life support: 2020 American Heart Association Guidelines for CPR and ECC. Circulation 2020;142:S366-S468.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 16).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: premature ventricular complexes, ventricular tachycardia, AIVR, wide complex tachycardia. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "Premature ventricular contractions",
+            markdown: r#"
+A **premature ventricular contraction (PVC)** is a beat that starts in the ventricular muscle,
+earlier than the next normal beat. Its signature:
+
+* a **wide QRS (0.12 s or more)** that is bizarre in shape, because the impulse spreads through muscle
+  and not through the Purkinje network,
+* **no P wave** before it,
+* a **T wave opposite** in direction to the main part of the QRS,
+* a **full compensatory pause** afterwards: the sinus node is not disturbed, so the sinus beat
+  after the PVC arrives right on schedule.
+
+Here every normal beat is followed by a PVC: **ventricular bigeminy**.
+"#,
+            actions: [
+                Ui(LoadScenario("pvc_bigeminy")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding identifies an early beat as a PVC?",
+                choices: [
+                    "A wide bizarre QRS with no preceding P wave and a compensatory pause",
+                    "A narrow QRS with an early P wave",
+                    "A short PR interval with a delta wave",
+                    "A normal QRS after a long pause",
+                ],
+                answer: 0,
+                explanation: "A wide QRS without a P wave is the signature of a beat that starts in the ventricle. The sinus rhythm continues unaffected, so the pause after the PVC completes two normal cycles.",
+            )),
+        ),
+        Page(
+            title: "Where does a PVC come from?",
+            markdown: r#"
+The shape of a PVC tells you where it starts, because the impulse spreads away from its origin.
+
+* A PVC from the **left ventricle** moves towards the right ventricle: lead V1 shows a **mainly
+  positive** QRS (**RBBB-like**).
+* A PVC from the **right ventricle** moves towards the left: lead V1 shows a **mainly negative**
+  QRS (**LBBB-like**).
+
+PVCs with **more than one shape** come from more than one focus: they are **multifocal**. That
+suggests a systemic cause such as electrolyte disturbance, ischaemia or digoxin toxicity, rather
+than one irritable spot.
+
+Open the 12-lead view and compare V1 in the two types of PVC.
+"#,
+            actions: [
+                Ui(LoadScenario("pvc_multifocal")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "A PVC has a mainly positive QRS in V1. Where does it most likely arise?",
+                choices: ["The left ventricle", "The right ventricle", "The atria", "The AV node"],
+                answer: 0,
+                explanation: "The impulse from a left-ventricular focus travels rightwards, towards V1 on the right side of the chest, giving a mainly positive QRS in V1, like right bundle-branch block.",
+            )),
+        ),
+        Page(
+            title: "Couplets and runs",
+            markdown: r#"
+Two PVCs in a row are a **couplet**; three or more in a row make a **run**.
+
+Frequent PVCs, couplets and runs are markers of an unstable ventricle. Most single PVCs in a healthy
+heart are harmless. What matters is the **heart under the PVC**: a scar, ischaemia, a cardiomyopathy,
+or a long QT interval make the same beat more dangerous.
+
+The simulator sends a couplet after every third normal beat.
+"#,
+            actions: [
+                Ui(LoadScenario("pvc_couplets")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "How many consecutive PVCs make a couplet?",
+                choices: ["Two", "Three", "Five", "Ten"],
+                answer: 0,
+                explanation: "Two consecutive PVCs are a couplet. Three or more at a rate above 100 bpm form non-sustained ventricular tachycardia.",
+            )),
+        ),
+        Page(
+            title: "R on T",
+            markdown: r#"
+The T wave is the **vulnerable period** of the ventricles: some cells have recovered and others
+have not. A PVC that falls on the T wave, **R-on-T**, can meet a ventricle in this uneven state
+and start a re-entry circuit, causing ventricular tachycardia or fibrillation.
+
+The risk is greatest in a damaged or electrically unstable heart: acute ischaemia, a long QT
+interval, or low potassium. In a healthy heart an R-on-T PVC is usually harmless.
+
+In this scenario the PVC arrives at the peak of the preceding T wave.
+"#,
+            actions: [
+                Ui(LoadScenario("pvc_r_on_t")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Why is an early beat on the T wave potentially dangerous?",
+                choices: [
+                    "The ventricle is only partly recovered, which favours re-entry",
+                    "The T wave blocks the AV node",
+                    "It always means complete heart block",
+                    "It makes the sinus rate faster",
+                ],
+                answer: 0,
+                explanation: "During the T wave some ventricular cells are still refractory and others are excitable. An early beat can then travel only one way around the refractory region and form a re-entry loop.",
+            )),
+        ),
+        Page(
+            title: "Runs that stop by themselves",
+            markdown: r#"
+**Ventricular tachycardia (VT)** is **three or more consecutive ventricular beats at more than
+100 beats per minute**. If it stops by itself in **less than 30 seconds** it is **non-sustained
+(NSVT)**.
+
+The simulator runs eight fast ventricular beats every few sinus beats. During each run the QRS is wide
+and regular, and the P waves of the sinus rhythm keep going underneath.
+
+NSVT is a warning in a patient with heart disease; it needs a search for a cause and a decision about
+the risk of a longer episode.
+"#,
+            actions: [
+                Ui(LoadScenario("nsvt_runs")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A run of 8 wide beats at 170 bpm stops by itself after 3 seconds. What is it called?",
+                choices: [
+                    "Non-sustained ventricular tachycardia",
+                    "Sustained ventricular tachycardia",
+                    "Accelerated idioventricular rhythm",
+                    "Atrial fibrillation",
+                ],
+                answer: 0,
+                explanation: "Three or more ventricular beats above 100 bpm lasting under 30 seconds is non-sustained VT. Sustained VT lasts more than 30 seconds or needs intervention because of haemodynamic compromise.",
+            )),
+        ),
+        Page(
+            title: "Sustained monomorphic VT",
+            markdown: r#"
+When the tachycardia does not stop, it is **sustained VT**. The ECG is a **regular, wide-complex
+tachycardia** (QRS 0.12 s or more) at about 120 to 250 bpm with one constant shape: **monomorphic**.
+
+The best clue is **AV dissociation**: the sinus node and the ventricles beat independently, so
+P waves are present but unrelated to the QRS complexes, and appear to march through them. They are
+easiest to see in lead II and V1.
+
+VT can be tolerated for a time, but it can cause collapse or degrade into ventricular fibrillation.
+"#,
+            actions: [
+                Ui(LoadScenario("vt_monomorphic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding strongly supports ventricular tachycardia in a wide-complex tachycardia?",
+                choices: [
+                    "AV dissociation: P waves unrelated to the QRS",
+                    "A P wave before every QRS",
+                    "A short PR interval",
+                    "A narrow QRS",
+                ],
+                answer: 0,
+                explanation: "Independent atrial and ventricular activity means the ventricles are being driven from below the AV node. A P wave before every QRS would point to a supraventricular rhythm with aberrancy.",
+            )),
+        ),
+        Page(
+            title: "Treating VT: cardioversion",
+            markdown: r#"
+The treatment of VT depends on the patient, not on the strip.
+
+* **No pulse:** treat as cardiac arrest, with an **unsynchronised shock** (defibrillation) and CPR.
+* **Pulse, but unstable** (low blood pressure, chest pain, heart failure, reduced
+  consciousness): **synchronised cardioversion**, starting at about 100 J (biphasic).
+* **Pulse and stable:** antiarrhythmic drugs such as amiodarone, or cardioversion, under
+  specialist advice.
+
+After about 7 seconds the simulator delivers a synchronised shock of 100 J. The sinus rhythm
+should return. If the shock fails, press **Replay**.
+"#,
+            actions: [
+                Ui(LoadScenario("vt_monomorphic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(7000.0))),
+                Sim(Shock(joules: 100.0, synchronised: true)),
+            ],
+            check: Some(Question(
+                prompt: "A patient in VT has a blood pressure of 70/40 and is drowsy, but has a pulse. What is the treatment?",
+                choices: [
+                    "A synchronised shock (cardioversion)",
+                    "Unsynchronised defibrillation at 200 J",
+                    "Adenosine",
+                    "Observation only",
+                ],
+                answer: 0,
+                explanation: "A pulse means the heart is still pumping, and a synchronised shock avoids the T wave. Unsynchronised shocks are for pulseless VT and ventricular fibrillation. Adenosine does not stop VT.",
+            )),
+        ),
+        Page(
+            title: "Slow VT: accelerated idioventricular rhythm",
+            markdown: r#"
+Not every wide ventricular rhythm needs a shock. In **accelerated idioventricular rhythm (AIVR)** a
+ventricular focus runs at **50 to 110 bpm**, only a little faster than the sinus node. It is wide and
+regular, with AV dissociation, and **capture beats** when the sinus impulse sneaks through.
+
+AIVR is typical after **reperfusion** of an acute infarction. It is usually benign and short-lived,
+and does not need treatment, unless the patient has symptoms.
+
+Compare the rate with the previous VT: the same family of rhythms, but a different risk.
+"#,
+            actions: [
+                Ui(LoadScenario("aivr")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A wide regular rhythm at 75 bpm appears after successful PCI for an infarct. The patient feels well. What is the most likely rhythm?",
+                choices: [
+                    "Accelerated idioventricular rhythm",
+                    "Ventricular fibrillation",
+                    "Complete heart block",
+                    "Atrial flutter",
+                ],
+                answer: 0,
+                explanation: "A slow ventricular rhythm of 50 to 110 bpm after reperfusion is AIVR, a benign reperfusion arrhythmia. Real VT is faster, and the patient is usually unwell.",
+            )),
+        ),
+        Page(
+            title: "Wide and fast: VT or SVT with aberrancy?",
+            markdown: r#"
+A fast rhythm with a wide QRS can be **VT** or a **supraventricular rhythm with aberrant conduction**
+(a bundle branch blocked by the rate). The two can look alike, and the wrong guess is costly.
+
+**The safe rule:** *treat a wide-complex tachycardia of uncertain origin as VT.* Giving drugs
+meant for SVT to a patient in VT can be dangerous.
+
+Clues for aberrancy: a P wave before every QRS, a typical RBBB or LBBB shape, and a history of
+previous bundle-branch block. Here the sinus rate rises at six seconds and a wide RBBB complex
+appears: the P waves are still in front of every QRS.
+"#,
+            actions: [
+                Ui(LoadScenario("rate_dependent_rbbb")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A wide-complex tachycardia of uncertain origin should be managed as:",
+                choices: [
+                    "Ventricular tachycardia until proven otherwise",
+                    "SVT with aberrancy",
+                    "Sinus tachycardia",
+                    "A normal variant",
+                ],
+                answer: 0,
+                explanation: "Treating VT as SVT can be fatal, while treating SVT with aberrancy as VT rarely causes harm. When in doubt, assume VT.",
+            )),
+        ),
+    ],
+)

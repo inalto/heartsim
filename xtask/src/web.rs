@@ -34,7 +34,7 @@ pub struct BudgetArgs {
 
 /// Directories of `assets/` that ship to the browser. `drugs.ron` is compiled into the simulation
 /// crate; `icon.svg` and `generated/` are packaging inputs.
-const INCLUDED: [&str; 3] = ["anatomy/default", "scenarios", "tutorials"];
+const INCLUDED: [&str; 4] = ["anatomy/default", "scenarios", "tutorials", "cases"];
 
 /// All files below `dir` as `(path relative to root with '/', absolute path)`, sorted.
 fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<()> {
@@ -151,7 +151,7 @@ mod tests {
     }
 
     #[test]
-    fn archive_holds_the_pack_rhythms_and_tutorials_and_nothing_else() {
+    fn archive_holds_the_pack_rhythms_tutorials_and_cases_and_nothing_else() {
         let bytes = build_archive(&repo_assets()).unwrap();
         let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
         let names: Vec<String> = (0..zip.len())
@@ -162,7 +162,8 @@ mod tests {
             "anatomy/default/cells.bin",
             "anatomy/default/torso.glb",
             "scenarios/sinus_normal.ron",
-            "tutorials/basics/tutorial.ron",
+            "tutorials/01_basics/tutorial.ron",
+            "scenarios/reentry/af_persistent.ron",
         ] {
             assert!(names.iter().any(|n| n == must), "{must} missing from {names:?}");
         }

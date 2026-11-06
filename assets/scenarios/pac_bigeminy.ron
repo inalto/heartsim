@@ -1,0 +1,28 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "pac_bigeminy",
+    title: "Atrial bigeminy",
+    description: "Each sinus beat is followed by a premature atrial beat 450 ms later; the pairs repeat, with a pause before the next sinus beat.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In atrial bigeminy every normal beat is followed by a PAC: the rhythm is grouped in pairs, which can be mistaken for a slow, irregular rhythm. The PACs reset the sinus node, so the pause after each pair is not fully compensatory.\nIt is common with caffeine, stress and structural atrial disease and is usually benign; frequent PACs can precede atrial fibrillation. Differential: ventricular bigeminy (wide QRS, full compensatory pause), sinus rhythm with 2:1 block, Wenckebach grouping."),
+    confused_with: ["pvc_bigeminy", "pac_frequent", "avb_2nd_mobitz1"],
+    references: [
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017.",
+        "Hindricks G et al. 2020 ESC Guidelines for the diagnosis and management of atrial fibrillation. Eur Heart J 2021;42:373-498.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: premature atrial complexes, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (75.0, 115.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: None,
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+        foci: [Focus(region: RightAtrium, mode: Coupled(coupling_ms: 450.0, every_n_beats: 1, count: 1, run_cycle_ms: 400.0))],
+    ),
+)

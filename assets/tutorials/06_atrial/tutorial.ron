@@ -1,0 +1,229 @@
+// heartsim tutorial: atrial arrhythmias. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "06_atrial",
+    title: "Atrial arrhythmias",
+    summary: "Premature atrial beats (conducted and blocked), atrial tachycardia, the sick sinus syndrome, and atrial fibrillation on the re-entry model with cardioversion.",
+    references: [
+        "Hindricks G et al. 2020 ESC Guidelines for the diagnosis and management of atrial fibrillation. Eur Heart J 2021;42:373-498.",
+        "Joglar JA et al. 2023 ACC/AHA/ACCP/HRS guideline for the diagnosis and management of atrial fibrillation. Circulation 2024;149:e1-e156.",
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 12, 15).",
+        "Moe GK, Abildskov JA. Atrial fibrillation as a self-sustaining arrhythmia independent of focal discharge. Am Heart J 1959;58:59-70.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: premature atrial complexes, atrial tachycardia, atrial fibrillation, sick sinus syndrome. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "Premature atrial contractions",
+            markdown: r#"
+A **premature atrial contraction (PAC)** is a beat that fires **early** from somewhere in the
+atria. On the strip:
+
+* an **early P wave** whose shape differs from the sinus P wave (it starts elsewhere),
+* usually a **narrow QRS** that follows it,
+* a pause afterwards that is **shorter than twice the normal beat interval**, because the PAC
+  resets the sinus node.
+
+PACs are common at any age and are usually harmless. Caffeine, stress and lack of sleep make them
+more frequent. Here every third beat is a PAC.
+"#,
+            actions: [
+                Ui(LoadScenario("pac_frequent")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "How can you tell an early beat is atrial rather than ventricular?",
+                choices: [
+                    "It is preceded by an early P wave and has a narrow QRS",
+                    "It has a wide, bizarre QRS and no P wave",
+                    "It comes after a long pause",
+                    "It has a delta wave",
+                ],
+                answer: 0,
+                explanation: "An early P wave with a normal, narrow QRS is a premature atrial beat. A premature ventricular beat is wide and has no preceding P wave.",
+            )),
+        ),
+        Page(
+            title: "A PAC that is blocked",
+            markdown: r#"
+A PAC that comes **very early** may arrive while the AV node is still **refractory** from the
+previous beat. The atria contract, but the impulse cannot cross the node: a P wave appears with **no
+QRS** after it.
+
+The P wave of a blocked PAC usually sits **on top of the preceding T wave**, which deforms it. If you
+do not look carefully, the pause looks like a sinus pause or an AV block. Before diagnosing either,
+**examine every T wave** in the pause.
+
+In this scenario every third beat is a blocked PAC.
+"#,
+            actions: [
+                Ui(LoadScenario("pac_blocked")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A pause occurs after a T wave that looks pointed or notched. What should you suspect?",
+                choices: [
+                    "A blocked premature atrial contraction hidden in the T wave",
+                    "Complete heart block",
+                    "A ventricular premature beat",
+                    "Sinoatrial exit block",
+                ],
+                answer: 0,
+                explanation: "A P wave landing on the T wave distorts it. Because the AV node is still refractory, no QRS follows. This is the commonest cause of unexplained pauses in an otherwise normal rhythm.",
+            )),
+        ),
+        Page(
+            title: "A fast ectopic atrial focus",
+            markdown: r#"
+If an area of atrial muscle fires repeatedly and faster than the sinus node, it takes over the
+rhythm: **atrial tachycardia**. The atria are driven from the new focus, so the **P wave has a
+different shape** from the sinus P wave. At 150 bpm the rhythm is regular and the QRS is narrow.
+
+Unlike the re-entry tachycardias, it does not start by a premature beat and stop in a single
+beat. It may start slowly (a "warm-up") and slow before it stops. Causes include digoxin toxicity,
+lung disease, and structural heart disease.
+
+Compare the P wave with the sinus P wave on the page about normal rhythm.
+"#,
+            actions: [
+                Ui(LoadScenario("atrial_tachycardia_150")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "What distinguishes the P wave of atrial tachycardia from a sinus P wave?",
+                choices: [
+                    "Its shape, because it starts from a different place in the atria",
+                    "It is always absent",
+                    "It always follows the QRS",
+                    "It is always wider than the QRS",
+                ],
+                answer: 0,
+                explanation: "The P wave shape depends on the path of atrial activation. An ectopic focus gives a different path and therefore a different P wave from the sinus node.",
+            )),
+        ),
+        Page(
+            title: "Sick sinus syndrome: fast and slow",
+            markdown: r#"
+Sometimes the problem is not one fast focus but a **diseased sinus node**. In the **tachycardia-
+bradycardia syndrome** the heart alternates between spells of fast atrial rhythm and **slow rates or
+long pauses**, often with an escape beat from the junction.
+
+Treating the fast phase with drugs that slow the heart can make the slow phase worse, so these
+patients frequently need a **pacemaker** first, and then drugs for the fast phase.
+
+The simulator alternates between 130 and 38 bpm every six seconds.
+"#,
+            actions: [
+                Ui(LoadScenario("sick_sinus_tachy_brady")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Why do patients with tachycardia-bradycardia syndrome often need a pacemaker before rate-slowing drugs?",
+                choices: [
+                    "The drugs would deepen the slow phase and its pauses",
+                    "The drugs have no effect on the fast phase",
+                    "A pacemaker cures the sinus node",
+                    "The drugs make the QRS wide",
+                ],
+                answer: 0,
+                explanation: "Beta-blockers and calcium-channel blockers suppress the sinus and AV nodes. In a node that already pauses, they lengthen the pauses. A pacemaker provides a safe floor for the rate.",
+            )),
+        ),
+        Page(
+            title: "Atrial fibrillation",
+            markdown: r#"
+In **atrial fibrillation (AF)** the atria no longer contract as one: many small wavelets wander
+through them, 300 to 600 times a minute. The ECG shows:
+
+* **no P waves**, only a wavy, uneven baseline (best seen in V1 and lead II),
+* an **irregularly irregular** ventricular rhythm: the R–R intervals have no pattern,
+* usually a narrow QRS.
+
+AF is the commonest sustained arrhythmia and multiplies the risk of stroke about five times,
+because blood stagnates in the atria.
+
+This scenario uses the re-entry model of the atria. It is much heavier to compute: the
+simulation may run **slower than real time**, and the rhythm starts about two seconds after you open
+the page, with a short burst of pacing from the pulmonary veins.
+"#,
+            actions: [
+                Ui(StartReentry("af_persistent")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Which two findings define atrial fibrillation on the ECG?",
+                choices: [
+                    "No P waves and an irregularly irregular ventricular rhythm",
+                    "A P wave before every QRS and a regular rhythm",
+                    "A sawtooth pattern with a fixed ratio",
+                    "A wide QRS and a regular rate of 40 bpm",
+                ],
+                answer: 0,
+                explanation: "Absent P waves with irregularly irregular R-R intervals are the two defining features of AF. A regular rhythm with a P wave before each QRS is sinus rhythm.",
+            )),
+        ),
+        Page(
+            title: "Why is the ventricular rhythm irregular?",
+            markdown: r#"
+The atria send hundreds of impulses per minute to the AV node. The node cannot conduct them all: it
+passes **only some**, and each blocked impulse still leaves the node partly recovered or partly
+refractory (*concealed conduction*), so the next one finds it in a different state.
+
+The result is an **irregularly irregular ventricular response**. In untreated AF it is often
+100 to 160 bpm. **Rate control** drugs (beta-blockers, diltiazem, verapamil, digoxin) act on the AV
+node to slow it; **rhythm control** tries to restore sinus rhythm.
+
+Count the QRS complexes in a ten-second stretch and multiply by six to estimate the ventricular rate.
+"#,
+            actions: [
+                Ui(StartReentry("af_persistent")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which part of the heart protects the ventricles from the full atrial rate in AF?",
+                choices: ["The AV node", "The sinus node", "The His bundle only", "The Purkinje fibres only"],
+                answer: 0,
+                explanation: "The AV node conducts only some of the atrial impulses, because of its refractory period and concealed conduction. Drugs that slow the node reduce the ventricular rate.",
+            )),
+        ),
+        Page(
+            title: "Electrical cardioversion",
+            markdown: r#"
+If AF has to be stopped, a **synchronised shock** can reset the heart. The energy is typically
+**120 to 200 J** (biphasic). All atrial muscle is depolarised at once, the wavelets die out, and the
+sinus node can take over.
+
+Before an elective cardioversion in AF lasting **more than 48 hours** (or of unknown duration), the
+patient needs **anticoagulation**, because the atria may contain clots that the return of
+contraction could dislodge. In an unstable patient the shock is given without delay.
+
+The simulator waits about 15 seconds, so you can see the fibrillation start, and then delivers a
+shock. Success is a matter of probability, as in real life: if it fails, press **Replay**.
+"#,
+            actions: [
+                Ui(StartReentry("af_persistent")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(15000.0))),
+                Sim(Shock(joules: 150.0, synchronised: true)),
+            ],
+            check: Some(Question(
+                prompt: "A patient has had AF for 5 days and is stable. What must happen before an elective cardioversion?",
+                choices: [
+                    "Anticoagulation, because of the risk of atrial clots",
+                    "Nothing, shock at once",
+                    "A pacemaker",
+                    "Adenosine",
+                ],
+                answer: 0,
+                explanation: "After more than 48 hours of AF, thrombus may have formed in the left atrial appendage. Restoring atrial contraction can dislodge it and cause a stroke, so the patient needs anticoagulation first (or an imaging check).",
+            )),
+        ),
+    ],
+)

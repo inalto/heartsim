@@ -1,0 +1,167 @@
+// heartsim patient case: syncope and progressive conduction disease. Original text by the heartsim
+// authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_syncope_heart_block",
+    title: "Collapse in the supermarket",
+    summary: "An older woman faints twice in a week. Follow her ECG from a quiet baseline to the rhythm that explains the collapses, and decide what to do.",
+    patient: "74-year-old woman, two episodes of sudden loss of consciousness in a week, no chest pain, no warning, on no heart-rate-lowering drugs.",
+    references: [
+        "Kusumoto FM et al. 2018 ACC/AHA/HRS guideline on the evaluation and management of patients with bradycardia and cardiac conduction delay. Circulation 2019;140:e382-e482.",
+        "Glikson M et al. 2021 ESC Guidelines on cardiac pacing and cardiac resynchronization therapy. Eur Heart J 2021;42:3427-3520.",
+        "Brignole M et al. 2018 ESC Guidelines for the diagnosis and management of syncope. Eur Heart J 2018;39:1883-1948.",
+        "Panchal AR et al. Part 3: Adult basic and advanced life support: 2020 American Heart Association Guidelines for CPR and ECC. Circulation 2020;142:S366-S468.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: bifascicular block, Mobitz II, third-degree AV block, pacemaker rhythms. litfl.com/ecg-library.",
+    ],
+    stages: [
+        Stage(
+            title: "The first ECG",
+            markdown: r#"
+**Mrs Rossi** is brought to the emergency department after fainting in a supermarket. She felt
+nothing before she fell, and recovered within a minute. Her examination is normal and her blood
+pressure is 135/80 mmHg.
+
+Her 12-lead ECG shows sinus rhythm at 72 bpm, a PR interval of 190 ms, a **wide QRS** with an rSR' in
+V1, and a frontal axis of about −60°.
+"#,
+            actions: [
+                Ui(LoadScenario("bifascicular")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What conduction abnormality does the ECG show?",
+                    choices: [
+                        "Right bundle-branch block with left anterior fascicular block (bifascicular block)",
+                        "Left bundle-branch block",
+                        "First-degree AV block only",
+                        "A normal ECG for her age",
+                    ],
+                    answer: 0,
+                    explanation: "A wide QRS with an rSR' in V1 is right bundle-branch block. The axis of −60° adds left anterior fascicular block. Two of the three divisions of the conduction system are blocked.",
+                ),
+                Question(
+                    prompt: "Why does unexplained syncope make this ECG worrying?",
+                    choices: [
+                        "The last fascicle may fail intermittently and cause complete heart block",
+                        "RBBB always causes syncope",
+                        "It proves a pulmonary embolism",
+                        "It shows a long QT interval",
+                    ],
+                    answer: 0,
+                    explanation: "With only the left posterior fascicle conducting, a transient failure produces complete AV block with a pause, which can cause sudden syncope. Syncope with bifascicular block is a reason for urgent investigation, usually with a pacemaker or prolonged monitoring.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Monitoring on the ward",
+            markdown: r#"
+She is admitted to a monitored bed. During the night the nurse calls you: the monitor shows
+**dropped beats**. The rhythm strip shows regular P waves at 80 bpm; **three of every four P waves are
+followed by a wide QRS**, and the PR interval of the conducted beats is the **same each time**.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_2nd_mobitz2_4to3")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the rhythm?",
+                    choices: [
+                        "Second-degree AV block, Mobitz type II",
+                        "Second-degree AV block, Mobitz type I (Wenckebach)",
+                        "Sinoatrial exit block",
+                        "Premature atrial contractions",
+                    ],
+                    answer: 0,
+                    explanation: "A constant PR interval in the conducted beats, followed by a sudden dropped QRS, is Mobitz II. In Mobitz I the PR would lengthen before each drop.",
+                ),
+                Question(
+                    prompt: "Atropine is unlikely to help here. Why?",
+                    choices: [
+                        "The block is below the AV node, and atropine acts on the node",
+                        "Atropine only works in the ventricles",
+                        "She is too old for atropine",
+                        "Atropine makes the QRS narrow",
+                    ],
+                    answer: 0,
+                    explanation: "Atropine removes vagal tone from the sinus and AV nodes. Block in the His-Purkinje system is not under vagal control, and a faster atrial rate can even worsen it by presenting more impulses to the block.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "She collapses on the monitor",
+            markdown: r#"
+Ten minutes later the alarm sounds. Mrs Rossi is **pale and unresponsive but has a faint pulse**. The
+monitor shows P waves at 80 bpm that **no longer conduct at all**, and slow, **wide** QRS complexes at
+35 bpm.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_3rd_ventricular")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the rhythm now?",
+                    choices: [
+                        "Complete heart block with a ventricular escape rhythm",
+                        "Ventricular tachycardia",
+                        "Sinus bradycardia",
+                        "Atrial fibrillation",
+                    ],
+                    answer: 0,
+                    explanation: "P waves and QRS complexes beat independently (AV dissociation), and the QRS complexes are wide and slow. The ventricles are being driven by an escape focus below the block.",
+                ),
+                Question(
+                    prompt: "What is the right immediate treatment for this unstable patient?",
+                    choices: [
+                        "Transcutaneous (or transvenous) pacing, with a chronotropic infusion as a bridge",
+                        "Adenosine 6 mg",
+                        "Amiodarone",
+                        "Synchronised cardioversion at 100 J",
+                    ],
+                    answer: 0,
+                    explanation: "A bradycardic patient who is unstable needs a faster rate. Pacing is the reliable treatment when the block is infranodal; an infusion of adrenaline or dopamine can bridge until the pacemaker is ready. Shocks and adenosine are for tachycardias.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "After the pacemaker",
+            markdown: r#"
+A dual-chamber pacemaker is implanted the next day. Her ECG shows a **thin spike before every wide QRS**,
+and the **ventricular rate follows the sinus P waves** at 75 bpm.
+"#,
+            actions: [
+                Ui(LoadScenario("paced_ddd")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which pacing mode keeps the ventricles in step with the sinus node here?",
+                    choices: [
+                        "DDD, which senses the atrium and paces the ventricle after an AV delay",
+                        "VVI, which paces the ventricle at a fixed rate",
+                        "AOO, which paces the atrium without sensing",
+                        "VOO, which paces the ventricle without sensing",
+                    ],
+                    answer: 0,
+                    explanation: "In DDD mode the pacemaker tracks each sensed P wave and paces the ventricle after the programmed AV delay, so the heart rate follows the sinus rate and AV synchrony is kept. VVI ignores the atria.",
+                ),
+                Question(
+                    prompt: "Why is the QRS wide after pacing?",
+                    choices: [
+                        "The lead in the right ventricle starts activation in muscle, not in the Purkinje network",
+                        "The pacemaker widens the P wave",
+                        "The block has become worse",
+                        "The sinus node is not working",
+                    ],
+                    answer: 0,
+                    explanation: "A paced beat starts at the tip of the lead and spreads cell to cell through the ventricular muscle, which takes longer than the normal His-Purkinje route. That is why paced QRS complexes have a left bundle-branch block shape.",
+                ),
+            ],
+        ),
+    ],
+)

@@ -7,6 +7,29 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ### Added
 - The browser version is published on GitHub Pages under `/app/`, next to the guide: `docs.yml` now builds the guide and, on
   `master`, the web app, and deploys both. The guide's introduction links to it.
+- Education content (brief B18): the rhythm library grows from 33 to 55 scenarios (ventricular tachycardia and its runs, couplets,
+  R-on-T and parasystole, blocked PACs and atrial bigeminy, atrial tachycardia, sick sinus, rate-related aberrancy, right-sided WPW,
+  accelerated junctional rhythm, Mobitz II 4:3, axis deviations, and anterior, inferior, lateral, posterior, subendocardial,
+  pericarditis and evolving ischaemia patterns), each with an explanation, a "confused with" list and cited references; the tutorial list to ten (basics, normal rhythm, cardiac axis, conduction abnormalities, AV blocks and
+  bradycardias, atrial arrhythmias, SVT, WPW, ventricular arrhythmias, ischaemia and infarction); and three scripted patient
+  cases with eight multiple-choice questions each.
+- Patient cases: `assets/cases/*.ron` (format in `heartsim_core::case`, documented in `docs/tutorials.md`), a case list under the
+  tutorials and a minimal player in the reader panel (stage vignettes, simulator actions, one answer per question with its
+  explanation, score), with English and Italian labels. The web archive carries `cases/`.
+- `heartsim-cli run-tutorial` runs every page action of a tutorial headlessly and checks the content rules; `heartsim-cli
+  validate-cases` does the same for cases. `validate-scenarios` now also requires references.
+- `references` field in scenarios, tutorials and cases (scenarios may still keep a `Sources:` block in `notes`); the tutorial
+  action `StartReentry("<preset>")` starts a re-entry preset from a page.
+- `crates/heartsim-ecg/tests/ischaemia_scenarios.rs` pins which leads rise and fall in each ischaemia scenario (the statements of
+  the tutorial); `crates/heartsim-cli/tests/content.rs` runs the scenario validator, every tutorial, and the cases.
+- `typos` spell-check with `_typos.toml` (medical terms), run by `cargo xtask ci` when installed and in the CI workflow.
+
+### Changed
+- The tutorial format and page runner moved from `heartsim-app` to `heartsim_core::tutorial` (re-exported by the app) so the CLI
+  reads the same files. Tutorial ids are numbered for the teaching order: `basics` is now `01_basics` and `cardiac_axis`
+  `03_cardiac_axis` (saved progress of those two starts afresh).
+- Tutorial `Sim` actions go through the same path as the therapy window (re-entry engine if one runs, timing engine, then the 3-D
+  heart), so a coronary lesion set by a page also reaches the heart view.
 
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the

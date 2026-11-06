@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "stemi_lateral",
+    title: "Lateral ST-elevation myocardial infarction (obtuse marginal)",
+    description: "Sinus rhythm at 78 bpm with an occluded obtuse marginal branch: ST elevation in I, aVL and V4 to V6 with reciprocal depression in III and V1.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The obtuse marginal branch of the left circumflex artery (or a diagonal branch of the LAD) supplies the lateral wall of the left ventricle. Its occlusion raises the ST segment in I, aVL and the lateral chest leads V5-V6 (here V4 to V6), with reciprocal depression in the inferior lead III.\nIsolated lateral infarcts can be subtle on the ECG because the circumflex territory is electrically silent in many leads; a high clinical suspicion matters more than the size of the ST shift.\nDifferential: pericarditis, early repolarisation, left ventricular hypertrophy with strain."),
+    confused_with: ["stemi_anterior", "stemi_inferior", "pericarditis", "wpw_left_lateral"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: lateral STEMI, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "OM", severity: 0.9)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)

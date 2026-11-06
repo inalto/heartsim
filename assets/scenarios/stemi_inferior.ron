@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset (brief B18). Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "stemi_inferior",
+    title: "Inferior ST-elevation myocardial infarction (RCA)",
+    description: "Sinus rhythm at 78 bpm with an occluded right coronary artery: ST elevation in II, III and aVF with reciprocal ST depression in aVL and aVR.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In most people the right coronary artery (RCA) supplies the inferior wall through the posterior descending artery, so its occlusion raises the ST segment in II, III and aVF. Reciprocal ST depression in aVL (and aVR) is the mirror image. ST elevation in III greater than in II, with ST depression in I and aVL, favours the RCA over the left circumflex.\nThe RCA also supplies the AV node in most people, so AV block with a narrow junctional escape is a common early complication; it is usually transient. Right ventricular infarction is checked with right-sided leads (V4R); nitrates are avoided in right ventricular infarction.\nThe model also lifts the ST segment a little in the chest leads; in patients the chest-lead changes of an inferior STEMI are usually small, so read the limb leads.\nDifferential: pericarditis, early repolarisation, pulmonary embolism, a normal variant."),
+    confused_with: ["pericarditis", "stemi_lateral", "stemi_posterior", "early repolarisation"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Ibanez B et al. 2017 ESC Guidelines for the management of acute myocardial infarction in patients presenting with ST-segment elevation. Eur Heart J 2018;39:119-177.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: inferior STEMI, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "RCA", severity: 0.9)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 78.0),
+    ),
+)

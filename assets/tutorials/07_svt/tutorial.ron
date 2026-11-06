@@ -1,0 +1,208 @@
+// heartsim tutorial: supraventricular tachycardia. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+Tutorial(
+    format_version: 1,
+    id: "07_svt",
+    title: "Supraventricular tachycardia (SVT)",
+    summary: "Regular narrow-complex tachycardias: how to tell sinus tachycardia from AV-nodal re-entry (AVNRT), AV re-entry (AVRT) and atrial tachycardia, and how adenosine and synchronised cardioversion stop them.",
+    references: [
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Panchal AR et al. Part 3: Adult basic and advanced life support: 2020 American Heart Association Guidelines for CPR and ECC. Circulation 2020;142:S366-S468.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 14).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: AVNRT, AVRT, atrial tachycardia, narrow complex tachycardia. litfl.com/ecg-library.",
+    ],
+    pages: [
+        Page(
+            title: "Sinus tachycardia speeds up gradually",
+            markdown: r#"
+**Supraventricular tachycardia (SVT)** is a fast rhythm that needs tissue **above the ventricles** to
+keep going, so the QRS is **narrow**. Before naming an SVT, rule out the commonest fast narrow rhythm
+of all: **sinus tachycardia**.
+
+Sinus tachycardia follows the body's demand. It accelerates and slows **gradually**, a P wave sits
+before every QRS, and the rate is usually under about 150 bpm.
+
+The simulator raises the sinus rate in three steps. Watch how the rate climbs: there is no sudden jump.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Sim(SetGlobalSinusRate(bpm: 90.0)),
+                Ui(WaitForEvent(ElapsedMs(3000.0))),
+                Sim(SetGlobalSinusRate(bpm: 120.0)),
+                Ui(WaitForEvent(ElapsedMs(3000.0))),
+                Sim(SetGlobalSinusRate(bpm: 145.0)),
+            ],
+            check: Some(Question(
+                prompt: "Which feature points to sinus tachycardia rather than a re-entrant SVT?",
+                choices: [
+                    "Gradual onset and offset with a normal P wave before every QRS",
+                    "A rate that suddenly jumps from 80 to 180 bpm",
+                    "No visible P waves and a rate fixed at 180 bpm",
+                    "A retrograde P wave inside the QRS",
+                ],
+                answer: 0,
+                explanation: "Sinus tachycardia is driven by the sinus node, so the P wave is normal and the rate changes smoothly with the stimulus. Re-entrant SVTs start and stop abruptly.",
+            )),
+        ),
+        Page(
+            title: "AVNRT: a circuit in the AV node",
+            markdown: r#"
+In most people the AV node has **two pathways**: a **fast** one with a long refractory period and a
+**slow** one with a short refractory period. A premature atrial beat can find the fast pathway still
+refractory, go down the slow pathway, and come back up the fast pathway: a **re-entry circuit** that
+starts **abruptly** and runs at **150 to 250 bpm**. This is **AV-nodal re-entrant tachycardia (AVNRT)**.
+
+Atria and ventricles are activated almost together, so the P wave is **buried in the QRS** or forms a
+tiny notch at its end (pseudo-r' in V1). The rhythm is regular and the QRS narrow.
+
+At about three seconds one premature atrial beat starts the tachycardia in this scenario.
+"#,
+            actions: [
+                Ui(LoadScenario("avnrt_150")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A regular narrow-complex tachycardia at 160 bpm starts suddenly. No P wave is visible. What is the most likely diagnosis?",
+                choices: [
+                    "AV-nodal re-entrant tachycardia",
+                    "Sinus tachycardia",
+                    "Ventricular tachycardia",
+                    "Complete heart block",
+                ],
+                answer: 0,
+                explanation: "Sudden onset, regular rhythm, narrow QRS and a P wave hidden in the QRS are the typical features of AVNRT, the commonest regular SVT.",
+            )),
+        ),
+        Page(
+            title: "AVRT: a circuit through an accessory pathway",
+            markdown: r#"
+In **AV re-entrant tachycardia (AVRT)** the circuit uses an **accessory pathway**, a strand of muscle
+that links atrium and ventricle outside the AV node. In the commonest form the impulse goes **down the
+AV node and up the accessory pathway**, which is why the QRS stays narrow (**orthodromic** AVRT).
+
+The loop is longer than in AVNRT, because the impulse has to travel through the ventricle. The
+retrograde P wave therefore comes **later after the QRS**: the **RP interval is longer than 70 ms**
+and the P wave is visible in the ST segment. The rate is often faster, around 200 bpm.
+
+The pathway in this scenario is *concealed*: it only conducts backwards, so the sinus rhythm before
+the tachycardia is completely normal.
+"#,
+            actions: [
+                Ui(LoadScenario("avrt_orthodromic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "A retrograde P wave appears 120 ms after the QRS in a regular narrow tachycardia. Which is more likely?",
+                choices: [
+                    "AVRT, because the RP interval is longer than 70 ms",
+                    "AVNRT, because the P wave is always inside the QRS",
+                    "Sinus tachycardia",
+                    "Ventricular tachycardia",
+                ],
+                answer: 0,
+                explanation: "In typical AVNRT the retrograde P is inside or right after the QRS (RP under about 70 ms). A visible P wave in the ST segment suggests the longer circuit of AVRT.",
+            )),
+        ),
+        Page(
+            title: "Stopping the circuit with adenosine",
+            markdown: r#"
+Both AVNRT and AVRT need the **AV node** as one limb of the circuit. A drug that blocks the node for a
+few seconds breaks the circuit. **Adenosine** does exactly that: a rapid intravenous bolus of 6 mg (then
+12 mg if needed) opens potassium channels in the node and causes **a few seconds of AV block**. The
+tachycardia stops, and the sinus node restarts the rhythm.
+
+The patient may feel flushed, with chest tightness. The strip may show a pause or a few slow beats
+before sinus rhythm returns. Vagal manoeuvres such as a modified Valsalva are tried first.
+
+In this run the tachycardia has been going for a few seconds when the simulator gives adenosine.
+"#,
+            actions: [
+                Ui(LoadScenario("avnrt_150")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(7000.0))),
+                Sim(Drug(name: "adenosine", dose: 1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Why does adenosine stop AVNRT?",
+                choices: [
+                    "It blocks the AV node, which is part of the circuit, for a few seconds",
+                    "It shortens the refractory period of the atria",
+                    "It speeds up the sinus node",
+                    "It slows the ventricles directly",
+                ],
+                answer: 0,
+                explanation: "The AV node is one limb of the re-entry loop. Interrupting conduction there for a few seconds leaves the circuit with nowhere to go, and the sinus node takes over.",
+            )),
+        ),
+        Page(
+            title: "Atrial tachycardia does not need the AV node",
+            markdown: r#"
+In **atrial tachycardia** a small area of atrial muscle fires on its own, quickly, usually at 150
+to 200 bpm. The P wave has a **different shape from the sinus P wave**, because the impulse starts
+somewhere else in the atria. There is a P wave before every QRS at this rate.
+
+The AV node is only a spectator. Giving **adenosine** therefore does **not break the rhythm**: the
+atria keep going, and the AV block it causes may simply reveal more P waves than QRS complexes. This
+is why adenosine is also a diagnostic test.
+
+Compare the P wave of this rhythm with the sinus P wave you saw earlier.
+"#,
+            actions: [
+                Ui(LoadScenario("atrial_tachycardia_150")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(7000.0))),
+                Sim(Drug(name: "adenosine", dose: 1.0)),
+            ],
+            check: Some(Question(
+                prompt: "A narrow tachycardia continues with more P waves than QRS complexes after adenosine. What does this show?",
+                choices: [
+                    "The tachycardia starts in the atria and does not depend on the AV node",
+                    "The tachycardia is AVNRT",
+                    "The tachycardia is ventricular",
+                    "Adenosine was not given",
+                ],
+                answer: 0,
+                explanation: "When the atria keep firing while the AV node is blocked, the atrial rhythm is independent of the node, as in atrial tachycardia or flutter. AVNRT and AVRT would have stopped.",
+            )),
+        ),
+        Page(
+            title: "The unstable patient: synchronised cardioversion",
+            markdown: r#"
+A patient with SVT who has **low blood pressure, chest pain, breathlessness or reduced
+consciousness** is unstable. Do not waste time with drugs: give a **synchronised shock**.
+
+The defibrillator is set to **synchronise** with the QRS, so that the shock is delivered on the R
+wave and not on the vulnerable T wave. A first energy of **50 to 100 J** (biphasic) usually works for
+a narrow regular tachycardia.
+
+In the simulator the shock succeeds with a high probability at this energy. If the rhythm does not
+stop, press **Replay** or increase the energy in the therapy window.
+"#,
+            actions: [
+                Ui(LoadScenario("avnrt_150")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(7000.0))),
+                Sim(Shock(joules: 100.0, synchronised: true)),
+            ],
+            check: Some(Question(
+                prompt: "Why is the shock for SVT synchronised?",
+                choices: [
+                    "To avoid delivering it on the T wave, which could trigger ventricular fibrillation",
+                    "To make it painless",
+                    "To increase the energy",
+                    "Because the P wave is missing",
+                ],
+                answer: 0,
+                explanation: "A shock on the T wave, the vulnerable period, can start ventricular fibrillation. Synchronisation delivers it on the R wave, a safe moment in the cycle.",
+            )),
+        ),
+    ],
+)
