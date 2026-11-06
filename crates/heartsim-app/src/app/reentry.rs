@@ -35,11 +35,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 /// Wall-clock budget of the simulation steps of one frame.
-const FRAME_BUDGET: Duration = Duration::from_millis(14);
+pub(super) const FRAME_BUDGET: Duration = Duration::from_millis(14);
 
 /// Wall-clock stopwatch. `std::time::Instant` panics on `wasm32-unknown-unknown`, so the browser
 /// build reads `Date.now()` (millisecond resolution, which is enough for a 14 ms frame budget).
-struct Stopwatch {
+pub(super) struct Stopwatch {
     #[cfg(not(target_arch = "wasm32"))]
     start: std::time::Instant,
     #[cfg(target_arch = "wasm32")]
@@ -47,7 +47,7 @@ struct Stopwatch {
 }
 
 impl Stopwatch {
-    fn start() -> Self {
+    pub(super) fn start() -> Self {
         Self {
             #[cfg(not(target_arch = "wasm32"))]
             start: std::time::Instant::now(),
@@ -56,7 +56,7 @@ impl Stopwatch {
         }
     }
 
-    fn elapsed(&self) -> Duration {
+    pub(super) fn elapsed(&self) -> Duration {
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.start.elapsed()
@@ -70,11 +70,11 @@ impl Stopwatch {
 
 /// What a preset needs from the anatomy pack.
 #[derive(Debug)]
-struct Runtime {
-    cells: Arc<CellCloud>,
-    sets: BTreeMap<String, Vec<u32>>,
-    aha: Vec<u8>,
-    forward: ForwardModel,
+pub(super) struct Runtime {
+    pub(super) cells: Arc<CellCloud>,
+    pub(super) sets: BTreeMap<String, Vec<u32>>,
+    pub(super) aha: Vec<u8>,
+    pub(super) forward: ForwardModel,
 }
 
 /// A running re-entry scenario.
@@ -170,7 +170,7 @@ fn load_dir(dir: &std::path::Path) -> Vec<Preset> {
 }
 
 impl Runtime {
-    fn load(bundle: Option<&AssetBundle>) -> anyhow::Result<Self> {
+    pub(super) fn load(bundle: Option<&AssetBundle>) -> anyhow::Result<Self> {
         use anyhow::Context as _;
         let pack = if let Some(bundle) = bundle {
             bundle
@@ -205,6 +205,7 @@ impl HeartSimApp {
 
     /// Start preset `index` from t = 0 (speed setting kept).
     fn start_reentry(&mut self, index: usize) {
+        self.stop_ep();
         if self.reentry.runtime.is_none() {
             match Runtime::load(self.reentry.bundle.as_ref()) {
                 Ok(rt) => self.reentry.runtime = Some(rt),
@@ -323,6 +324,9 @@ impl HeartSimApp {
     /// Give a therapy-window action to the switching engine. `false` when no re-entry scenario
     /// runs (the app's own engines take it).
     pub(super) fn reentry_apply(&mut self, action: &Action) -> bool {
+        if self.ep_apply(action) {
+            return true;
+        }
         let Some(act) = &mut self.reentry.active else {
             return false;
         };
@@ -335,7 +339,8 @@ impl HeartSimApp {
 
     /// Shocks the switching engine delivered since the last call (`None` outside re-entry).
     pub(super) fn reentry_shocks(&mut self) -> Option<Vec<ShockRecord>> {
-        self.reentry.active.as_mut().map(|a| a.engine.drain_shocks())
+        self.ep_shocks()
+            .or_else(|| self.reentry.active.as_mut().map(|a| a.engine.drain_shocks()))
     }
 
     /// The re-entry picker with the tier read-out, next to the rhythm picker.

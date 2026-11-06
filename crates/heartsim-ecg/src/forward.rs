@@ -948,18 +948,18 @@ fn centroid(cloud: &CellCloud, cells: &[u32]) -> Vec3 {
 }
 
 /// Typical cell spacing, mm.
-fn spacing_mm(cloud: &CellCloud) -> f32 {
+pub(crate) fn spacing_mm(cloud: &CellCloud) -> f32 {
     let h = cloud.mean_nearest_distance_mm();
     if h.is_finite() && h > 0.0 { h } else { 1.0 }
 }
 
-fn outer(a: DVec3, b: DVec3) -> DMat3 {
+pub(crate) fn outer(a: DVec3, b: DVec3) -> DMat3 {
     DMat3::from_cols(a * b.x, a * b.y, a * b.z)
 }
 
 /// `(M + ε·tr(M)/3·I)⁻¹`: exact on well-spread stencils, finite on degenerate ones (a strand
 /// gives the gradient along the strand only, because every offset lies in M's range).
-fn regularised_inverse(m: DMat3) -> DMat3 {
+pub(crate) fn regularised_inverse(m: DMat3) -> DMat3 {
     let tr = m.x_axis.x + m.y_axis.y + m.z_axis.z;
     if tr <= 0.0 {
         return DMat3::ZERO;

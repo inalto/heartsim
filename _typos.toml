@@ -32,6 +32,8 @@ extend-ignore-identifiers-re = ["^avb_2nd_.*$"]
 extend-ignore-re = ["PNGs", "ATPase"]
 
 [default.extend-words]
+# the ablation catheter, on EP-lab displays
+ABL = "ABL"
 # Medical terms and abbreviations that look like misspellings.
 laf = "laf"       # left anterior fascicle
 lpf = "lpf"       # left posterior fascicle

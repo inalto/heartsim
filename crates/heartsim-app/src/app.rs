@@ -29,6 +29,7 @@ const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
 /// eframe storage key of the tutorial progress where there is no settings directory (the web build).
 const TUTORIAL_PROGRESS_KEY: &str = "tutorial_progress";
 
+mod ep_lab;
 mod pacing;
 mod reentry;
 mod therapy;
@@ -84,6 +85,8 @@ pub struct HeartSimApp {
     exports: crate::export_panel::ExportPanel,
     /// Re-entry presets and the running one (B17).
     reentry: reentry::Reentry,
+    /// Cardiac EP lab: procedures, catheters, electrograms (B22).
+    ep: ep_lab::EpLabTab,
     /// Preferences (language, high contrast, reduced motion) and the Settings window (B19).
     settings: crate::settings::Settings,
     settings_open: bool,
@@ -114,11 +117,12 @@ enum Tab {
     Electrodes,
     RhythmQuiz,
     Tutorials,
+    EpLab,
     Help,
 }
 
 impl Tab {
-    const ALL: [Tab; 9] = [
+    const ALL: [Tab; 10] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -127,6 +131,7 @@ impl Tab {
         Tab::Electrodes,
         Tab::RhythmQuiz,
         Tab::Tutorials,
+        Tab::EpLab,
         Tab::Help,
     ];
 
@@ -140,6 +145,7 @@ impl Tab {
             Tab::Electrodes => t!("tab-electrodes"),
             Tab::RhythmQuiz => t!("tab-rhythm-quiz"),
             Tab::Tutorials => t!("tab-tutorials"),
+            Tab::EpLab => t!("tab-ep-lab"),
             Tab::Help => t!("tab-help"),
         }
     }
@@ -297,6 +303,7 @@ impl HeartSimApp {
             #[cfg(feature = "export")]
             exports: crate::export_panel::ExportPanel::default(),
             reentry: assets.map_or_else(reentry::Reentry::load_default, reentry::Reentry::from_bundle),
+            ep: assets.map_or_else(ep_lab::EpLabTab::load_default, ep_lab::EpLabTab::from_bundle),
             settings,
             settings_open: false,
         }
@@ -325,6 +332,10 @@ impl HeartSimApp {
 
     fn step_simulation(&mut self, frame_dt: Millis) {
         let steps = self.clock.advance(frame_dt);
+        if self.ep_active() {
+            self.step_ep(steps);
+            return;
+        }
         if self.reentry_active() {
             self.step_reentry(steps);
             return;
@@ -670,6 +681,7 @@ impl HeartSimApp {
                 ui.label(t!("help-tab-heart-vector"));
                 ui.label(t!("help-tab-axis-quiz"));
                 ui.label(t!("help-tab-tutorials"));
+                ui.label(t!("help-tab-ep-lab"));
                 ui.label(t!("help-tab-rhythm-quiz"));
                 ui.separator();
                 ui.strong(t!("help-rhythms-heading"));
@@ -773,6 +785,7 @@ impl eframe::App for HeartSimApp {
                 }
             }
             Tab::Tutorials => self.tutorials_tab(ui),
+            Tab::EpLab => self.ep_lab_tab(ui),
             Tab::Help => Self::help_tab(ui),
         }
 

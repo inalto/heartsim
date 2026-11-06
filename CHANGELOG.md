@@ -37,11 +37,26 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   to 4.5. The R wave now grows from V1 to V5 (brief B05), and left posterior fascicular block now moves the axis to the right of
   sinus. The coronary territories follow: the LAD now owns the anterior apical part of the RV free wall (`segments.bin` value 18,
   pack format version 2), which is what keeps ST elevation in V2–V4 for an LAD occlusion, and not in an RCA one.
+- Inert tissue from a scenario's Tier-2 patches no longer follows the heart back to Tier 1 as lesions; lesions made during the run still do.
 - The tutorial format and page runner moved from `heartsim-app` to `heartsim_core::tutorial` (re-exported by the app) so the CLI
   reads the same files. Tutorial ids are numbered for the teaching order: `basics` is now `01_basics` and `cardiac_axis`
   `03_cardiac_axis` (saved progress of those two starts afresh).
 - Tutorial `Sim` actions go through the same path as the therapy window (re-entry engine if one runs, timing engine, then the 3-D
   heart), so a coronary lesion set by a page also reaches the heart view.
+- Cardiac EP lab (brief B22, F-16, F-33): a new **EP Lab** tab with five procedures in `assets/scenarios/ep/` (baseline study, AVNRT and
+  slow-pathway modification, left-lateral accessory pathway, typical flutter and CTI ablation, AF and pulmonary-vein isolation). See the
+  user-guide page *The EP lab*.
+- Catheters (`heartsim_geometry::catheter`): HRA, His, CS decapolar, RVA and ablation catheters as polylines with electrodes, placed on landmarks
+  or along the coronary sinus and held inside chamber cavities computed from the cell cloud.
+- Electrograms (`heartsim_ecg::egm`): unipolar and bipolar local potentials from the forward model restricted to nearby cells, displayed at
+  100–200 mm/s, with A, H and V deflections labelled by source; AH, HV and cycle-length measurements and the activation sequence along a catheter.
+- Programmed stimulation (`heartsim_sim::ep`) from any bipole: continuous, S1×n / S2 / S3, decremental, automatic ERP search with A2–H2 jump
+  detection, entrainment with PPI and PPI − TCL. In Tier 1 the timing engine decides capture and only a capture starts the mesh front.
+- RF ablation: lesions that grow with a time constant, with temperature and impedance read-outs (a teaching stub, not a thermal model). A lesion
+  stops the cells and voxels under it and the nodal, bundle or accessory-pathway structures it touches, and it survives an engine reset.
+- Tier-2 patches: `PatchTarget::Band` and `Initiation::PhaseWave { within }`, used to draw a macro-re-entrant circuit on the spherical atria.
+  Typical flutter exists only as this drawn, pre-seeded circuit (cycle 235 ms), a procedure of the EP lab; it is not induced by pacing.
+- `EikonalParams::cs_os_link_mm`: joins the coronary-sinus sleeve to the right atrium (off by default, so existing rhythms do not change).
 
 ## [0.4.0] — 2026-11-05
 Third tagged release: the re-entry framework with a persistent-AF preset, localisation and accessibility settings, the

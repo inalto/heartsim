@@ -1,5 +1,6 @@
 //! ECG signal layer.
 //!
+//! * [`egm`] — intracardiac electrograms: local potentials at catheter electrodes, bipoles, AH/HV.
 //! * [`synth`] — Tier 0: event-driven Gaussian-sum waveform synthesis projected onto 12 leads
 //!   through fixed lead vectors (McSharry-style morphology, Sameni-style 3-D dipole).
 //! * [`forward`] — Tier-1 forward model: weight matrix `W[electrode, cell]` from the cell cloud and
@@ -19,6 +20,7 @@
 
 pub mod analysis;
 pub mod axis_est;
+pub mod egm;
 pub mod filter;
 pub mod forward;
 pub mod leadvec;
@@ -33,6 +35,10 @@ pub use analysis::{
     WaveKind, WaveMark,
 };
 pub use axis_est::{estimate_frontal_axis, net_area_axis};
+pub use egm::{
+    ConductionIntervals, Deflection, EGM_RATE_HZ, EgmChannel, EgmOptions, EgmRecorder, EgmSource,
+    ElectrogramModel,
+};
 pub use forward::{
     ForwardError, ForwardModel, ForwardOptions, LimbPlacement, SourceModel, SurfacePatches, VentricularPhase,
     WaveGains, WeightStats,

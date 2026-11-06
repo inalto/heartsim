@@ -776,6 +776,23 @@ impl<M: CellModel> Tier2Engine<M> {
             .collect()
     }
 
+    /// The tissue as it conducts now is the baseline against which [`Tier2Engine::lesion_cells`]
+    /// and `reset` compare.
+    pub fn accept_tissue_as_baseline(&mut self) {
+        self.base_conducting = self.solver.conducting().to_vec();
+    }
+
+    /// Inert tissue for good within `radius_mm` of `centre`: an RF lesion (brief B22). It survives
+    /// `reset` and is not reported by [`Tier2Engine::lesion_cells`], because the Tier-1 engine it
+    /// would be reported to already holds it.
+    pub fn ablate_sphere_permanently(&mut self, centre: Vec3, radius_mm: f32) {
+        let vox = self.solver.grid().voxels_within(centre, radius_mm, None);
+        self.solver.set_conducting(&vox, false);
+        for &v in &vox {
+            self.base_conducting[v as usize] = false;
+        }
+    }
+
     /// Cross-field stimulation of the voxels of `compartment` ([`super::preset::Initiation::CrossField`]):
     /// S1 over the 12 % of the compartment's x-extent at its low-x end at `start_ms`, S2 over its
     /// low-x, low-y quadrant at `start_ms + s2_ms`; both 4 ms strong pulses.
@@ -806,10 +823,20 @@ impl<M: CellModel> Tier2Engine<M> {
     }
 
     /// Pre-seed a rotating wave ([`super::preset::Initiation::PhaseWave`]).
-    pub fn seed_phase_wave(&mut self, compartment: Compartment, centre: Option<Vec3>, axis: Vec3, span: f32) {
+    pub fn seed_phase_wave(
+        &mut self,
+        compartment: Compartment,
+        centre: Option<Vec3>,
+        axis: Vec3,
+        span: f32,
+        within: Option<super::preset::PhaseWaveLimit>,
+    ) {
         let g = self.solver.grid();
         let vox: Vec<u32> = (0..g.len() as u32)
-            .filter(|&v| g.compartment[v as usize] == compartment)
+            .filter(|&v| {
+                g.compartment[v as usize] == compartment
+                    && (within.is_none() || self.solver.conducting()[v as usize])
+            })
             .collect();
         if vox.is_empty() {
             return;
@@ -817,6 +844,19 @@ impl<M: CellModel> Tier2Engine<M> {
         let centre =
             centre.unwrap_or_else(|| vox.iter().map(|&v| g.position(v)).sum::<Vec3>() / vox.len() as f32);
         let axis = axis.try_normalize().unwrap_or(Vec3::Y);
+        // a limited wave stays in its circuit; the rest of the chamber is left at rest
+        let vox: Vec<u32> = match within {
+            Some(limit) => vox
+                .into_iter()
+                .filter(|&v| {
+                    let r = g.position(v) - centre;
+                    let len = r.length().max(1e-3);
+                    let polar = (r.dot(axis) / len).clamp(-1.0, 1.0).acos().to_degrees();
+                    len <= limit.radius_mm && (limit.polar_deg.0..=limit.polar_deg.1).contains(&polar)
+                })
+                .collect(),
+            None => vox,
+        };
         let u = axis.any_orthonormal_vector();
         let w = axis.cross(u);
         let now = self.solver.now_ms();

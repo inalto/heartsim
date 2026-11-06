@@ -255,6 +255,25 @@ impl Tier1Engine {
         }
     }
 
+    /// A programmed stimulus at `cell` (brief B22): the timing engine decides whether the chamber
+    /// is excitable, and only a capture starts the front at that cell, so the strip, the
+    /// electrograms and the colour map cannot disagree about it.
+    pub fn stimulate_cell(&mut self, cell: u32, at: Millis) -> Result<(), ActionError> {
+        let cloud = self.eikonal.cloud();
+        let region = *cloud
+            .regions
+            .get(cell as usize)
+            .ok_or_else(|| ActionError::UnsupportedSite(format!("cell {cell}")))?;
+        let delay = region
+            .is_atrial()
+            .then(|| self.eikonal.atrial_site_delay_ms(cell));
+        self.timing.stimulate_region(region, at, delay)?;
+        if region.is_atrial() || !region.is_conduction_system() {
+            self.eikonal.queue_site_stimulus(cell, at);
+        }
+        Ok(())
+    }
+
     /// Mesh-level events since the last call.
     pub fn drain_mesh_events(&mut self) -> Vec<Event> {
         self.eikonal.drain_events()

@@ -24,7 +24,7 @@ struct Step {
     quiz: bool,
 }
 
-const STEPS: [Step; 6] = [
+const STEPS: [Step; 7] = [
     Step {
         file: "simulator-sinus.png",
         tab: Tab::Simulator,
@@ -79,7 +79,19 @@ const STEPS: [Step; 6] = [
         vector: false,
         quiz: true,
     },
+    Step {
+        file: "ep-lab-avrt.png",
+        tab: Tab::EpLab,
+        scenario: EP_TOUR_PROCEDURE,
+        run_s: 7.0,
+        after_qrs_ms: 0.0,
+        vector: false,
+        quiz: false,
+    },
 ];
+
+/// The tour's EP-lab shot: this procedure, with the tachycardia induced by a premature stimulus.
+const EP_TOUR_PROCEDURE: &str = "ep_ap_left_lateral";
 
 #[derive(Debug)]
 enum Phase {
@@ -137,13 +149,18 @@ impl HeartSimApp {
             Phase::Setup => {
                 // the X pointer rests mid-window under xvfb: keep its hover read-out out of the shots
                 ctx.all_styles_mut(|s| s.interaction.tooltip_delay = f32::INFINITY);
-                if let Some(i) = self.library.index_of(step.scenario) {
+                if step.tab == Tab::EpLab {
+                    self.start_ep_tour(step.scenario);
+                } else if let Some(i) = self.library.index_of(step.scenario) {
                     self.load_scenario(i);
                 }
                 self.tab = step.tab;
                 self.vector.arrow = step.vector;
                 self.vector.show_loop = step.vector;
-                if let Some(h) = &mut self.heart {
+                // the EP lab makes the heart see-through itself, for its catheters
+                if step.tab != Tab::EpLab
+                    && let Some(h) = &mut self.heart
+                {
                     let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
                     self.vector.set_see_through(step.vector, &mut alphas);
                 }
