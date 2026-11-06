@@ -6,7 +6,7 @@
 use crate::ExportInfo;
 use crate::record::EcgRecord;
 use heartsim_core::Lead;
-use heartsim_ui::snapshot::{encode_png, render_page, render_strip};
+use heartsim_ui::snapshot::{encode_png, render_page, render_strip, stamp_caption};
 use heartsim_ui::{LeadOrder, StripStyle, SweepMode, TwelveLeadLayout};
 
 /// Raster resolution of exports, px/mm.
@@ -37,7 +37,7 @@ pub fn page_png(rec: &EcgRecord, info: &ExportInfo, order: LeadOrder) -> Result<
         px(WIDTH_MM),
         px(crate::pdf::ROWS as f32 * crate::pdf::ROW_HEIGHT_MM),
     ];
-    let img = render_page(
+    let mut img = render_page(
         &rings,
         &export_style(info),
         TwelveLeadLayout::Clinical,
@@ -46,6 +46,9 @@ pub fn page_png(rec: &EcgRecord, info: &ExportInfo, order: LeadOrder) -> Result<
         size,
         1.0,
     );
+    if let Some(note) = &info.trace_note {
+        stamp_caption(&mut img, &export_style(info), note);
+    }
     encode_png(&img)
 }
 
@@ -53,7 +56,7 @@ pub fn page_png(rec: &EcgRecord, info: &ExportInfo, order: LeadOrder) -> Result<
 pub fn strip_png(rec: &EcgRecord, info: &ExportInfo, lead: Lead) -> Result<Vec<u8>, image::ImageError> {
     let rings = rec.to_rings(1);
     let size = [px(WIDTH_MM), px(crate::pdf::ROW_HEIGHT_MM)];
-    let img = render_strip(
+    let mut img = render_strip(
         &rings[lead as usize],
         &export_style(info),
         lead.label(),
@@ -61,5 +64,8 @@ pub fn strip_png(rec: &EcgRecord, info: &ExportInfo, lead: Lead) -> Result<Vec<u
         size,
         1.0,
     );
+    if let Some(note) = &info.trace_note {
+        stamp_caption(&mut img, &export_style(info), note);
+    }
     encode_png(&img)
 }

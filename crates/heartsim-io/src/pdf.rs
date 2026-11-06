@@ -281,6 +281,17 @@ pub fn write_pdf(rec: &EcgRecord, info: &ExportInfo, order: LeadOrder) -> Vec<u8
         ),
     );
 
+    if let Some(note) = &info.trace_note {
+        text(
+            &mut ops,
+            left,
+            y_bottom - 11.5,
+            8.0,
+            true,
+            &format!("Trace not as simulated. {note}"),
+        );
+    }
+
     let mut doc = PdfDocument::new(&ascii(&format!(
         "{} - simulated 12-lead ECG",
         info.scenario_title

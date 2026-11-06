@@ -12,8 +12,12 @@ use serde::{Deserialize, Serialize};
 pub const STORAGE_KEY: &str = "settings";
 
 /// What the user chose in the Settings window.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off preferences, stored by name"
+)]
 pub struct Settings {
     /// A shipped language code (`"it"`), or `None` to follow the operating system.
     pub language: Option<String>,
@@ -22,6 +26,32 @@ pub struct Settings {
     /// Turns off the automatic rotation of the 3-D heart and the defibrillator's shock flash.
     /// Those are the only animations the simulator adds on its own; the simulation itself is unchanged.
     pub reduced_motion: bool,
+    /// The first-run medical disclaimer (requirement N-09) has been acknowledged on this computer.
+    /// Stored so the dialog appears once; the About window shows the same text at any time.
+    pub disclaimer_accepted: bool,
+    /// QRS-synchronous monitor beep (desktop builds with the `audio` feature). Off by default: a simulator
+    /// that suddenly makes noise in a lecture hall is a surprise.
+    pub monitor_beep: bool,
+    /// Linear loudness of the monitor beep, `0.0..=1.0`.
+    pub beep_volume: f32,
+}
+
+/// Default loudness of the monitor beep, linear: half scale, audible without being startling.
+pub const DEFAULT_BEEP_VOLUME: f32 = 0.5;
+
+// Written by hand: `beep_volume` defaults to `DEFAULT_BEEP_VOLUME`, not 0.0, also for the fields missing in
+// settings stored by an older version (`#[serde(default)]` on the struct uses this).
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            language: None,
+            high_contrast: false,
+            reduced_motion: false,
+            disclaimer_accepted: false,
+            monitor_beep: false,
+            beep_volume: DEFAULT_BEEP_VOLUME,
+        }
+    }
 }
 
 impl Settings {
@@ -85,9 +115,33 @@ impl Settings {
     }
 }
 
+/// Reads "35" or "35 %" as the fraction 0.35 (the volume slider's text box).
+#[cfg(feature = "audio")]
+fn parse_percent(text: &str) -> Option<f64> {
+    text.trim()
+        .trim_end_matches('%')
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .map(|p| p / 100.0)
+}
+
 /// The Settings window. Returns `true` when a setting changed this frame, so the caller can
 /// re-apply the language and the theme.
 pub fn settings_window(ctx: &egui::Context, open: &mut bool, settings: &mut Settings) -> bool {
+    settings_window_with_audio(ctx, open, settings, None)
+}
+
+/// [`settings_window`] that also knows whether the audio output could be opened
+/// ([`crate::monitor_beep::MonitorBeep::available`]): with `Some(false)` the monitor-beep section says that
+/// no sound device was found. The monitor-beep controls exist only in builds with the `audio` feature.
+pub fn settings_window_with_audio(
+    ctx: &egui::Context,
+    open: &mut bool,
+    settings: &mut Settings,
+    beep_available: Option<bool>,
+) -> bool {
+    let _ = beep_available; // read only by the `audio` section below
     let mut changed = false;
     egui::Window::new(t!("settings-title"))
         .open(open)
@@ -121,6 +175,24 @@ pub fn settings_window(ctx: &egui::Context, open: &mut bool, settings: &mut Sett
             changed |= ui
                 .checkbox(&mut settings.reduced_motion, t!("settings-reduced-motion"))
                 .changed();
+            #[cfg(feature = "audio")]
+            {
+                ui.separator();
+                changed |= ui
+                    .checkbox(&mut settings.monitor_beep, t!("settings-beep"))
+                    .changed();
+                ui.add_enabled_ui(settings.monitor_beep, |ui| {
+                    let slider = egui::Slider::new(&mut settings.beep_volume, 0.0..=1.0)
+                        .text(t!("settings-beep-volume"))
+                        .custom_formatter(|v, _| format!("{:.0} %", v * 100.0))
+                        .custom_parser(parse_percent);
+                    changed |= ui.add(slider).changed();
+                });
+                ui.weak(t!("settings-beep-hint"));
+                if settings.monitor_beep && beep_available == Some(false) {
+                    ui.weak(t!("settings-beep-unavailable"));
+                }
+            }
             ui.separator();
             ui.weak(t!("settings-hint"));
         });
@@ -137,9 +209,25 @@ mod tests {
             language: Some("it".into()),
             high_contrast: true,
             reduced_motion: true,
+            disclaimer_accepted: true,
+            monitor_beep: true,
+            beep_volume: 0.25,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
+    }
+
+    #[test]
+    fn the_monitor_beep_is_off_at_half_volume_by_default() {
+        let d = Settings::default();
+        assert!(!d.monitor_beep);
+        assert!((d.beep_volume - DEFAULT_BEEP_VOLUME).abs() < f32::EPSILON);
+        // settings saved before the beep existed keep working and get the same defaults
+        let old: Settings =
+            ron::from_str("(language: None, high_contrast: true)").expect("old settings load");
+        assert!(old.high_contrast);
+        assert!(!old.monitor_beep);
+        assert!((old.beep_volume - DEFAULT_BEEP_VOLUME).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -147,6 +235,17 @@ mod tests {
         let parsed: Option<Settings> = ron::from_str("not ron at all {{").ok();
         assert!(parsed.is_none());
         assert_eq!(Settings::default().language, None);
+    }
+
+    #[test]
+    fn the_disclaimer_is_unacknowledged_until_stored() {
+        assert!(!Settings::default().disclaimer_accepted);
+        // settings saved by an older version have no such field: still unacknowledged
+        let old: Settings =
+            ron::from_str("(language: Some(\"it\"), high_contrast: false, reduced_motion: false)")
+                .expect("old settings load");
+        assert!(!old.disclaimer_accepted);
+        assert_eq!(old.language.as_deref(), Some("it"));
     }
 
     #[test]

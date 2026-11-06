@@ -61,7 +61,7 @@ help-keys-heading = Scorciatoie da tastiera
 help-keys-space = Spazio: mette in pausa o riprende la simulazione.
 help-keys-arrows = ← / →: in pausa, sposta il cursore di scorrimento indietro o avanti. Se è attivo un cursore di misura, le frecce lo spostano.
 help-keys-speed = + / −: aumenta o diminuisce la velocità della simulazione e della carta.
-help-keys-tabs = 1 – 9: apre una scheda, nell'ordine mostrato nella barra in alto.
+help-keys-tabs = 1 – 9, 0: apre una scheda, nell'ordine mostrato nella barra in alto.
 help-keys-note = Le scorciatoie non funzionano mentre una casella di testo ha il focus della tastiera.
 help-disclaimer = Strumento didattico, non destinato all'uso clinico.
 
@@ -72,6 +72,10 @@ settings-language = Lingua
 settings-language-system = Predefinita del sistema
 settings-high-contrast = Tema ad alto contrasto
 settings-reduced-motion = Movimento ridotto (niente rotazione automatica né lampeggio della scarica)
+settings-beep = Segnale acustico del monitor (sincrono con il QRS, disattivato di default)
+settings-beep-volume = Volume
+settings-beep-hint = Un breve tono a ogni attivazione ventricolare, al massimo uno ogni 180 ms di tempo simulato; non è sincronizzato al campione con la traccia.
+settings-beep-unavailable = Non è stato possibile aprire un dispositivo audio: il segnale resta muto.
 settings-hint = Le modifiche hanno effetto subito e vengono ricordate su questo computer.
 
 ## Finestra Esporta / Importa (app/exports.rs)
@@ -259,3 +263,57 @@ reentry-tier2 = Livello 2 · { $count } singolarità di fase · quiete { $quiet 
 reentry-speed = { $tier } · { $speed }× tempo reale
 reentry-speed-hint = Il livello 2 non funziona in tempo reale su tutte le macchine; la simulazione procede alla massima velocità possibile.
 reentry-stop = Ferma
+
+## Avvertenza medica al primo avvio e Informazioni (requisito N-09; il testo segue docs/book/src/user/disclaimer.md)
+disclaimer-title = Prima di iniziare: solo uso didattico
+disclaimer-lead = heartsim è una simulazione didattica. Non è un dispositivo medico e non deve essere usato per diagnosi, terapia, monitoraggio o altre decisioni cliniche.
+disclaimer-models = Cuore, torace e sistema di conduzione sono modelli semplificati. Ogni ritmo è un esempio didattico costruito sui criteri dei testi di riferimento, non la registrazione di un paziente.
+disclaimer-values = Intervalli, ampiezze e morfologie sono abbastanza realistici per esercitarsi nel riconoscimento e nella misura, ma non sono validati su dati clinici di alcun individuo. Gli ECG reali sono più rumorosi e più vari.
+disclaimer-exports = I file esportati (PDF, PNG, CSV, WFDB) riportano «simulated» nell'intestazione. Non contengono dati di pazienti e non vanno presentati come tracciati di pazienti.
+disclaimer-import = L'importazione di un tracciato reale serve solo a visualizzarlo. heartsim non lo interpreta e le sue misure non sostituiscono un lettore qualificato né un programma di analisi certificato.
+disclaimer-warranty = Il software è fornito «così com'è», senza garanzie di alcun tipo; vedere le licenze MIT e Apache-2.0 allegate.
+disclaimer-reminder = Puoi rileggerla in qualsiasi momento in Informazioni.
+disclaimer-accept = Ho capito: solo uso didattico
+about-button = Informazioni
+about-title = Informazioni su heartsim
+about-version = Versione { $version }
+about-tagline = Simulatore 3D di elettrofisiologia cardiaca e di ECG a 12 derivazioni per la didattica medica.
+about-licence = Software libero con licenza MIT o Apache-2.0, a scelta. Anatomia e contenuti derivano dalla letteratura pubblicata; la guida utente elenca le fonti.
+about-disclaimer-heading = Avvertenza medica
+
+## Esportazione del tracciato visualizzato (requisito F-15)
+export-trace = Tracciato
+export-as-displayed = Come visualizzato (con filtro e artefatti)
+export-as-displayed-hint = Spento: si esporta il segnale simulato pulito. Acceso: il tracciato come lo mostra la striscia, e ogni file indica il filtro e gli artefatti applicati.
+export-as-displayed-active = Filtro o artefatti di visualizzazione attivi: i file lo riporteranno.
+
+## Spiegazioni dei quiz (ritmo, asse e intervalli; brief B8)
+rq-yours-was = Hai scelto: { $title }
+rq-confused = Spesso confuso con: { $list }
+axis-why-normal = La derivazione I è { $i } e la II è { $ii }: il vettore QRS netto punta a sinistra e in basso, tra −30° e +90°. È un asse normale.
+axis-why-left = La derivazione I è { $i } e la II è { $ii }: il vettore QRS netto punta a sinistra e in alto, oltre −30°. È una deviazione assiale sinistra (da −30° a −90°).
+axis-why-right = La derivazione I è { $i } e aVF è { $avf }: il vettore QRS netto punta a destra e in basso, oltre +90°. È una deviazione assiale destra (da +90° a +180°).
+axis-why-extreme = La derivazione I è { $i } e aVF è { $avf }: il vettore QRS netto punta in alto e a destra, nella «terra di nessuno». È una deviazione assiale estrema (da −90° a ±180°).
+
+## Esercizio sugli intervalli
+tab-interval-drill = Intervalli
+help-tab-interval-drill = Intervalli: misura con i calibri l'intervallo PR, la durata del QRS o l'intervallo QT di una striscia; le risposte entro una tolleranza valgono.
+interval-intro = Premi Nuova domanda, poi misura con i calibri l'intervallo richiesto sulla striscia.
+interval-task = Misura { $interval } nella derivazione II a { $speed } mm/s. Posiziona i calibri sulla striscia, inserisci il risultato e premi Verifica risposta.
+interval-name-pr = l'intervallo PR
+interval-name-qrs = la durata del QRS
+interval-name-qt = l'intervallo QT
+interval-def-pr = Intervallo PR: dall'inizio dell'onda P all'inizio del complesso QRS. Normale: 120–200 ms.
+interval-def-qrs = Durata del QRS: dalla prima deflessione del complesso QRS alla sua fine. Normale: meno di 120 ms.
+interval-def-qt = Intervallo QT: dall'inizio del complesso QRS alla fine dell'onda T. Si accorcia quando la frequenza sale.
+interval-calipers-place = Posiziona calibri
+interval-calipers-clear = Rimuovi calibri
+interval-calipers-use = Usa la misura dei calibri
+interval-calipers-hint = Trascina le due linee all'inizio e alla fine dell'intervallo; Maiusc+clic sulla striscia aggiunge un'altra coppia.
+interval-calipers-reading = Calibri: { $ms } ms
+interval-your-value = La tua misura
+interval-correct = Corretto: hai misurato { $entry } ms, il riferimento è { $truth } ms (tolleranza ±{ $tolerance } ms).
+interval-wrong = Non proprio: hai misurato { $entry } ms, il riferimento è { $truth } ms (scarto di { $off } ms, tolleranza ±{ $tolerance } ms).
+interval-rhythm = Ritmo: { $title }.
+interval-reference-note = Il riferimento è la misura del simulatore su questa striscia; le onde etichettate mostrano dove ha misurato. I lettori reali differiscono un poco, per questo c'è una tolleranza.
+interval-no-strip = Nessuna striscia adatta. Premi Nuova domanda per riprovare.

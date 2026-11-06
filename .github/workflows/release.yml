@@ -75,7 +75,7 @@ jobs:
       - name: Install cargo-packager
         run: command -v cargo-packager || cargo install cargo-packager --locked --version "$CARGO_PACKAGER_VERSION"
       - name: Build release binary
-        run: cargo build --release --locked -p heartsim-app --bin heartsim
+        run: cargo build --release --locked -p heartsim-app --features audio --bin heartsim
       - name: Package .deb and AppImage
         run: cargo packager --formats deb,appimage --verbose
       - name: Validate desktop entry
@@ -127,7 +127,7 @@ jobs:
       - name: Install cargo-packager
         run: command -v cargo-packager || cargo install cargo-packager --locked --version "$CARGO_PACKAGER_VERSION"
       - name: Build release binary (static MSVC runtime via .cargo/config.toml)
-        run: cargo build --release --locked -p heartsim-app --bin heartsim
+        run: cargo build --release --locked -p heartsim-app --features audio --bin heartsim
       - name: Check GUI subsystem and static CRT
         shell: pwsh
         run: ./packaging/windows/check-exe.ps1 target/release/heartsim.exe
@@ -194,7 +194,7 @@ jobs:
       - name: Build arm64 and x86_64 and merge with lipo
         run: |
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
-            cargo build --release --locked --target "$target" -p heartsim-app --bin heartsim
+            cargo build --release --locked --target "$target" -p heartsim-app --features audio --bin heartsim
           done
           mkdir -p target/universal-apple-darwin/release
           lipo -create -output target/universal-apple-darwin/release/heartsim \

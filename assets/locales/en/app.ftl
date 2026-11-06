@@ -60,7 +60,7 @@ help-keys-heading = Keyboard shortcuts
 help-keys-space = Space: pause or resume the simulation.
 help-keys-arrows = ← / →: while paused, move the scrub cursor back or forward. When a caliper has focus, the arrows nudge the caliper instead.
 help-keys-speed = + / −: simulation and paper speed faster or slower.
-help-keys-tabs = 1 – 9: open a tab, in the order shown in the top bar.
+help-keys-tabs = 1 – 9, 0: open a tab, in the order shown in the top bar.
 help-keys-note = Shortcuts are off while a text box has the keyboard.
 help-disclaimer = Educational tool, not for clinical use.
 
@@ -71,6 +71,10 @@ settings-language = Language
 settings-language-system = System default
 settings-high-contrast = High-contrast theme
 settings-reduced-motion = Reduced motion (no automatic rotation or shock flash)
+settings-beep = Monitor beep (QRS-synchronous, off by default)
+settings-beep-volume = Volume
+settings-beep-hint = A short tone at each ventricular activation, at most one per 180 ms of simulated time; not sample-accurate with the strip.
+settings-beep-unavailable = No sound device could be opened, so the beep stays silent.
 settings-hint = Changes apply at once and are remembered on this computer.
 
 ## Export / Import window (app/exports.rs)
@@ -258,3 +262,57 @@ reentry-tier2 = Tier 2 · { $count } phase singularities · quiet { $quiet } s
 reentry-speed = { $tier } · { $speed }× real time
 reentry-speed-hint = Tier 2 is not real time on every machine; the simulation runs as fast as it can.
 reentry-stop = Stop
+
+## First-run disclaimer and About (requirement N-09; wording follows docs/book/src/user/disclaimer.md)
+disclaimer-title = Before you start: educational use only
+disclaimer-lead = heartsim is an educational simulation. It is not a medical device and must not be used for diagnosis, treatment, monitoring or any other clinical decision.
+disclaimer-models = The heart, the torso and the conduction system are simplified models. Every rhythm is a teaching example built from textbook criteria, not a recording of a patient.
+disclaimer-values = Intervals, amplitudes and morphologies are realistic enough to practise recognition and measurement, but they are not validated against clinical data for any individual. Real ECGs are noisier and more varied.
+disclaimer-exports = Exported files (PDF, PNG, CSV, WFDB) say "simulated" in their header. They contain no patient data, and they must not be presented as patient recordings.
+disclaimer-import = Importing a real recording for review only displays it. heartsim does not interpret it, and its measurements are no substitute for a qualified reader or a certified analysis program.
+disclaimer-warranty = The software is provided "as is", without warranty of any kind; see the MIT and Apache-2.0 licences that come with it.
+disclaimer-reminder = You can read this again at any time under About.
+disclaimer-accept = I understand: educational use only
+about-button = About
+about-title = About heartsim
+about-version = Version { $version }
+about-tagline = 3-D heart electrophysiology and 12-lead ECG simulator for medical education.
+about-licence = Free software under the MIT or Apache-2.0 licence, at your choice. Anatomy and content are derived from the published literature; the user guide lists the sources.
+about-disclaimer-heading = Medical disclaimer
+
+## Export of the displayed trace (requirement F-15)
+export-trace = Trace
+export-as-displayed = As displayed (with filter and artefacts)
+export-as-displayed-hint = Off: the clean simulated signal is exported. On: the trace as the strip shows it, and every file states the filter and artefacts applied.
+export-as-displayed-active = The display filter or artefacts are on: the files will say so.
+
+## Quiz explanations (rhythm, axis and interval drills; brief B8)
+rq-yours-was = You chose: { $title }
+rq-confused = Often confused with: { $list }
+axis-why-normal = Lead I is { $i } and lead II is { $ii }: the net QRS vector points to the left and down, between −30° and +90°. That is a normal axis.
+axis-why-left = Lead I is { $i } and lead II is { $ii }: the net QRS vector points to the left and up, beyond −30°. That is left axis deviation (−30° to −90°).
+axis-why-right = Lead I is { $i } and aVF is { $avf }: the net QRS vector points to the right and down, beyond +90°. That is right axis deviation (+90° to +180°).
+axis-why-extreme = Lead I is { $i } and aVF is { $avf }: the net QRS vector points up and to the right, into "no man's land". That is extreme axis deviation (−90° to ±180°).
+
+## Interval drill
+tab-interval-drill = Interval Drill
+help-tab-interval-drill = Interval Drill: measure the PR interval, the QRS duration or the QT interval of a strip with the calipers; answers within a tolerance count.
+interval-intro = Press New question, then measure the interval it names on the strip with the calipers.
+interval-task = Measure the { $interval } in lead II at { $speed } mm/s. Place the calipers on the strip, enter the result and press Check answer.
+interval-name-pr = PR interval
+interval-name-qrs = QRS duration
+interval-name-qt = QT interval
+interval-def-pr = PR interval: from the start of the P wave to the start of the QRS complex. Normal: 120–200 ms.
+interval-def-qrs = QRS duration: from the first deflection of the QRS complex to its end. Normal: under 120 ms.
+interval-def-qt = QT interval: from the start of the QRS complex to the end of the T wave. It shortens as the heart rate rises.
+interval-calipers-place = Place calipers
+interval-calipers-clear = Clear calipers
+interval-calipers-use = Use caliper reading
+interval-calipers-hint = Drag the two lines to the start and the end of the interval; shift-click on the strip adds another pair.
+interval-calipers-reading = Calipers: { $ms } ms
+interval-your-value = Your measurement
+interval-correct = Correct: you measured { $entry } ms, the reference is { $truth } ms (tolerance ±{ $tolerance } ms).
+interval-wrong = Not quite: you measured { $entry } ms, the reference is { $truth } ms (off by { $off } ms, tolerance ±{ $tolerance } ms).
+interval-rhythm = Rhythm: { $title }.
+interval-reference-note = The reference is the simulator's own measurement of this strip; the labelled waves show where it measured. Real readers differ a little, which is why a tolerance applies.
+interval-no-strip = No suitable strip was found. Press New question to try again.

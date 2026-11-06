@@ -84,6 +84,15 @@ impl HeartSimApp {
                 ui.checkbox(&mut f.bundle, t!("export-bundle"));
             });
             ui.end_row();
+            ui.label(t!("export-trace"));
+            ui.vertical(|ui| {
+                ui.checkbox(&mut self.exports.as_displayed, t!("export-as-displayed"))
+                    .on_hover_text(t!("export-as-displayed-hint"));
+                if self.exports.as_displayed && !self.ecg.display_config().is_identity() {
+                    ui.weak(t!("export-as-displayed-active"));
+                }
+            });
+            ui.end_row();
             ui.label(t!("export-folder"));
             ui.text_edit_singleline(&mut self.exports.dir);
             ui.end_row();
@@ -155,6 +164,12 @@ impl HeartSimApp {
             custom = custom_scenario(&self.engine.params, &self.synth);
             &custom
         };
+        // by default the clean engine signal; "as displayed" exports the filtered trace and says so
+        let trace_note = if self.exports.as_displayed {
+            self.ecg.display_config().describe()
+        } else {
+            None
+        };
         let req = ExportRequest {
             scenario,
             style: &self.ecg.style,
@@ -164,12 +179,18 @@ impl HeartSimApp {
             paper: self.exports.paper,
             formats: self.exports.formats,
             date: heartsim_io::today(),
+            trace_note: trace_note.clone(),
         };
         let head = self.ecg.head(&self.rings);
         let fs = self.rings.first().map_or(500.0, |r| f64::from(r.sample_rate_hz));
         let pushed = self.rings.first().map_or(0, heartsim_ecg::LeadRing::pushed);
         let newest = newest_sample_ms(self.engine.now().0, pushed, head, fs);
-        let files = export_from_rings(&self.rings, head, newest, &req);
+        let rings = if trace_note.is_some() {
+            self.ecg.display_rings(&self.rings)
+        } else {
+            &self.rings
+        };
+        let files = export_from_rings(rings, head, newest, &req);
         let dir = PathBuf::from(self.exports.dir.trim());
         self.exports.status = Some(
             match files

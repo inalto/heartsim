@@ -21,6 +21,14 @@ in several formats at once, and loads a recording back for review with the calip
 | `heartsim_<scenario>.ron` | The scenario file: load it again in heartsim or run it with `heartsim-cli run`. | heartsim, a text editor. |
 | `heartsim_<scenario>.zip` | The **share bundle**: all of the above plus a README describing the excerpt. | Send this one to students. |
 
+**Clean signal or as displayed.** By default the files hold the clean simulated signal, whatever filter or artefacts the strip
+is showing. Tick **As displayed (with filter and artefacts)** in the export window to export the trace as the strip shows it.
+The files then say so: the PDF has a line under the page, the PNGs carry a caption along their bottom edge, the CSV starts with
+a `# trace:` comment line (heartsim reads it back), the WFDB header has a `trace:` comment, and the share bundle's README has a
+`Trace` line. The statement names the filter (for example `monitor 0.5-40 Hz`) and the artefacts with their intensity and seed,
+so the same trace can be reproduced. The 12-lead tab's *Save PNG* button always saves what is on screen and captions it the
+same way.
+
 The header of every file names the scenario, paper speed, gain, sampling rate and date, and says that the ECG is simulated.
 There are no patient fields: a simulation has no patient.
 

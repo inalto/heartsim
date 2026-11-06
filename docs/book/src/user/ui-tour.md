@@ -20,6 +20,22 @@ simulation speed, plus the *Pacemaker* window. The **Export / Import** button at
   scrolling paper or a monitor-style sweep bar, monitor colours, grid, wave letters (P, R, T) and PR/RR brackets, and the
   screen calibration in points per millimetre (hold a ruler to the screen and adjust it until 10 small squares measure 1 cm).
 
+**Filter and artefacts.** The second row of controls above the strip (and the 12-lead page) changes how the trace is *drawn*:
+
+* *Filter*: **Off**, **Diagnostic 0.05–150 Hz** or **Monitor 0.5–40 Hz**. The diagnostic band is what a 12-lead ECG machine
+  records (the 0.05 Hz corner leaves the ST segment undistorted); the monitor band is what a bedside monitor shows (steadier
+  baseline, softer QRS peaks, but ST segments and notches are distorted, which is why a monitor trace must not be used to
+  judge ST changes).
+* *Artefacts*: **Baseline wander**, **Respiration** (a baseline swing and a small change of the QRS height), **Mains hum**
+  (50 or 60 Hz, your choice) and **Muscle** tremor, with an *intensity* slider (1 is the reference amplitude). They are
+  generated from a fixed seed, so the same settings always draw the same trace. Try the monitor filter on mains hum: it is only
+  a few dB weaker, because a 40 Hz low-pass is not a notch filter.
+
+This is a *display* stage only. The simulation, the measurements (rate, intervals, axis, wave letters), the calipers' snapping
+and the exports of the clean signal are not filtered and do not change when you switch it. The filters are causal, so the trace
+is a few milliseconds later than the unfiltered one. When a saved 12-lead PNG or an export shows the filtered trace, it says
+which filter and artefacts were applied (see [Exporting](exports.md)).
+
 **Pause and scrub.** Press *Pause*, then drag the *s back* slider or the strip itself (away from any caliper): the heart, the vector arrow and the
 read-out all follow the cursor, up to 60 s back. *Run* continues from where the simulation stopped; time never jumps.
 
@@ -57,6 +73,26 @@ axis class and why. The [Axis Quiz](quizzes.md) hides the axis and asks you to f
 
 Move the ten electrodes on the torso, try the preset misplacements (limb-cable reversals, chest leads one space too high) and
 see which leads change; the detector explains what was misplaced.
+
+## Settings and About
+
+The Settings button in the top bar opens the preferences: language, high-contrast theme and reduced motion. Changes apply at once
+and are remembered on this computer.
+
+The **About** button next to it shows the version and the [medical disclaimer](disclaimer.md), which is also shown once, as a
+dialog that must be acknowledged, the first time the program runs.
+
+### Monitor beep
+
+Desktop builds made with the `audio` feature add a **Monitor beep** switch and a volume slider to the Settings window. It is
+**off by default**; the browser version and builds without the feature have no sound and do not show the switch.
+
+- It plays a short 1 kHz tone, synthesised in the program, in the frame in which the ventricle activates. It is a teaching
+  imitation of a bedside monitor's QRS tone, not a reproduction of any product. The latency is up to one frame plus the audio
+  buffer, so it is not sample-accurate with the strip or the 3-D map.
+- To keep fast rhythms and fast-forward from turning into a buzz, at most one beep is sounded per 180 ms of *simulated* time.
+- The sound never affects the simulation. Without an audio device the program runs as usual and the beep stays silent (the
+  Settings window says so).
 
 ## Help
 
