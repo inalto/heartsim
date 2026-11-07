@@ -978,11 +978,7 @@ impl GaussianSynth {
     /// the beat's own R and T waves: each lead loses what it had.
     fn spawn_infarct(&mut self, beat: &[ActiveWave], t0: Millis, qrs_scale: f64) {
         let forces = self.modulation.infarct;
-        let vector = |name: &str| {
-            beat.iter()
-                .find(|w| w.spec.name == name)
-                .map(|w| w.spec)
-        };
+        let vector = |name: &str| beat.iter().find(|w| w.spec.name == name).map(|w| w.spec);
         // Sum over the leads of `gain · (frontal part along v) + weight · (precordial part)`.
         let gains = |limb: [f64; 2], limb_along: &dyn Fn(DVec3) -> f64, precordial: &dyn Fn(usize) -> f64| {
             let v = DVec3::new(limb[0], limb[1], 0.0);
@@ -1140,7 +1136,11 @@ mod tests {
             .map(|w| w.amplitude * w.width_ms)
             .sum();
         assert!(area.abs() < 1e-2, "net area {area}");
-        for t in [Template::FibrillatoryWave, Template::VfWave, Template::PolymorphicBeat] {
+        for t in [
+            Template::FibrillatoryWave,
+            Template::VfWave,
+            Template::PolymorphicBeat,
+        ] {
             let area: f64 = template_waves(t).iter().map(|w| w.amplitude * w.width_ms).sum();
             assert!(area.abs() < 1e-9, "{t:?}: net area {area}");
         }

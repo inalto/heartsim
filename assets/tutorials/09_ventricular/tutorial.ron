@@ -249,7 +249,7 @@ Compare it with the identical complexes of monomorphic VT on the previous pages.
             )),
         ),
         Page(
-            title: "Torsades de pointes",
+            title: "Torsades: a QRS that twists",
             markdown: r#"
 **Torsades de pointes** ("twisting of the points") is polymorphic VT with a **long QT**. It runs at
 about 160 to 240 bpm, and the QRS complexes shrink, flip and grow again as if twisting around the baseline.
@@ -365,7 +365,7 @@ because VF is shockable and asystole is not.
             )),
         ),
         Page(
-            title: "Defibrillation",
+            title: "The unsynchronised shock",
             markdown: r#"
 **Defibrillation** is an **unsynchronised** shock: there is no R wave to wait for. In this simulator, as on
 a real defibrillator, a shock in **sync mode does not fire** during VF.

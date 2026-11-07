@@ -503,7 +503,15 @@ impl Analyzer {
     /// QRS onset/offset from the spatial velocity: walk outwards from the R peak until the
     /// velocity stays below the threshold for 12 ms.
     #[allow(clippy::cast_possible_wrap)]
-    fn delineate_qrs(&self, peaks: &[usize], vel: &[f32], noise_v: f32, floor: f32, fs: f32, n: usize) -> Vec<Beat> {
+    fn delineate_qrs(
+        &self,
+        peaks: &[usize],
+        vel: &[f32],
+        noise_v: f32,
+        floor: f32,
+        fs: f32,
+        n: usize,
+    ) -> Vec<Beat> {
         let hold = samples_of(12.0, fs).max(1);
         let core = samples_of(60.0, fs);
         let reach_l = samples_of(150.0, fs);
@@ -520,8 +528,12 @@ impl Analyzer {
             let lo_core = r.saturating_sub(core);
             let hi_core = (r + core).min(n - 1);
             let smax = vel[lo_core..=hi_core].iter().copied().fold(0.0_f32, f32::max);
-            let thr = (self.config.qrs_slope_fraction * smax).max(0.4 * noise_v).max(floor);
-            let tail_thr = (self.config.qrs_tail_fraction * smax).max(0.4 * noise_v).max(floor);
+            let thr = (self.config.qrs_slope_fraction * smax)
+                .max(0.4 * noise_v)
+                .max(floor);
+            let tail_thr = (self.config.qrs_tail_fraction * smax)
+                .max(0.4 * noise_v)
+                .max(floor);
             let in_range = |i: i64, dir: i64, limit: usize| {
                 i >= 0
                     && (i as usize) < n

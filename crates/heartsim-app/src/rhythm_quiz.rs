@@ -413,8 +413,12 @@ mod tests {
             "mi_inferior_evolved",
             "mi_lateral_evolved",
         ] {
-            let i = lib.index_of(id).unwrap_or_else(|| panic!("{id} is not in the library"));
-            let rec = lib.entries[i].record(RECORD_S).unwrap_or_else(|e| panic!("{id}: {e}"));
+            let i = lib
+                .index_of(id)
+                .unwrap_or_else(|| panic!("{id} is not in the library"));
+            let rec = lib.entries[i]
+                .record(RECORD_S)
+                .unwrap_or_else(|e| panic!("{id}: {e}"));
             assert_eq!(rec.leads.len(), LEAD_COUNT);
         }
     }

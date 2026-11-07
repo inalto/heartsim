@@ -1153,6 +1153,20 @@ impl EikonalEngine {
         }
     }
 
+    /// The tissue's own action potential and conduction, once no circuit drives it.
+    fn restore_circuit_scales(&mut self) {
+        let driven = self
+            .circuit_apd_scale
+            .iter()
+            .chain(&self.circuit_cv_scale)
+            .any(|s| (s - 1.0).abs() > f32::EPSILON);
+        if driven {
+            self.circuit_apd_scale = [1.0; 2];
+            self.circuit_cv_scale = [1.0; 2];
+            self.refresh_modifiers();
+        }
+    }
+
     fn ingest_atrial(&mut self, e: &Event, t: f64) {
         if let Origin::Circuit(c) = e.origin {
             self.ingest_circuit(c, e, t);
@@ -1341,11 +1355,7 @@ impl EikonalEngine {
         let at = at.0.max(self.now);
         self.queue.clear();
         self.stimuli.clear();
-        if self.circuit_apd_scale != [1.0; 2] || self.circuit_cv_scale != [1.0; 2] {
-            self.circuit_apd_scale = [1.0; 2];
-            self.circuit_cv_scale = [1.0; 2];
-            self.refresh_modifiers();
-        }
+        self.restore_circuit_scales();
         for j in 0..self.hot.len() {
             let h = &mut self.hot[j];
             h.tentative = f64::INFINITY;
@@ -1695,11 +1705,7 @@ impl Engine for EikonalEngine {
     fn reset(&mut self) {
         let n = self.t_act.len();
         self.now = 0.0;
-        if self.circuit_apd_scale != [1.0; 2] || self.circuit_cv_scale != [1.0; 2] {
-            self.circuit_apd_scale = [1.0; 2];
-            self.circuit_cv_scale = [1.0; 2];
-            self.refresh_modifiers();
-        }
+        self.restore_circuit_scales();
         for h in &mut self.hot {
             *h = Hot {
                 region: h.region,

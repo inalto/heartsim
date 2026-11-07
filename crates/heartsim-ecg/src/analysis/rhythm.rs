@@ -145,9 +145,9 @@ fn deflection_height(leads: &[Vec<f32>], at: usize, fs: f32) -> f64 {
         .iter()
         .map(|l| {
             let w = &l[at.saturating_sub(reach)..(at + reach).min(l.len())];
-            let (lo, hi) = w
-                .iter()
-                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+            let (lo, hi) = w.iter().fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), v| {
+                (lo.min(*v), hi.max(*v))
+            });
             f64::from(hi - lo)
         })
         .fold(0.0, f64::max)
@@ -228,7 +228,10 @@ pub fn ventricular_chaos(leads: &[Vec<f32>], fs: f32) -> Option<VentricularChaos
             let dot: f32 = v[0].iter().zip(&v[1]).map(|(a, b)| a * b).sum();
             let na: f32 = v[0].iter().map(|a| a * a).sum::<f32>().sqrt();
             let nb: f32 = v[1].iter().map(|a| a * a).sum::<f32>().sqrt();
-            f64::from(dot / (na * nb).max(1e-9)).clamp(-1.0, 1.0).acos().to_degrees()
+            f64::from(dot / (na * nb).max(1e-9))
+                .clamp(-1.0, 1.0)
+                .acos()
+                .to_degrees()
         })
         .collect();
     let turn = median(&mut turns);
@@ -274,7 +277,7 @@ pub fn ventricular_chaos(leads: &[Vec<f32>], fs: f32) -> Option<VentricularChaos
             count += 1.0;
             continue;
         }
-        if sign != 0.0 && x.signum() != sign {
+        if sign * x < 0.0 {
             runs.push(count);
             count = 0.0;
         }
@@ -386,14 +389,18 @@ fn flutter_cycle(v1: &[f32], beats: &[Beat], per_ms: f64) -> Option<f64> {
     }
     let (cycle, coherence) = best_cycle(&waves_ms, FLUTTER_CYCLE_MS);
     let spacing = median(&mut spacings_ms);
-    ((coherence >= FLUTTER_COHERENCE) && (spacing - cycle).abs() <= FLUTTER_SPACING_TOLERANCE * cycle).then_some(cycle)
+    ((coherence >= FLUTTER_COHERENCE) && (spacing - cycle).abs() <= FLUTTER_SPACING_TOLERANCE * cycle)
+        .then_some(cycle)
 }
 
 /// The P waves found stand at one distance before their QRS: whatever makes this rhythm irregular
 /// (ectopics, runs of VT), the atria are organised. An f wave that happens to look like a P wave
 /// has no fixed PR.
 fn atria_lead_the_ventricles(beats: &[Beat]) -> bool {
-    let mut pr: Vec<f64> = beats.iter().filter_map(|b| b.p.map(|p| (b.qrs_onset - p.onset) as f64)).collect();
+    let mut pr: Vec<f64> = beats
+        .iter()
+        .filter_map(|b| b.p.map(|p| (b.qrs_onset - p.onset) as f64))
+        .collect();
     if pr.len() < 3 {
         return false;
     }
@@ -448,17 +455,23 @@ pub fn atrial_activity(
             .len()
             .max(extrema(&v1[from..=to], MIN_PROMINENCE_MV).len());
     }
-    (baseline_ms > 300.0 && seen as f64 / (baseline_ms / 1000.0) >= FIBRILLATORY_EXTREMA_PER_S).then_some(AtrialFinding {
-        rhythm: RhythmKind::AtrialFibrillation,
-        atrial_rate_bpm: None,
-        av_ratio: None,
-    })
+    (baseline_ms > 300.0 && seen as f64 / (baseline_ms / 1000.0) >= FIBRILLATORY_EXTREMA_PER_S).then_some(
+        AtrialFinding {
+            rhythm: RhythmKind::AtrialFibrillation,
+            atrial_rate_bpm: None,
+            av_ratio: None,
+        },
+    )
 }
 
 /// Fast, broad and irregular: AF over an accessory pathway. The baseline is not asked, because at
 /// this rate there is none left to read.
 #[must_use]
-pub fn pre_excited(regularity: Regularity, hr_bpm: Option<f64>, qrs_ms: Option<f64>) -> Option<AtrialFinding> {
+pub fn pre_excited(
+    regularity: Regularity,
+    hr_bpm: Option<f64>,
+    qrs_ms: Option<f64>,
+) -> Option<AtrialFinding> {
     (regularity == Regularity::Irregular
         && hr_bpm.is_some_and(|h| h >= PREEXCITED_MIN_RATE_BPM)
         && qrs_ms.is_some_and(|q| q >= PREEXCITED_MIN_QRS_MS))

@@ -94,10 +94,17 @@ fn peak_to_peak(x: &[f64]) -> f64 {
 #[test]
 fn flutter_waves_are_a_300_per_minute_sawtooth_negative_inferiorly_and_positive_in_v1() {
     let leads = atrial_only("flutter_4to1", 8.0);
-    let (ii, v1) = (&leads[Lead::II as usize][3000..], &leads[Lead::V1 as usize][3000..]);
+    let (ii, v1) = (
+        &leads[Lead::II as usize][3000..],
+        &leads[Lead::V1 as usize][3000..],
+    );
     let f = dominant_hz(ii, 1000.0, (2.0, 10.0));
     assert!((f - 5.0).abs() < 0.2, "flutter frequency {f} Hz");
-    assert!((0.15..=0.5).contains(&peak_to_peak(ii)), "II {}", peak_to_peak(ii));
+    assert!(
+        (0.15..=0.5).contains(&peak_to_peak(ii)),
+        "II {}",
+        peak_to_peak(ii)
+    );
     // No isoelectric baseline: the signal is hardly ever flat.
     let flat = ii.windows(2).filter(|w| (w[1] - w[0]).abs() < 2e-4).count();
     assert!(flat * 10 < ii.len(), "{flat} of {} samples flat", ii.len());
@@ -125,7 +132,11 @@ fn the_analyser_names_flutter_with_its_rate_and_ratio() {
         let a = analysed(id);
         assert_eq!(a.rhythm, Some(RhythmKind::AtrialFlutter), "{id}");
         assert_eq!(a.av_ratio, Some(ratio), "{id}");
-        assert!((a.atrial_rate_bpm.unwrap() - 300.0).abs() < 25.0, "{id}: {:?}", a.atrial_rate_bpm);
+        assert!(
+            (a.atrial_rate_bpm.unwrap() - 300.0).abs() < 25.0,
+            "{id}: {:?}",
+            a.atrial_rate_bpm
+        );
         assert!((a.hr_bpm.unwrap() - hr).abs() < 6.0, "{id}: {:?}", a.hr_bpm);
         assert!(!a.p_wave_present, "{id}: flutter waves are not P waves");
         assert_eq!(a.pr_ms, None, "{id}");
@@ -170,7 +181,11 @@ fn pre_excited_af_is_fast_broad_and_irregular() {
     assert!(a.qrs_ms.unwrap() >= 110.0, "{:?}", a.qrs_ms);
     assert!(!a.p_wave_present);
     // the danger sign the notes teach: a shortest pre-excited R-R of 250 ms or less
-    let shortest_rr_ms = a.beats.iter().filter_map(|b| b.rr_before_ms).fold(f64::INFINITY, f64::min);
+    let shortest_rr_ms = a
+        .beats
+        .iter()
+        .filter_map(|b| b.rr_before_ms)
+        .fold(f64::INFINITY, f64::min);
     assert!(shortest_rr_ms <= 250.0, "shortest R-R {shortest_rr_ms} ms");
 }
 
@@ -241,7 +256,11 @@ fn polarity_runs(x: &[f64]) -> Vec<usize> {
             n = 0;
         }
     }
-    if runs.len() > 1 { runs[1..].to_vec() } else { Vec::new() }
+    if runs.len() > 1 {
+        runs[1..].to_vec()
+    } else {
+        Vec::new()
+    }
 }
 
 #[test]
@@ -250,7 +269,10 @@ fn torsades_twists_with_polarity_runs_in_the_reported_range() {
     let runs = polarity_runs(&p);
     assert!(!runs.is_empty(), "{p:?}");
     // the QRS changes polarity every 5–20 beats
-    assert!(runs.iter().all(|r| (5..=20).contains(r)), "polarity runs {runs:?}");
+    assert!(
+        runs.iter().all(|r| (5..=20).contains(r)),
+        "polarity runs {runs:?}"
+    );
     // amplitude waxes and wanes inside a run
     let biggest = p.iter().copied().map(f64::abs).fold(0.0, f64::max);
     let smallest = p.iter().copied().map(f64::abs).fold(f64::MAX, f64::min);
@@ -268,7 +290,10 @@ fn torsades_has_a_long_qt_before_it_starts() {
     // the same heart without its premature beats: QTc > 500 ms (Drew et al. 2010)
     s.timing.foci.clear();
     s.timing.ventricular_driver = None;
-    let a = s.record(VALIDATION_RUN_S).unwrap().analyze_tail(VALIDATION_WINDOW_S);
+    let a = s
+        .record(VALIDATION_RUN_S)
+        .unwrap()
+        .analyze_tail(VALIDATION_WINDOW_S);
     let qtc = a.qtc_bazett_ms.unwrap();
     assert!(qtc > 500.0, "QTc {qtc}");
 }
@@ -282,7 +307,11 @@ fn polymorphic_vt_changes_from_beat_to_beat_without_a_twist() {
     let p = beat_polarity("polymorphic_vt");
     // polarity changes often, not in long orderly runs
     let flips = p.windows(2).filter(|w| w[0].signum() != w[1].signum()).count();
-    assert!(flips * 4 > p.len(), "{flips} polarity changes in {} beats", p.len());
+    assert!(
+        flips * 4 > p.len(),
+        "{flips} polarity changes in {} beats",
+        p.len()
+    );
 }
 
 // --- infarction --------------------------------------------------------------------------------
@@ -365,7 +394,11 @@ impl Measured {
                 continue;
             }
             let i = (from..to)
-                .max_by(|&p, &q| (f64::from(x[p]) - base).abs().total_cmp(&(f64::from(x[q]) - base).abs()))
+                .max_by(|&p, &q| {
+                    (f64::from(x[p]) - base)
+                        .abs()
+                        .total_cmp(&(f64::from(x[q]) - base).abs())
+                })
                 .unwrap();
             amp.push(f64::from(x[i]) - base);
             when.push((i - b.qrs_onset) as f64 * 2.0);
@@ -446,7 +479,18 @@ fn inferior_infarct_q_waves_and_t_inversion_lie_in_ii_iii_avf() {
     let m = Measured::of(&scenario("mi_inferior_evolved"));
     let id = "mi_inferior_evolved";
     m.assert_pathological_q(id, &[Lead::II, Lead::III, Lead::AVF]);
-    m.assert_no_pathological_q(id, &[Lead::I, Lead::AVL, Lead::V2, Lead::V3, Lead::V4, Lead::V5, Lead::V6]);
+    m.assert_no_pathological_q(
+        id,
+        &[
+            Lead::I,
+            Lead::AVL,
+            Lead::V2,
+            Lead::V3,
+            Lead::V4,
+            Lead::V5,
+            Lead::V6,
+        ],
+    );
     m.assert_t_inverted(id, &[Lead::III, Lead::AVF]);
     m.assert_t_upright(id, &[Lead::I, Lead::AVL]);
 }
@@ -456,7 +500,10 @@ fn lateral_infarct_q_waves_and_t_inversion_lie_in_i_avl_v5_v6() {
     let m = Measured::of(&scenario("mi_lateral_evolved"));
     let id = "mi_lateral_evolved";
     m.assert_pathological_q(id, &[Lead::I, Lead::AVL, Lead::V5, Lead::V6]);
-    m.assert_no_pathological_q(id, &[Lead::II, Lead::III, Lead::AVF, Lead::V1, Lead::V2, Lead::V3]);
+    m.assert_no_pathological_q(
+        id,
+        &[Lead::II, Lead::III, Lead::AVF, Lead::V1, Lead::V2, Lead::V3],
+    );
     m.assert_t_inverted(id, &[Lead::I, Lead::AVL, Lead::V6]);
     m.assert_t_upright(id, &[Lead::III, Lead::V2]);
 }
@@ -500,19 +547,22 @@ fn stages_come_in_order_st_then_q_then_t_inversion_then_q_alone() {
     let stage = |to_s: f64, len_s: f64| Measured::window(&s, to_s, len_s);
     let st_at = |m: &Measured, lead: Lead| {
         let x = &m.leads[lead as usize];
-        let mut v: Vec<f64> = m
-            .a
-            .beats
-            .iter()
-            .filter(|b| b.qrs_offset + 30 < x.len())
-            .map(|b| f64::from(x[b.qrs_offset + 30]) - f64::from(x[b.qrs_onset.saturating_sub(10)]))
-            .collect();
+        let mut v: Vec<f64> =
+            m.a.beats
+                .iter()
+                .filter(|b| b.qrs_offset + 30 < x.len())
+                .map(|b| f64::from(x[b.qrs_offset + 30]) - f64::from(x[b.qrs_onset.saturating_sub(10)]))
+                .collect();
         v.sort_by(f64::total_cmp);
         v[v.len() / 2]
     };
     let acute = stage(4.9, 3.5);
     assert!(st_at(&acute, Lead::V2) > 0.1, "ST {}", st_at(&acute, Lead::V2));
-    assert!(acute.q_wave(Lead::V4).0 < 30.0, "no Q yet: {:?}", acute.q_wave(Lead::V4));
+    assert!(
+        acute.q_wave(Lead::V4).0 < 30.0,
+        "no Q yet: {:?}",
+        acute.q_wave(Lead::V4)
+    );
     assert!(acute.t_wave(Lead::V5).0 > -0.1);
 
     let q_stage = stage(9.9, 3.5);
@@ -522,7 +572,10 @@ fn stages_come_in_order_st_then_q_then_t_inversion_then_q_alone() {
     let t_stage = stage(15.9, 4.5);
     t_stage.assert_pathological_q("T stage", &[Lead::V2, Lead::V3, Lead::V4]);
     t_stage.assert_t_inverted("T stage", &[Lead::V2, Lead::V3, Lead::V4]);
-    assert!(st_at(&t_stage, Lead::V5) < st_at(&q_stage, Lead::V5), "ST settles");
+    assert!(
+        st_at(&t_stage, Lead::V5) < st_at(&q_stage, Lead::V5),
+        "ST settles"
+    );
 
     let old = stage(20.0, 3.5);
     old.assert_pathological_q("old stage", &[Lead::V2, Lead::V3, Lead::V4]);
@@ -567,7 +620,11 @@ fn the_analyser_names_a_rhythm_only_where_the_library_expects_one() {
         let id = f.file_stem().unwrap().to_string_lossy().into_owned();
         let s = scenario(&id);
         let want = s.scenario.expected.as_ref().and_then(|e| e.rhythm);
-        let got = s.record(VALIDATION_RUN_S).unwrap().analyze_tail(VALIDATION_WINDOW_S).rhythm;
+        let got = s
+            .record(VALIDATION_RUN_S)
+            .unwrap()
+            .analyze_tail(VALIDATION_WINDOW_S)
+            .rhythm;
         if got != want {
             wrong.push(format!("{id}: analyser says {got:?}, library says {want:?}"));
         }

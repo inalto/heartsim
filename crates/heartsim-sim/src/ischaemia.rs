@@ -461,9 +461,9 @@ impl IschaemiaState {
             let stage = depth * l.kind.t_inversion();
             let r = p.frontal_axis_deg.to_radians();
             let axis = [r.cos(), -r.sin()];
-            for i in 0..2 {
-                f.q_limb[i] += axis[i] * p.frontal_gain * depth;
-                f.t_limb[i] += axis[i] * p.frontal_gain * stage;
+            for (i, a) in axis.iter().enumerate() {
+                f.q_limb[i] += a * p.frontal_gain * depth;
+                f.t_limb[i] += a * p.frontal_gain * stage;
             }
             for i in 0..6 {
                 f.q_precordial[i] = (f.q_precordial[i] + p.precordial[i] * depth).clamp(-1.0, 1.0);

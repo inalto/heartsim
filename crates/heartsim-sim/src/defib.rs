@@ -76,12 +76,12 @@ impl RhythmClass {
     /// `(p_max, E_c J)` of [`success_probability`].
     fn efficacy(self) -> (f64, f64) {
         match self {
-            RhythmClass::VentricularFibrillation => (0.95, 60.0),
+            RhythmClass::VentricularFibrillation | RhythmClass::PolymorphicVentricularTachycardia => {
+                (0.95, 60.0)
+            }
             RhythmClass::VentricularTachycardia => (0.97, 30.0),
-            RhythmClass::PolymorphicVentricularTachycardia => (0.95, 60.0),
-            RhythmClass::SupraventricularTachycardia => (0.97, 25.0),
+            RhythmClass::SupraventricularTachycardia | RhythmClass::AtrialFlutter => (0.97, 25.0),
             RhythmClass::AtrialFibrillationOrFlutter => (0.92, 60.0),
-            RhythmClass::AtrialFlutter => (0.97, 25.0),
             RhythmClass::Organised => (1.0, 0.0),
             RhythmClass::Asystole => (0.0, 1.0),
         }

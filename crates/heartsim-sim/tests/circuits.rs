@@ -16,7 +16,12 @@ fn timing(id: &str) -> TimingParams {
     TimingParams::from_scenario_ron(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
-fn run(p: TimingParams, seed: u64, seconds: f64, actions: &[(f64, Action)]) -> (Vec<Event>, Vec<ShockRecord>) {
+fn run(
+    p: TimingParams,
+    seed: u64,
+    seconds: f64,
+    actions: &[(f64, Action)],
+) -> (Vec<Event>, Vec<ShockRecord>) {
     let mut e = TimingEngine::new(p);
     e.set_shock_seed(seed);
     let (mut evs, mut shocks) = (Vec::new(), Vec::new());
@@ -136,7 +141,10 @@ fn adenosine_raises_the_block_of_flutter_and_the_circuit_carries_on() {
     let a = atrial_cycles(&evs, 8000.0);
     assert_flutter_rate(&a);
     let during = beats(&evs, 9500.0).iter().filter(|t| **t < 14_000.0).count();
-    assert!(during <= 5, "{during} QRS complexes in 4.5 s of adenosine (2:1 gives 11)");
+    assert!(
+        during <= 5,
+        "{during} QRS complexes in 4.5 s of adenosine (2:1 gives 11)"
+    );
 }
 
 #[test]
@@ -164,7 +172,8 @@ fn af_has_irregular_atrial_cycles_and_an_irregularly_irregular_ventricular_rhyth
     assert!(cv(&diffs(&v)) > 0.12, "RR CV {}", cv(&diffs(&v)));
     assert!(
         evs.iter()
-            .any(|e| e.region == Region::LeftAtrium && e.origin == Origin::Circuit(Circuit::AtrialFibrillation))
+            .any(|e| e.region == Region::LeftAtrium
+                && e.origin == Origin::Circuit(Circuit::AtrialFibrillation))
     );
 }
 
@@ -184,7 +193,9 @@ fn pre_excited_af_is_fast_and_mostly_conducted_over_the_pathway() {
     let over_pathway = evs
         .iter()
         .filter(|e| {
-            e.chamber == Chamber::Ventricle && e.kind == EventKind::Conducted && e.origin == Origin::AccessoryPathway
+            e.chamber == Chamber::Ventricle
+                && e.kind == EventKind::Conducted
+                && e.origin == Origin::AccessoryPathway
         })
         .count();
     assert!(over_pathway * 2 > v.len(), "{over_pathway} of {} beats", v.len());
@@ -267,7 +278,10 @@ fn torsades_starts_on_a_short_long_short_sequence_with_an_r_on_t() {
     let [.., first_short, long, short] = rr.as_slice() else {
         panic!("too few beats before the episode");
     };
-    assert!(*long > 1.5 * short && *long > 1.5 * first_short, "{first_short} {long} {short}");
+    assert!(
+        *long > 1.5 * short && *long > 1.5 * first_short,
+        "{first_short} {long} {short}"
+    );
     // the triggering beat falls in the vulnerable period of the beat before it
     assert!((0.7 * erp..=1.3 * erp).contains(short), "coupling {short}");
 }
@@ -290,8 +304,10 @@ fn torsades_runs_at_160_to_240_bpm_then_slows_and_stops_by_itself() {
     assert!(*t.last().unwrap() < 28_000.0, "the episode ended");
     let end = *t.last().unwrap();
     assert!(
-        evs.iter()
-            .any(|e| e.at.0 > end && e.chamber == Chamber::Ventricle && e.origin == Origin::Sinus && e.kind != EventKind::Blocked),
+        evs.iter().any(|e| e.at.0 > end
+            && e.chamber == Chamber::Ventricle
+            && e.origin == Origin::Sinus
+            && e.kind != EventKind::Blocked),
         "sinus beats return"
     );
 }
@@ -325,8 +341,13 @@ fn polymorphic_vt_is_fast_and_a_sync_shock_waits_for_an_organised_r_wave() {
     let bpm = 60_000.0 / mean(&diffs(&t));
     assert!((170.0..=260.0).contains(&bpm), "rate {bpm}");
     assert!(cv(&diffs(&t)) > 0.05);
-    let (_, none) = run(timing("polymorphic_vt"), 42, 12.0, &[(5000.0, shock(150.0, true))]);
-    assert!(none.is_empty());
+    let (_, none) = run(
+        timing("polymorphic_vt"),
+        42,
+        12.0,
+        &[(5000.0, shock(150.0, true))],
+    );
+    assert_eq!(none.len(), 0, "sync mode finds no R wave to fire on");
 }
 
 // --- shocks on the atrial circuits -------------------------------------------------------------
@@ -335,7 +356,11 @@ fn polymorphic_vt_is_fast_and_a_sync_shock_waits_for_an_organised_r_wave() {
 fn a_synchronised_shock_ends_flutter_and_preexcited_af_on_the_first_seed_that_succeeds() {
     for (id, class, joules) in [
         ("flutter_2to1", RhythmClass::AtrialFlutter, 100.0),
-        ("atrial_fibrillation", RhythmClass::AtrialFibrillationOrFlutter, 200.0),
+        (
+            "atrial_fibrillation",
+            RhythmClass::AtrialFibrillationOrFlutter,
+            200.0,
+        ),
         ("af_preexcited", RhythmClass::AtrialFibrillationOrFlutter, 150.0),
     ] {
         let mut ended = false;
@@ -347,8 +372,9 @@ fn a_synchronised_shock_ends_flutter_and_preexcited_af_on_the_first_seed_that_su
             if s[0].success {
                 assert_eq!(after, 0, "{id}: the circuit stopped");
                 assert!(
-                    evs.iter()
-                        .any(|e| e.at.0 > s[0].at.0 && e.origin == Origin::Sinus && e.kind == EventKind::Automatic),
+                    evs.iter().any(|e| e.at.0 > s[0].at.0
+                        && e.origin == Origin::Sinus
+                        && e.kind == EventKind::Automatic),
                     "{id}: the sinus node took over"
                 );
                 ended = true;
@@ -462,7 +488,10 @@ fn the_heart_agrees_with_the_strip_in_vf_and_a_shock_restores_it() {
     let mut first: Vec<usize> = first_ms.into_iter().flatten().collect();
     first.sort_unstable();
     let spread_ms = first[first.len() * 9 / 10] - first[first.len() / 10];
-    assert!(spread_ms > 50, "the cells share a beat: first upstrokes within {spread_ms} ms");
+    assert!(
+        spread_ms > 50,
+        "the cells share a beat: first upstrokes within {spread_ms} ms"
+    );
 
     // A shock the timing engine says succeeded depolarises everything at once and then rests.
     let mut shocked = false;
@@ -488,5 +517,8 @@ fn the_atria_follow_flutter_one_to_one_on_the_heart() {
     // a front at every event: 10 cycles in 2 s appear as 10 rising crossings of the mean level
     let m = mean(&f);
     let rises = f.windows(2).filter(|w| w[0] <= m && w[1] > m).count();
-    assert!((8..=12).contains(&rises), "{rises} atrial fronts in 2 s, the strip has 10");
+    assert!(
+        (8..=12).contains(&rises),
+        "{rises} atrial fronts in 2 s, the strip has 10"
+    );
 }
