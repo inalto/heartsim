@@ -88,7 +88,7 @@ fn flutter_2to1_conducts_every_second_wave() {
     let (evs, _) = run(timing("flutter_2to1"), 42, 20.0, &[]);
     let (a, v) = (atrial_cycles(&evs, 5000.0), beats(&evs, 5000.0));
     assert_flutter_rate(&a);
-    let ratio = a.len() as f64 / v.len() as f64;
+    let ratio = mean(&diffs(&v)) / mean(&diffs(&a));
     assert!((ratio - 2.0).abs() < 0.1, "AV ratio {ratio}");
     assert!(cv(&diffs(&v)) < 0.02, "fixed ratio is regular");
     let bpm = 60_000.0 / mean(&diffs(&v));
@@ -100,7 +100,7 @@ fn flutter_4to1_conducts_every_fourth_wave() {
     let (evs, _) = run(timing("flutter_4to1"), 42, 20.0, &[]);
     let (a, v) = (atrial_cycles(&evs, 5000.0), beats(&evs, 5000.0));
     assert_flutter_rate(&a);
-    let ratio = a.len() as f64 / v.len() as f64;
+    let ratio = mean(&diffs(&v)) / mean(&diffs(&a));
     assert!((ratio - 4.0).abs() < 0.2, "AV ratio {ratio}");
     assert!(cv(&diffs(&v)) < 0.02);
 }
@@ -431,6 +431,38 @@ fn the_heart_agrees_with_the_strip_in_vf_and_a_shock_restores_it() {
     );
     assert!(lo > 0.05, "VF: at least some tissue is always excited: {lo}");
     assert!(hi < 0.98, "VF: no common beat: {hi}");
+    // A steady share is not a frozen heart: each cell keeps being excited and recovering, on its
+    // own schedule.
+    let kinds = vf.eikonal().kinds().to_vec();
+    let sampled: Vec<usize> = (0..kinds.len())
+        .filter(|i| kinds[*i] == CellKind::Ventricular)
+        .step_by(50)
+        .collect();
+    let mut upstrokes = vec![0_u32; sampled.len()];
+    let mut was_up: Vec<bool> = sampled.iter().map(|i| vf.cells().vm[*i] > 0.5).collect();
+    let mut first_ms: Vec<Option<usize>> = vec![None; sampled.len()];
+    for ms in 0..2000 {
+        vf.step(Millis(1.0));
+        let vm = &vf.cells().vm;
+        for (k, i) in sampled.iter().enumerate() {
+            let up = vm[*i] > 0.5;
+            if up && !was_up[k] {
+                upstrokes[k] += 1;
+                first_ms[k].get_or_insert(ms);
+            }
+            was_up[k] = up;
+        }
+    }
+    let active = upstrokes.iter().filter(|n| **n >= 4).count();
+    assert!(
+        active as f64 >= 0.9 * sampled.len() as f64,
+        "cells re-excited at least four times in 2 s: {active} of {}",
+        sampled.len()
+    );
+    let mut first: Vec<usize> = first_ms.into_iter().flatten().collect();
+    first.sort_unstable();
+    let spread_ms = first[first.len() * 9 / 10] - first[first.len() / 10];
+    assert!(spread_ms > 50, "the cells share a beat: first upstrokes within {spread_ms} ms");
 
     // A shock the timing engine says succeeded depolarises everything at once and then rests.
     let mut shocked = false;

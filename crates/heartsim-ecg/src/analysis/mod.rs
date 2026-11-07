@@ -327,7 +327,7 @@ impl Analyzer {
         }
         // One lead's energy threshold can hide a run of broad beats behind a few narrow, much
         // steeper ones: pre-excited AF is such a mixture. All 12 leads together still see them.
-        let deflections = rhythm::deflections(&raw, fs);
+        let deflections = rhythm::qrs_sized(&raw, &rhythm::deflections(&raw, fs), &det.peaks, fs);
         if deflections.len() >= rhythm::MIN_DEFLECTIONS && det.peaks.len() * 5 < deflections.len() {
             det.peaks = qrs::refine_peaks(&raw[ref_idx], &deflections, fs);
         }

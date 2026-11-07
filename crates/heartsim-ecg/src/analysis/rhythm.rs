@@ -75,6 +75,11 @@ const BASELINE_VELOCITY_REACH_MS: f64 = 120.0;
 /// A QRS edge must rise above the velocity this share of the baseline stays under.
 const BASELINE_VELOCITY_QUANTILE: f32 = 0.75;
 
+/// How far around a deflection its height is measured, ms.
+const QRS_SIZED_REACH_MS: f64 = 60.0;
+/// Share of the height of a detected QRS that makes a deflection one too.
+const QRS_SIZED_SHARE: f64 = 0.5;
+
 /// A polymorphic or fibrillating ventricular rhythm.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VentricularChaos {
@@ -133,6 +138,33 @@ pub(super) fn deflections(leads: &[Vec<f32>], fs: f32) -> Vec<usize> {
     kept
 }
 
+/// Largest peak-to-peak of any lead around sample `at`, mV.
+fn deflection_height(leads: &[Vec<f32>], at: usize, fs: f32) -> f64 {
+    let reach = (QRS_SIZED_REACH_MS * f64::from(fs) / 1000.0) as usize;
+    leads
+        .iter()
+        .map(|l| {
+            let w = &l[at.saturating_sub(reach)..(at + reach).min(l.len())];
+            let (lo, hi) = w
+                .iter()
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+            f64::from(hi - lo)
+        })
+        .fold(0.0, f64::max)
+}
+
+/// The `deflections` as tall as a QRS: their height reaches half of the height around the median
+/// R peak in `r_peaks`. T, P, flutter and f waves stay out.
+pub(super) fn qrs_sized(leads: &[Vec<f32>], deflections: &[usize], r_peaks: &[usize], fs: f32) -> Vec<usize> {
+    let mut heights: Vec<f64> = r_peaks.iter().map(|r| deflection_height(leads, *r, fs)).collect();
+    let limit = QRS_SIZED_SHARE * median(&mut heights);
+    deflections
+        .iter()
+        .copied()
+        .filter(|d| deflection_height(leads, *d, fs) >= limit)
+        .collect()
+}
+
 /// Frequency of the largest spectral peak of `x` in [`DOMINANT_BAND_HZ`], Hz (Goertzel scan).
 fn dominant_frequency_hz(x: &[f32], fs: f32) -> f64 {
     let mean = x.iter().map(|v| f64::from(*v)).sum::<f64>() / x.len().max(1) as f64;
@@ -172,8 +204,13 @@ pub fn ventricular_chaos(leads: &[Vec<f32>], fs: f32) -> Option<VentricularChaos
     }
     // Each deflection's vector: the 12 leads at the largest excursion in the 80 ms before it.
     let reach = (80.0 * per_ms) as usize;
+    // Only the taller half: a T wave turns the vector from its QRS, but it is the QRS complexes
+    // that keep or lose their axis.
+    let mut heights: Vec<f64> = peaks.iter().map(|p| deflection_height(leads, *p, fs)).collect();
+    let tall = median(&mut heights);
     let vectors: Vec<[f32; LEAD_COUNT]> = peaks
         .iter()
+        .filter(|p| deflection_height(leads, **p, fs) >= tall)
         .map(|&p| {
             let lo = p.saturating_sub(reach);
             let at = (lo..=p)

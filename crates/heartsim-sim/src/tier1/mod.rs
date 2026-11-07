@@ -82,6 +82,10 @@ const CIRCUIT_APD_FLUTTER: f32 = 0.7;
 const CIRCUIT_APD_FIBRILLATION: f32 = 0.5;
 /// APD multiplier during torsades and polymorphic VT (cycle ≈ 300 ms).
 const CIRCUIT_APD_POLYMORPHIC: f32 = 0.75;
+/// Conduction-velocity multiplier during fibrillation. Fronts have to be slow enough that several
+/// of them share the chamber at once: at full speed one crosses it before the next event, and the
+/// whole chamber would beat together instead of fibrillating.
+const CIRCUIT_CV_FIBRILLATION: f32 = 0.3;
 /// Random wavelets started by one fibrillatory event.
 const CIRCUIT_WAVELETS: usize = 3;
 const NO_PROBE: u8 = u8::MAX;
@@ -326,6 +330,8 @@ pub struct EikonalEngine {
     /// APD multiplier of the atria `[0]` and ventricles `[1]` while a sustained arrhythmia of the
     /// timing engine runs in them.
     circuit_apd_scale: [f32; 2],
+    /// Conduction-velocity multipliers of the same two chambers.
+    circuit_cv_scale: [f32; 2],
     /// AHA segment per cell (0 = none) for coronary territories; empty until set.
     aha_segments: Vec<u8>,
     ischaemia: IschaemiaState,
@@ -435,6 +441,7 @@ impl EikonalEngine {
             user_cv_scale: vec![1.0; n],
             modifiers_dirty: false,
             circuit_apd_scale: [1.0; 2],
+            circuit_cv_scale: [1.0; 2],
             aha_segments: Vec::new(),
             ischaemia: IschaemiaState::default(),
             injury: InjuryField::healthy(n),
@@ -837,12 +844,12 @@ impl EikonalEngine {
         for i in 0..self.cloud.len() {
             let (cv, apd, myocardium) = match self.kinds[i] {
                 CellKind::Atrial => (
-                    d.atrial_cv_scale,
+                    d.atrial_cv_scale * f64::from(self.circuit_cv_scale[0]),
                     d.atrial_apd_scale * f64::from(self.circuit_apd_scale[0]),
                     true,
                 ),
                 CellKind::Ventricular => (
-                    d.ventricular_cv_scale,
+                    d.ventricular_cv_scale * f64::from(self.circuit_cv_scale[1]),
                     d.ventricular_apd_scale * f64::from(self.circuit_apd_scale[1]),
                     true,
                 ),
@@ -1047,8 +1054,16 @@ impl EikonalEngine {
             Circuit::VentricularFibrillation => (1, CIRCUIT_APD_FIBRILLATION),
             Circuit::Torsades | Circuit::PolymorphicVt => (1, CIRCUIT_APD_POLYMORPHIC),
         };
-        if (self.circuit_apd_scale[index] - scale).abs() > f32::EPSILON {
+        let cv = if matches!(c, Circuit::AtrialFibrillation | Circuit::VentricularFibrillation) {
+            CIRCUIT_CV_FIBRILLATION
+        } else {
+            1.0
+        };
+        if (self.circuit_apd_scale[index] - scale).abs() > f32::EPSILON
+            || (self.circuit_cv_scale[index] - cv).abs() > f32::EPSILON
+        {
             self.circuit_apd_scale[index] = scale;
+            self.circuit_cv_scale[index] = cv;
             self.modifiers_dirty = true;
         }
         match c {
@@ -1247,8 +1262,9 @@ impl EikonalEngine {
         let at = at.0.max(self.now);
         self.queue.clear();
         self.stimuli.clear();
-        if self.circuit_apd_scale != [1.0; 2] {
+        if self.circuit_apd_scale != [1.0; 2] || self.circuit_cv_scale != [1.0; 2] {
             self.circuit_apd_scale = [1.0; 2];
+            self.circuit_cv_scale = [1.0; 2];
             self.refresh_modifiers();
         }
         for j in 0..self.hot.len() {
@@ -1600,8 +1616,9 @@ impl Engine for EikonalEngine {
     fn reset(&mut self) {
         let n = self.t_act.len();
         self.now = 0.0;
-        if self.circuit_apd_scale != [1.0; 2] {
+        if self.circuit_apd_scale != [1.0; 2] || self.circuit_cv_scale != [1.0; 2] {
             self.circuit_apd_scale = [1.0; 2];
+            self.circuit_cv_scale = [1.0; 2];
             self.refresh_modifiers();
         }
         for h in &mut self.hot {

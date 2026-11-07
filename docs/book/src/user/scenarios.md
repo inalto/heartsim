@@ -33,9 +33,9 @@ rhythms and not a simulation of their mechanism:
 | Rhythm | Strip | 3-D heart |
 |---|---|---|
 | Atrial flutter | Sawtooth at about 300/min, the AV ratio from the node | A front from the right atrium every cycle. The anatomical circuit around the tricuspid valve is not drawn |
-| Atrial fibrillation | f waves, irregular QRS | Random wavelets in both atria each cycle, no common beat. For a tissue model see [Re-entry presets](reentry.md) |
+| Atrial fibrillation | f waves, irregular QRS | Random slow wavelets in both atria each cycle, no common beat. For a tissue model see [Re-entry presets](reentry.md) |
 | Pre-excited AF | Fast, broad, irregular QRS | As atrial fibrillation, with the ventricles entered at the pathway's insertion |
-| Ventricular fibrillation | Chaotic deflections, no QRS, no P waves | Random wavelets running into each other and into refractory tissue. There are no rotors behind them |
+| Ventricular fibrillation | Chaotic deflections, no QRS, no P waves | Random wavelets, slowed to about a third of normal speed so that several share the chamber, running into each other and into refractory tissue. There are no rotors behind them |
 | Torsades de pointes, polymorphic VT | Large wide complexes that twist, or change every beat | A front from either ventricle each cycle. The twist itself is not drawn |
 | Infarct with Q waves | Q waves, T inversion | A silent necrotic core with a slow border zone: the same lesion |
 
