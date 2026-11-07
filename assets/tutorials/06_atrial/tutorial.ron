@@ -4,7 +4,7 @@ Tutorial(
     format_version: 1,
     id: "06_atrial",
     title: "Atrial arrhythmias",
-    summary: "Premature atrial beats (conducted and blocked), atrial tachycardia, the sick sinus syndrome, and atrial fibrillation on the re-entry model with cardioversion.",
+    summary: "Premature atrial beats (conducted and blocked), atrial tachycardia, the sick sinus syndrome, atrial flutter with its AV ratios, and atrial fibrillation with cardioversion.",
     references: [
         "Hindricks G et al. 2020 ESC Guidelines for the diagnosis and management of atrial fibrillation. Eur Heart J 2021;42:373-498.",
         "Joglar JA et al. 2023 ACC/AHA/ACCP/HRS guideline for the diagnosis and management of atrial fibrillation. Circulation 2024;149:e1-e156.",
@@ -12,6 +12,8 @@ Tutorial(
         "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 12, 15).",
         "Moe GK, Abildskov JA. Atrial fibrillation as a self-sustaining arrhythmia independent of focal discharge. Am Heart J 1959;58:59-70.",
         "Burns E, Buttner R. Life in the Fast Lane ECG Library: premature atrial complexes, atrial tachycardia, atrial fibrillation, sick sinus syndrome. litfl.com/ecg-library.",
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: atrial flutter. litfl.com/ecg-library.",
     ],
     pages: [
         Page(
@@ -135,6 +137,94 @@ The simulator alternates between 130 and 38 bpm every six seconds.
             )),
         ),
         Page(
+            title: "Atrial flutter: the sawtooth",
+            markdown: r#"
+**Atrial flutter** is one large re-entrant circuit, usually around the tricuspid valve. It turns about
+**300 times a minute**, so the atria are activated every 200 ms.
+
+The result is a **sawtooth** baseline with no flat line between waves: **negative in II, III and
+aVF, positive in V1**. Here the AV node passes every fourth wave, so the ventricles beat at a calm
+75 bpm and you can see the sawtooth clearly.
+
+Count the flutter waves between two QRS complexes in lead II.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_4to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "At 4:1 conduction with a flutter rate of 300/min, what is the ventricular rate?",
+                choices: [
+                    "75 bpm",
+                    "150 bpm",
+                    "300 bpm",
+                    "40 bpm",
+                ],
+                answer: 0,
+                explanation: "The ventricles follow every fourth wave: 300 divided by 4 is 75 bpm. A normal rate does not rule out flutter, so check the baseline.",
+            )),
+        ),
+        Page(
+            title: "Flutter at 2:1: the rate of 150",
+            markdown: r#"
+A healthy AV node usually conducts **every second** flutter wave. That makes a regular narrow
+tachycardia at about **150 bpm**, and half the flutter waves are hidden in the ST-T segment.
+
+This is one of the most often missed rhythms: it looks like sinus tachycardia. Be suspicious of
+any regular narrow tachycardia that stays **fixed near 150 bpm**.
+
+The simulator gives **adenosine** after eight seconds: the AV block deepens for a few seconds and the
+sawtooth shows. It does not stop the flutter, because the circuit is in the atrium.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_2to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Drug(name: "adenosine", dose: 1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Why does adenosine show the flutter waves without ending the flutter?",
+                choices: [
+                    "It blocks the AV node only, and the circuit lies in the atrium",
+                    "It removes the T waves",
+                    "It speeds up the atria",
+                    "It stops the sinus node",
+                ],
+                answer: 0,
+                explanation: "Adenosine produces a few seconds of AV block. Fewer QRS complexes means the sawtooth can be seen, but the atrial circuit does not depend on the AV node and carries on.",
+            )),
+        ),
+        Page(
+            title: "Flutter with variable block",
+            markdown: r#"
+When the AV ratio keeps changing the ventricular rhythm becomes **irregular**, and at a glance it
+looks like atrial fibrillation.
+
+The difference is in the baseline. **Flutter waves look alike and keep a fixed spacing**, whatever
+the QRS complexes are doing. The f waves of fibrillation vary in size, shape and spacing. Here the
+ratio shifts between 2:1 and 3:1.
+
+Open the 12-lead view and look at the waves in II and V1.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_variable")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "An irregular narrow tachycardia has identical, evenly spaced atrial waves at 300/min. What is it?",
+                choices: [
+                    "Atrial flutter with variable block",
+                    "Atrial fibrillation",
+                    "Sinus arrhythmia",
+                    "Multifocal PVCs",
+                ],
+                answer: 0,
+                explanation: "Regular identical atrial waves mean an organised circuit, even when the ventricular rhythm is irregular. In AF the atrial activity itself is irregular.",
+            )),
+        ),
+        Page(
             title: "Atrial fibrillation",
             markdown: r#"
 In **atrial fibrillation (AF)** the atria no longer contract as one: many small wavelets wander
@@ -193,6 +283,33 @@ Count the QRS complexes in a ten-second stretch and multiply by six to estimate 
             )),
         ),
         Page(
+            title: "Fibrillation or flutter?",
+            markdown: r#"
+Here is atrial fibrillation drawn from the timing model, which runs in real time: **no P waves**,
+a baseline of **irregular f waves**, and an **irregularly irregular** QRS at about 100 bpm.
+
+Compare it with the flutter pages. The baseline is the thing to look at: here no two waves are
+alike and there is no repeating spacing. The 3-D heart shows random wavelets in both atria,
+with no common beat.
+"#,
+            actions: [
+                Ui(LoadScenario("atrial_fibrillation")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "What separates the baseline of AF from the baseline of flutter?",
+                choices: [
+                    "f waves vary in size, shape and spacing; flutter waves are alike and evenly spaced",
+                    "f waves are larger",
+                    "f waves are present only after the QRS",
+                    "There is no difference",
+                ],
+                answer: 0,
+                explanation: "Fibrillation has no organised circuit, so its waves are irregular in every way. Flutter is a regular circuit, so its waves repeat.",
+            )),
+        ),
+        Page(
             title: "Electrical cardioversion",
             markdown: r#"
 If AF has to be stopped, a **synchronised shock** can reset the heart. The energy is typically
@@ -223,6 +340,37 @@ shock. Success is a matter of probability, as in real life: if it fails, press *
                 ],
                 answer: 0,
                 explanation: "After more than 48 hours of AF, thrombus may have formed in the left atrial appendage. Restoring atrial contraction can dislodge it and cause a stroke, so the patient needs anticoagulation first (or an imaging check).",
+            )),
+        ),
+        Page(
+            title: "Cardioverting flutter",
+            markdown: r#"
+Flutter needs **less energy** than fibrillation: guidelines suggest starting from about 70 to 120 J
+biphasic, **synchronised** with the R wave. An organised circuit is easy to interrupt.
+
+After eight seconds the simulator delivers a synchronised shock of 100 J. The sawtooth should
+stop and sinus rhythm return. If the shock fails, press **Replay**.
+
+Stroke prevention is the same as for AF: flutter carries an embolic risk too. In the longer term
+**catheter ablation of the cavotricuspid isthmus** cures most typical flutter.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_2to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Shock(joules: 100.0, synchronised: true)),
+            ],
+            check: Some(Question(
+                prompt: "Which shock is the right one for stable-but-symptomatic flutter being cardioverted?",
+                choices: [
+                    "A synchronised shock at a modest energy",
+                    "An unsynchronised shock at the maximum energy",
+                    "No shock works in flutter",
+                    "A shock timed to the T wave",
+                ],
+                answer: 0,
+                explanation: "Flutter has a clear R wave, and synchronising avoids the vulnerable T wave. Flutter usually responds to modest energy.",
             )),
         ),
     ],

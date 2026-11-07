@@ -1,0 +1,32 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "mi_old_anterior",
+    title: "Old anterior infarction: Q waves only",
+    description: "Months after an anterior infarct: Q or QS complexes in V1 to V4 remain, the ST segment is level and the T waves are upright again or nearly so.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Over weeks to months the T waves often recover, and the Q waves usually stay. Q waves without ST or T changes are a sign of an old infarct rather than an acute event, which is why an old ECG is so helpful to compare.\nOccasionally Q waves shrink or vanish, especially after early reperfusion. In the simulator the same lesion is a healed silent core on the 3-D heart (branch name `LAD infarct`)."),
+    confused_with: ["mi_anterior_evolved", "stemi_anterior", "lbbb", "wpw_left_lateral"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017 (ch. 8, 9).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: pathological Q waves, myocardial infarction evolution, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "LAD infarct", severity: 1.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+    ),
+)

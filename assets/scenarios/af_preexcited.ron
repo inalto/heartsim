@@ -1,0 +1,33 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "af_preexcited",
+    title: "Pre-excited atrial fibrillation",
+    description: "Atrial fibrillation conducted over a left-sided accessory pathway with a short refractory period: fast, broad, irregular QRS complexes, some over 250 bpm.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A patient with a manifest accessory pathway who goes into AF has lost the protection of the AV node, because the pathway does not slow down at high rates. The ECG is the classic 'FBI' tachycardia: fast, broad and irregular. The QRS varies from beat to beat with the balance of pathway and node, and an occasional narrow beat may appear.\nA shortest pre-excited R-R interval of 250 ms or less marks a pathway that can pass AF on to ventricular fibrillation, and so a risk of sudden death. Here the pathway's refractory period is 200 ms.\nAV-nodal blockers (verapamil, diltiazem, digoxin, beta-blockers, adenosine) must be avoided: they do not slow the pathway and can make things worse. An unstable patient needs a synchronised shock; a stable one may receive procainamide or ibutilide. The definitive treatment is ablation.\nIn the simulator an AV-nodal drug changes only the AV node, so it does not slow this rhythm; the reflex and refractoriness effects by which such drugs can speed up the pathway in patients are not modelled."),
+    confused_with: ["vt_monomorphic", "polymorphic_vt", "atrial_fibrillation", "wpw_left_lateral"],
+    references: [
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Klein GJ et al. Ventricular fibrillation in the Wolff-Parkinson-White syndrome. N Engl J Med 1979;301:1080-1085.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: pre-excited atrial fibrillation, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (150.0, 260.0),
+        pr_ms: None,
+        qrs_ms: Some((110.0, 240.0)),
+        axis_deg: None,
+        rhythm: Some(PreExcitedAtrialFibrillation),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        ventricular_erp_ms: 180.0,
+        av: AvParams(concealment_fraction: 0.6, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 100.0, recovery_tau_ms: 100.0, erp_ms: 240.0, blocked: false)),
+        atrial_driver: Some(AtrialDriver(kind: Fibrillation, cycle_ms: 160.0, cycle_jitter: 0.4)),
+        accessory: Some(AccessoryPathway(delay_ms: 30.0, erp_ms: 200.0, antegrade: true, retrograde: false, ventricular_side: Left, atrial_side: Left)),
+    ),
+)

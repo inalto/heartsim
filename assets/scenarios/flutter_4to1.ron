@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "flutter_4to1",
+    title: "Atrial flutter with 4:1 AV conduction",
+    description: "The same 300/min flutter circuit with more AV block: every fourth wave conducts, the ventricles beat regularly at 75 bpm and the sawtooth is plain between the QRS complexes.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("With a slower AV node (a rate-controlling drug or conduction disease) only every fourth flutter wave conducts. The ventricular rate is normal, and the sawtooth baseline can be seen clearly: count three waves that do not conduct between QRS complexes. Best seen in II, III, aVF and V1.\nA normal heart rate does not rule out flutter: look at the baseline, not just the rate. An odd ratio such as 3:1 is less common than 2:1 or 4:1.\nThe ratio follows from the longer AV-nodal refractory period of this file and is not set directly. The 3-D heart shows the atria activated every 200 ms from the right atrium, not the anatomical circuit itself."),
+    confused_with: ["flutter_2to1", "flutter_variable", "atrial_fibrillation", "sinus_normal"],
+    references: [
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017 (ch. 15).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: atrial flutter, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 80.0),
+        pr_ms: None,
+        qrs_ms: Some((60.0, 120.0)),
+        axis_deg: None,
+        rhythm: Some(AtrialFlutter),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        av: AvParams(concealment_fraction: 0.5, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 330.0, blocked: false)),
+        atrial_driver: Some(AtrialDriver(kind: Flutter, cycle_ms: 200.0, cycle_jitter: 0.0)),
+    ),
+)

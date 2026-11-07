@@ -4,13 +4,16 @@ Tutorial(
     format_version: 1,
     id: "09_ventricular",
     title: "Ventricular arrhythmias",
-    summary: "Premature ventricular beats, couplets and R-on-T, non-sustained and sustained ventricular tachycardia with its cardioversion, the benign accelerated idioventricular rhythm, and the wide-complex tachycardia question.",
+    summary: "Premature ventricular beats, couplets and R-on-T, non-sustained and sustained ventricular tachycardia with its cardioversion, polymorphic VT and torsades de pointes, ventricular fibrillation and defibrillation, the benign accelerated idioventricular rhythm, and the wide-complex tachycardia question.",
     references: [
         "Al-Khatib SM et al. 2017 AHA/ACC/HRS guideline for management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Circulation 2018;138:e272-e391.",
         "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
         "Panchal AR et al. Part 3: Adult basic and advanced life support: 2020 American Heart Association Guidelines for CPR and ECC. Circulation 2020;142:S366-S468.",
         "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 16).",
         "Burns E, Buttner R. Life in the Fast Lane ECG Library: premature ventricular complexes, ventricular tachycardia, AIVR, wide complex tachycardia. litfl.com/ecg-library.",
+        "Drew BJ et al. Prevention of torsade de pointes in hospital settings: a scientific statement from the American Heart Association and the American College of Cardiology Foundation. Circulation 2010;121:1047-1060.",
+        "Weaver WD et al. Amplitude of ventricular fibrillation waveform and outcome after cardiac arrest. Ann Intern Med 1985;102:53-55.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: polymorphic VT and torsades de pointes, ventricular fibrillation. litfl.com/ecg-library.",
     ],
     pages: [
         Page(
@@ -214,6 +217,180 @@ should return. If the shock fails, press **Replay**.
                 ],
                 answer: 0,
                 explanation: "A pulse means the heart is still pumping, and a synchronised shock avoids the T wave. Unsynchronised shocks are for pulseless VT and ventricular fibrillation. Adenosine does not stop VT.",
+            )),
+        ),
+        Page(
+            title: "Polymorphic VT",
+            markdown: r#"
+When the path of ventricular activation changes from beat to beat, so does the QRS: **polymorphic VT**.
+The rhythm is fast, wide and irregular, and **no two complexes match**.
+
+With a **normal QT** the usual cause is **acute ischaemia**, and that is the setting here. It is unstable
+and can turn into fibrillation. Treatment is an unsynchronised shock if the patient is unstable, and
+then the cause: for ischaemia, revascularisation.
+
+Compare it with the identical complexes of monomorphic VT on the previous pages.
+"#,
+            actions: [
+                Ui(LoadScenario("polymorphic_vt")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "What is the commonest cause of polymorphic VT with a normal QT interval?",
+                choices: [
+                    "Acute myocardial ischaemia",
+                    "Hyperkalaemia",
+                    "Sinus node disease",
+                    "A delta wave",
+                ],
+                answer: 0,
+                explanation: "Polymorphic VT with a normal QT usually means acute ischaemia, so its treatment includes treating the coronary problem.",
+            )),
+        ),
+        Page(
+            title: "Torsades: a QRS that twists",
+            markdown: r#"
+**Torsades de pointes** ("twisting of the points") is polymorphic VT with a **long QT**. It runs at
+about 160 to 240 bpm, and the QRS complexes shrink, flip and grow again as if twisting around the baseline.
+
+It usually starts with a **short-long-short** sequence. A premature beat (short) is followed by a pause
+(long); the next beat has an even longer QT, and a second premature beat falls on its T wave.
+
+Watch the first seconds of this run: first bigeminy with a very long QT, then the sequence, then the
+twist. It usually stops by itself, slowing over its last beats, but it can return or become VF.
+"#,
+            actions: [
+                Ui(LoadScenario("torsades")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Which sequence of R-R intervals typically starts torsades de pointes?",
+                choices: [
+                    "Short, long, short",
+                    "Long, long, long",
+                    "Short, short, short",
+                    "Regular intervals, then a sudden stop",
+                ],
+                answer: 0,
+                explanation: "A premature beat and its pause make the short and the long. The long pause prolongs the next QT, and the following premature beat falls on its T wave.",
+            )),
+        ),
+        Page(
+            title: "Treating torsades",
+            markdown: r#"
+The treatment of torsades is different from that of other VT: **magnesium**, correcting potassium,
+stopping any QT-prolonging drug, and avoiding pauses, for example by faster pacing. A shock is
+for an episode that does not stop or turns into VF.
+
+The changing QRS gives a synchroniser no reliable R wave, so the shock is **unsynchronised**. The
+simulator delivers 150 J at 12 seconds. The episode ends and the sinus rhythm returns, but **the long
+QT is still there**, so it may start again a few seconds later. Magnesium is not in the simulator's
+drug table yet.
+"#,
+            actions: [
+                Ui(LoadScenario("torsades")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(12000.0))),
+                Sim(Shock(joules: 150.0, synchronised: false)),
+            ],
+            check: Some(Question(
+                prompt: "Why can torsades return after a successful shock?",
+                choices: [
+                    "The shock does not correct the long QT that caused it",
+                    "The shock damages the AV node",
+                    "The shock makes the QT short",
+                    "It cannot return",
+                ],
+                answer: 0,
+                explanation: "A shock ends the episode but leaves the long QT and its cause, so the first-line treatment is magnesium and removal of the cause.",
+            )),
+        ),
+        Page(
+            title: "Ventricular fibrillation",
+            markdown: r#"
+In **ventricular fibrillation (VF)** the ventricles have no common beat, so there is **no output and no
+pulse**. The strip has **no identifiable P waves, QRS complexes or T waves**: only chaotic deflections of
+varying size.
+
+This simulator's heart shows random wavelets running into each other. It is a picture of the
+disorder, not a simulation of the rotors that sustain real VF.
+
+Check the patient first. A loose electrode can look similar, but the patient in VF is unconscious.
+"#,
+            actions: [
+                Ui(LoadScenario("vf_coarse")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding defines ventricular fibrillation on the strip?",
+                choices: [
+                    "Chaotic deflections with no identifiable QRS complexes",
+                    "A wide regular tachycardia",
+                    "A sawtooth baseline",
+                    "Twisting QRS complexes at 200 bpm",
+                ],
+                answer: 0,
+                explanation: "VF has no organised complexes at all. Twisting complexes are torsades, and a regular wide tachycardia is monomorphic VT.",
+            )),
+        ),
+        Page(
+            title: "Fine VF",
+            markdown: r#"
+As VF goes on, its amplitude falls: **coarse** VF becomes **fine** VF (0.2 mV or less, peak to peak)
+and then asystole. Patients with fine VF do worse, partly because it reflects the delay before
+treatment. **Every minute counts**.
+
+Fine VF can look like a flat line. Before calling asystole, **raise the gain and check a second lead**,
+because VF is shockable and asystole is not.
+"#,
+            actions: [
+                Ui(LoadScenario("vf_fine")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Why does it matter to tell fine VF from asystole?",
+                choices: [
+                    "VF is shockable and asystole is not",
+                    "Asystole needs a bigger shock",
+                    "Fine VF needs no treatment",
+                    "They are the same rhythm",
+                ],
+                answer: 0,
+                explanation: "Fine VF is still treated with an unsynchronised shock and CPR. Asystole is treated with CPR and adrenaline, because a shock has no organised electrical activity to reset.",
+            )),
+        ),
+        Page(
+            title: "The unsynchronised shock",
+            markdown: r#"
+**Defibrillation** is an **unsynchronised** shock: there is no R wave to wait for. In this simulator, as on
+a real defibrillator, a shock in **sync mode does not fire** during VF.
+
+Early CPR and an early shock are what save patients. Biphasic energies are 120 to 200 J, depending on the
+device. After six seconds the simulator delivers 200 J. The sinus rhythm should return; if it does not,
+press **Replay**, because a shock can fail, as in real life.
+"#,
+            actions: [
+                Ui(LoadScenario("vf_coarse")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(6000.0))),
+                Sim(Shock(joules: 200.0, synchronised: false)),
+            ],
+            check: Some(Question(
+                prompt: "What happens if a defibrillator is left in sync mode during VF?",
+                choices: [
+                    "It waits for an R wave and never fires",
+                    "It fires at a higher energy",
+                    "It fires immediately",
+                    "It cardioverts the atria",
+                ],
+                answer: 0,
+                explanation: "A synchronised shock waits for an R wave, and VF has none. Switch sync off to defibrillate.",
             )),
         ),
         Page(

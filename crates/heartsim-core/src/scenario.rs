@@ -105,13 +105,34 @@ pub struct TimedAction {
 /// A closed range `(lo, hi)` of an expected measurement.
 pub type Range = (f64, f64);
 
+/// The rhythm name the B4 analyser gives a strip when it can name one from the waveform alone
+/// (`heartsim_ecg::analysis`). Every other rhythm is described by its measurements instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RhythmKind {
+    /// Regular atrial macro-re-entry at about 300/min: sawtooth flutter waves, no isoelectric
+    /// baseline, a fixed or variable AV ratio.
+    AtrialFlutter,
+    /// No P waves, an irregular fibrillatory baseline, irregularly irregular narrow QRS.
+    AtrialFibrillation,
+    /// AF conducted over an accessory pathway: fast, broad, irregular.
+    PreExcitedAtrialFibrillation,
+    /// No identifiable QRS complexes: chaotic deflections of varying amplitude.
+    VentricularFibrillation,
+    /// Polymorphic VT whose QRS axis twists around the baseline, in a long QT setting.
+    TorsadesDePointes,
+    /// Polymorphic VT with beat-to-beat QRS changes and no orderly twist.
+    PolymorphicVentricularTachycardia,
+}
+
 /// What the B4 analyser must measure on the scenario's ECG once the rhythm has settled — the
 /// textbook diagnostic criteria of the rhythm, so a regression in an engine, the synthesiser or
 /// the analyser shows up as a scenario that no longer "looks like" its diagnosis.
 /// `None` = not a criterion of this rhythm (e.g. PR in complete AV block).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExpectedFindings {
-    /// Ventricular rate, beats/min.
+    /// Ventricular rate, beats/min. May be left out when the rhythm has no countable beats
+    /// (ventricular fibrillation): see [`ExpectedFindings::NO_RATE`].
+    #[serde(default = "no_rate")]
     pub hr_bpm: Range,
     /// PR interval (P onset → QRS onset), ms.
     #[serde(default)]
@@ -122,9 +143,25 @@ pub struct ExpectedFindings {
     /// Frontal QRS axis, degrees. `lo > hi` wraps through ±180° (e.g. `(150, -90)`).
     #[serde(default)]
     pub axis_deg: Option<Range>,
+    /// The name the analyser must give the rhythm (`None` = not a criterion).
+    #[serde(default)]
+    pub rhythm: Option<RhythmKind>,
+}
+
+fn no_rate() -> Range {
+    ExpectedFindings::NO_RATE
 }
 
 impl ExpectedFindings {
+    /// `hr_bpm` of a rhythm with no countable beats: the rate is then not a criterion.
+    pub const NO_RATE: Range = (0.0, 0.0);
+
+    /// Whether `hr_bpm` is a criterion of this rhythm.
+    #[must_use]
+    pub fn rate_is_criterion(&self) -> bool {
+        self.hr_bpm != Self::NO_RATE
+    }
+
     /// `true` if `deg` lies on the arc from `lo` to `hi` (counter-clockwise on the hexaxial
     /// circle, i.e. increasing angle), so ranges through ±180° work.
     #[must_use]
@@ -304,6 +341,21 @@ mod tests {
         assert!(!ExpectedFindings::axis_contains(e.axis_deg.unwrap(), 0.0));
         assert!(ExpectedFindings::axis_contains((-30.0, 90.0), 60.0));
         assert!(!ExpectedFindings::axis_contains((-30.0, 90.0), 120.0));
+    }
+
+    #[test]
+    fn a_rhythm_without_countable_beats_may_omit_its_rate() {
+        let text = r#"Scenario(
+            format_version: 1,
+            id: "x",
+            title: "X",
+            description: "d",
+            tier: Template,
+            expected: Some(ExpectedFindings(rhythm: Some(VentricularFibrillation))),
+        )"#;
+        let e = Scenario::from_ron(text).unwrap().expected.unwrap();
+        assert!(!e.rate_is_criterion());
+        assert_eq!(e.rhythm, Some(RhythmKind::VentricularFibrillation));
     }
 
     #[test]

@@ -1,0 +1,29 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "vf_coarse",
+    title: "Ventricular fibrillation, coarse",
+    description: "After two seconds of sinus rhythm the ventricles fibrillate: chaotic deflections of varying size and direction with no identifiable P wave, QRS complex or T wave.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In ventricular fibrillation (VF) the ventricles have no common beat, so there is no cardiac output and no pulse. The ECG shows chaotic irregular deflections of varying amplitude with no P waves, QRS complexes or T waves. Before diagnosing it, check the patient and the leads: a loose lead can look similar, a patient in VF is unconscious.\nThe treatment is immediate defibrillation with an unsynchronised shock (120 to 200 J biphasic) and CPR. A synchronised shock would wait for an R wave that does not exist. This simulator's defibrillator does the same: in sync mode it does not fire during VF.\nOn the strip the dominant frequency lies around 4 to 7 Hz (reported in recorded human VF). VF is called coarse here because it exceeds 0.2 mV peak to peak. The 3-D heart shows random wavelets running into each other and into refractory tissue. It is a schematic of the disorder and not a simulation of rotors, which the Tier-2 model does not yet sustain in the ventricles."),
+    confused_with: ["vf_fine", "polymorphic_vt", "torsades", "vt_monomorphic"],
+    references: [
+        "Weaver WD et al. Amplitude of ventricular fibrillation waveform and outcome after cardiac arrest. Ann Intern Med 1985;102:53-55.",
+        "Panchal AR et al. Part 3: Adult basic and advanced life support: 2020 American Heart Association Guidelines for CPR and ECC. Circulation 2020;142:S366-S468.",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ventricular fibrillation, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+        rhythm: Some(VentricularFibrillation),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        ventricular_driver: Some(VentricularDriver(kind: Fibrillation, cycle_ms: 180.0, cycle_jitter: 0.25, start: AtMs(2000.0))),
+    ),
+)
