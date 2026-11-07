@@ -118,6 +118,8 @@ fn every_defined_region_is_populated_and_landmarks_exist() {
         .iter()
         .filter(|r| **r == Region::RightVentricle)
         .count();
+    // a test on a few thousand cells: not worth the `bytecount` dependency
+    #[allow(clippy::naive_bytecount)]
     let lad = h
         .aha_segments
         .iter()
