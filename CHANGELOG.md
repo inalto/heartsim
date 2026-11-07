@@ -4,12 +4,23 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-07
+Fifth tagged release: the wave types that were missing from the strip (flutter, AF, VF, torsades, polymorphic VT, infarct
+evolution) with 14 scenarios, the user-interface gaps (first-run disclaimer and About, ECG display filters and artefacts, the
+Interval Drill, quiz explanations, the monitor beep), the anatomy pack re-posed on measured values so the R wave progresses
+across the chest leads, and the new *Known limitations and open questions* page in the guide with the project wiki.
+
 ### Known limitations
 - Fascicular blocks shift the frontal axis the right way but not as far as in patients (sinus ≈ +24°, LAFB ≈ +17°, LPFB ≈ +35°; brief B05
   asks for ≤ −45° and ≥ +90°). `fascicular_block_axes` stays ignored; its doc comment records what was tried and why rS in V1 and these
   axes exclude each other in this model.
+- The guide's new page [Known limitations and open questions](docs/book/src/known-issues.md) lists what no person has run on real
+  hardware yet and the physiology numbers that still need a clinician's check.
 
 ### Added
+- The guide page *Known limitations and open questions*, a rewritten README, the project wiki (Home, Features, Releases, Known
+  issues, Contributing) and a 17-step screenshot tour (`HEARTSIM_SCREENSHOT_DIR`) that now covers every tab, the 6 × 2 and
+  clinical 12-lead layouts, flutter, VF, torsades and an anterior STEMI.
 - New wave types on the Tier-0 strip, drawn from the timing engine's own events so the strip and the 3-D heart agree: atrial
   flutter (sawtooth at about 300/min with 2:1, 4:1 and variable AV block that follow from the AV-nodal recovery curve), atrial
   fibrillation with f waves, pre-excited AF, coarse and fine ventricular fibrillation, torsades de pointes (twisting axis, started by a
