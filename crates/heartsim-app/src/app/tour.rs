@@ -4,11 +4,23 @@
 //! saves a PNG of the window and quits. Runs are 12 s or more: the strip can only be scrubbed
 //! once it holds more than one screen (10 s). Used headless with xvfb + lavapipe (see `docs/images/`).
 
-use super::{HeartSimApp, Tab};
+use super::{HeartSimApp, Tab, TwelveLeadLayout};
 use eframe::egui;
 use heartsim_sim::Engine as _;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+
+/// What else to set up before a shot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Extra {
+    None,
+    /// Ask a rhythm-quiz question and answer it wrongly, so the explanation shows.
+    RhythmQuiz,
+    /// Draw an axis-quiz target.
+    AxisQuiz,
+    /// Ask an interval-drill question.
+    IntervalDrill,
+}
 
 /// One screenshot.
 #[derive(Debug, Clone, Copy)]
@@ -21,45 +33,61 @@ struct Step {
     /// Where the strip cursor goes: ms after the last ventricular activation.
     after_qrs_ms: f64,
     vector: bool,
-    quiz: bool,
+    layout: TwelveLeadLayout,
+    /// Dial this frontal QRS axis (the axis trainer's shot).
+    axis_deg: Option<f64>,
+    extra: Extra,
 }
 
-const STEPS: [Step; 7] = [
+const DEFAULT: Step = Step {
+    file: "",
+    tab: Tab::Simulator,
+    scenario: "sinus_normal",
+    run_s: 12.0,
+    after_qrs_ms: 45.0,
+    vector: false,
+    layout: TwelveLeadLayout::Stacked,
+    axis_deg: None,
+    extra: Extra::None,
+};
+
+const STEPS: [Step; 17] = [
     Step {
         file: "simulator-sinus.png",
-        tab: Tab::Simulator,
-        scenario: "sinus_normal",
-        run_s: 12.0,
-        after_qrs_ms: 45.0,
-        vector: false,
-        quiz: false,
+        ..DEFAULT
     },
     Step {
         file: "simulator-lbbb-vector.png",
-        tab: Tab::Simulator,
         scenario: "lbbb",
-        run_s: 12.0,
         after_qrs_ms: 70.0,
         vector: true,
-        quiz: false,
+        ..DEFAULT
     },
     Step {
         file: "heart-vector-lbbb.png",
         tab: Tab::HeartVector,
         scenario: "lbbb",
-        run_s: 12.0,
         after_qrs_ms: 70.0,
         vector: true,
-        quiz: false,
+        ..DEFAULT
     },
     Step {
         file: "simulator-wpw.png",
-        tab: Tab::Simulator,
         scenario: "wpw_left_lateral",
-        run_s: 12.0,
         after_qrs_ms: 30.0,
-        vector: false,
-        quiz: false,
+        ..DEFAULT
+    },
+    Step {
+        file: "simulator-flutter.png",
+        scenario: "flutter_2to1",
+        after_qrs_ms: 40.0,
+        ..DEFAULT
+    },
+    Step {
+        file: "simulator-vf.png",
+        scenario: "vf_coarse",
+        after_qrs_ms: 0.0,
+        ..DEFAULT
     },
     Step {
         file: "twelve-lead-mobitz1.png",
@@ -67,17 +95,75 @@ const STEPS: [Step; 7] = [
         scenario: "avb_2nd_mobitz1",
         run_s: 13.0,
         after_qrs_ms: 300.0,
-        vector: false,
-        quiz: false,
+        ..DEFAULT
+    },
+    Step {
+        file: "twelve-lead-clinical.png",
+        tab: Tab::TwelveLead,
+        run_s: 13.0,
+        after_qrs_ms: 300.0,
+        layout: TwelveLeadLayout::Clinical,
+        ..DEFAULT
+    },
+    Step {
+        file: "twelve-lead-stemi.png",
+        tab: Tab::TwelveLead,
+        scenario: "stemi_anterior",
+        run_s: 13.0,
+        after_qrs_ms: 300.0,
+        layout: TwelveLeadLayout::TwoColumn,
+        ..DEFAULT
+    },
+    Step {
+        file: "twelve-lead-torsades.png",
+        tab: Tab::TwelveLead,
+        scenario: "torsades",
+        run_s: 13.0,
+        after_qrs_ms: 0.0,
+        ..DEFAULT
+    },
+    Step {
+        file: "axis-trainer.png",
+        tab: Tab::AxisTrainer,
+        after_qrs_ms: 300.0,
+        axis_deg: Some(-50.0),
+        ..DEFAULT
+    },
+    Step {
+        file: "axis-quiz.png",
+        tab: Tab::Quiz,
+        after_qrs_ms: 300.0,
+        extra: Extra::AxisQuiz,
+        ..DEFAULT
+    },
+    Step {
+        file: "electrodes.png",
+        tab: Tab::Electrodes,
+        after_qrs_ms: 300.0,
+        ..DEFAULT
     },
     Step {
         file: "rhythm-quiz.png",
         tab: Tab::RhythmQuiz,
-        scenario: "sinus_normal",
         run_s: 1.0,
         after_qrs_ms: 0.0,
-        vector: false,
-        quiz: true,
+        extra: Extra::RhythmQuiz,
+        ..DEFAULT
+    },
+    Step {
+        file: "interval-drill.png",
+        tab: Tab::IntervalDrill,
+        run_s: 3.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::IntervalDrill,
+        ..DEFAULT
+    },
+    Step {
+        file: "tutorials.png",
+        tab: Tab::Tutorials,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        ..DEFAULT
     },
     Step {
         file: "ep-lab-avrt.png",
@@ -85,8 +171,7 @@ const STEPS: [Step; 7] = [
         scenario: EP_TOUR_PROCEDURE,
         run_s: 7.0,
         after_qrs_ms: 0.0,
-        vector: false,
-        quiz: false,
+        ..DEFAULT
     },
 ];
 
@@ -164,17 +249,29 @@ impl HeartSimApp {
                     let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
                     self.vector.set_see_through(step.vector, &mut alphas);
                 }
-                if step.quiz {
-                    self.rhythm_quiz.next_question(&self.library);
-                    if let Some(q) = &self.rhythm_quiz.question {
-                        let wrong = q
-                            .options
-                            .iter()
-                            .copied()
-                            .find(|&i| i != q.answer)
-                            .unwrap_or(q.answer);
-                        self.rhythm_quiz.answer(wrong);
+                self.layout = step.layout;
+                if let Some(deg) = step.axis_deg {
+                    self.set_qrs_axis(deg);
+                }
+                match step.extra {
+                    Extra::None => {}
+                    Extra::RhythmQuiz => {
+                        self.rhythm_quiz.next_question(&self.library);
+                        if let Some(q) = &self.rhythm_quiz.question {
+                            let wrong = q
+                                .options
+                                .iter()
+                                .copied()
+                                .find(|&i| i != q.answer)
+                                .unwrap_or(q.answer);
+                            self.rhythm_quiz.answer(wrong);
+                        }
                     }
+                    Extra::AxisQuiz => {
+                        let target = self.quiz.next_question();
+                        self.set_qrs_axis(target);
+                    }
+                    Extra::IntervalDrill => self.interval_drill.next_question(&self.library),
                 }
                 tour.phase = Phase::Running;
             }

@@ -45,16 +45,20 @@ select it and use the arrow keys to nudge it by one sample (with shift, ten). *C
 
 ![LBBB with the heart-vector arrow, scrubbed to the middle of the QRS](../images/simulator-lbbb-vector.png)
 
+The same views with a fibrillating heart: in [coarse VF](../images/simulator-vf.png) every region recycles on its own
+schedule and no QRS is found, and in [flutter with 2:1 conduction](../images/simulator-flutter.png) the strip shows the
+sawtooth while the read-out gives the atrial rate and the conduction ratio.
+
 ## 12-Lead ECG
 
-![The clinical 3 × 4 layout with a lead II rhythm strip](../images/app-12lead-clinical.png)
+![The clinical 3 × 4 layout with a lead II rhythm strip](../images/twelve-lead-clinical.png)
 
 All twelve leads on one shared time base, in three layouts: 12 × 1 (one row per lead, best for comparing morphology),
 6 × 2 (limb leads left, chest leads right) and the clinical 3 × 4 printout with a lead II rhythm strip. *Cabrera* reorders
 the limb leads by their angle (aVL, I, −aVR, II, aVF, III). Calipers work in every cell. *Save PNG* writes the page as it is
 on screen; the export window writes a printable PDF.
 
-![The 12 × 1 layout](../images/app-12lead-12x1.png)
+![The 6 × 2 layout showing an anterior STEMI](../images/twelve-lead-stemi.png)
 
 ## Heart Vector
 
@@ -64,15 +68,26 @@ The cardiac dipole at the strip cursor and its loop over the last beat, in the f
 
 ## Axis Trainer and Axis Quiz
 
-![Axis trainer](../images/app-axis-trainer.png)
+![Axis trainer, dialled to a left axis deviation](../images/axis-trainer.png)
 
 Drag on the circle to rotate the heart's electrical axis and watch all six limb leads change; the right-hand panel names the
 axis class and why. The [Axis Quiz](quizzes.md) hides the axis and asks you to find it.
 
 ## Electrodes
 
+![The Electrodes tab](../images/electrodes.png)
+
 Move the ten electrodes on the torso, try the preset misplacements (limb-cable reversals, chest leads one space too high) and
 see which leads change; the detector explains what was misplaced.
+
+## Rhythm Quiz, Interval Drill, Tutorials and EP Lab
+
+The [Rhythm Quiz](quizzes.md#rhythm-quiz) shows a strip and asks which rhythm it is; the [Interval Drill](quizzes.md#interval-drill)
+asks you to measure PR, QRS and QT with the calipers and grades the answer. The [Tutorials](tutorials.md) tab holds the ten
+guided lessons and the three patient cases. The [EP Lab](ep-lab.md) is the catheter laboratory: electrograms, programmed
+stimulation and ablation.
+
+![The Tutorials tab](../images/tutorials.png)
 
 ## Settings and About
 

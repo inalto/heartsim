@@ -2,6 +2,7 @@
 
 [Introduction](introduction.md)
 [Medical disclaimer](user/disclaimer.md)
+[Known limitations and open questions](known-issues.md)
 
 # User guide
 

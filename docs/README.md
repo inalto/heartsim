@@ -3,6 +3,7 @@
 | document | what it is | audience |
 |---|---|---|
 | [book/](book/) | The mdBook user and developer guide (install, UI tour, scenarios, tutorials, quizzes, exports, FAQ, disclaimer; architecture, adding a scenario or drug, benchmarks, file formats), published to GitHub Pages | users, contributors |
+| [book/src/known-issues.md](book/src/known-issues.md) | Known limitations and open questions: what was never run on real hardware, physiology values and tutorial statements that still need a clinician's check, approximate or missing behaviour, ignored tests. Updated at each release | teachers, reviewers, contributors |
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements: features (P0/P1/P2), rhythms/pathologies list, UX, non-functional requirements | everyone |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical design: crates, data flow, simulation tiers, ECG forward model, rendering, file formats, testing, packaging | implementers |
 | [ROADMAP.md](ROADMAP.md) | Milestones M0–M8 with exit criteria and the dependency order of the briefs | planners |

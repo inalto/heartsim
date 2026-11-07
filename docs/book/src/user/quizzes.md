@@ -2,7 +2,7 @@
 
 ## Axis Quiz
 
-![Axis quiz](../images/app-axis-quiz.png)
+![Axis quiz](../images/axis-quiz.png)
 
 Press **New question**: heartsim dials a hidden frontal QRS axis into the heart and shows the six limb leads. Read them,
 click where you think the axis points on the circle, then press **Check answer**. Answers within 15° (half a hexaxial sector)
@@ -32,6 +32,8 @@ The explanation is shown after every answer, right or wrong: what the rhythm is,
 rhythms it is most often confused with, and, when you chose another one, what that rhythm is.
 
 ## Interval Drill
+
+![Interval drill](../images/interval-drill.png)
 
 Measure an interval with the calipers, as you would on paper. Press **New question**: a strip of lead II appears at 50 mm/s
 (1 mm is 20 ms) and the question names an interval: the **PR interval** (start of the P wave to start of the QRS), the **QRS

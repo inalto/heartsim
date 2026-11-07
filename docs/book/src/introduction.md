@@ -20,4 +20,6 @@ literature; it contains no code or data from any other simulator.
 * The [developer guide](dev/architecture.md) is for contributors: how the code is organised, how to add a rhythm or a drug
   (no code needed for either), and how to run the tests and benchmarks.
 
-Read the [medical disclaimer](user/disclaimer.md) before using heartsim in teaching.
+Read the [medical disclaimer](user/disclaimer.md) before using heartsim in teaching, and the page of
+[known limitations and open questions](known-issues.md): it lists the numbers and statements that still need a clinician's
+check and the parts of the program nobody has yet run on real hardware.
