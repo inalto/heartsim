@@ -4,6 +4,25 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-07
+Sixth tagged release, the follow-up to the first look at 0.6.0: the 3-D view opens on an oblique that shows the heart as a
+heart, the tab row gives way to a one-line menu bar with the version in view, and the desktop app tells you when a newer
+release is on GitHub.
+
+### Added
+- Update check: at start the desktop app asks the GitHub releases API once whether a newer release exists and, if so, shows
+  a notice under the menu bar and in About with a link to the release page. It sends only the app version, downloads nothing,
+  and the new Settings switch *Check for a newer release at start* turns it off (no request at all). Not in the web build.
+
+### Changed
+- The 3-D view opens as a right anterior oblique (45°, slightly from above) instead of straight-on AP: since 0.6.0 the heart's long
+  axis points left, caudal and anterior as measured, and the AP view looked down that axis, showing the left ventricle as a round
+  outline in front of the atria. The oblique puts the long axis in the screen plane with the apex at the lower right.
+- The row of eleven tabs is replaced by a one-line menu bar: the program name and version, a **Menu** with every page (the open
+  one marked, each with its number-key shortcut) followed by Export / Import, Settings and About, and the name of the open page.
+  On a 1280-pixel window the old row clipped Settings and About off the right edge. The version also appears in the window
+  title and at the top of the Help page.
+
 ## [0.6.0] — 2026-11-07
 Fifth tagged release: the wave types that were missing from the strip (flutter, AF, VF, torsades, polymorphic VT, infarct
 evolution) with 14 scenarios, the user-interface gaps (first-run disclaimer and About, ECG display filters and artefacts, the
