@@ -420,8 +420,8 @@ fn qrs_axis(rec: &Recording) -> f64 {
 /// vector of about the size of the block's shift.
 ///
 /// What was measured (a numpy replica of the Tier-1 engine and forward model that reproduces the
-/// old pack within 1° and 3 %; 800 fascicle/RBB seed variants and every long-axis direction within
-/// one SD of Engblom 2005, roll −60…+60°):
+/// old pack within 1° and 3 %; several hundred fascicle/RBB seed variants, long-axis directions
+/// within one SD of Engblom 2005 at roll −25…+15°, and wider rolls at a coarser level):
 /// * with the RV septal RBB seeds, the best of all variants that keep rS in V1: LAFB ≈ +11°,
 ///   LPFB ≈ +35° (margin to the targets ≈ −55°), and even 5 RV septal seed cells give this,
 ///   because the RV-side fast layer then activates the whole septal face at once;
@@ -453,10 +453,12 @@ fn fascicular_blocks_shift_the_axis_the_right_way() {
     let mut lafb = TimingParams::default();
     lafb.his_purkinje.laf.blocked = true;
     let a = qrs_axis(&record(lafb, &Parameters::default()));
+    eprintln!("axes: sinus {sinus:.1}°, LAFB {a:.1}°");
     assert!(a < sinus - 5.0, "LAFB {a:.0}° left of sinus {sinus:.0}°");
     let mut lpfb = TimingParams::default();
     lpfb.his_purkinje.lpf.blocked = true;
     let a = qrs_axis(&record(lpfb, &Parameters::default()));
+    eprintln!("axes: LPFB {a:.1}°");
     assert!(a > sinus + 5.0, "LPFB {a:.0}° right of sinus {sinus:.0}°");
 }
 
@@ -582,7 +584,7 @@ fn rest_offset_elevates_st_over_the_injured_zone() {
     };
     let elevation = st(Lead::V2) - normal(Lead::V2);
     assert!(elevation > 0.1, "ST elevation in V2 {elevation:.3} mV");
-    // measured: V1 +0.16, V2 +0.34, V3 +0.16; V5 −0.02, V6 −0.02, I −0.02 mV
+    // measured: V1 +0.03, V2 +0.10, V3 +0.07; V5 −0.01, V6 −0.01, I −0.01 mV
     for lead in [Lead::I, Lead::V5, Lead::V6] {
         let reciprocal = st(lead) - normal(lead);
         assert!(

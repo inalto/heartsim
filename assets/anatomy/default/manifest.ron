@@ -5,7 +5,7 @@ PackManifest(
     licence: "MIT OR Apache-2.0",
     frame: "millimetres; origin = ventricular centroid; +x = patient\'s left, +y = cranial, +z = anterior",
     cell_spacing_mm: 2.3,
-    cell_count: 17531,
+    cell_count: 17545,
     meshes: [MeshEntry(
         name: "lv",
         file: "mesh_lv.glb",
@@ -22,14 +22,14 @@ PackManifest(
         name: "ra",
         file: "mesh_ra.glb",
         kind: Myocardium,
-        vertices: 8896,
-        triangles: 17908,
+        vertices: 8888,
+        triangles: 17892,
     ), MeshEntry(
         name: "la",
         file: "mesh_la.glb",
         kind: Myocardium,
-        vertices: 9218,
-        triangles: 18532,
+        vertices: 9356,
+        triangles: 18824,
     ), MeshEntry(
         name: "aorta",
         file: "mesh_aorta.glb",
@@ -46,8 +46,8 @@ PackManifest(
         name: "svc",
         file: "mesh_svc.glb",
         kind: Vessel,
-        vertices: 1908,
-        triangles: 3812,
+        vertices: 1984,
+        triangles: 3964,
     ), MeshEntry(
         name: "ivc",
         file: "mesh_ivc.glb",
@@ -73,44 +73,44 @@ PackManifest(
             crc32: 3061975403,
         ),
         "cells.bin": FileEntry(
-            bytes: 508411,
-            crc32: 1396736880,
+            bytes: 508817,
+            crc32: 440973420,
         ),
         "electrodes.ron": FileEntry(
             bytes: 806,
             crc32: 4205733909,
         ),
         "hoods/la.bin": FileEntry(
-            bytes: 589968,
-            crc32: 3419363069,
+            bytes: 598800,
+            crc32: 1025769635,
         ),
         "hoods/lv.bin": FileEntry(
             bytes: 1221264,
-            crc32: 3080548906,
+            crc32: 1394447966,
         ),
         "hoods/ra.bin": FileEntry(
-            bytes: 569360,
-            crc32: 1193758962,
+            bytes: 568848,
+            crc32: 3700861919,
         ),
         "hoods/rv.bin": FileEntry(
             bytes: 983184,
-            crc32: 1528445687,
+            crc32: 1924064592,
         ),
         "landmarks.ron": FileEntry(
             bytes: 8490,
-            crc32: 1969814311,
+            crc32: 1854533538,
         ),
         "mesh_aorta.glb": FileEntry(
             bytes: 271524,
             crc32: 1770075749,
         ),
         "mesh_ivc.glb": FileEntry(
-            bytes: 97852,
-            crc32: 68674517,
+            bytes: 97856,
+            crc32: 20924355,
         ),
         "mesh_la.glb": FileEntry(
-            bytes: 444468,
-            crc32: 3566595407,
+            bytes: 451284,
+            crc32: 1794607987,
         ),
         "mesh_lv.glb": FileEntry(
             bytes: 916740,
@@ -125,28 +125,28 @@ PackManifest(
             crc32: 2467258958,
         ),
         "mesh_ra.glb": FileEntry(
-            bytes: 429252,
-            crc32: 3955830361,
+            bytes: 428864,
+            crc32: 2647258157,
         ),
         "mesh_rv.glb": FileEntry(
             bytes: 738660,
             crc32: 4106484578,
         ),
         "mesh_svc.glb": FileEntry(
-            bytes: 92380,
-            crc32: 1700530499,
+            bytes: 96028,
+            crc32: 3544200051,
         ),
         "mesh_valve_rings.glb": FileEntry(
             bytes: 77176,
             crc32: 620565224,
         ),
         "neighbours.bin": FileEntry(
-            bytes: 1682992,
-            crc32: 1280706213,
+            bytes: 1684336,
+            crc32: 3100992562,
         ),
         "segments.bin": FileEntry(
-            bytes: 17543,
-            crc32: 1694226228,
+            bytes: 17557,
+            crc32: 2578020954,
         ),
         "torso.glb": FileEntry(
             bytes: 804996,

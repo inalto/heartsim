@@ -8,7 +8,7 @@ Scenario(
     tier: ReactionDiffusion,
     anatomy: "default",
     seed: 17,
-    notes: Some("Atrial fibrillation is sustained by many small wavelets (multiple-wavelet hypothesis) or by a few fast rotors, started by triggers in the pulmonary veins and kept going by atrial remodelling: the action potential shortens and conduction slows, so the wavelength (conduction velocity x refractory period) shrinks until several circuits fit in the atria.\nHere the whole atrial muscle has an action potential 0.4 x and a conduction velocity 0.3 x normal, the pulmonary-vein sleeves slightly more so, and a burst of 15 stimuli at 130 ms from the veins starts it.\nECG: no P waves, a fibrillatory baseline (f waves, best seen in V1 and II), and an irregularly irregular ventricular rhythm because the AV node conducts only some of the atrial impulses and each blocked one still delays the node (concealed conduction).\nIsolating the veins before the burst prevents the induction; isolating them once AF is established does not stop it here, which matches the lower success of PVI alone in persistent AF. A synchronised shock then restores sinus rhythm and the ring keeps the burst from restarting it.\n\nSources:\n- Moe GK, Abildskov JA. Atrial fibrillation as a self-sustaining arrhythmia independent of focal discharge. Am Heart J 1959;58:59-70.\n- Wijffels MC et al. Atrial fibrillation begets atrial fibrillation. Circulation 1995;92:1954-1968.\n- Haissaguerre M et al. Spontaneous initiation of atrial fibrillation by ectopic beats originating in the pulmonary veins. N Engl J Med 1998;339:659-666.\n- Verma A et al. Approaches to catheter ablation for persistent atrial fibrillation. N Engl J Med 2015;372:1812-1822.\n- Hindricks G et al. 2020 ESC Guidelines for the diagnosis and management of atrial fibrillation. Eur Heart J 2021;42:373-498."),
+    notes: Some("Atrial fibrillation is sustained by many small wavelets (multiple-wavelet hypothesis) or by a few fast rotors, started by triggers in the pulmonary veins and kept going by atrial remodelling: the action potential shortens and conduction slows, so the wavelength (conduction velocity x refractory period) shrinks until several circuits fit in the atria.\nHere the whole atrial muscle has an action potential 0.4 x and a conduction velocity 0.3 x normal, the pulmonary-vein sleeves slightly more so, the refractory period varies from patch to patch, and a burst of 15 stimuli at 125 ms from the veins starts it.\nECG: no P waves, a fibrillatory baseline (f waves, best seen in V1 and II), and an irregularly irregular ventricular rhythm because the AV node conducts only some of the atrial impulses and each blocked one still delays the node (concealed conduction).\nIsolating the veins before the burst prevents the induction; isolating them once AF is established does not stop it here, which matches the lower success of PVI alone in persistent AF. A synchronised shock then restores sinus rhythm and the ring keeps the burst from restarting it.\n\nSources:\n- Moe GK, Abildskov JA. Atrial fibrillation as a self-sustaining arrhythmia independent of focal discharge. Am Heart J 1959;58:59-70.\n- Wijffels MC et al. Atrial fibrillation begets atrial fibrillation. Circulation 1995;92:1954-1968.\n- Haissaguerre M et al. Spontaneous initiation of atrial fibrillation by ectopic beats originating in the pulmonary veins. N Engl J Med 1998;339:659-666.\n- Verma A et al. Approaches to catheter ablation for persistent atrial fibrillation. N Engl J Med 2015;372:1812-1822.\n- Hindricks G et al. 2020 ESC Guidelines for the diagnosis and management of atrial fibrillation. Eur Heart J 2021;42:373-498."),
     confused_with: ["atrial flutter with variable block", "multifocal atrial tachycardia", "sinus rhythm with artefact"],
     expected: Some(ExpectedFindings(
         hr_bpm: (80.0, 180.0),
@@ -18,15 +18,18 @@ Scenario(
     )),
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 70.0),
-        av: AvParams(concealment_fraction: 0.7, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 200.0, recovery_tau_ms: 100.0, erp_ms: 160.0, blocked: false)),
+        av: AvParams(concealment_fraction: 0.85, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 200.0, recovery_tau_ms: 100.0, erp_ms: 160.0, blocked: false)),
     ),
     reentry: Some(ReentrySpec(
-        tier2: (voxel_mm: 2.0, sense_gap_ms: 100.0),
+        // conduction at 0.3 x stretches a sinus beat over the AV sensing site to 151-315 ms after the sinus event
+        tier2: (voxel_mm: 2.0, sense_gap_ms: 135.0, sense_window_ms: 400.0),
         patches: [
             Patch(target: Compartment(Atrial), effect: Scale(apd: 0.4, cv: 0.3)),
             Patch(target: Region(PulmonaryVeinSleeves), effect: Scale(apd: 0.8, cv: 0.8)),
+            // dispersion of refractoriness breaks a single stable rotor into an irregular rhythm
+            Patch(target: Compartment(Atrial), effect: Mosaic(patch_mm: 8.0, lo: 0.75, hi: 1.25)),
         ],
-        initiation: Protocol(site: Landmark("la_pv_antrum"), start_ms: 2000.0, s1_cycle_ms: 130.0, s1_count: 15, s2_ms: None, s3_ms: None),
+        initiation: Protocol(site: Landmark("la_pv_antrum"), start_ms: 2000.0, s1_cycle_ms: 125.0, s1_count: 15, s2_ms: None, s3_ms: None),
     )),
     ep: Some(EpSpec(goal: VeinsIsolated, targets: [PulmonaryVeins, AvNode])),
 )

@@ -504,7 +504,7 @@ fn deterministic_and_reset_reproduces() {
 /// the commit message.
 #[test]
 fn golden_sinus_activation_histogram() {
-    const GOLDEN: u64 = 2_135_846_586_806_199_752;
+    const GOLDEN: u64 = 12_706_740_700_071_212_075;
     let t1 = sinus_beat(TimingParams::default());
     let t = t1.eikonal().activation_times();
     let t0 = t

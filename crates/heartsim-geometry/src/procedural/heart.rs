@@ -219,6 +219,7 @@ const PV_DIRS: [Vec3; 4] = [
     Vec3::new(0.07, 0.96, -0.214),
     Vec3::new(0.036, 0.74, -0.654),
 ];
+
 /// The posterior left-atrial wall between the four veins, where a pulmonary-vein trigger or an
 /// antral isolation line acts (the mean of `PV_DIRS`).
 const PV_ANTRUM_DIR: Vec3 = Vec3::new(0.498, 0.479, -0.286);
@@ -542,7 +543,10 @@ struct Conduction {
 fn conduction_geometry() -> Conduction {
     // The SVC–RA junction: superior, lateral and slightly posterior in the thorax.
     let sa_point = on_sphere(RA_CENTRE, Vec3::new(-0.2, 0.75, 0.6), ATRIUM_MID_R);
-    let avn_point = on_sphere(RA_CENTRE, Vec3::new(0.7, -0.7, 0.15), ATRIUM_MID_R);
+    // The AV node and His bundle are held by the central fibrous body at the crest of the septum,
+    // so this direction keeps them there when RA_CENTRE follows the thorax: the His catheter's tip
+    // stays about 13 mm from ventricular muscle and records a V.
+    let avn_point = on_sphere(RA_CENTRE, Vec3::new(0.7, -0.7, -0.21), ATRIUM_MID_R);
     let septum_top = lv_surface_point(
         SEPTAL_AZIMUTH_DEG,
         LV_BASE_Y - 2.0,

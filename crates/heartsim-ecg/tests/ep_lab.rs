@@ -288,24 +288,3 @@ fn the_tier_1_procedures_rest_in_the_rhythm_they_declare() {
         assert!(violations.is_empty(), "{id}: {violations:?}");
     }
 }
-
-#[test]
-fn zz_his_probe() {
-    let mut s = Study::new("ep_baseline");
-    s.run(3000.0);
-    let c = &pack().cells;
-    for cat in &s.catheters {
-        if cat.kind != CatheterKind::His { continue; }
-        for e in cat.electrodes() {
-            let mut d = f32::INFINITY;
-            for (p, r) in c.positions.iter().zip(&c.regions) {
-                if r.is_ventricular() { d = d.min(p.distance(*e)); }
-            }
-            eprintln!("zz His electrode {e:?} nearest ventricle {d:.1} mm");
-        }
-    }
-    for src in [EgmSource::Atrial, EgmSource::His, EgmSource::Ventricular] {
-        let n = s.rec.deflections().filter(|d| d.source == src && s.rec.channels()[d.channel].kind == CatheterKind::His).count();
-        eprintln!("zz His {src:?} deflections {n}");
-    }
-}
