@@ -5,7 +5,7 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Known limitations
-- Fascicular blocks shift the frontal axis the right way but not as far as in patients (sinus ≈ +30°, LAFB ≈ +24°, LPFB ≈ +39°; brief B05
+- Fascicular blocks shift the frontal axis the right way but not as far as in patients (sinus ≈ +24°, LAFB ≈ +17°, LPFB ≈ +35°; brief B05
   asks for ≤ −45° and ≥ +90°). `fascicular_block_axes` stays ignored; its doc comment records what was tried and why rS in V1 and these
   axes exclude each other in this model.
 

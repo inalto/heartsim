@@ -408,8 +408,8 @@ fn qrs_axis(rec: &Recording) -> f64 {
 }
 
 /// Brief B05 asks for LAFB ≤ −45° and LPFB ≥ +90°. This is not met: with the anatomical heart
-/// orientation the pack gives sinus ≈ +30°, LAFB ≈ +24° and LPFB ≈ +39° (both blocks now shift the
-/// right way, by 6° and 9°).
+/// orientation the pack gives sinus ≈ +24°, LAFB ≈ +17° and LPFB ≈ +35° (both blocks now shift the
+/// right way, by 7° and 12°).
 ///
 /// Why orientation and sites cannot deliver it. The net QRS area of the heart vector is
 /// `k ∮ t_act n dS`, so a block changes it by `k ∮ Δt_act n dS`. A territory delayed by a uniform 30 ms
