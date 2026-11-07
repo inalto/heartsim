@@ -747,11 +747,7 @@ fn heart_rotation() -> Quat {
     let (s, c) = SEPTAL_AZIMUTH_DEG.to_radians().sin_cos();
     let canonical_septal = Vec3::new(c, 0.0, s);
     let target = Mat3::from_cols(septal, apex, septal.cross(apex));
-    let source = Mat3::from_cols(
-        canonical_septal,
-        Vec3::NEG_Y,
-        canonical_septal.cross(Vec3::NEG_Y),
-    );
+    let source = Mat3::from_cols(canonical_septal, Vec3::NEG_Y, canonical_septal.cross(Vec3::NEG_Y));
     Quat::from_mat3(&(target * source.transpose())).normalize()
 }
 
@@ -942,11 +938,9 @@ pub fn idealised_heart(resolution: Resolution) -> IdealisedHeart {
     );
     put(
         "la_pv_antrum",
-        nearest_cell(
-            &cells,
-            on_sphere(LA_CENTRE, PV_ANTRUM_DIR, ATRIUM_MID_R),
-            |r| r == Region::LeftAtrium,
-        ),
+        nearest_cell(&cells, on_sphere(LA_CENTRE, PV_ANTRUM_DIR, ATRIUM_MID_R), |r| {
+            r == Region::LeftAtrium
+        }),
     );
 
     // --- PMJ seed sets ---------------------------------------------------------------------

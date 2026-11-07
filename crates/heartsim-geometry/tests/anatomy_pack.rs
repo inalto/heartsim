@@ -112,8 +112,17 @@ fn every_defined_region_is_populated_and_landmarks_exist() {
             assert_eq!(*s, 0);
         }
     }
-    let rv = h.cells.regions.iter().filter(|r| **r == Region::RightVentricle).count();
-    let lad = h.aha_segments.iter().filter(|s| **s == RV_ANTERIOR_SEGMENT).count();
+    let rv = h
+        .cells
+        .regions
+        .iter()
+        .filter(|r| **r == Region::RightVentricle)
+        .count();
+    let lad = h
+        .aha_segments
+        .iter()
+        .filter(|s| **s == RV_ANTERIOR_SEGMENT)
+        .count();
     assert!(
         (0.3..0.45).contains(&(lad as f64 / rv as f64)),
         "LAD zone: {lad} of {rv} RV cells"
@@ -144,9 +153,18 @@ fn anatomical_orientation() {
     // all four chambers share an axial slice through the middle of the ventricles, the veins enter
     // the left atrium at or above it, and the left atrium is the most posterior chamber
     let antrum = at("la_pv_antrum");
-    assert!(antrum.y > 0.0, "pulmonary veins not below mid-ventricle: {antrum:?}");
-    assert!(antrum.y > lv_apex.y + 25.0, "pulmonary veins above the apex: {antrum:?}");
-    assert!(antrum.z < at("lv_lateral").z && antrum.z < sa.z, "left atrium posterior: {antrum:?}");
+    assert!(
+        antrum.y > 0.0,
+        "pulmonary veins not below mid-ventricle: {antrum:?}"
+    );
+    assert!(
+        antrum.y > lv_apex.y + 25.0,
+        "pulmonary veins above the apex: {antrum:?}"
+    );
+    assert!(
+        antrum.z < at("lv_lateral").z && antrum.z < sa.z,
+        "left atrium posterior: {antrum:?}"
+    );
     // RV free wall is anterior-right of the LV lateral wall
     assert!(at("rv_free_wall").z > at("lv_lateral").z);
     assert!(at("rv_free_wall").x < at("lv_lateral").x);
