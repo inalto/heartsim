@@ -93,7 +93,8 @@ jobs:
         run: |
           docker run --rm -e VERSION -e APPIMAGE_EXTRACT_AND_RUN -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -euo pipefail -c '
             apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgl1 libvulkan1
+            # libasound2: the audio feature links ALSA, which linuxdeploy leaves to the host (every desktop distribution has it).
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libgl1 libvulkan1 libasound2
             appimage=$(ls /dist/*.AppImage)
             test "$($appimage --version)" = "heartsim $VERSION"
             echo "AppImage ok: $($appimage --version)"'

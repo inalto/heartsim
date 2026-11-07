@@ -9,7 +9,7 @@ rhythm library; nothing else is downloaded.
 | Windows 10/11 (x64) | `heartsim_<version>_x64_en-US.msi` or `…-setup.exe` | Installs to *Program Files* and adds a Start-menu entry. |
 | macOS 11+ (Intel and Apple silicon) | `HeartSim_<version>_universal.dmg` | Open the image and drag *HeartSim* to *Applications*. |
 | Debian / Ubuntu 22.04+ | `heartsim_<version>_amd64.deb` | `sudo apt install ./heartsim_<version>_amd64.deb` |
-| Other Linux | `heartsim_<version>_amd64.AppImage` | `chmod +x` it and run it; no installation needed. |
+| Other Linux | `heartsim_<version>_amd64.AppImage` | `chmod +x` it and run it; no installation needed. It uses the system's `libasound2` (ALSA), `libgl1` and `libvulkan1`, which every desktop distribution has. |
 
 Check the installation from a terminal with `heartsim --version`.
 
