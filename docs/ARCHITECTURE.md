@@ -142,8 +142,12 @@ mapping each cell's template phase to `(u, v)`.
   The transmural APD gradient was widened to endo 345 / epi 285 ms (septum uniform 315 ms, since both of its faces are
   endocardium). With the old 30 ms gradient, LV repolarisation was transmurally uniform and the T wave was discordant.
   Known activation-driven gaps (B3): sinus axis ≈ −2°, R amplitude peaks in V2–V3, LAFB/LPFB shift the axis only −14°/−1°.
-* Signal chain: 500 Hz sampling → optional filters → rings. Interval detection (Pan–Tompkins-style QRS, P/T search windows) feeds
-  read-outs and quizzes.
+* Signal chain: 500 Hz sampling → rings (always the clean signal). Interval detection (Pan–Tompkins-style QRS, P/T search windows)
+  reads those rings and feeds read-outs and quizzes. The diagnostic (0.05–150 Hz) and monitor (0.5–40 Hz) filters and the seeded
+  artefacts (baseline wander, respiration, 50/60 Hz mains, muscle) are a **display stage** (`heartsim_ecg::DisplayStage`, F-15):
+  it fills separate rings that only the painters read, so the engine, the analysis and the default exports stay unfiltered and
+  deterministic; artefacts are pure functions of `(seed, lead, sample index)`. An export of the displayed trace carries a trace
+  note (`ExportInfo::trace_note`) in every file.
 
 ### 4.5 Interventions
 `core::scenario::Action` is the only way to mutate an engine; the app queues actions with timestamps, so tutorials, timelines and

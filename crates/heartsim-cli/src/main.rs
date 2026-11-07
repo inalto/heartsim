@@ -356,6 +356,7 @@ fn run(a: RunArgs) -> Result<()> {
         mm_per_mv: a.gain,
         date,
         paper,
+        trace_note: None,
     };
     let opts = heartsim_io::ExportOptions {
         formats: parse_formats(&a.formats)?,

@@ -233,3 +233,16 @@ ischaemia-in-effect = In effect
 ischaemia-acute = acute ischaemia
 ischaemia-infarct-kind = infarct
 ischaemia-lesion-line = { $branch }: { $kind }, severity { $severity }
+
+## Display filter and artefacts (ecg_view.rs, requirement F-15)
+ecg-filter = Filter
+ecg-filter-off = Off
+ecg-filter-diagnostic = Diagnostic 0.05–150 Hz
+ecg-filter-monitor = Monitor 0.5–40 Hz
+ecg-filter-hint = Display only: the simulation, the measurements and the exports of the clean signal stay unfiltered. The monitor band steadies the baseline but distorts the ST segment.
+ecg-artefacts = Artefacts
+ecg-art-wander = Baseline wander
+ecg-art-respiration = Respiration
+ecg-art-mains = Mains hum
+ecg-art-muscle = Muscle
+ecg-art-intensity = intensity

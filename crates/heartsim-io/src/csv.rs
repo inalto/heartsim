@@ -19,9 +19,21 @@ fn push_value(out: &mut String, v: f32) {
 /// The CSV text of `rec`.
 #[must_use]
 pub fn write_csv(rec: &EcgRecord) -> String {
+    write_csv_noted(rec, None)
+}
+
+/// The CSV text of `rec`, led by a `# trace: <note>` comment line when the trace is not the clean
+/// engine signal (the display filter and artefacts it went through). [`read_csv`] skips `#` lines.
+#[must_use]
+pub fn write_csv_noted(rec: &EcgRecord, trace_note: Option<&str>) -> String {
     let period_ms = 1000.0 / rec.sample_rate_hz;
     let whole_ms = (period_ms - period_ms.round()).abs() < 1e-9;
     let mut out = String::with_capacity(rec.len() * 12 * 8 + 64);
+    if let Some(note) = trace_note {
+        out.push_str("# trace: ");
+        out.push_str(&note.replace(['\n', '\r'], " "));
+        out.push('\n');
+    }
     out.push_str("t_ms");
     for l in Lead::ALL {
         out.push(',');

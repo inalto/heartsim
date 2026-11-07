@@ -24,6 +24,11 @@ native = ["dep:directories", "dep:tracing-subscriber"]
 export = ["native", "dep:heartsim-io"]
 # Rayon in the engines; the browser has no threads, so the web build turns it off.
 parallel = ["heartsim-sim/parallel", "heartsim-ecg/parallel", "heartsim-render/parallel"]
+# QRS-synchronous monitor beep (off by default in Settings): a short tone synthesised in code and played through `kira`
+# on each ventricular activation. Native desktop only; on Linux it needs the ALSA headers (`libasound2-dev`) to build, so it
+# is not in `default` and the release workflow switches it on. The web build never enables it. Without the feature the
+# `monitor_beep` module still compiles (pure logic, no audio device is ever opened).
+audio = ["native", "dep:kira"]
 
 [dependencies]
 heartsim-core.workspace = true
@@ -46,6 +51,7 @@ directories = { workspace = true, optional = true }
 egui_commonmark.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
+kira = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `std::time::Instant` is unavailable in the browser: the re-entry frame budget reads `Date.now()`.

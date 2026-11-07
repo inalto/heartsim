@@ -291,6 +291,7 @@ impl HeartSimApp {
             for e in &events {
                 if e.region.is_ventricular() && e.kind != EventKind::Blocked {
                     self.last_v_activation = e.at;
+                    self.beep.on_ventricular_event(e.at.0);
                 }
             }
             if let Some(h) = &mut self.heart {

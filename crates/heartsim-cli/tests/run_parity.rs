@@ -100,6 +100,7 @@ fn check(id: &str, seconds: f64, scrub_samples: u64, style: StripStyle, paper: P
         paper,
         formats: Formats::default(),
         date: DATE.into(),
+        trace_note: None,
     };
     let app_files =
         export_from_rings(&rings, head, newest_sample_ms(now_ms, pushed, head, 500.0), &req).unwrap();
