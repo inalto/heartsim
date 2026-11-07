@@ -13,6 +13,13 @@
 //! the ventricles fire when the ventricles stay silent.
 //! ```
 //!
+//! **Sustained arrhythmias** ([`AtrialDriver`], [`VentricularDriver`]) are two more items in the
+//! same queue: every cycle emits an event with `Origin::Circuit`. An atrial cycle overdrives the
+//! sinus node and meets the AV node and any accessory pathway as usual, so the ventricular
+//! response is the node's own. A ventricular driver blocks every other ventricular front while
+//! it runs. Cycle lengths come from a generator seeded by [`TimingEngine::set_shock_seed`], apart
+//! from the one that decides shock outcomes, so adding a driver does not change those.
+//!
 //! AV conduction follows the Shrier recovery curve `AVCT(RT) = min + A·exp(−(RT − ERP)/τ)` with
 //! `RT` the H–A recovery time (last His activation → arrival at the node); this single formula
 //! yields 1st-degree block, Wenckebach and 2:1 block. Mobitz II is an all-or-none His-level drop.
@@ -30,15 +37,16 @@ pub mod params;
 pub use ladder::{LadderDirection, LadderSample};
 pub use pacer::{MarkerKind, PacerMarker, T_WAVE_DELAY_MS};
 pub use params::{
-    AccessoryPathway, AvParams, AvPathway, BundleEdge, EscapeParams, Focus, FocusMode, FocusRegion,
-    HisPurkinjeParams, LeadParams, LeadSite, PMT_DETECT_CYCLES, PacerChannel, PacerConfig, PacerMode,
-    PacerPreset, Side, SinusParams, TimingParams,
+    AccessoryPathway, AtrialDriver, AtrialDriverKind, AvParams, AvPathway, BundleEdge, DriverStart,
+    EscapeParams, Focus, FocusMode, FocusRegion, HisPurkinjeParams, LeadParams, LeadSite, PMT_DETECT_CYCLES,
+    PacerChannel, PacerConfig, PacerMode, PacerPreset, Side, SinusParams, TimingParams, VentricularDriver,
+    VentricularDriverKind,
 };
 
 use crate::defib::{
     RhythmClass, SYNC_DELAY_MS, ShockRecord, ShockRng, VULNERABLE_WINDOW, success_probability,
 };
-use crate::engine::{CellState, Chamber, Engine, Event, EventKind, Origin};
+use crate::engine::{CellState, Chamber, Circuit, Engine, Event, EventKind, Origin};
 use crate::ischaemia::IschaemiaState;
 use crate::pharma::{DrugEffects, Pharmacology};
 use heartsim_core::scenario::{Action, StimSite};
@@ -69,6 +77,8 @@ pub(crate) enum VentVia {
     External,
     /// An activation the tissue model (Tier 2 re-entry) produced and sensed back.
     Tissue,
+    /// A cycle of the timing engine's own [`VentricularDriver`].
+    Circuit,
 }
 
 /// Which route brought an impulse to the atria.
@@ -84,6 +94,8 @@ pub(crate) enum AtrialVia {
     External,
     /// A re-entrant atrial front the tissue model (Tier 2) sensed at the AV-nodal input.
     Tissue,
+    /// A cycle of the timing engine's own [`AtrialDriver`].
+    Circuit,
 }
 
 /// Bundle-branch / fascicular edges.
@@ -145,6 +157,10 @@ pub(crate) enum Pending {
     Stimulus { target: StimTarget },
     /// Defibrillator discharge (`Action::Shock`; synchronised shocks are scheduled on the R wave).
     Shock { joules: f64, synchronised: bool },
+    /// Next cycle of the [`AtrialDriver`].
+    AtrialCircuit,
+    /// Next cycle of the [`VentricularDriver`].
+    VentricularCircuit,
 }
 
 /// Where a programmed stimulus is delivered.
@@ -176,6 +192,21 @@ pub(crate) struct FocusState {
     pub fires: u32,
     /// Terminated by a successful shock (Tier-1 stub of an ectopic tachycardia).
     pub terminated: bool,
+}
+
+/// Run-time state of a driver.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct CircuitState {
+    /// An episode is under way.
+    pub running: bool,
+    /// Ended for good (shock, or an episode that does not recur).
+    pub stopped: bool,
+    /// When a self-limiting episode starts to end, ms.
+    pub ends_at_ms: Option<f64>,
+    /// Slowing beats already played at the end of an episode.
+    pub closing_beats: u32,
+    /// A pause-dependent start may not fire before this time, ms.
+    pub not_before_ms: f64,
 }
 
 /// Errors from [`TimingEngine::apply`].
@@ -223,6 +254,14 @@ const TACHYCARDIA_RR_MS: f64 = 600.0;
 const VF_CYCLE_MS: f64 = 250.0;
 /// Atrial cycle below this is fibrillation / flutter (> 250 bpm), ms.
 const FLUTTER_CYCLE_MS: f64 = 240.0;
+/// Mixed into the seed of the circuit generator so that it differs from the shock generator.
+const CIRCUIT_SEED_MIX: u64 = 0xC1BC_0175_A7F1_0B5E;
+/// An RR this many times the coupling interval is the "long" of a short-long-short sequence.
+const SHORT_LONG_RATIO: f64 = 1.5;
+/// Beats over which a self-limiting episode slows before it ends (Drew et al. 2010: "the last 2
+/// to 3 beats"), and the cycle-length increase per beat.
+pub(crate) const CLOSING_BEATS: u32 = 3;
+pub(crate) const CLOSING_SLOWING: f64 = 0.2;
 
 /// The timing engine. See the module documentation for the model.
 #[derive(Debug, Clone)]
@@ -277,6 +316,14 @@ pub struct TimingEngine {
     // --- accessory pathway ---
     ap_last_use: Option<f64>,
 
+    // --- sustained arrhythmias ---
+    pub(crate) atrial_circuit: CircuitState,
+    pub(crate) ventricular_circuit: CircuitState,
+    /// Draws the cycle lengths and sites of the drivers.
+    pub(crate) circuit_rng: ShockRng,
+    /// The last three RR intervals, newest first, ms (short-long-short detection).
+    pub(crate) rr_history: [f64; 3],
+
     // --- foci / pacer ---
     foci: Vec<FocusState>,
     pacer: Pacer,
@@ -320,6 +367,10 @@ impl TimingEngine {
             last_v_rr_ms: None,
             last_a_cycle_ms: None,
             ap_last_use: None,
+            atrial_circuit: CircuitState::default(),
+            ventricular_circuit: CircuitState::default(),
+            circuit_rng: ShockRng::new(DEFAULT_SHOCK_SEED ^ CIRCUIT_SEED_MIX),
+            rr_history: [f64::INFINITY; 3],
             foci: vec![FocusState::default(); n_foci],
             pacer: Pacer::default(),
             markers: Vec::with_capacity(16),
@@ -443,6 +494,7 @@ impl TimingEngine {
         // was armed.
         if ev.kind != EventKind::Blocked
             && ev.chamber == Chamber::Ventricle
+            && !matches!(ev.origin, Origin::Circuit(c) if c.is_ventricular())
             && let Some(joules) = self.sync_armed.take()
         {
             self.schedule(
@@ -510,6 +562,32 @@ impl TimingEngine {
     pub fn set_shock_seed(&mut self, seed: u64) {
         self.shock_seed = seed;
         self.rng = ShockRng::new(seed);
+        self.circuit_rng = ShockRng::new(seed ^ CIRCUIT_SEED_MIX);
+    }
+
+    /// The atrial and the ventricular circuit under way at this moment.
+    #[must_use]
+    pub fn running_circuits(&self) -> (Option<Circuit>, Option<Circuit>) {
+        let a = self
+            .params
+            .atrial_driver
+            .as_ref()
+            .filter(|_| self.atrial_circuit.running)
+            .map(|d| match d.kind {
+                AtrialDriverKind::Flutter => Circuit::AtrialFlutter,
+                AtrialDriverKind::Fibrillation => Circuit::AtrialFibrillation,
+            });
+        let v = self
+            .params
+            .ventricular_driver
+            .as_ref()
+            .filter(|_| self.ventricular_circuit.running)
+            .map(|d| match d.kind {
+                VentricularDriverKind::Fibrillation => Circuit::VentricularFibrillation,
+                VentricularDriverKind::Torsades => Circuit::Torsades,
+                VentricularDriverKind::Polymorphic => Circuit::PolymorphicVt,
+            });
+        (a, v)
     }
 
     /// Rhythm class at `t` from the last ventricular and atrial cycles (see [`RhythmClass`]).
@@ -519,6 +597,13 @@ impl TimingEngine {
         // Before the first beat, silence is counted from the start of the simulation.
         if t - self.last_ventricular.unwrap_or(0.0) >= ASYSTOLE_MS {
             return RhythmClass::Asystole;
+        }
+        match self.running_circuits() {
+            (_, Some(Circuit::VentricularFibrillation)) => return RhythmClass::VentricularFibrillation,
+            (_, Some(_)) => return RhythmClass::PolymorphicVentricularTachycardia,
+            (Some(Circuit::AtrialFlutter), None) => return RhythmClass::AtrialFlutter,
+            (Some(_), None) => return RhythmClass::AtrialFibrillationOrFlutter,
+            (None, None) => {}
         }
         let flutter = self.last_a_cycle_ms.is_some_and(|c| c < FLUTTER_CYCLE_MS);
         match self.last_v_rr_ms {
@@ -565,6 +650,8 @@ impl TimingEngine {
             self.slow_last_use = Some(t);
             self.ap_last_use = Some(t);
             self.sinus_suppression_ms = 0.0;
+            self.rr_history = [f64::INFINITY; 3];
+            self.stop_circuits_after_shock(t);
             for (id, f) in self.params.foci.iter().enumerate() {
                 if let FocusMode::Automatic { rate_bpm, .. } = f.mode
                     && rate_bpm * self.drug.automaticity_scale > 60_000.0 / TACHYCARDIA_RR_MS
@@ -583,6 +670,26 @@ impl TimingEngine {
             success,
             vulnerable,
         });
+    }
+
+    /// A successful shock ends both circuits. The substrate of a recurring pause-dependent
+    /// arrhythmia stays, so its next start is only delayed.
+    fn stop_circuits_after_shock(&mut self, t: f64) {
+        self.atrial_circuit.running = false;
+        self.atrial_circuit.stopped = true;
+        let recur = self.params.ventricular_driver.as_ref().and_then(|d| {
+            matches!(d.start, DriverStart::PauseDependentRonT { .. })
+                .then_some(d.recur_after_ms)
+                .filter(|r| *r > 0.0)
+        });
+        let vc = &mut self.ventricular_circuit;
+        vc.running = false;
+        vc.ends_at_ms = None;
+        vc.closing_beats = 0;
+        match recur {
+            Some(r) => vc.not_before_ms = t + r,
+            None => vc.stopped = true,
+        }
     }
 
     // --- drug-modified parameters ------------------------------------------------------------
@@ -828,12 +935,27 @@ impl Engine for TimingEngine {
         self.last_v_rr_ms = None;
         self.last_a_cycle_ms = None;
         self.ap_last_use = None;
+        self.atrial_circuit = CircuitState::default();
+        self.ventricular_circuit = CircuitState::default();
+        self.circuit_rng = ShockRng::new(self.shock_seed ^ CIRCUIT_SEED_MIX);
+        self.rr_history = [f64::INFINITY; 3];
         self.foci.clear();
         self.foci.resize(self.params.foci.len(), FocusState::default());
         self.pacer.reset(0.0);
         self.markers.clear();
         self.schedule(200.0, Pending::Sinus);
         self.schedule_automatic_foci(0.0);
+        if let Some(d) = &self.params.atrial_driver {
+            let start = d.start_ms.max(0.0);
+            self.schedule(start, Pending::AtrialCircuit);
+        }
+        if let Some(VentricularDriver {
+            start: DriverStart::AtMs(start),
+            ..
+        }) = self.params.ventricular_driver
+        {
+            self.schedule(start.max(0.0), Pending::VentricularCircuit);
+        }
     }
 }
 

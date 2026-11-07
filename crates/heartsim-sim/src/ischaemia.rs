@@ -34,6 +34,11 @@
 //! surrounded by a border zone with slow conduction and long APD (the defaults of
 //! `Region::BorderZone`: 0.2 m/s vs 0.6, 340 ms vs 285). No injury current (healed scar).
 //!
+//! **Evolving infarct** (branch suffix `evolving`, e.g. `"LAD evolving"`): the same necrotic core
+//! on the mesh, a small residual ST elevation, and on the Tier-0 strip the T waves of the
+//! territory inverted as well as the Q waves ([`IschaemiaState::infarct_forces`]). The acute
+//! lesion, this one and the healed infarct are the stages a timeline walks through.
+//!
 //! **Pericarditis** (`"pericardium"`): diffuse injury of the outer 20 % of the ventricular wall
 //! (all territories) at `M = 0.6 · severity` → concave ST elevation in most leads, depression
 //! in aVR. **Global subendocardial ischaemia** (`"global"`): demand ischaemia of the whole LV
@@ -193,13 +198,93 @@ impl CoronaryBranch {
         let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
         [v[0] / l, v[1] / l, v[2] / l]
     }
+
+    /// The leads an infarct of this branch faces. `None` for the diffuse patterns, which have no
+    /// necrotic territory. Lead groups: anterior V1–V4 plus I and aVL when proximal; inferior II,
+    /// III, aVF; lateral I, aVL, V5, V6; posterior the mirror image in V1–V3 (Wagner et al. 2009).
+    #[must_use]
+    pub fn infarct_pattern(self) -> Option<InfarctPattern> {
+        let (frontal_axis_deg, frontal_gain, precordial) = match self {
+            CoronaryBranch::LeftMain => (-20.0, 0.7, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]),
+            CoronaryBranch::Lad => (-30.0, 0.5, [1.0, 1.0, 1.0, 1.0, 0.5, 0.25]),
+            CoronaryBranch::Lcx => (-10.0, 1.0, [-0.3, -0.3, 0.0, 0.0, 0.6, 1.0]),
+            CoronaryBranch::ObtuseMarginal => (-15.0, 1.0, [0.0, 0.0, 0.0, 0.2, 0.8, 1.0]),
+            CoronaryBranch::Posterolateral => (0.0, 0.0, [-1.0, -1.0, -0.8, 0.0, 0.0, 0.0]),
+            CoronaryBranch::Rca => (85.0, 1.0, [0.0; 6]),
+            CoronaryBranch::Pda => (90.0, 1.0, [0.0; 6]),
+            CoronaryBranch::Global | CoronaryBranch::Pericardium => return None,
+        };
+        Some(InfarctPattern {
+            frontal_axis_deg,
+            frontal_gain,
+            precordial,
+        })
+    }
 }
 
-/// Acute ischaemia or a healed infarct.
+/// Acute ischaemia, an evolving infarct or a healed infarct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LesionKind {
     Acute,
+    /// Healed: Q waves, no ST shift, T waves nearly normal.
     Infarct,
+    /// Hours to days old: Q waves, inverted T waves, a little residual ST elevation.
+    Evolving,
+}
+
+impl LesionKind {
+    /// `true` when the core of the lesion is necrotic.
+    #[must_use]
+    pub fn is_necrotic(self) -> bool {
+        matches!(self, LesionKind::Infarct | LesionKind::Evolving)
+    }
+
+    /// How far the T waves of the territory are inverted (0 = not at all, 1 = fully).
+    fn t_inversion(self) -> f64 {
+        match self {
+            LesionKind::Acute => 0.0,
+            LesionKind::Infarct => 0.25,
+            LesionKind::Evolving => 1.0,
+        }
+    }
+}
+
+/// Which leads an infarct of one territory faces, for the Tier-0 strip (which has no mesh). The
+/// surface pattern of an old or evolving infarct is regional: pathological Q waves and T inversion
+/// appear in the contiguous leads over the territory (Wagner et al., *Circulation* 2009;119:e262;
+/// Thygesen et al. 2018), so the precordial leads carry their own weights instead of one dipole.
+/// The limb leads stay a frontal dipole, so that Einthoven's law keeps holding.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InfarctPattern {
+    /// Hexaxial angle in the frontal plane pointing into the territory, degrees.
+    pub frontal_axis_deg: f64,
+    /// How strongly the limb leads see it (0 = not at all).
+    pub frontal_gain: f64,
+    /// Weight of V1…V6: 1 = faces the infarct; negative = sees it from behind (the tall R and
+    /// upright T of a posterior infarct in V1–V3).
+    pub precordial: [f64; 6],
+}
+
+/// What the necrotic lesions in effect do to the Q wave, R wave and T wave of a conducted beat,
+/// per lead group, for Tier-0 synthesis (see [`IschaemiaState::infarct_forces`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct InfarctForces {
+    /// Frontal vector into the infarct, heart frame `[x, y]`; its length is the weight (0 … 1).
+    pub q_limb: [f64; 2],
+    /// Weight of V1…V6 for the Q wave and the loss of R.
+    pub q_precordial: [f64; 6],
+    /// Same as `q_limb` for the T inversion.
+    pub t_limb: [f64; 2],
+    /// Same as `q_precordial` for the T inversion.
+    pub t_precordial: [f64; 6],
+}
+
+impl InfarctForces {
+    /// `true` when no lesion changes the beat.
+    #[must_use]
+    pub fn is_none(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// One lesion: a branch, its kind, and its severity (0 … 1).
@@ -262,7 +347,8 @@ enum Target {
     One(CoronaryBranch, LesionKind),
 }
 
-/// Parse a `Stenosis` branch string: `"<id>"` (acute), `"<id> infarct"` or `"all"`.
+/// Parse a `Stenosis` branch string: `"<id>"` (acute), `"<id> infarct"`, `"<id> evolving"` or
+/// `"all"`.
 fn parse_target(s: &str) -> Option<Target> {
     let mut words = s.split_whitespace();
     let id = words.next()?;
@@ -273,6 +359,7 @@ fn parse_target(s: &str) -> Option<Target> {
     let kind = match words.next() {
         None => LesionKind::Acute,
         Some(w) if w.eq_ignore_ascii_case("infarct") || w.eq_ignore_ascii_case("old") => LesionKind::Infarct,
+        Some(w) if w.eq_ignore_ascii_case("evolving") => LesionKind::Evolving,
         Some(_) => return None,
     };
     words.next().is_none().then_some(Target::One(branch, kind))
@@ -329,15 +416,18 @@ impl IschaemiaState {
     /// direction × 0.3 mV × severity drive, pointing *into* the territory when transmural
     /// (ST elevation facing it) and away from it when only the subendocardium is injured
     /// (ST depression); global subendocardial ischaemia and pericarditis carry their own
-    /// sign in the direction. Infarcts add none (healed).
+    /// sign in the direction. An evolving infarct adds a small residual elevation; a healed one
+    /// adds none.
     #[must_use]
     pub fn st_vector_mv(&self) -> [f64; 3] {
         const TRANSMURAL_MV: f64 = 0.3;
         const SUBENDOCARDIAL_MV: f64 = 0.15;
+        const RESIDUAL_MV: f64 = 0.05;
         let mut v = [0.0; 3];
-        for l in self.lesions.iter().filter(|l| l.kind == LesionKind::Acute) {
+        for l in self.lesions.iter().filter(|l| l.kind != LesionKind::Infarct) {
             let d = l.branch.injury_direction();
             let mag = match l.branch {
+                _ if l.kind == LesionKind::Evolving => RESIDUAL_MV * l.transmural_fraction(),
                 CoronaryBranch::Pericardium => 0.6 * TRANSMURAL_MV * l.severity,
                 CoronaryBranch::Global => 2.0 * SUBENDOCARDIAL_MV * l.transmural_fraction().min(0.5),
                 _ => {
@@ -354,6 +444,33 @@ impl IschaemiaState {
             }
         }
         v
+    }
+
+    /// What the necrotic lesions in effect do to conducted beats on the Tier-0 strip. The depth of
+    /// the necrosis follows the wavefront rule ([`Lesion::transmural_fraction`]): Q waves belong to
+    /// transmural infarcts, so a non-transmural lesion draws proportionally less. This is the same
+    /// lesion the mesh turns into a silent core, so the strip and the heart cannot disagree.
+    #[must_use]
+    pub fn infarct_forces(&self) -> InfarctForces {
+        let mut f = InfarctForces::default();
+        for l in self.lesions.iter().filter(|l| l.kind.is_necrotic()) {
+            let Some(p) = l.branch.infarct_pattern() else {
+                continue;
+            };
+            let depth = l.transmural_fraction();
+            let stage = depth * l.kind.t_inversion();
+            let r = p.frontal_axis_deg.to_radians();
+            let axis = [r.cos(), -r.sin()];
+            for (i, a) in axis.iter().enumerate() {
+                f.q_limb[i] += a * p.frontal_gain * depth;
+                f.t_limb[i] += a * p.frontal_gain * stage;
+            }
+            for i in 0..6 {
+                f.q_precordial[i] = (f.q_precordial[i] + p.precordial[i] * depth).clamp(-1.0, 1.0);
+                f.t_precordial[i] = (f.t_precordial[i] + p.precordial[i] * stage).clamp(-1.0, 1.0);
+            }
+        }
+        f
     }
 }
 
@@ -544,9 +661,10 @@ pub fn injury_field(
     let mut infarct = vec![0.0f32; n];
     for l in lesions {
         let w = territory_weight(cloud, graph, kinds, aha_segments, l.branch);
-        let target = match l.kind {
-            LesionKind::Acute => &mut acute,
-            LesionKind::Infarct => &mut infarct,
+        let target = if l.kind.is_necrotic() {
+            &mut infarct
+        } else {
+            &mut acute
         };
         for i in 0..n {
             if kinds[i] != CellKind::Ventricular || w[i] <= 0.0 {
@@ -554,9 +672,10 @@ pub fn injury_field(
             }
             let rho = transmural_depth(cloud.regions[i], cloud.depth[i]);
             let m = l.injury(w[i], rho);
-            let e = match l.kind {
-                LesionKind::Acute => m * Lesion::expression(rho),
-                LesionKind::Infarct => m,
+            let e = if l.kind.is_necrotic() {
+                m
+            } else {
+                m * Lesion::expression(rho)
             };
             target[i] = target[i].max(e);
         }
@@ -584,6 +703,37 @@ pub fn injury_field(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn necrotic_lesions_draw_q_waves_and_only_an_evolving_one_inverts_t_fully() {
+        let forces = |branch: &str| {
+            let mut s = IschaemiaState::default();
+            s.apply(branch, 1.0).unwrap();
+            s.infarct_forces()
+        };
+        assert!(forces("LAD").is_none(), "acute lesions have no necrosis");
+        assert!(forces("global infarct").is_none(), "no territory");
+        let healed = forces("LAD infarct");
+        let evolving = forces("LAD evolving");
+        assert_eq!(healed.q_precordial, evolving.q_precordial);
+        assert_eq!(evolving.t_precordial[1], 1.0);
+        assert!(healed.t_precordial[1] < 0.5);
+        // a non-transmural lesion draws less than a transmural one
+        let mut s = IschaemiaState::default();
+        s.apply("LAD evolving", 0.5).unwrap();
+        assert!(s.infarct_forces().q_precordial[1] < 0.5);
+    }
+
+    #[test]
+    fn an_evolving_infarct_keeps_less_st_than_an_acute_lesion() {
+        let st = |branch: &str| {
+            let mut s = IschaemiaState::default();
+            s.apply(branch, 1.0).unwrap();
+            s.st_vector_mv()[2]
+        };
+        assert!(st("LAD evolving") > 0.0 && st("LAD evolving") < 0.3 * st("LAD"));
+        assert_eq!(st("LAD infarct"), 0.0);
+    }
 
     #[test]
     fn wavefront_rule() {

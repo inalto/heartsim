@@ -1,0 +1,33 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "vf_fine",
+    title: "Ventricular fibrillation, fine",
+    description: "Late ventricular fibrillation: small chaotic deflections of 0.2 mV or less, close to a flat line.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("As VF goes on untreated, the amplitude falls: coarse VF turns into fine VF and then asystole. Fine VF (0.2 mV or less, peak to peak) has a worse outcome than coarse VF, partly because it reflects the delay to treatment (Weaver 1985).\nFine VF can pass for asystole: raise the gain and look in a second lead. It is still treated as VF, with an unsynchronised shock and CPR, while asystole is not shockable.\nThis preset draws a stable fine amplitude: the fall from coarse to fine over minutes is not modelled in one run."),
+    confused_with: ["vf_coarse", "polymorphic_vt", "sinus_arrest_junctional_escape", "asystole"],
+    references: [
+        "Weaver WD et al. Amplitude of ventricular fibrillation waveform and outcome after cardiac arrest. Ann Intern Med 1985;102:53-55.",
+        "Panchal AR et al. Part 3: Adult basic and advanced life support: 2020 American Heart Association Guidelines for CPR and ECC. Circulation 2020;142:S366-S468.",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: ventricular fibrillation, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+        rhythm: Some(VentricularFibrillation),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+        ventricular_driver: Some(VentricularDriver(kind: Fibrillation, cycle_ms: 180.0, cycle_jitter: 0.25, start: AtMs(2000.0))),
+    ),
+    morphology: MorphologyOverrides(waves: [
+        WaveOverride(template: VfWave, wave: "VF", amplitude_mv: Some(0.08)),
+        WaveOverride(template: VfWave, wave: "VF2", amplitude_mv: Some(-0.08)),
+    ]),
+)

@@ -4,7 +4,7 @@ Tutorial(
     format_version: 1,
     id: "10_ischaemia",
     title: "Ischaemia and infarction",
-    summary: "The ST segment as the injury current: ST elevation by coronary territory, reciprocal change, posterior and subendocardial patterns, pericarditis as the great mimic, and what reperfusion does.",
+    summary: "The ST segment as the injury current: ST elevation by coronary territory, reciprocal change, posterior and subendocardial patterns, pericarditis as the great mimic, what reperfusion does, and the Q waves and T inversion of an evolving infarct.",
     references: [
         "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
         "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
@@ -57,7 +57,8 @@ simulator also V5, V6, I and aVL). In III and aVF the ST segment is **lowered**.
 change**, the mirror image seen from the opposite side of the heart. It suggests a **proximal**
 occlusion, which threatens a large area.
 
-The simulator draws only the ST shift. In real infarcts Q waves and T-wave changes follow.
+This is the acute stage, so only the ST segment has moved. Q waves and T-wave changes follow later;
+they have their own pages at the end of this tutorial.
 "#,
             actions: [
                 Ui(LoadScenario("stemi_anterior")),
@@ -129,8 +130,8 @@ No standard lead faces the **posterior wall**. When it is infarcted, the leads o
 (V1 to V3, on the front of the chest) show the mirror image: **ST depression**, greatest in V1 and V2.
 
 This is a **STEMI equivalent**. The proof is ST elevation in the extra posterior leads **V7 to V9**,
-recorded on the back. The simulator shows the ST depression in V1 to V3 (the tall R waves of the
-established pattern are not modelled).
+recorded on the back. The simulator shows the acute ST depression in V1 to V3 here; the tall R waves
+come later, in the established pattern.
 
 Because the ST depression is in the chest leads, a posterior infarct is easily mistaken for
 simple ischaemia.
@@ -268,6 +269,118 @@ guidelines (120 minutes from diagnosis); otherwise fibrinolysis is given.
                 ],
                 answer: 0,
                 explanation: "When the occluded artery reopens the injury current fades and the ST segment falls back. It is a marker of reperfusion, not a guarantee that no muscle was lost.",
+            )),
+        ),
+        Page(
+            title: "Q waves: the mark of dead muscle",
+            markdown: r#"
+Dead muscle gives no electrical forces, so the leads over it see the opposite wall activating away from
+them. That shows as a **pathological Q wave**:
+
+* in **V2 and V3**: any Q of at least 0.02 s, or a QS complex;
+* elsewhere: at least **0.03 s and 0.1 mV deep**, in **two neighbouring leads**.
+
+This run shows an **anterior** infarct hours to days old: Q or QS complexes in **V1 to V4**, deep symmetric
+**inverted T waves** in the same leads, and little ST elevation left. On the 3-D heart the same lesion is a
+silent core with a slow border.
+"#,
+            actions: [
+                Ui(LoadScenario("mi_anterior_evolved")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Which Q wave in lead aVF counts as pathological?",
+                choices: [
+                    "One at least 0.03 s wide and 0.1 mV deep, also present in a neighbouring lead",
+                    "Any small q wave",
+                    "Only a Q wider than 0.2 s",
+                    "A Q wave in aVF alone, whatever its size",
+                ],
+                answer: 0,
+                explanation: "Outside V2 and V3 a pathological Q is at least 0.03 s and 0.1 mV deep in two contiguous leads. Small septal q waves are normal.",
+            )),
+        ),
+        Page(
+            title: "Q waves by territory",
+            markdown: r#"
+The leads with Q waves tell you which wall has been lost, just as ST elevation did.
+
+This run shows an **inferior** infarct, with Q waves and inverted T waves in **II, III and aVF**, and
+leads I and aVL left upright. The earlier lateral pattern would be in **I, aVL, V5 and V6**.
+
+Be careful with lead III: a small Q there alone can be normal, which is why the definition asks for two
+neighbouring leads.
+"#,
+            actions: [
+                Ui(LoadScenario("mi_inferior_evolved")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Q waves in II, III and aVF point to an infarct of which wall?",
+                choices: [
+                    "The inferior wall",
+                    "The anterior wall",
+                    "The lateral wall",
+                    "The right atrium",
+                ],
+                answer: 0,
+                explanation: "Leads II, III and aVF face the inferior wall, which the right coronary artery usually supplies.",
+            )),
+        ),
+        Page(
+            title: "From ST elevation to T inversion",
+            markdown: r#"
+An infarct passes through stages. This run compresses them into seconds, **for teaching only**: in a patient
+they take hours to weeks and vary a lot.
+
+* **0 s**: occlusion: ST elevation only.
+* **5 s**: Q waves appear while the ST segment stays up.
+* **10 s**: the ST settles and the **T waves invert**.
+* **16 s**: the T waves recover and the **Q waves stay**.
+
+Watch V2 and V3 in the 12-lead view. Early reperfusion can change this course and spare the Q waves.
+"#,
+            actions: [
+                Ui(LoadScenario("mi_evolution_stages")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "What usually remains longest on the ECG after an infarct?",
+                choices: [
+                    "The Q waves",
+                    "The ST elevation",
+                    "The hyperacute T waves",
+                    "The reciprocal ST depression",
+                ],
+                answer: 0,
+                explanation: "ST elevation and T inversion usually fade over days to weeks, while Q waves often persist for years. They are the mark of an old infarct.",
+            )),
+        ),
+        Page(
+            title: "An old infarct",
+            markdown: r#"
+Months later the ECG may show only **Q waves**, with a level ST segment and upright or nearly upright T waves.
+
+That is why an **old ECG for comparison** is so useful: the same Q waves mean something quite different
+with and without chest pain. If the ST segment stays elevated for weeks over Q waves, think of a left
+ventricular **aneurysm**.
+
+On the 3-D heart the core is silent, and the strip draws no ST shift.
+"#,
+            actions: [
+                Ui(LoadScenario("mi_old_anterior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "Q waves in V1 to V4 with a level ST segment and no symptoms most likely mean:",
+                choices: [
+                    "An old anterior infarct",
+                    "An acute STEMI",
+                    "Pericarditis",
+                    "Atrial flutter",
+                ],
+                answer: 0,
+                explanation: "Q waves without ST or T-wave changes point to an old infarct. Comparison with earlier ECGs confirms when it appeared.",
             )),
         ),
     ],

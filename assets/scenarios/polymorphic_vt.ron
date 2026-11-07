@@ -1,0 +1,33 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "polymorphic_vt",
+    title: "Polymorphic ventricular tachycardia",
+    description: "After two seconds of sinus rhythm: a fast, wide, irregular tachycardia whose QRS shape changes from beat to beat, without an orderly twist and with a normal QT before it.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In polymorphic VT the sequence of ventricular activation changes beat to beat, so the QRS keeps changing shape and axis. The commonest cause with a normal QT is acute myocardial ischaemia, and this preset has an occluded LAD behind it. The baseline QT separates it from torsades de pointes, because the treatment differs: for ischaemic polymorphic VT the priority is revascularisation and beta-blockade, and magnesium is not expected to help unless the QT is long.\nIt is unstable and can turn into VF. A patient without a pulse, or an unstable one, receives an unsynchronised shock: the changing QRS gives a synchroniser no reliable R wave to lock onto, and this simulator's defibrillator does not fire in sync mode here. The 3-D heart shows the fronts coming from either ventricle."),
+    confused_with: ["torsades", "vf_coarse", "vt_monomorphic", "af_preexcited"],
+    references: [
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126.",
+        "Al-Khatib SM et al. 2017 AHA/ACC/HRS guideline for management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Circulation 2018;138:e272-e391.",
+        "Wolfe CL et al. Polymorphous ventricular tachycardia associated with acute myocardial infarction. Circulation 1991;84:1543-1551.",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: polymorphic VT and torsades de pointes, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (170.0, 260.0),
+        pr_ms: None,
+        qrs_ms: None,
+        axis_deg: None,
+        rhythm: Some(PolymorphicVentricularTachycardia),
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "LAD", severity: 1.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+        ventricular_driver: Some(VentricularDriver(kind: Polymorphic, cycle_ms: 280.0, cycle_jitter: 0.2, start: AtMs(2000.0))),
+    ),
+)

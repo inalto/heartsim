@@ -122,11 +122,21 @@ pub fn detect(sig: &[f32], fs: f32) -> QrsDetection {
         };
     }
 
-    // Refine on the raw lead: R = largest excursion from the local baseline within ±80 ms.
+    QrsDetection {
+        peaks: refine_peaks(sig, &found, fs),
+        peak_to_background,
+    }
+}
+
+/// Refine candidates on the raw lead: R = largest excursion from the local baseline within ±80 ms.
+#[must_use]
+pub fn refine_peaks(sig: &[f32], candidates: &[usize], fs: f32) -> Vec<usize> {
+    let n = sig.len();
+    let refractory = (REFRACTORY_MS * 1e-3 * fs) as usize;
     let base = dsp::median(sig).unwrap_or(0.0);
     let reach = (0.08 * fs) as usize;
-    let mut peaks: Vec<usize> = Vec::with_capacity(found.len());
-    for &c in &found {
+    let mut peaks: Vec<usize> = Vec::with_capacity(candidates.len());
+    for &c in candidates {
         let lo = c.saturating_sub(reach);
         let hi = (c + reach).min(n - 1);
         let (mut best, mut best_dev) = (c, 0.0_f32);
@@ -143,8 +153,5 @@ pub fn detect(sig: &[f32], fs: f32) -> QrsDetection {
             peaks.push(best);
         }
     }
-    QrsDetection {
-        peaks,
-        peak_to_background,
-    }
+    peaks
 }

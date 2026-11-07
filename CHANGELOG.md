@@ -5,6 +5,23 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- New wave types on the Tier-0 strip, drawn from the timing engine's own events so the strip and the 3-D heart agree: atrial
+  flutter (sawtooth at about 300/min with 2:1, 4:1 and variable AV block that follow from the AV-nodal recovery curve), atrial
+  fibrillation with f waves, pre-excited AF, coarse and fine ventricular fibrillation, torsades de pointes (twisting axis, started by a
+  pause-dependent R-on-T beat on a long QT, ending by itself) and polymorphic VT, and the evolution of an infarct (pathological Q
+  waves and T-wave inversion in the leads of its territory). New timing sections `atrial_driver` and `ventricular_driver`, event
+  origin `Origin::Circuit`, and the lesion kind `"<branch> evolving"` next to `"<branch> infarct"`. Old files load unchanged, and the
+  golden strips of the existing scenarios are unchanged.
+- 14 new scenarios with explanations, differentials, references and golden strips: `flutter_2to1`, `flutter_4to1`,
+  `flutter_variable`, `atrial_fibrillation`, `af_preexcited`, `vf_coarse`, `vf_fine`, `torsades`, `polymorphic_vt`,
+  `mi_anterior_evolved`, `mi_inferior_evolved`, `mi_lateral_evolved`, `mi_old_anterior`, `mi_evolution_stages`. They enter the rhythm
+  quiz with the rest of the library.
+- The analyser names these rhythms from the waveform alone (`Analysis::rhythm`, `atrial_rate_bpm`, `av_ratio`,
+  `dominant_frequency_hz`), and an `expected` block can require a name (`rhythm`) and leave out the rate for a rhythm with no
+  countable beats. The thresholds separate what this simulator draws and are not validated on recorded ECGs.
+- A shock ends these rhythms through the existing therapy path. Sync mode does not fire in VF, polymorphic VT or torsades, flutter
+  needs less energy than AF (new class `RhythmClass::AtrialFlutter`), and polymorphic VT and torsades have their own class.
+- Tutorial pages using the new scenarios in `06_atrial`, `08_wpw`, `09_ventricular` and `10_ischaemia`.
 - QRS-synchronous monitor beep (cargo feature `audio` of `heartsim-app`, desktop only): a 1 kHz tone synthesised in code and played
   through `kira` at each ventricular activation, with a switch and a volume slider in Settings (off by default; at most one beep per
   180 ms of simulated time; silent without an audio device; never in the browser build).

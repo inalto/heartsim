@@ -4,13 +4,14 @@ Tutorial(
     format_version: 1,
     id: "08_wpw",
     title: "WPW and pre-excitation",
-    summary: "How an accessory pathway makes a short PR and a delta wave, how its position changes the delta wave, how it sustains AV re-entrant tachycardia, and what closing it does.",
+    summary: "How an accessory pathway makes a short PR and a delta wave, how its position changes the delta wave, how it sustains AV re-entrant tachycardia, what closing it does, and why atrial fibrillation over a pathway is an emergency.",
     references: [
         "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
         "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
         "Surawicz B et al. Recommendations for the standardization and interpretation of the electrocardiogram, part III: intraventricular conduction disturbances. Circulation 2009;119:e235-e240.",
         "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography: A Simplified Approach, 9th ed. Elsevier 2017 (ch. 14).",
         "Burns E, Buttner R. Life in the Fast Lane ECG Library: Wolff-Parkinson-White syndrome, delta wave, accessory pathway localisation. litfl.com/ecg-library.",
+        "Klein GJ et al. Ventricular fibrillation in the Wolff-Parkinson-White syndrome. N Engl J Med 1979;301:1080-1085.",
     ],
     pages: [
         Page(
@@ -144,7 +145,7 @@ offered to patients with repeated attacks.
 **Warning.** If a patient with a *manifest* pathway develops **atrial fibrillation**, the pathway can
 conduct the fast atrial rate directly to the ventricles. Drugs that block only the AV node
 (verapamil, diltiazem, digoxin, beta-blockers) can then make the ventricular rate faster and are
-avoided. The simulator has no pre-excited fibrillation to show this.
+avoided. The next page shows that rhythm.
 "#,
             actions: [
                 Ui(LoadScenario("avrt_orthodromic")),
@@ -163,6 +164,65 @@ avoided. The simulator has no pre-excited fibrillation to show this.
                 ],
                 answer: 0,
                 explanation: "Adenosine acts on the AV node and does not affect the accessory pathway. The substrate remains, and the next premature beat can start the circuit again.",
+            )),
+        ),
+        Page(
+            title: "Pre-excited atrial fibrillation",
+            markdown: r#"
+A pathway does not slow down at high rates as the AV node does. If a patient with a manifest
+pathway goes into **atrial fibrillation**, the fast atrial impulses can reach the ventricles directly.
+
+The ECG is **fast, broad and irregular** ("FBI"), at rates that can exceed 200 bpm, with a QRS that
+changes from beat to beat. An R-R interval of **250 ms or less** marks a dangerous pathway, because
+this rhythm can turn into ventricular fibrillation.
+
+**Avoid AV-nodal blockers** (adenosine, verapamil, diltiazem, digoxin, beta-blockers). They do not
+slow the pathway and can make things worse. The simulator's drugs act on the AV node only and do not
+show that acceleration.
+"#,
+            actions: [
+                Ui(LoadScenario("af_preexcited")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            check: Some(Question(
+                prompt: "A patient has a fast, broad, irregular tachycardia at 240 bpm. Which drug class must be avoided?",
+                choices: [
+                    "AV-nodal blockers such as verapamil",
+                    "Antiarrhythmics such as procainamide",
+                    "Oxygen",
+                    "Sedation before cardioversion",
+                ],
+                answer: 0,
+                explanation: "This is pre-excited AF until shown otherwise. AV-nodal blockers leave the pathway free to conduct and can precipitate ventricular fibrillation.",
+            )),
+        ),
+        Page(
+            title: "Cardioverting pre-excited AF",
+            markdown: r#"
+An **unstable** patient needs a **synchronised shock** straight away. A stable one may receive
+procainamide or ibutilide, and then ablation of the pathway, which removes the danger.
+
+After seven seconds the simulator delivers a synchronised shock of 150 J. Sinus rhythm returns with
+its short PR and delta wave: the shock ends the fibrillation, and the pathway is still there. If the
+shock fails, press **Replay**.
+"#,
+            actions: [
+                Ui(LoadScenario("af_preexcited")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(7000.0))),
+                Sim(Shock(joules: 150.0, synchronised: true)),
+            ],
+            check: Some(Question(
+                prompt: "What does the ECG show after a successful shock?",
+                choices: [
+                    "Sinus rhythm with a short PR and a delta wave, because the pathway remains",
+                    "A normal PR and no delta wave, because the pathway is destroyed",
+                    "Complete heart block",
+                    "Persistent AF",
+                ],
+                answer: 0,
+                explanation: "A shock resets the rhythm but does not touch the anatomy. Only ablation removes the pathway.",
             )),
         ),
     ],

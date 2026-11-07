@@ -35,6 +35,58 @@ pub enum EventKind {
     Blocked,
 }
 
+/// A sustained arrhythmia the timing graph carries itself (`TimingParams::atrial_driver`,
+/// `TimingParams::ventricular_driver`): the timing engine emits one event per circuit revolution
+/// or fibrillatory wavelet, and the ECG and the 3-D heart both draw from those events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Circuit {
+    /// Atrial macro-re-entry, one event per revolution.
+    AtrialFlutter,
+    /// Atrial wavelets at irregular intervals.
+    AtrialFibrillation,
+    /// Ventricular wavelets at irregular intervals; the ventricles have no organised beat.
+    VentricularFibrillation,
+    /// Polymorphic VT with an orderly twist of the QRS axis, in a long QT setting.
+    Torsades,
+    /// Polymorphic VT with beat-to-beat changes of the QRS axis.
+    PolymorphicVt,
+}
+
+impl Circuit {
+    /// `true` for the circuits that live in the ventricles.
+    #[must_use]
+    pub fn is_ventricular(self) -> bool {
+        matches!(
+            self,
+            Circuit::VentricularFibrillation | Circuit::Torsades | Circuit::PolymorphicVt
+        )
+    }
+
+    /// Stable small number of the circuit (tie-break rank of the Tier-1 queue).
+    #[must_use]
+    pub fn rank(self) -> u8 {
+        match self {
+            Circuit::AtrialFlutter => 0,
+            Circuit::AtrialFibrillation => 1,
+            Circuit::VentricularFibrillation => 2,
+            Circuit::Torsades => 3,
+            Circuit::PolymorphicVt => 4,
+        }
+    }
+
+    /// Inverse of [`Circuit::rank`] (out-of-range ranks read as the last circuit).
+    #[must_use]
+    pub fn from_rank(rank: u8) -> Self {
+        match rank {
+            0 => Circuit::AtrialFlutter,
+            1 => Circuit::AtrialFibrillation,
+            2 => Circuit::VentricularFibrillation,
+            3 => Circuit::Torsades,
+            _ => Circuit::PolymorphicVt,
+        }
+    }
+}
+
 /// Where an impulse originated. Conducted events carry the origin of the impulse they
 /// propagate, so a ladder diagram can colour a whole beat by its source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -55,6 +107,8 @@ pub enum Origin {
     Pacer(u8),
     /// Programmed stimulus or user click (`Action::Stimulate`, `Action::PacingTrain`).
     External,
+    /// A sustained arrhythmia of the timing graph, see [`Circuit`].
+    Circuit(Circuit),
 }
 
 /// Coarse anatomical level of an event, i.e. the row of a ladder diagram.

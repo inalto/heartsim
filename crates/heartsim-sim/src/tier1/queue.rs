@@ -12,7 +12,7 @@
 //! exactly the order of a single priority queue, whatever the bucket width: results do not
 //! depend on it, only speed does.
 
-use crate::engine::Origin;
+use crate::engine::{Circuit, Origin};
 
 /// Bucket width, ms: about a third of the shortest ventricular edge delay, so a settle's own
 /// pushes land in a later bucket.
@@ -40,6 +40,7 @@ fn origin_rank(o: Origin) -> u16 {
         Origin::Escape => 0x400,
         Origin::Pacer(ch) => 0x500 | u16::from(ch),
         Origin::External => 0x600,
+        Origin::Circuit(c) => 0x700 | u16::from(c.rank()),
     }
 }
 
@@ -52,6 +53,7 @@ fn origin_of_rank(r: u16) -> Origin {
         3 => Origin::Reentry,
         4 => Origin::Escape,
         5 => Origin::Pacer(low),
+        7 => Origin::Circuit(Circuit::from_rank(low)),
         _ => Origin::External,
     }
 }

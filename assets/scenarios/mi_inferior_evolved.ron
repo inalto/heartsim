@@ -1,0 +1,32 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "mi_inferior_evolved",
+    title: "Evolved inferior infarction: Q waves and T inversion",
+    description: "Hours to days after an RCA occlusion: Q waves and inverted T waves in II, III and aVF.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The leads over the inferior wall are II, III and aVF. An inferior infarct leaves Q waves and inverted T waves there; the leads opposite (I, aVL) stay upright.\nA pathological Q wave (Fourth Universal Definition): in V2-V3, any Q of at least 0.02 s or a QS complex; elsewhere, Q of at least 0.03 s and 0.1 mV deep, in two contiguous leads. It marks a region of dead tissue that no longer gives electrical forces, so the leads over it see the opposite wall activating away from them.\nThe inverted T waves are deep and symmetric, in the same leads. In a patient, Q waves appear over hours and T waves invert as the ST segment settles, over hours to days; Q waves usually persist. Timing varies between patients.\nA small isolated Q wave in lead III alone can be normal: the definition needs two contiguous leads. A posteroseptal accessory pathway can mimic an inferior Q wave (a negative delta wave), so look at the PR interval as well."),
+    confused_with: ["stemi_inferior", "wpw_right_type_b", "lafb", "axis_left_deviation"],
+    references: [
+        "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
+        "Wagner GS et al. Recommendations for the standardization and interpretation of the electrocardiogram, part VI: acute ischemia/infarction. Circulation 2009;119:e262-e270.",
+        "Byrne RA et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44:3720-3826.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017 (ch. 8, 9).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: pathological Q waves, myocardial infarction evolution, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (65.0, 95.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: None,
+        axis_deg: None,
+    )),
+    timeline: [
+        TimedAction(at: 0.0, action: Stenosis(branch: "RCA evolving", severity: 1.0)),
+    ],
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+    ),
+)

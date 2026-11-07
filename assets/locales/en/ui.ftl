@@ -119,6 +119,8 @@ preset-posterior-stemi = Posterior STEMI (PL)
 preset-subendocardial = Subendocardial ischaemia
 rhythm-vf = VF
 rhythm-vt = VT
+rhythm-polymorphic-vt = polymorphic VT
+rhythm-flutter = flutter
 rhythm-svt = SVT
 rhythm-af-flutter = AF / flutter
 rhythm-organised = organised rhythm
@@ -232,6 +234,7 @@ ischaemia-presets = Presets
 ischaemia-in-effect = In effect
 ischaemia-acute = acute ischaemia
 ischaemia-infarct-kind = infarct
+ischaemia-evolving-kind = evolving infarct
 ischaemia-lesion-line = { $branch }: { $kind }, severity { $severity }
 
 ## Display filter and artefacts (ecg_view.rs, requirement F-15)

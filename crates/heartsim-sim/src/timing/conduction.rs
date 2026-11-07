@@ -5,9 +5,16 @@
 
 use super::ladder::LadderSample;
 use super::pacer::{MarkerKind, PacerMarker};
-use super::params::{AvPathway, FocusMode, FocusRegion, LeadSite, PacerChannel, PacerConfig};
-use super::{AtrialVia, Edge, HisVia, Pending, StimTarget, TimingEngine, VentVia};
-use crate::engine::{Chamber, EventKind, Origin};
+use super::params::{
+    AtrialDriverKind, AvPathway, DriverStart, FocusMode, FocusRegion, LeadSite, PacerChannel, PacerConfig,
+    VentricularDriverKind,
+};
+use super::{
+    AtrialVia, CLOSING_BEATS, CLOSING_SLOWING, Edge, HisVia, Pending, SHORT_LONG_RATIO, StimTarget,
+    TimingEngine, VentVia,
+};
+use crate::defib::VULNERABLE_WINDOW;
+use crate::engine::{Chamber, Circuit, EventKind, Origin};
 use heartsim_core::{Millis, Region};
 
 /// Shrier recovery curve: conduction time for recovery time `rt` (ms), `None` if blocked.
@@ -62,6 +69,8 @@ impl TimingEngine {
             }
             Pending::HisRetro { origin } => self.on_his_retro(t, origin),
             Pending::Shock { joules, synchronised } => self.deliver_shock(t, joules, synchronised),
+            Pending::AtrialCircuit => self.on_atrial_circuit(t),
+            Pending::VentricularCircuit => self.on_ventricular_circuit(t),
             Pending::Stimulus { target } => match target {
                 StimTarget::Atrium(r) => {
                     self.activate_atrium(t, r, EventKind::Stimulus, Origin::External, AtrialVia::External);
@@ -112,7 +121,9 @@ impl TimingEngine {
         self.sinus_beats += 1;
         let s = self.params.sinus.clone();
         let exit_blocked = s.exit_block_ratio > 1 && self.sinus_beats.is_multiple_of(s.exit_block_ratio);
-        if exit_blocked {
+        // A fibrillating heart shows no P waves: the strip has no organised atrial activity either.
+        let fibrillating = self.running_circuits().1 == Some(Circuit::VentricularFibrillation);
+        if exit_blocked || fibrillating {
             self.emit(t, Region::SinoatrialNode, EventKind::Blocked, Origin::Sinus);
         } else {
             self.activate_atrium(
@@ -156,8 +167,10 @@ impl TimingEngine {
         via: AtrialVia,
     ) -> bool {
         // A front sensed on the tissue model has already passed the tissue's own refractoriness:
-        // the timing engine's atrial ERP (a Tier-0/1 stand-in for it) must not veto a fact.
-        if via != AtrialVia::Tissue && since(self.last_atrial, t) < self.atrial_erp() {
+        // the timing engine's atrial ERP (a Tier-0/1 stand-in for it) must not veto a fact. The
+        // same holds for a cycle of the atrial driver; nothing else can enter a running circuit.
+        let own_rhythm = matches!(via, AtrialVia::Tissue | AtrialVia::Circuit);
+        if !own_rhythm && (self.atrial_circuit.running || since(self.last_atrial, t) < self.atrial_erp()) {
             let r = if via == AtrialVia::Sinus {
                 Region::SinoatrialNode
             } else {
@@ -437,15 +450,23 @@ impl TimingEngine {
         via: VentVia,
     ) -> bool {
         let gap = since(self.last_ventricular, t);
-        let fusion = gap < self.params.fusion_window_ms && self.last_vent_via != Some(via);
+        // Nothing fuses with, or enters, a ventricle that is running its own circuit.
+        if self.ventricular_circuit.running && via != VentVia::Circuit {
+            self.emit(t, region, EventKind::Blocked, origin);
+            return false;
+        }
+        let fusion =
+            via != VentVia::Circuit && gap < self.params.fusion_window_ms && self.last_vent_via != Some(via);
         // As for the atria: a ventricular front the tissue produced (VT, VF) is never vetoed by
         // the timing engine's ERP, which would turn VF (cycles of 150-200 ms) into "asystole".
-        if !fusion && via != VentVia::Tissue && gap < self.ventricular_erp() {
+        let own_rhythm = matches!(via, VentVia::Tissue | VentVia::Circuit);
+        if !fusion && !own_rhythm && gap < self.ventricular_erp() {
             self.emit(t, region, EventKind::Blocked, origin);
             return false;
         }
         if !fusion {
             self.last_v_rr_ms = gap.is_finite().then_some(gap);
+            self.rr_history = [gap, self.rr_history[0], self.rr_history[1]];
             self.last_ventricular = Some(t);
             self.last_vent_via = Some(via);
         }
@@ -455,7 +476,15 @@ impl TimingEngine {
         if fusion {
             return true;
         }
+        // A driver's cycle is not a beat for the foci, the His bundle or an accessory pathway:
+        // the ventricle gives them no organised front.
+        if via == VentVia::Circuit {
+            return true;
+        }
         self.notify_foci(t, Chamber::Ventricle, origin);
+        if via == VentVia::Focus {
+            self.check_pause_dependent_start(t);
+        }
 
         // Retrograde into the His–Purkinje system (not for impulses that came down it).
         if via != VentVia::HisPurkinje {
@@ -490,6 +519,127 @@ impl TimingEngine {
             }
         }
         true
+    }
+
+    // --- sustained arrhythmias ----------------------------------------------------------------
+
+    /// One cycle length of a driver, ms: uniform within `cycle_ms · (1 ± jitter)`.
+    fn draw_cycle(&mut self, cycle_ms: f64, jitter: f64) -> f64 {
+        let u = self.circuit_rng.next_f64();
+        (cycle_ms * (1.0 + jitter * (2.0 * u - 1.0))).max(1.0)
+    }
+
+    /// One atrial cycle of the driver: an atrial activation at `t`, then the next cycle. A circuit
+    /// is as long as its path, so a drug that slows atrial conduction lengthens the cycle.
+    fn on_atrial_circuit(&mut self, t: f64) {
+        let Some(d) = self.params.atrial_driver.clone() else {
+            return;
+        };
+        if self.atrial_circuit.stopped {
+            return;
+        }
+        self.atrial_circuit.running = true;
+        let side = self.circuit_rng.next_f64();
+        let (circuit, region) = match d.kind {
+            AtrialDriverKind::Flutter => (Circuit::AtrialFlutter, Region::RightAtrium),
+            AtrialDriverKind::Fibrillation => (
+                Circuit::AtrialFibrillation,
+                if side < 0.5 {
+                    Region::RightAtrium
+                } else {
+                    Region::LeftAtrium
+                },
+            ),
+        };
+        self.activate_atrium(
+            t,
+            region,
+            EventKind::Automatic,
+            Origin::Circuit(circuit),
+            AtrialVia::Circuit,
+        );
+        let cycle = self.draw_cycle(d.cycle_ms, d.cycle_jitter) / self.drug_effects().atrial_cv_scale;
+        self.schedule(t + cycle, Pending::AtrialCircuit);
+    }
+
+    /// One ventricular cycle of the driver: a ventricular event at `t`, then the next cycle, or
+    /// the end of the episode after its last slowing beats.
+    fn on_ventricular_circuit(&mut self, t: f64) {
+        let Some(d) = self.params.ventricular_driver.clone() else {
+            return;
+        };
+        if self.ventricular_circuit.stopped {
+            return;
+        }
+        if !self.ventricular_circuit.running {
+            self.ventricular_circuit.running = true;
+            self.ventricular_circuit.ends_at_ms = (d.duration_ms > 0.0).then_some(t + d.duration_ms);
+            self.ventricular_circuit.closing_beats = 0;
+        }
+        let side = self.circuit_rng.next_f64();
+        let region = if side < 0.5 {
+            Region::LeftVentricle
+        } else {
+            Region::RightVentricle
+        };
+        let circuit = match d.kind {
+            VentricularDriverKind::Fibrillation => Circuit::VentricularFibrillation,
+            VentricularDriverKind::Torsades => Circuit::Torsades,
+            VentricularDriverKind::Polymorphic => Circuit::PolymorphicVt,
+        };
+        self.activate_ventricle(
+            t,
+            region,
+            EventKind::Automatic,
+            Origin::Circuit(circuit),
+            VentVia::Circuit,
+        );
+        let mut cycle = self.draw_cycle(d.cycle_ms, d.cycle_jitter);
+        if self.ventricular_circuit.ends_at_ms.is_some_and(|e| t >= e) {
+            let vc = &mut self.ventricular_circuit;
+            vc.closing_beats += 1;
+            if vc.closing_beats > CLOSING_BEATS {
+                vc.running = false;
+                vc.ends_at_ms = None;
+                vc.closing_beats = 0;
+                if d.recur_after_ms > 0.0 && matches!(d.start, DriverStart::PauseDependentRonT { .. }) {
+                    vc.not_before_ms = t + d.recur_after_ms;
+                } else {
+                    vc.stopped = true;
+                }
+                return;
+            }
+            cycle *= 1.0 + CLOSING_SLOWING * f64::from(vc.closing_beats);
+        }
+        self.schedule(t + cycle, Pending::VentricularCircuit);
+    }
+
+    /// An ectopic beat at `t` starts a pause-dependent arrhythmia when it closes a
+    /// short-long-short sequence and falls in the vulnerable period of the beat before it.
+    fn check_pause_dependent_start(&mut self, t: f64) {
+        let Some(d) = self.params.ventricular_driver.clone() else {
+            return;
+        };
+        let DriverStart::PauseDependentRonT { not_before_ms } = d.start else {
+            return;
+        };
+        let vc = self.ventricular_circuit;
+        if vc.running || vc.stopped || t < not_before_ms.max(vc.not_before_ms) {
+            return;
+        }
+        let [short, long, first_short] = self.rr_history;
+        let erp = self.ventricular_erp();
+        let on_t = (VULNERABLE_WINDOW.0 * erp..=VULNERABLE_WINDOW.1 * erp).contains(&short);
+        let short_long_short = first_short.is_finite()
+            && long >= SHORT_LONG_RATIO * short
+            && long >= SHORT_LONG_RATIO * first_short;
+        if on_t && short_long_short {
+            self.ventricular_circuit.running = true;
+            self.ventricular_circuit.ends_at_ms = (d.duration_ms > 0.0).then_some(t + d.duration_ms);
+            self.ventricular_circuit.closing_beats = 0;
+            let cycle = self.draw_cycle(d.cycle_ms, d.cycle_jitter);
+            self.schedule(t + cycle, Pending::VentricularCircuit);
+        }
     }
 
     // --- escape pacemakers --------------------------------------------------------------------

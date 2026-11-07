@@ -1,0 +1,31 @@
+// Tier-0 rhythm preset. Ranges in `expected` are textbook criteria, see
+// docs/research/tier0-rhythm-criteria.md; engine parameters are re-derived from the references.
+Scenario(
+    format_version: 1,
+    id: "flutter_2to1",
+    title: "Atrial flutter with 2:1 AV conduction",
+    description: "A right-atrial macro-re-entrant circuit turns at 300/min; the AV node conducts every second wave, so the ventricles beat regularly at 150 bpm and one flutter wave hides in the ST-T segment.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Typical atrial flutter is a large re-entrant circuit around the tricuspid valve that passes through the cavotricuspid isthmus. The atria are activated about 300 times a minute (usual range 250 to 350). The flutter waves make a sawtooth with no flat baseline, negative in II, III and aVF and positive in V1 in the common counter-clockwise form.\nThe healthy AV node cannot follow that rate, and the commonest result is 2:1 conduction: a regular narrow tachycardia close to 150 bpm. Half of the flutter waves sit on the ST-T segment, so this rhythm is regularly mistaken for sinus tachycardia or another SVT. Think of flutter whenever a regular narrow tachycardia stays fixed near 150 bpm. Vagal manoeuvres or adenosine briefly raise the block and show the waves.\nThe 2:1 ratio here is not set directly: it follows from the refractory period of the AV node in this file. The 3-D heart shows the atria activated every 200 ms from the right atrium, not the anatomical circuit itself."),
+    confused_with: ["sinus_tachy_130", "atrial_tachycardia_150", "avnrt_150", "avrt_orthodromic", "flutter_4to1"],
+    references: [
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720.",
+        "Page RL et al. 2015 ACC/AHA/HRS guideline for the management of adult patients with supraventricular tachycardia. Circulation 2016;133:e506-e574.",
+        "Goldberger AL, Goldberger ZD, Shvilkin A. Goldberger's Clinical Electrocardiography, 9th ed. Elsevier 2017 (ch. 15).",
+        "Burns E, Buttner R. Life in the Fast Lane ECG Library: atrial flutter, litfl.com/ecg-library.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (140.0, 160.0),
+        pr_ms: None,
+        qrs_ms: Some((60.0, 120.0)),
+        axis_deg: None,
+        rhythm: Some(AtrialFlutter),
+    )),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        av: AvParams(concealment_fraction: 0.5, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 120.0, recovery_tau_ms: 80.0, erp_ms: 150.0, blocked: false)),
+        atrial_driver: Some(AtrialDriver(kind: Flutter, cycle_ms: 200.0, cycle_jitter: 0.0)),
+    ),
+)

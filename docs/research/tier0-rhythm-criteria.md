@@ -30,6 +30,35 @@ The engine parameters are re-derived from the same sources plus the timing-model
 | Pacing modes | NBG code (VVI, DDD), timing cycles | Bernstein 2002 |
 | QT rate adaptation | QT ∝ RR^⅓ (Fridericia) — synthesiser T timing in scenario runs | Fridericia 1920 |
 
+### Sustained arrhythmias and infarction
+
+| quantity | value used | source | how sure |
+|---|---|---|---|
+| Typical flutter rate | 250–350/min; cycle 200 ms in the presets | Page 2015; Goldberger 2017; secondary sources give 240–340 | Range quoted from secondary sources, the guidelines themselves were not re-read |
+| Flutter F-wave polarity | Negative in II, III, aVF, positive in V1 (counter-clockwise) | Harvey, *HeartRhythm Case Rep* 2024;10:445; RCEM Learning | Good |
+| Flutter amplitude | 0.15–0.5 mV in II | Chosen to look typical | No citation: a teaching value |
+| AF f waves | Coarse ≥ 0.1 mV in V1 or II, the usual dividing line | Studies using 1 mm in V1 or 0.1 mV in II/V1 | Good for the line, the exact drawn size is a teaching value |
+| AF atrial rate | 250–600/min; preset mean cycle 170 ms ± 40 % | Common textbook range; one 2019 study reports a dominant rate near 390/min in V1 | Upper limit not confirmed from a primary source |
+| Pre-excited AF | Shortest pre-excited RR ≤ 250 ms marks danger | ESC 2016 AF text, Klein 1979 (older work uses 220–260 ms) | Good; pathway ERP 200 ms sits under that line |
+| VF dominant frequency | Test range 3.5–8 Hz | Recorded human VF: 4.1 → 5.2 Hz in the first 5 s (ten recordings), 5.6–7.2 Hz in a sustained case | Small studies: a range and not a norm |
+| VF rate | 150–500/min quoted; preset mean cycle 180 ms | LITFL | Secondary |
+| Coarse vs fine VF | Fine ≤ 0.2 mV peak to peak | Weaver et al., *Ann Intern Med* 1985;102:53 | Good |
+| VF absence of P waves | Sinus node exit silenced while VF runs | Simplification: atrial activity is not visible on a VF strip | Modelling choice, not a physiological claim |
+| Torsades rate | 160–240/min | Drew et al., *Circulation* 2010;121:1047 | Good |
+| Torsades twist | Polarity flips every 5–20 beats; preset mean ≈ 10 | Reported as 5–20 beats in teaching sources, one says 180° in 10–12 beats; Drew 2010 gives no number; Dessertenne 1966 not read | **Least sure value of this table** |
+| Torsades start | Short-long-short, R-on-T near the T peak, QTc > 500 ms raises the risk | Drew 2010; Kay et al., *JACC* 1983;2:806 | Good |
+| Torsades end | Last 2–3 beats slow; may recur or become VF | Drew 2010 | Good; degeneration to VF is not modelled |
+| Polymorphic VT | Beat-to-beat QRS change, normal QT, acute ischaemia as the usual cause | Reviews and case reports; Wolfe et al., *Circulation* 1991;84:1543 | Good |
+| Sync mode in polymorphic VT | Treated with unsynchronised shocks | ACLS teaching material | The guideline wording on why was not found: treat as secondary |
+| Pathological Q waves | V2–V3 ≥ 20 ms or QS; else ≥ 30 ms and ≥ 0.1 mV in two contiguous leads | Thygesen et al. 2018 (text seen in documents reproducing it) | Good |
+| Lead territories | Anterior V1–V4 (+ I, aVL proximal); inferior II, III, aVF; lateral I, aVL, V5, V6; posterior mirror in V1–V3 | Wagner et al. 2009, Thygesen 2018 | Good |
+| T inversion | Deeper than 0.1 mV in the territory, as the ST settles, hours to days | Sources disagree on timing; the stages scenario states that time is compressed | Time course is only qualitative |
+| Q and T depths | Q 0.45 mV, T 0.4 mV at full weight | Chosen so that the criteria above are met | Teaching values |
+| Inferior Q axis | RCA Q force at +85° (PDA +90°) | Chosen so that lead II also meets the 30 ms criterion; no literature number | Teaching value |
+
+The analyser's thresholds (`crates/heartsim-ecg/src/analysis/rhythm.rs`) separate the rhythms this simulator draws. They have not
+been tested on recorded ECGs.
+
 ## How each rhythm is produced
 
 The timing engine (B1) decides *which* structures fire and when; the Tier-0 synthesiser picks the beat morphology from

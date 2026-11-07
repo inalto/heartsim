@@ -48,8 +48,10 @@ pub fn rhythm_name(value: heartsim_sim::defib::RhythmClass) -> String {
     match value {
         VentricularFibrillation => t!("rhythm-vf"),
         VentricularTachycardia => t!("rhythm-vt"),
+        PolymorphicVentricularTachycardia => t!("rhythm-polymorphic-vt"),
         SupraventricularTachycardia => t!("rhythm-svt"),
         AtrialFibrillationOrFlutter => t!("rhythm-af-flutter"),
+        AtrialFlutter => t!("rhythm-flutter"),
         Organised => t!("rhythm-organised"),
         Asystole => t!("rhythm-asystole"),
     }
