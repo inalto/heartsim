@@ -61,7 +61,8 @@ help-keys-heading = Scorciatoie da tastiera
 help-keys-space = Spazio: mette in pausa o riprende la simulazione.
 help-keys-arrows = ← / →: in pausa, sposta il cursore di scorrimento indietro o avanti. Se è attivo un cursore di misura, le frecce lo spostano.
 help-keys-speed = + / −: aumenta o diminuisce la velocità della simulazione e della carta.
-help-keys-tabs = 1 – 9, 0: apre una scheda, nell'ordine mostrato nella barra in alto.
+help-keys-tabs = 1 – 9, 0: apre una pagina, nell'ordine del Menu (il numero è mostrato accanto a ogni pagina).
+menu-button = Menu
 help-keys-note = Le scorciatoie non funzionano mentre una casella di testo ha il focus della tastiera.
 help-disclaimer = Strumento didattico, non destinato all'uso clinico.
 
@@ -77,6 +78,13 @@ settings-beep-volume = Volume
 settings-beep-hint = Un breve tono a ogni attivazione ventricolare, al massimo uno ogni 180 ms di tempo simulato; non è sincronizzato al campione con la traccia.
 settings-beep-unavailable = Non è stato possibile aprire un dispositivo audio: il segnale resta muto.
 settings-hint = Le modifiche hanno effetto subito e vengono ricordate su questo computer.
+settings-update-check = Controlla all'avvio se esiste una versione più recente
+settings-update-check-hint = Una sola richiesta ad api.github.com che invia soltanto la versione dell'app; non viene scaricato nulla. Quando esiste una versione più recente compare un avviso con il collegamento.
+
+## Avviso di aggiornamento (update_check.rs)
+update-available = È disponibile heartsim { $version }.
+update-download = Scarica dalla pagina della versione
+update-dismiss = Ignora
 
 ## Finestra Esporta / Importa (app/exports.rs)
 export-title = Esporta / Importa

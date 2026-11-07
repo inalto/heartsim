@@ -25,6 +25,13 @@ const TAB_KEYS: [Key; 10] = [
     Key::Num0,
 ];
 
+/// The key that opens the `i`-th page of `Tab::ALL`, as shown next to it in the Menu: `1`–`9`, then
+/// `0`; pages beyond the tenth (Help) have none.
+pub(super) fn tab_shortcut_label(i: usize) -> Option<&'static str> {
+    const LABELS: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
+    LABELS.get(i).copied()
+}
+
 impl HeartSimApp {
     pub(super) fn keyboard_shortcuts(&mut self, ctx: &egui::Context) {
         if ctx.egui_wants_keyboard_input() || ctx.memory(egui::Memory::focused).is_some() {

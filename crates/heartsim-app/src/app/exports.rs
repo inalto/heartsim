@@ -42,17 +42,17 @@ impl HeartSimApp {
         self.exports.open = open;
     }
 
-    /// The tab-bar toggle that opens the window.
-    pub(super) fn export_button(&mut self, ui: &mut egui::Ui) {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.toggle_value(&mut self.exports.open, t!("export-title"));
-            if let Some(r) = &self.exports.review {
+    /// The warning in the menu bar while an exported file is open for review (the window itself is
+    /// opened from the Menu).
+    pub(super) fn export_review_label(&self, ui: &mut egui::Ui) {
+        if let Some(r) = &self.exports.review {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
                     t!("export-reviewing", label = r.label.clone()),
                 );
-            }
-        });
+            });
+        }
     }
 
     fn exports_ui(&mut self, ui: &mut egui::Ui) {

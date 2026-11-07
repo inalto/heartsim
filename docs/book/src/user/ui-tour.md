@@ -1,6 +1,8 @@
 # A tour of the window
 
-The window has a row of tabs at the top. Below it, on the pages that run the simulation, is the **rhythm bar**: the rhythm
+The window has a one-line **menu bar** at the top: the program name and version, a **Menu** that lists the eleven pages (the
+open one is marked and each shows its number-key shortcut) followed by *Export / Import*, *Settings* and *About*, and the name
+of the page that is open. Below it, on the pages that run the simulation, is the **rhythm bar**: the rhythm
 picker, *Restart*, *Run / Pause*, and sliders for the sinus rate, AV block, Mobitz II ratio, QRS axis shift, QRS width and
 simulation speed, plus the *Pacemaker* window. The **Export / Import** button at the right of the tab row opens the
 [export window](exports.md).
@@ -91,7 +93,7 @@ stimulation and ablation.
 
 ## Settings and About
 
-The Settings button in the top bar opens the preferences: language, high-contrast theme and reduced motion. Changes apply at once
+*Settings* in the Menu opens the preferences: language, high-contrast theme and reduced motion. Changes apply at once
 and are remembered on this computer.
 
 The **About** button next to it shows the version and the [medical disclaimer](disclaimer.md), which is also shown once, as a

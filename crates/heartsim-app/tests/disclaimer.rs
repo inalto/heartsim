@@ -6,12 +6,15 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use heartsim_app::disclaimer::{self, PARAGRAPH_KEYS};
 use heartsim_app::settings::Settings;
+use heartsim_app::update_check::Release;
 use heartsim_ui::i18n;
 use std::path::Path;
 
 struct Model {
     settings: Settings,
     about_open: bool,
+    /// What the update check found, if anything (About names it under the version).
+    newer: Option<Release>,
 }
 
 /// What `HeartSimApp::ui` does with the dialog and the About window, on a bare context.
@@ -22,7 +25,7 @@ fn harness(settings: Settings) -> Harness<'static, Model> {
             |ui, m: &mut Model| {
                 let ctx = ui.ctx().clone();
                 if m.about_open {
-                    disclaimer::about_window(&ctx, &mut m.about_open);
+                    disclaimer::about_window(&ctx, &mut m.about_open, m.newer.as_ref());
                 }
                 if !m.settings.disclaimer_accepted && disclaimer::first_run_dialog(&ctx) {
                     m.settings.disclaimer_accepted = true;
@@ -31,6 +34,7 @@ fn harness(settings: Settings) -> Harness<'static, Model> {
             Model {
                 settings,
                 about_open: false,
+                newer: None,
             },
         )
 }
@@ -98,6 +102,25 @@ fn about_shows_the_version_and_the_disclaimer_at_any_time() {
     let _ = h.get_by_label("Medical disclaimer");
     let _ = h.get_by_label_contains("educational simulation");
     let _ = h.get_by_label_contains("without warranty");
+    assert!(h.query_by_label_contains("is available").is_none());
+}
+
+#[test]
+fn about_names_a_newer_release_with_its_link_when_the_check_found_one() {
+    i18n::set_language("en");
+    let mut h = harness(Settings {
+        disclaimer_accepted: true,
+        ..Settings::default()
+    });
+    h.state_mut().about_open = true;
+    h.state_mut().newer = Some(Release {
+        version: "9.9.9".into(),
+        html_url: "https://github.com/inalto/heartsim/releases/tag/v9.9.9".into(),
+    });
+    h.run();
+    let _ = h.get_by_label(&format!("Version {}", env!("CARGO_PKG_VERSION")));
+    let _ = h.get_by_label("heartsim 9.9.9 is available.");
+    let _ = h.get_by_label("Download from the release page");
 }
 
 #[test]

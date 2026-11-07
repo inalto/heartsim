@@ -19,5 +19,5 @@ The software is provided "as is", without warranty of any kind; see the MIT and 
 * **On first run** a dialog with this text opens over the window and must be acknowledged ("I understand: educational use
   only") before the program can be used. It is shown once: the answer is remembered on this computer (in the browser version,
   in the browser's local storage). Clearing the program's settings or the browser's site data shows it again.
-* **In About**, the *About* button in the top bar shows the same text at any time, with the version of the program.
+* **In About**, *About* in the Menu shows the same text at any time, with the version of the program.
 * **In every export**, as described above, and on the Help tab.

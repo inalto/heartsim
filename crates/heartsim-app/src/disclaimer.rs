@@ -66,8 +66,9 @@ pub fn first_run_dialog(ctx: &egui::Context) -> bool {
     accepted
 }
 
-/// The About window: product, version, licence and the disclaimer.
-pub fn about_window(ctx: &egui::Context, open: &mut bool) {
+/// The About window: product, version, licence and the disclaimer. `newer` is the release the update check
+/// found (see [`crate::update_check`]): shown under the version with the link to its page.
+pub fn about_window(ctx: &egui::Context, open: &mut bool, newer: Option<&crate::update_check::Release>) {
     egui::Window::new(t!("about-title"))
         .open(open)
         .resizable(false)
@@ -75,6 +76,12 @@ pub fn about_window(ctx: &egui::Context, open: &mut bool) {
         .show(ctx, |ui| {
             ui.heading("heartsim");
             ui.label(t!("about-version", version = VERSION));
+            if let Some(release) = newer {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(t!("update-available", version = release.version.as_str()));
+                    ui.hyperlink_to(t!("update-download"), &release.html_url);
+                });
+            }
             ui.label(t!("about-tagline"));
             ui.weak(t!("about-licence"));
             ui.separator();

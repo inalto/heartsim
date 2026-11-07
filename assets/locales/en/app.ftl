@@ -60,7 +60,8 @@ help-keys-heading = Keyboard shortcuts
 help-keys-space = Space: pause or resume the simulation.
 help-keys-arrows = ← / →: while paused, move the scrub cursor back or forward. When a caliper has focus, the arrows nudge the caliper instead.
 help-keys-speed = + / −: simulation and paper speed faster or slower.
-help-keys-tabs = 1 – 9, 0: open a tab, in the order shown in the top bar.
+help-keys-tabs = 1 – 9, 0: open a page, in the order of the Menu (the number is shown next to each page).
+menu-button = Menu
 help-keys-note = Shortcuts are off while a text box has the keyboard.
 help-disclaimer = Educational tool, not for clinical use.
 
@@ -76,6 +77,13 @@ settings-beep-volume = Volume
 settings-beep-hint = A short tone at each ventricular activation, at most one per 180 ms of simulated time; not sample-accurate with the strip.
 settings-beep-unavailable = No sound device could be opened, so the beep stays silent.
 settings-hint = Changes apply at once and are remembered on this computer.
+settings-update-check = Check for a newer release at start
+settings-update-check-hint = One request to api.github.com that sends only the app version; nothing is downloaded. A notice with a link appears when a newer release exists.
+
+## Update notice (update_check.rs)
+update-available = heartsim { $version } is available.
+update-download = Download from the release page
+update-dismiss = Dismiss
 
 ## Export / Import window (app/exports.rs)
 export-title = Export / Import

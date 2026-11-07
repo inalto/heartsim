@@ -97,6 +97,10 @@ pub struct HeartSimApp {
     beep: crate::monitor_beep::MonitorBeep,
     /// The About window (version and medical disclaimer, N-09).
     about_open: bool,
+    /// The once-per-start GitHub release check and its notice; `None` when switched off in Settings or during
+    /// the documentation tour.
+    #[cfg(feature = "update-check")]
+    update_check: Option<crate::update_check::UpdateCheck>,
 }
 
 /// A snapshot of the model for hosts that cannot look inside it (the web build publishes it to the
@@ -243,6 +247,11 @@ impl HeartSimApp {
         vector.install(rs);
         let settings = crate::settings::Settings::load(cc.storage);
         settings.apply(&cc.egui_ctx);
+        let tour = tour::Tour::from_env();
+        // no request when the switch is off, nor in the documentation tour (its screenshots must not show a notice)
+        #[cfg(feature = "update-check")]
+        let update_check =
+            (settings.check_for_updates && tour.is_none()).then(crate::update_check::UpdateCheck::start);
         let mut rhythm_quiz = RhythmQuiz::default();
         if let Some(score) = cc.storage.and_then(|s| s.get_string(RHYTHM_QUIZ_SCORE_KEY)) {
             rhythm_quiz.restore_score(&score);
@@ -275,7 +284,7 @@ impl HeartSimApp {
             vector,
             rhythm_quiz,
             interval_drill: crate::interval_drill::IntervalDrill::default(),
-            tour: tour::Tour::from_env(),
+            tour,
             tutorials: Self::load_tutorials(cc, assets),
             cases: assets.map_or_else(
                 crate::case_ui::Cases::load_default,
@@ -290,6 +299,22 @@ impl HeartSimApp {
             settings_open: false,
             beep: crate::monitor_beep::MonitorBeep::new(),
             about_open: false,
+            #[cfg(feature = "update-check")]
+            update_check,
+        }
+    }
+
+    /// The newer release the update check found, for the About window; never in builds without the check.
+    fn newer_release(&self) -> Option<&crate::update_check::Release> {
+        #[cfg(feature = "update-check")]
+        {
+            self.update_check
+                .as_ref()
+                .and_then(crate::update_check::UpdateCheck::newer)
+        }
+        #[cfg(not(feature = "update-check"))]
+        {
+            None
         }
     }
 
@@ -585,10 +610,54 @@ impl HeartSimApp {
         });
     }
 
+    /// The top bar: the product and its version, one **Menu** with every page (the current one
+    /// marked, with its number-key shortcut), the Export / Import, Settings and About windows, and
+    /// the name of the page that is open. A single menu instead of a row of eleven tabs keeps the
+    /// bar one line high on any window width.
+    fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        egui::MenuBar::new().ui(ui, |ui| {
+            ui.heading("heartsim");
+            ui.weak(format!("v{}", crate::disclaimer::VERSION))
+                .on_hover_text(t!("about-version", version = crate::disclaimer::VERSION));
+            ui.separator();
+            ui.menu_button(t!("menu-button"), |ui| {
+                for (i, t) in Tab::ALL.into_iter().enumerate() {
+                    let mut button = egui::Button::new(t.title()).selected(self.tab == t);
+                    if let Some(key) = keys::tab_shortcut_label(i) {
+                        button = button.shortcut_text(key);
+                    }
+                    if ui.add(button).clicked() {
+                        self.tab = t;
+                        ui.close();
+                    }
+                }
+                ui.separator();
+                #[cfg(feature = "export")]
+                if ui.button(t!("export-title")).clicked() {
+                    self.exports.open = !self.exports.open;
+                    ui.close();
+                }
+                if ui.button(t!("settings-button")).clicked() {
+                    self.settings_open = true;
+                    ui.close();
+                }
+                if ui.button(t!("about-button")).clicked() {
+                    self.about_open = true;
+                    ui.close();
+                }
+            });
+            ui.separator();
+            ui.strong(self.tab.title());
+            #[cfg(feature = "export")]
+            self.export_review_label(ui);
+        });
+    }
+
     fn help_tab(ui: &mut egui::Ui) {
         egui::CentralPanel::default().show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.heading("heartsim");
+                ui.heading(crate::version_line());
+                ui.label(t!("about-version", version = crate::disclaimer::VERSION));
                 ui.label(t!("help-intro"));
                 ui.separator();
                 ui.strong(t!("help-tabs-heading"));
@@ -647,7 +716,8 @@ impl eframe::App for HeartSimApp {
             self.settings.beep_volume,
         );
         if self.about_open {
-            crate::disclaimer::about_window(&ctx, &mut self.about_open);
+            let newer = self.newer_release().cloned();
+            crate::disclaimer::about_window(&ctx, &mut self.about_open, newer.as_ref());
         }
         if needs_disclaimer && crate::disclaimer::first_run_dialog(&ctx) {
             self.settings.disclaimer_accepted = true;
@@ -692,19 +762,11 @@ impl eframe::App for HeartSimApp {
             }
         }
 
-        egui::Panel::top("tabs").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("heartsim");
-                ui.separator();
-                for t in Tab::ALL {
-                    ui.selectable_value(&mut self.tab, t, t.title());
-                }
-                #[cfg(feature = "export")]
-                self.export_button(ui);
-                ui.toggle_value(&mut self.settings_open, t!("settings-button"));
-                ui.toggle_value(&mut self.about_open, t!("about-button"));
-            });
-        });
+        egui::Panel::top("tabs").show(ui, |ui| self.menu_bar(ui));
+        #[cfg(feature = "update-check")]
+        if let Some(check) = &mut self.update_check {
+            check.notice_bar(ui);
+        }
         if matches!(
             self.tab,
             Tab::Simulator | Tab::TwelveLead | Tab::HeartVector | Tab::AxisTrainer | Tab::Electrodes

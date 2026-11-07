@@ -34,6 +34,9 @@ pub struct Settings {
     pub monitor_beep: bool,
     /// Linear loudness of the monitor beep, `0.0..=1.0`.
     pub beep_volume: f32,
+    /// Ask GitHub once at start whether a newer release exists (desktop builds with the `update-check`
+    /// feature; see [`crate::update_check`]). On by default; off means no request is made at all.
+    pub check_for_updates: bool,
 }
 
 /// Default loudness of the monitor beep, linear: half scale, audible without being startling.
@@ -50,6 +53,7 @@ impl Default for Settings {
             disclaimer_accepted: false,
             monitor_beep: false,
             beep_volume: DEFAULT_BEEP_VOLUME,
+            check_for_updates: true,
         }
     }
 }
@@ -193,6 +197,14 @@ pub fn settings_window_with_audio(
                     ui.weak(t!("settings-beep-unavailable"));
                 }
             }
+            #[cfg(feature = "update-check")]
+            {
+                ui.separator();
+                changed |= ui
+                    .checkbox(&mut settings.check_for_updates, t!("settings-update-check"))
+                    .changed();
+                ui.weak(t!("settings-update-check-hint"));
+            }
             ui.separator();
             ui.weak(t!("settings-hint"));
         });
@@ -212,9 +224,22 @@ mod tests {
             disclaimer_accepted: true,
             monitor_beep: true,
             beep_volume: 0.25,
+            check_for_updates: false,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
+    }
+
+    #[test]
+    fn the_update_check_is_on_by_default_also_for_older_settings() {
+        assert!(Settings::default().check_for_updates);
+        // settings saved before the switch existed load and get the default
+        let old: Settings = ron::from_str("(language: None, high_contrast: false, monitor_beep: true)")
+            .expect("old settings load");
+        assert!(old.check_for_updates);
+        assert!(old.monitor_beep);
+        let off: Settings = ron::from_str("(check_for_updates: false)").expect("settings load");
+        assert!(!off.check_for_updates);
     }
 
     #[test]

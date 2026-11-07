@@ -15,6 +15,8 @@ accepted = [
     "OFL-1.1",
     "BSL-1.0",
     "Ubuntu-font-1.0",
+    # webpki-roots (Mozilla's CA root store, used by ureq/rustls for the update check); see deny.toml.
+    "CDLA-Permissive-2.0",
 ]
 targets = [
     "x86_64-unknown-linux-gnu",

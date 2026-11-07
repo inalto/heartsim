@@ -13,6 +13,14 @@ rhythm library; nothing else is downloaded.
 
 Check the installation from a terminal with `heartsim --version`.
 
+## Update check
+
+At start the desktop app asks `api.github.com` once whether a newer release exists. The request carries the app version in
+its user agent (`heartsim/0.7.0`) and nothing else: no account, no machine identifier, nothing stored. When a newer release
+exists, a thin bar under the menu bar and the About window name the version with a link to its release page; the app never
+downloads or installs anything by itself. Turn the check off with *Check for a newer release at start* in **Settings**: the
+app then makes no request at all. Without a network the check fails silently.
+
 ## Graphics requirements
 
 heartsim draws the heart with the GPU through Vulkan, Metal or DirectX 12, and falls back to OpenGL ES 3 where those are

@@ -14,7 +14,7 @@ path = "src/main.rs"
 required-features = ["native"]
 
 [features]
-default = ["native", "export", "parallel"]
+default = ["native", "export", "parallel", "update-check"]
 # Desktop only: asset discovery on disk (`$HEARTSIM_ASSETS`, next to the executable), the per-user
 # data directory (tutorial progress, saved scenarios), plain-file save/load buttons and the CLI-style
 # `--version` entry. The web build (`heartsim-web`) leaves this off and gets its assets from an
@@ -29,6 +29,9 @@ parallel = ["heartsim-sim/parallel", "heartsim-ecg/parallel", "heartsim-render/p
 # is not in `default` and the release workflow switches it on. The web build never enables it. Without the feature the
 # `monitor_beep` module still compiles (pure logic, no audio device is ever opened).
 audio = ["native", "dep:kira"]
+# One GET of the GitHub releases API at start (switchable off in Settings) and a notice with a download link when a newer
+# release exists. Nothing is downloaded or installed. Desktop only: the browser build has no thread to spawn and no installer.
+update-check = ["native", "dep:ureq", "dep:semver", "dep:serde_json"]
 
 [dependencies]
 heartsim-core.workspace = true
@@ -52,6 +55,9 @@ egui_commonmark.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 kira = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
+semver = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `std::time::Instant` is unavailable in the browser: the re-entry frame budget reads `Date.now()`.

@@ -97,6 +97,10 @@ pollster = "1.0.1"
 fluent = "0.17.0"
 unic-langid = "0.9.6"
 sys-locale = "0.3.2"
+# Update check (heartsim-app `update-check`): one blocking HTTPS GET of the GitHub releases API at start, rustls so no system
+# TLS library is needed; no gzip (the response is a few hundred bytes of JSON). Not reqwest/tokio: no async runtime in the app.
+ureq = { version = "3.5.0", default-features = false, features = ["rustls"] }
+semver = "1.0.28"
 
 # --- dev / test --------------------------------------------------------------
 proptest = "1.12.0"
