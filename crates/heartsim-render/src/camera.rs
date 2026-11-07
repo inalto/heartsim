@@ -116,13 +116,22 @@ pub struct OrbitCamera {
     pub max_distance: f32,
 }
 
+/// Default azimuth, degrees: a right anterior oblique of 45°, slightly from above. The heart's long
+/// axis runs left, caudal and anterior (about 36° below horizontal in the frontal plane and 46°
+/// anterior in the transverse plane), so the straight-on AP view looks down that axis and the left
+/// ventricle hides the right ventricle and the atria behind a round outline. RAO 45° puts the long
+/// axis in the screen plane with the apex at the lower right, the textbook anterior view.
+pub const DEFAULT_YAW_DEG: f32 = -45.0;
+/// Default elevation, degrees (see [`DEFAULT_YAW_DEG`]).
+pub const DEFAULT_PITCH_DEG: f32 = 8.6;
+
 impl Default for OrbitCamera {
     fn default() -> Self {
         Self {
             target: Vec3::ZERO,
             distance: 4.0,
-            yaw: 0.0,
-            pitch: 0.15,
+            yaw: DEFAULT_YAW_DEG.to_radians(),
+            pitch: DEFAULT_PITCH_DEG.to_radians(),
             fov_y: 45f32.to_radians(),
             near: 0.05,
             far: 100.0,
@@ -254,6 +263,24 @@ mod tests {
         assert!(
             c.distance <= c.max_distance && c.distance > 50.0,
             "zoom limits follow the scene"
+        );
+    }
+
+    #[test]
+    fn default_view_has_the_long_axis_in_the_screen_plane() {
+        // The LV long axis of the default anatomy pack (mitral annulus → apex), see
+        // `heartsim_geometry::procedural::heart`.
+        let apex = Vec3::new(0.62015, -0.45057, 0.64219);
+        let c = OrbitCamera::default();
+        let view_dir = (c.target - c.eye()).normalize();
+        assert!(
+            view_dir.dot(apex).abs() < 0.2,
+            "the default camera should look across the long axis, not down it: {}",
+            view_dir.dot(apex)
+        );
+        assert!(
+            c.eye().x < 0.0 && c.eye().z > 0.0 && c.eye().y > 0.0,
+            "RAO from slightly above"
         );
     }
 

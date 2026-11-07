@@ -63,8 +63,14 @@ impl Gpu {
         let e = self.errors.lock().unwrap();
         assert!(e.is_empty(), "wgpu reported errors: {e:#?}");
     }
+    /// A scene with the camera pinned to the straight-on AP view (looking from +z, slightly from
+    /// above): the golden images and the pick tests were made with it, and the app's default view
+    /// (an oblique, see `OrbitCamera::default`) is not what they test.
     fn scene(&self) -> SceneRenderer {
-        SceneRenderer::new(&self.device, &self.queue, wgpu::TextureFormat::Rgba8UnormSrgb)
+        let mut scene = SceneRenderer::new(&self.device, &self.queue, wgpu::TextureFormat::Rgba8UnormSrgb);
+        scene.camera.yaw = 0.0;
+        scene.camera.pitch = 0.15;
+        scene
     }
 }
 
@@ -518,6 +524,7 @@ fn msaa_matches_single_sample_and_smooths_edges() {
     );
     assert_eq!(ms.msaa_samples(), 4);
     let mut ss = g.scene();
+    ms.camera = ss.camera; // the same pinned AP view for both images
     vm_sphere(&g, &mut ms);
     vm_sphere(&g, &mut ss);
     let a = render(&g, &mut ms, (128, 128));
