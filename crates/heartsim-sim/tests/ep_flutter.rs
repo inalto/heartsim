@@ -161,8 +161,8 @@ fn entrainment_tells_the_isthmus_from_a_site_outside_the_circuit() {
     // the isthmus cell in the middle of the circuit's width: halfway between the annulus and the
     // outer barrier of the file's patches (28° and 66° from the annulus axis)
     let (centre, axis) = (
-        Vec3::new(-47.9, 27.9, -37.6),
-        Vec3::new(0.384, 0.039, 0.923).normalize(),
+        Vec3::new(-53.0, 18.8, -33.3),
+        Vec3::new(0.695, 0.483, 0.533).normalize(),
     );
     let polar = |p: Vec3| {
         (p - centre)

@@ -2,11 +2,17 @@
 //!
 //! Segments are assigned from an apex–base coordinate (0 apex … 1 base) and a circumferential angle
 //! measured in the short-axis plane; the "assumed" coronary distribution of the AHA statement
-//! (Cerqueira et al. 2002) maps segments to LAD / LCx / RCA. The right ventricular free wall is
-//! RCA territory (acute marginal branches) and is not part of the 17-segment LV model.
+//! (Cerqueira et al. 2002) maps segments to LAD / LCx / RCA. The right ventricular free wall is not
+//! part of the 17-segment LV model: it is RCA territory (acute marginal branches) except for its
+//! anterior apical zone, [`RV_ANTERIOR_SEGMENT`], which right ventricular branches of the LAD supply.
 
 use heartsim_core::Region;
 use serde::{Deserialize, Serialize};
+
+/// Pseudo-segment of the RV free wall supplied by the LAD: its anterior wall next to the septum, in
+/// the apical half (the LAD perfuses almost 30 % of the anterior RV wall and most of its apex; Novo
+/// et al., *Curr Probl Cardiol* 2022;47:101277). The rest of the RV free wall has segment 0.
+pub const RV_ANTERIOR_SEGMENT: u8 = 18;
 
 /// Coronary territory of a cell. `None` for non-ventricular tissue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -25,6 +31,7 @@ impl Territory {
     #[must_use]
     pub fn for_cell(region: Region, aha_segment: u8) -> Self {
         match (region, aha_segment) {
+            (Region::RightVentricle, RV_ANTERIOR_SEGMENT) => Territory::Lad,
             (Region::RightVentricle, _) | (_, 3 | 4 | 9 | 10 | 15) => Territory::Rca,
             (_, 1 | 2 | 7 | 8 | 13 | 14 | 17) => Territory::Lad,
             (_, 5 | 6 | 11 | 12 | 16) => Territory::Lcx,
@@ -88,6 +95,10 @@ mod tests {
         assert_eq!(Territory::for_cell(Region::LeftVentricle, 1), Territory::Lad);
         assert_eq!(Territory::for_cell(Region::VentricularSeptum, 3), Territory::Rca);
         assert_eq!(Territory::for_cell(Region::RightVentricle, 0), Territory::Rca);
+        assert_eq!(
+            Territory::for_cell(Region::RightVentricle, RV_ANTERIOR_SEGMENT),
+            Territory::Lad
+        );
         assert_eq!(Territory::for_cell(Region::RightAtrium, 0), Territory::None);
     }
 }

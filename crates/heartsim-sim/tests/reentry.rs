@@ -214,7 +214,7 @@ fn af_persists_and_the_av_node_makes_the_ventricular_response_irregular() {
 fn quiet_preset() -> Preset {
     let mut p = preset("af_persistent");
     p.spec.initiation = Initiation::Protocol {
-        site: StimSite::Point([-10.0, 42.0, -72.0]),
+        site: StimSite::Landmark("la_pv_antrum".into()),
         start_ms: 1_000.0,
         s1_cycle_ms: 500.0,
         s1_count: 1,

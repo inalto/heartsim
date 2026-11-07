@@ -4,6 +4,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Known limitations
+- Fascicular blocks shift the frontal axis the right way but not as far as in patients (sinus ≈ +24°, LAFB ≈ +17°, LPFB ≈ +35°; brief B05
+  asks for ≤ −45° and ≥ +90°). `fascicular_block_axes` stays ignored; its doc comment records what was tried and why rS in V1 and these
+  axes exclude each other in this model.
+
 ### Added
 - New wave types on the Tier-0 strip, drawn from the timing engine's own events so the strip and the 3-D heart agree: atrial
   flutter (sawtooth at about 300/min with 2:1, 4:1 and variable AV block that follow from the AV-nodal recovery curve), atrial
@@ -39,6 +44,19 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   after every answer.
 
 ### Changed
+- The default anatomy pack's heart now sits in the thorax as measured: the LV long axis at the CMR population mean (frontal 36°,
+  transverse 46°; Engblom 2005, Kayyali 2025) with the septum facing right and anterior (Narumi 2022), so the LV free wall faces left
+  and posterior and the "anterior" wall faces cranially. The torso is narrower and the heart further left, the LAF and LPF terminals
+  are at Durrer's paraseptal breakthrough sites with 25 mm junction patches, and `ForwardOptions::gain_mv` is recalibrated from 5.0
+  to 4.4. The R wave now grows from V1 to V5 (brief B05), and left posterior fascicular block now moves the axis to the right of
+  sinus. The coronary territories follow: the LAD now owns the anterior apical part of the RV free wall (`segments.bin` value 18,
+  pack format version 2), which is what keeps ST elevation in V2–V4 for an LAD occlusion, and not in an RCA one.
+- The atria, caval veins, coronary sinus and pulmonary veins follow the thorax too: the veins now enter the left atrium at or above the
+  mid-ventricular level instead of beside the apex, the SA node sits at the SVC–RA junction, the P axis is about +33°, and the AV node
+  and His bundle stay at the septal crest. A new landmark, `la_pv_antrum`, marks the posterior left atrium between the veins.
+- The persistent-AF presets (`af_persistent`, `ep_af_pvi`) are re-tuned for the new atria: the burst starts at `la_pv_antrum` at 125 ms,
+  the atrial refractory period varies from patch to patch, and sensing (`sense_window_ms` 400, `sense_gap_ms` 135) and AV concealment
+  (0.85) are set for conduction at 0.3 ×. The typical-flutter preset's circuit moves with the right atrium.
 - Tab shortcuts: `0` opens the tenth tab (EP Lab); the new Interval Drill tab sits before Tutorials, so Tutorials is now `9`.
 
 ## [0.5.0] — 2026-11-06

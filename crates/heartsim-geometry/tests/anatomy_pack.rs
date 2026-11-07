@@ -4,6 +4,7 @@ use glam::Vec3;
 use heartsim_core::{Electrode, Region};
 use heartsim_geometry::procedural::heart::LANDMARKS;
 use heartsim_geometry::procedural::{IDEALISED_REGIONS, Resolution, idealised_heart, procedural_electrodes};
+use heartsim_geometry::territory::RV_ANTERIOR_SEGMENT;
 use heartsim_geometry::{AnatomyPack, K_NEIGHBOURS, compute_hoods};
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -98,16 +99,36 @@ fn every_defined_region_is_populated_and_landmarks_exist() {
                 .all(|s| h.cells.regions[*s as usize].is_ventricular())
         );
     }
-    // AHA segments cover 1..=17 on the LV/septum and are 0 elsewhere
+    // AHA segments cover 1..=17 on the LV/septum; the RV free wall has 0 or the LAD's zone, about a
+    // third of it; other tissue has 0
     let mut seen = [false; 18];
     for (s, r) in h.aha_segments.iter().zip(&h.cells.regions) {
         if matches!(r, Region::LeftVentricle | Region::VentricularSeptum) {
             assert!((1..=17).contains(s));
             seen[usize::from(*s)] = true;
+        } else if *r == Region::RightVentricle {
+            assert!(*s == 0 || *s == RV_ANTERIOR_SEGMENT);
         } else {
             assert_eq!(*s, 0);
         }
     }
+    let rv = h
+        .cells
+        .regions
+        .iter()
+        .filter(|r| **r == Region::RightVentricle)
+        .count();
+    // a test on a few thousand cells: not worth the `bytecount` dependency
+    #[allow(clippy::naive_bytecount)]
+    let lad = h
+        .aha_segments
+        .iter()
+        .filter(|s| **s == RV_ANTERIOR_SEGMENT)
+        .count();
+    assert!(
+        (0.3..0.45).contains(&(lad as f64 / rv as f64)),
+        "LAD zone: {lad} of {rv} RV cells"
+    );
     assert!(seen[1..].iter().all(|b| *b), "AHA segments missing: {seen:?}");
 }
 
@@ -116,12 +137,36 @@ fn anatomical_orientation() {
     let h = default_heart();
     let at = |name: &str| h.cells.positions[h.cells.landmarks[name] as usize];
     let rv_apex = at("rv_apex");
+    let lv_apex = at("lv_apex");
     let sa = at("sa_node");
     assert!(
-        rv_apex.y < -20.0 && rv_apex.x > -10.0 && rv_apex.z > 0.0,
-        "apex inferior/left/anterior: {rv_apex:?}"
+        lv_apex.y < -15.0 && lv_apex.x > 20.0 && lv_apex.z > 10.0,
+        "LV apex inferior/left/anterior: {lv_apex:?}"
     );
-    assert!(sa.y > 30.0 && sa.x < 0.0, "SA node superior and right: {sa:?}");
+    // The long axis is 27° below the horizontal (Engblom 2005 mean, see `procedural::heart`), not the
+    // 45° of the first version of the pack, so the RV apex is anterior and well below the outflow
+    // tract rather than far below the centroid.
+    assert!(
+        rv_apex.y < at("rvot").y - 20.0 && rv_apex.x > -10.0 && rv_apex.z > 0.0,
+        "RV apex below the outflow tract, left, anterior: {rv_apex:?}"
+    );
+    assert!(sa.y > 25.0 && sa.x < 0.0, "SA node superior and right: {sa:?}");
+    assert!(sa.z < at("rvot").z, "atria behind the ventricles: {sa:?}");
+    // all four chambers share an axial slice through the middle of the ventricles, the veins enter
+    // the left atrium at or above it, and the left atrium is the most posterior chamber
+    let antrum = at("la_pv_antrum");
+    assert!(
+        antrum.y > 0.0,
+        "pulmonary veins not below mid-ventricle: {antrum:?}"
+    );
+    assert!(
+        antrum.y > lv_apex.y + 25.0,
+        "pulmonary veins above the apex: {antrum:?}"
+    );
+    assert!(
+        antrum.z < at("lv_lateral").z && antrum.z < sa.z,
+        "left atrium posterior: {antrum:?}"
+    );
     // RV free wall is anterior-right of the LV lateral wall
     assert!(at("rv_free_wall").z > at("lv_lateral").z);
     assert!(at("rv_free_wall").x < at("lv_lateral").x);
