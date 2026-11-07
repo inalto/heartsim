@@ -95,7 +95,7 @@ fn readme(rec: &EcgRecord, info: &ExportInfo, files: &[ExportFile]) -> String {
          Excerpt    {dur:.1} s, simulation time {t0:.2}-{t1:.2} s, {fs:.0} Hz, 12 leads (I II III aVR aVL aVF V1-V6)\n\
          Paper      {speed} mm/s, {gain} mm/mV, {paper}\n\
          Date       {date}\n\
-         Made by    {generator}\n\nFiles\n-----\n",
+         Made by    {generator}\n",
         disclaimer = crate::DISCLAIMER,
         title = info.scenario_title,
         id = info.scenario_id,
@@ -109,6 +109,10 @@ fn readme(rec: &EcgRecord, info: &ExportInfo, files: &[ExportFile]) -> String {
         date = info.date,
         generator = crate::generator(),
     );
+    if let Some(note) = &info.trace_note {
+        let _ = writeln!(s, "Trace      NOT the clean engine signal. {note}");
+    }
+    s.push_str("\nFiles\n-----\n");
     for f in files {
         let what = match f.name.rsplit('.').next().unwrap_or("") {
             "pdf" => "12-lead printout (3 x 4 + lead II rhythm strip)",
@@ -174,15 +178,21 @@ pub fn export_files(
         );
     }
     if f.csv {
-        add(format!("{stem}.csv"), csv::write_csv(rec).into_bytes());
+        add(
+            format!("{stem}.csv"),
+            csv::write_csv_noted(rec, info.trace_note.as_deref()).into_bytes(),
+        );
     }
     if f.wfdb {
-        let comments = [
+        let mut comments = vec![
             format!("{} - simulated ECG, not a patient recording", crate::generator()),
             format!("scenario: {} - {}", info.scenario_id, info.scenario_title),
             format!("start_ms: {}", rec.start_ms),
             format!("date: {}", info.date),
         ];
+        if let Some(note) = &info.trace_note {
+            comments.push(format!("trace: {note}"));
+        }
         let w = wfdb::write_wfdb(rec, &stem, &comments);
         add(format!("{stem}.hea"), w.header.into_bytes());
         add(format!("{stem}.dat"), w.data);

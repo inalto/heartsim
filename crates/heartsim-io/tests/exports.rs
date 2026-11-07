@@ -23,6 +23,7 @@ fn info(s: &Tier0Scenario, paper: Paper) -> ExportInfo {
         mm_per_mv: 10.0,
         date: "2026-11-03".into(),
         paper,
+        trace_note: None,
     }
 }
 
@@ -201,4 +202,111 @@ fn scenario_export_reloads_and_reruns_identically() {
     let text = heartsim_io::scenario_file::scenario_ron(&s).unwrap();
     let back = Tier0Scenario::from_ron(&text).unwrap();
     assert_eq!(back.record(5.0).unwrap().leads, s.record(5.0).unwrap().leads);
+}
+
+#[test]
+fn a_processed_trace_is_stated_in_every_file_that_carries_it() {
+    let s = scenario("sinus_normal");
+    let rec = excerpt(&s, 8.0, 6.0);
+    let note = "Display filter: monitor 0.5-40 Hz. Artefacts added: 50 Hz mains (intensity 1.0, seed 7).";
+    let clean = export_files(&rec, &info(&s, Paper::A4), &s, &ExportOptions::default()).unwrap();
+    let mut noted_info = info(&s, Paper::A4);
+    noted_info.trace_note = Some(note.into());
+    let noted = export_files(&rec, &noted_info, &s, &ExportOptions::default()).unwrap();
+    let find = |files: &[heartsim_io::ExportFile], ext: &str| -> Vec<u8> {
+        files
+            .iter()
+            .find(|f| f.name.ends_with(ext))
+            .unwrap_or_else(|| panic!("no {ext} file"))
+            .bytes
+            .clone()
+    };
+
+    // CSV: a comment line first, and it still imports to the same samples
+    let csv = String::from_utf8(find(&noted, ".csv")).unwrap();
+    assert!(
+        csv.starts_with(&format!("# trace: {note}\nt_ms,")),
+        "{}",
+        &csv[..120]
+    );
+    assert!(!String::from_utf8(find(&clean, ".csv")).unwrap().contains("trace"));
+    let back = import_bytes("x.csv", csv.as_bytes(), |_| unreachable!()).unwrap();
+    assert_eq!(back.record.len(), rec.len());
+
+    // WFDB header comment
+    let hea = String::from_utf8(find(&noted, ".hea")).unwrap();
+    assert!(hea.contains(&format!("# trace: {note}")), "{hea}");
+    assert!(
+        !String::from_utf8(find(&clean, ".hea"))
+            .unwrap()
+            .contains("trace:")
+    );
+
+    // PDF: the page text says it, the clean PDF does not
+    let page_text = |pdf: &[u8]| -> String {
+        let doc = lopdf::Document::load_mem(pdf).expect("PDF parses");
+        let mut out = String::new();
+        for id in doc.get_pages().values() {
+            let content = lopdf::content::Content::decode(&doc.get_page_content(*id)).unwrap();
+            for op in &content.operations {
+                for operand in &op.operands {
+                    let mut strings = Vec::new();
+                    match operand {
+                        lopdf::Object::String(b, _) => strings.push(b.clone()),
+                        lopdf::Object::Array(items) => {
+                            for item in items {
+                                if let lopdf::Object::String(b, _) = item {
+                                    strings.push(b.clone());
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                    for b in strings {
+                        out.push_str(&String::from_utf8_lossy(&b));
+                    }
+                }
+            }
+        }
+        out
+    };
+    assert!(page_text(&find(&noted, ".pdf")).contains("Trace not as simulated"));
+    assert!(!page_text(&find(&clean, ".pdf")).contains("Trace not as simulated"));
+
+    // PNGs carry the caption (so they differ from the clean pictures); the scenario file does not change
+    assert_ne!(find(&noted, "-12lead.png"), find(&clean, "-12lead.png"));
+    assert_ne!(find(&noted, "-II.png"), find(&clean, "-II.png"));
+    assert_eq!(find(&noted, ".ron"), find(&clean, ".ron"));
+
+    // the bundle's README states it
+    let zip_bytes = find(&noted, ".zip");
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(zip_bytes.as_slice())).unwrap();
+    let mut readme = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("README.txt").unwrap(), &mut readme).unwrap();
+    assert!(
+        readme.contains("NOT the clean engine signal") && readme.contains(note),
+        "{readme}"
+    );
+}
+
+#[test]
+fn a_clean_trace_exports_exactly_as_before() {
+    // no note: no extra line anywhere, so existing exports and the CLI stay byte-identical
+    let s = scenario("sinus_normal");
+    let rec = excerpt(&s, 8.0, 6.0);
+    let files = export_files(&rec, &info(&s, Paper::A4), &s, &ExportOptions::default()).unwrap();
+    let csv = String::from_utf8(
+        files
+            .iter()
+            .find(|f| {
+                std::path::Path::new(&f.name)
+                    .extension()
+                    .is_some_and(|e| e == "csv")
+            })
+            .unwrap()
+            .bytes
+            .clone(),
+    )
+    .unwrap();
+    assert!(csv.starts_with("t_ms,"));
 }

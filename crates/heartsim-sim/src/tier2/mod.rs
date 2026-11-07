@@ -38,7 +38,8 @@ pub use engine::{SnapshotError, Tier2Engine, Tier2Params, Tier2Snapshot};
 pub use grid::{Compartment, VoxelGrid, VoxelSpec};
 pub use model::{AlievPanfilov, CellModel, FentonKarma, MitchellSchaeffer};
 pub use preset::{
-    Initiation, Patch, PatchEffect, PatchTarget, Preset, PresetError, ReentrySpec, SwitchPolicy,
+    Initiation, Patch, PatchEffect, PatchTarget, PhaseWaveLimit, Preset, PresetError, ReentrySpec,
+    SwitchPolicy,
 };
 pub use solver::{Monodomain, Tissue, TissueModifier, Trajectory};
 pub use switching::{SwitchReason, SwitchRecord, SwitchingEngine, Tier, requires_reentry};

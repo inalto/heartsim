@@ -53,6 +53,20 @@ fn quiz_flow_start_answer_feedback_next() {
     h.run();
     assert_eq!(h.state().quiz.correct, 1);
     let _ = h.get_by_label("Correct.");
+    // the explanation is shown, not folded away: the teaching text and the differential
+    let right = h.state().library.entries[q.answer].scenario.clone();
+    let _ = h.get_by_label("Why");
+    let teaching = right
+        .notes
+        .as_deref()
+        .unwrap()
+        .split("\n\nSources:")
+        .next()
+        .unwrap()
+        .trim()
+        .to_owned();
+    let _ = h.get_by_label_contains(teaching.lines().next().unwrap());
+    let _ = h.get_by_label_contains("Often confused with:");
 
     // next question, wrong answer → names the right one
     h.get_by_label("Next question").click();
@@ -64,6 +78,9 @@ fn quiz_flow_start_answer_feedback_next() {
     h.run();
     assert_eq!((h.state().quiz.correct, h.state().quiz.asked), (1, 2));
     let _ = h.get_by_label(&format!("Not quite: this is {}.", title(&h, q2.answer)));
+    // a wrong answer also says what the chosen rhythm is
+    let _ = h.get_by_label(&format!("You chose: {}", title(&h, wrong)));
+    let _ = h.get_by_label(&h.state().library.entries[wrong].scenario.description.clone());
 
     h.get_by_label("Open in simulator").click();
     h.run();

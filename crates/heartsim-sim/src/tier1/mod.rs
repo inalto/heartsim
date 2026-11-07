@@ -98,6 +98,9 @@ const NODAL_PATHWAY_SPAN_MS: f64 = 20.0;
 /// A His event lights the compact node from the last pathway event only if it is this recent.
 const NODAL_PAIRING_MS: f64 = 500.0;
 
+/// A timing event and a queued catheter stimulus belong together if they are this close, ms.
+const SITE_MATCH_MS: f64 = 1e-6;
+
 /// Fast endocardial layer ids (`0` = none).
 const LAYER_LV: u8 = 1;
 const LAYER_RV: u8 = 2;
@@ -381,6 +384,9 @@ pub struct EikonalEngine {
     scratch: Vec<Vec<Candidate>>,
     /// External stimuli `(time, cell)` from actions, ascending.
     stimuli: Vec<(f64, u32)>,
+    /// Catheter stimuli `(time, cell)` waiting for the timing engine's capture decision, ascending:
+    /// the front starts only when the timing event says the tissue captured.
+    site_stimuli: Vec<(f64, u32)>,
     last_av_pathway: Option<f64>,
     /// When set, [`EikonalEngine::route_events`] is running: seeds are recorded here instead
     /// of starting fronts (Tier 2 uses the engine as its event → seed-cell router).
@@ -409,7 +415,8 @@ impl EikonalEngine {
     ) -> Self {
         let n = cloud.len();
         let kinds: Vec<CellKind> = cloud.regions.iter().map(|r| CellKind::of(*r)).collect();
-        let graph = Graph::build(&cloud, &kinds, eik.neighbourhood_factor, eik.max_edges);
+        let links = cs_os_link(&cloud, eik.cs_os_link_mm);
+        let graph = Graph::build_with_links(&cloud, &kinds, eik.neighbourhood_factor, eik.max_edges, &links);
         let apex_base = apex_base_coordinate(&cloud);
         let layer = fast_layer(&cloud, &kinds, &apex_base, &eik);
         let structure_s = structure_coordinate(&cloud);
@@ -450,6 +457,7 @@ impl EikonalEngine {
             amp_vm: vec![1.0; n],
             ablated_base: vec![false; n],
             ablated: vec![false; n],
+            site_stimuli: Vec::new(),
             region_blocked: [false; REGIONS],
             shape,
             vm_lut: [
@@ -680,6 +688,65 @@ impl EikonalEngine {
         self.refresh_excitable();
     }
 
+    /// Make `cells` non-excitable for good: an RF lesion is scar, so unlike
+    /// [`EikonalEngine::ablate_cells`] these survive `reset`.
+    pub fn ablate_cells_permanently(&mut self, cells: &[u32]) {
+        for &c in cells {
+            if let Some(a) = self.ablated_base.get_mut(c as usize) {
+                *a = true;
+            }
+            if let Some(a) = self.ablated.get_mut(c as usize) {
+                *a = true;
+            }
+            if let Some(v) = self.cells.vm.get_mut(c as usize) {
+                *v = 0.0;
+            }
+        }
+        self.refresh_excitable();
+    }
+
+    /// Announce a catheter stimulus at `cell`, time `at`: its front starts when the timing engine
+    /// reports the capture ([`crate::timing::TimingEngine::stimulate_region`]), not before, so
+    /// the strip and the colour map agree on which stimuli captured.
+    pub fn queue_site_stimulus(&mut self, cell: u32, at: Millis) {
+        let at = at.0.max(self.now);
+        let pos = self.site_stimuli.partition_point(|s| s.0 <= at);
+        self.site_stimuli.insert(pos, (at, cell));
+    }
+
+    /// The front of the catheter stimulus the timing engine captured at `t`, if any. Stimuli it
+    /// refused earlier than `t` are forgotten here.
+    fn take_site_stimulus(&mut self, t: f64) -> Option<u32> {
+        let due = self.site_stimuli.partition_point(|s| s.0 <= t + SITE_MATCH_MS);
+        let found = self.site_stimuli[..due]
+            .iter()
+            .rev()
+            .find(|s| (s.0 - t).abs() <= SITE_MATCH_MS)
+            .map(|s| s.1);
+        self.site_stimuli.drain(..due);
+        found
+    }
+
+    /// Conduction time from atrial `cell` to the AV-nodal input, ms: straight-line distance at the
+    /// effective atrial velocity. The factor 0.8 is measured: on the default pack the first front
+    /// from the SA node reaches the input at 1.1 mm/ms over the straight line, against a nominal
+    /// 0.8 × 1.7 = 1.36 m/s, because of the anisotropy and the curved wall.
+    #[must_use]
+    pub fn atrial_site_delay_ms(&self, cell: u32) -> f64 {
+        let p = self.cloud.positions[cell as usize];
+        let d = self
+            .seeds
+            .av_input
+            .iter()
+            .map(|&c| self.cloud.positions[c as usize].distance(p))
+            .fold(f32::INFINITY, f32::min);
+        if !d.is_finite() {
+            return 40.0;
+        }
+        let cv = self.params.region(Region::RightAtrium).cv_long_m_s * self.eik.atrial_cv_scale * 0.8;
+        f64::from(d) / cv.max(1e-3)
+    }
+
     /// Put every cell at rest at `at`: wavefronts, refractoriness and V_m are cleared while
     /// lesions, blocks, drug and ischaemia modifiers stay. Used when Tier 2 hands the heart back
     /// after its re-entry has stopped, so no tissue is left mid-action-potential.
@@ -697,6 +764,7 @@ impl EikonalEngine {
         self.inv_apd.iter_mut().for_each(|a| *a = 0.0);
         self.queue.clear();
         self.stimuli.clear();
+        self.site_stimuli.clear();
         self.last_av_pathway = None;
         for p in &mut self.probes {
             p.last_fired = f64::NEG_INFINITY;
@@ -1091,7 +1159,12 @@ impl EikonalEngine {
             return;
         }
         let set = match (e.kind, e.origin) {
-            (EventKind::Stimulus, Origin::External) => return,
+            (EventKind::Stimulus, Origin::External) => {
+                if let Some(cell) = self.take_site_stimulus(t) {
+                    self.push_seed(cell, t, 0, e.origin);
+                }
+                return;
+            }
             (EventKind::Automatic, Origin::Sinus) => SeedSet::Sinus,
             (EventKind::Stimulus, Origin::Pacer(_)) => SeedSet::AtrialLead,
             (_, Origin::Focus(id)) => self.focus_or_chamber(id, e.region),
@@ -1157,7 +1230,13 @@ impl EikonalEngine {
             (EventKind::Conducted, Origin::AccessoryPathway) => {
                 SeedSet::ApVentricular(usize::from(e.region == Region::RightVentricle))
             }
-            (EventKind::Conducted, _) | (EventKind::Stimulus, Origin::External) => return,
+            (EventKind::Stimulus, Origin::External) => {
+                if let Some(cell) = self.take_site_stimulus(t) {
+                    self.push_seed(cell, t, 0, e.origin);
+                }
+                return;
+            }
+            (EventKind::Conducted, _) => return,
             (EventKind::Stimulus, Origin::Pacer(2)) => SeedSet::LvLead,
             (EventKind::Stimulus, Origin::Pacer(_)) => SeedSet::VentricularLead,
             (_, Origin::Focus(id)) => self.focus_or_chamber(id, e.region),
@@ -1634,6 +1713,7 @@ impl Engine for EikonalEngine {
         self.origin.iter_mut().for_each(|o| *o = Origin::Sinus);
         self.queue.clear();
         self.stimuli.clear();
+        self.site_stimuli.clear();
         self.last_av_pathway = None;
         self.ablated.clone_from(&self.ablated_base);
         self.region_blocked = [false; REGIONS];
@@ -1651,6 +1731,31 @@ impl Engine for EikonalEngine {
 }
 
 // --- static per-cell geometry -----------------------------------------------------------------
+
+/// The edge joining the coronary-sinus sleeve to the right atrium at the ostium
+/// ([`EikonalParams::cs_os_link_mm`]).
+fn cs_os_link(cloud: &CellCloud, max_mm: f32) -> Vec<(u32, u32)> {
+    if max_mm <= 0.0 {
+        return Vec::new();
+    }
+    let Some(&os) = cloud.landmarks.get("cs_os") else {
+        return Vec::new();
+    };
+    let p = cloud.positions[os as usize];
+    let nearest = (0..cloud.len())
+        .filter(|&i| {
+            matches!(
+                cloud.regions[i],
+                Region::RightAtrium | Region::CavotricuspidIsthmus | Region::AtrialSeptum
+            )
+        })
+        .map(|i| (cloud.positions[i].distance(p), i as u32))
+        .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    match nearest {
+        Some((d, i)) if d <= max_mm => vec![(os, i)],
+        _ => Vec::new(),
+    }
+}
 
 /// 0 at the `lv_apex` landmark, 1 at the `his` landmark (top of the septum), by projection on
 /// that axis. Without both landmarks every cell gets 0.5 (no apicobasal structure).

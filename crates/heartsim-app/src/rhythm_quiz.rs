@@ -9,7 +9,7 @@
 use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
-use heartsim_ecg::LeadRing;
+use heartsim_ecg::{LeadRing, Tier0Scenario};
 use heartsim_ui::t;
 use heartsim_ui::{StripStyle, TwelveLeadLayout, lead_column, twelve_lead_page};
 
@@ -85,6 +85,75 @@ pub fn make_question(library: &ScenarioLibrary, rng: &mut u64, previous: Option<
     Some(Question { answer, options })
 }
 
+/// Record `scenario` for [`RECORD_S`] seconds, drop the first [`SETTLE_S`] and return the twelve
+/// strip rings at [`RATE_HZ`]. Shared by the rhythm quiz and the interval drill.
+///
+/// # Errors
+/// The scenario's morphology overrides name an unknown wave.
+pub fn record_strip(scenario: &Tier0Scenario) -> Result<Vec<LeadRing>, String> {
+    let rec = scenario.record(RECORD_S).map_err(|e| e.to_string())?;
+    let step = (1000.0 / f64::from(RATE_HZ) / heartsim_ecg::scenario::STEP_MS).round() as usize;
+    let skip = (SETTLE_S * 1000.0 / heartsim_ecg::scenario::STEP_MS) as usize;
+    let kept = (RECORD_S - SETTLE_S) * f64::from(RATE_HZ);
+    Ok(rec
+        .leads
+        .iter()
+        .map(|l| {
+            let mut r = LeadRing::new(kept as usize, RATE_HZ);
+            for &v in l.iter().skip(skip + step - 1).step_by(step.max(1)) {
+                r.push(v);
+            }
+            r
+        })
+        .collect())
+}
+
+/// What the quiz shows after an answer, as plain data so it can be tested without a window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Explanation {
+    /// Title of the right rhythm.
+    pub title: String,
+    /// One-line description of the right rhythm.
+    pub description: String,
+    /// The teaching text (the scenario's notes without the trailing `Sources:` block).
+    pub teaching: Option<String>,
+    /// Titles of the rhythms it is most often confused with that are in the library.
+    pub confused_with: Vec<String>,
+    /// When the learner chose a different rhythm: its title and description, so the difference is
+    /// explained and not just the right answer.
+    pub chosen: Option<(String, String)>,
+}
+
+/// The explanation for a question whose answer is library entry `answer` and which the learner
+/// answered with `chosen`.
+#[must_use]
+pub fn explanation(library: &ScenarioLibrary, answer: usize, chosen: usize) -> Explanation {
+    let s = &library.entries[answer].scenario;
+    let teaching = s
+        .notes
+        .as_deref()
+        .map(|n| n.split("\n\nSources:").next().unwrap_or(n).trim().to_owned())
+        .filter(|n| !n.is_empty());
+    let confused_with = s
+        .confused_with
+        .iter()
+        .filter_map(|id| library.index_of(id))
+        .filter(|&i| i != answer)
+        .map(|i| library.entries[i].scenario.title.clone())
+        .collect();
+    let chosen = (chosen != answer)
+        .then(|| library.entries.get(chosen))
+        .flatten()
+        .map(|e| (e.scenario.title.clone(), e.scenario.description.clone()));
+    Explanation {
+        title: s.title.clone(),
+        description: s.description.clone(),
+        teaching,
+        confused_with,
+        chosen,
+    }
+}
+
 /// Quiz state: the current question, its recording, the learner's choice and the score.
 #[derive(Debug)]
 pub struct RhythmQuiz {
@@ -131,24 +200,9 @@ impl RhythmQuiz {
         self.rings.clear();
         self.error = None;
         let Some(q) = &self.question else { return };
-        match library.entries[q.answer].record(RECORD_S) {
-            Ok(rec) => {
-                let step = (1000.0 / f64::from(RATE_HZ) / heartsim_ecg::scenario::STEP_MS).round() as usize;
-                let skip = (SETTLE_S * 1000.0 / heartsim_ecg::scenario::STEP_MS) as usize;
-                let kept = (RECORD_S - SETTLE_S) * f64::from(RATE_HZ);
-                self.rings = rec
-                    .leads
-                    .iter()
-                    .map(|l| {
-                        let mut r = LeadRing::new(kept as usize, RATE_HZ);
-                        for &v in l.iter().skip(skip + step - 1).step_by(step.max(1)) {
-                            r.push(v);
-                        }
-                        r
-                    })
-                    .collect();
-            }
-            Err(e) => self.error = Some(e.to_string()),
+        match record_strip(&library.entries[q.answer]) {
+            Ok(rings) => self.rings = rings,
+            Err(e) => self.error = Some(e),
         }
     }
 
@@ -257,23 +311,43 @@ impl RhythmQuiz {
                         self.answer(i);
                     }
                 }
-                if let Some(c) = self.chosen {
+                // Pinned above the (scrolling) explanation so it is never pushed out of view.
+                if self.chosen.is_some() {
                     ui.separator();
-                    let s = &library.entries[q.answer].scenario;
-                    if c == q.answer {
-                        ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
-                    } else {
-                        ui.colored_label(egui::Color32::LIGHT_RED, t!("rq-wrong", title = s.title.as_str()));
-                    }
-                    ui.label(&s.description);
-                    if let Some(notes) = &s.notes {
-                        let teaching = notes.split("\n\nSources:").next().unwrap_or(notes);
-                        ui.collapsing(t!("rq-why"), |ui| ui.label(teaching));
-                    }
                     if ui.button(t!("rq-open")).clicked() {
                         open = Some(q.answer);
                     }
                 }
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    if let Some(c) = self.chosen {
+                        let e = explanation(library, q.answer, c);
+                        if c == q.answer {
+                            ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
+                        } else {
+                            ui.colored_label(
+                                egui::Color32::LIGHT_RED,
+                                t!("rq-wrong", title = e.title.as_str()),
+                            );
+                        }
+                        ui.add(egui::Label::new(&e.description).wrap());
+                        if let Some((title, description)) = &e.chosen {
+                            ui.add_space(4.0);
+                            ui.strong(t!("rq-yours-was", title = title.as_str()));
+                            ui.add(egui::Label::new(description).wrap());
+                        }
+                        if let Some(teaching) = &e.teaching {
+                            ui.add_space(4.0);
+                            ui.strong(t!("rq-why"));
+                            ui.add(egui::Label::new(teaching).wrap());
+                        }
+                        if !e.confused_with.is_empty() {
+                            ui.add_space(4.0);
+                            ui.add(
+                                egui::Label::new(t!("rq-confused", list = e.confused_with.join(", "))).wrap(),
+                            );
+                        }
+                    }
+                });
             });
         egui::CentralPanel::default().show(ui, |ui| {
             if self.rings.len() < LEAD_COUNT {
@@ -357,6 +431,51 @@ mod tests {
             let got = q.options.iter().filter(|i| in_library.contains(i)).count();
             assert!(got >= want, "{}: {got} of {want} differential choices", s.id);
         }
+    }
+
+    #[test]
+    fn every_scenario_explains_itself_and_names_its_differential() {
+        let lib = library();
+        for (i, e) in lib.entries.iter().enumerate() {
+            let x = explanation(&lib, i, i);
+            assert_eq!(x.title, e.scenario.title);
+            assert!(
+                x.teaching.as_deref().is_some_and(|t| t.len() > 40),
+                "{}: no teaching text",
+                e.scenario.id
+            );
+            assert!(
+                !x.teaching.as_deref().unwrap_or_default().contains("Sources:"),
+                "{}",
+                e.scenario.id
+            );
+            assert!(
+                !x.confused_with.is_empty(),
+                "{}: no resolvable differential",
+                e.scenario.id
+            );
+            assert!(
+                !x.confused_with.contains(&x.title),
+                "{}: confused with itself",
+                e.scenario.id
+            );
+            assert_eq!(x.chosen, None, "right answer has no 'you chose' part");
+        }
+    }
+
+    #[test]
+    fn a_wrong_answer_also_explains_the_rhythm_that_was_chosen() {
+        let lib = library();
+        let (answer, chosen) = (0, 1);
+        let x = explanation(&lib, answer, chosen);
+        assert_eq!(
+            x.chosen,
+            Some((
+                lib.entries[chosen].scenario.title.clone(),
+                lib.entries[chosen].scenario.description.clone()
+            ))
+        );
+        assert_eq!(x.title, lib.entries[answer].scenario.title);
     }
 
     #[test]

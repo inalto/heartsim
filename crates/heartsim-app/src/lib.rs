@@ -3,12 +3,18 @@
 
 pub mod app;
 pub mod assets;
+#[cfg(feature = "audio")]
+pub mod audio_out;
+pub mod axis_quiz;
 pub mod case_ui;
+pub mod disclaimer;
 pub mod electrode_tab;
 #[cfg(feature = "export")]
 pub mod export_panel;
 pub mod heart_history;
 pub mod heart_view;
+pub mod interval_drill;
+pub mod monitor_beep;
 pub mod rhythm_quiz;
 pub mod scenario_file;
 pub mod scenarios;

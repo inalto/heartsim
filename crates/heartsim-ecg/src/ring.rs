@@ -26,6 +26,15 @@ impl LeadRing {
             sample_rate_hz,
         }
     }
+    /// An empty ring whose first sample will have absolute index `first_index`, so a ring derived
+    /// from another (the filtered display of the strip) can line up with it sample for sample.
+    #[must_use]
+    pub fn starting_at(capacity: usize, sample_rate_hz: f32, first_index: u64) -> Self {
+        Self {
+            total: first_index,
+            ..Self::new(capacity, sample_rate_hz)
+        }
+    }
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.buf.len()
@@ -163,6 +172,17 @@ mod tests {
         assert_eq!(out, vec![3.0, 4.0, 5.0]);
         assert_eq!(r.range(4, 4, &mut out), 4);
         assert_eq!(out, Vec::<f32>::new());
+    }
+
+    #[test]
+    fn a_ring_can_start_at_an_absolute_index() {
+        let mut r = LeadRing::starting_at(4, 500.0, 1000);
+        assert_eq!((r.pushed(), r.len(), r.oldest_index()), (1000, 0, 1000));
+        r.push(1.5);
+        r.push(2.5);
+        assert_eq!(r.pushed(), 1002);
+        assert_eq!(r.at(1000), Some(1.5));
+        assert_eq!(r.at(999), None);
     }
 
     proptest! {

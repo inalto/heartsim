@@ -1,4 +1,4 @@
-use crate::settings::settings_window;
+use crate::settings::settings_window_with_audio;
 use eframe::egui;
 use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead, Millis, SimClock};
 use heartsim_ecg::{GaussianSynth, LeadRing, estimate_frontal_axis};
@@ -29,6 +29,7 @@ const RHYTHM_QUIZ_SCORE_KEY: &str = "rhythm_quiz_score";
 /// eframe storage key of the tutorial progress where there is no settings directory (the web build).
 const TUTORIAL_PROGRESS_KEY: &str = "tutorial_progress";
 
+mod ep_lab;
 mod pacing;
 mod reentry;
 mod therapy;
@@ -54,7 +55,8 @@ pub struct HeartSimApp {
     vertex_count: usize,
     tab: Tab,
     layout: TwelveLeadLayout,
-    quiz: Quiz,
+    /// Axis drill (B8): hidden target axis, guard bands, explanation after each answer.
+    quiz: crate::axis_quiz::AxisQuiz,
     /// The anatomy-pack heart (B9); `None` falls back to the placeholder sphere.
     heart: Option<crate::heart_view::HeartView>,
     /// Pacemaker window, strip spike marks and lead markers (B13).
@@ -72,6 +74,8 @@ pub struct HeartSimApp {
     /// Heart-vector arrow and loop in the 3-D view.
     vector: VectorOverlay,
     rhythm_quiz: RhythmQuiz,
+    /// Interval drill (B8): measure PR, QRS or QT with calipers.
+    interval_drill: crate::interval_drill::IntervalDrill,
     /// Documentation screenshot run (`HEARTSIM_SCREENSHOT_DIR`).
     tour: Option<tour::Tour>,
     /// Guided tutorials (B15) and the scenario timeline editor.
@@ -84,9 +88,15 @@ pub struct HeartSimApp {
     exports: crate::export_panel::ExportPanel,
     /// Re-entry presets and the running one (B17).
     reentry: reentry::Reentry,
+    /// Cardiac EP lab: procedures, catheters, electrograms (B22).
+    ep: ep_lab::EpLabTab,
     /// Preferences (language, high contrast, reduced motion) and the Settings window (B19).
     settings: crate::settings::Settings,
     settings_open: bool,
+    /// QRS-synchronous monitor beep: fed the ventricular events, never read by the simulation.
+    beep: crate::monitor_beep::MonitorBeep,
+    /// The About window (version and medical disclaimer, N-09).
+    about_open: bool,
 }
 
 /// A snapshot of the model for hosts that cannot look inside it (the web build publishes it to the
@@ -113,12 +123,14 @@ enum Tab {
     Quiz,
     Electrodes,
     RhythmQuiz,
+    IntervalDrill,
     Tutorials,
+    EpLab,
     Help,
 }
 
 impl Tab {
-    const ALL: [Tab; 9] = [
+    const ALL: [Tab; 11] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -126,7 +138,9 @@ impl Tab {
         Tab::Quiz,
         Tab::Electrodes,
         Tab::RhythmQuiz,
+        Tab::IntervalDrill,
         Tab::Tutorials,
+        Tab::EpLab,
         Tab::Help,
     ];
 
@@ -139,35 +153,11 @@ impl Tab {
             Tab::Quiz => t!("tab-axis-quiz"),
             Tab::Electrodes => t!("tab-electrodes"),
             Tab::RhythmQuiz => t!("tab-rhythm-quiz"),
+            Tab::IntervalDrill => t!("tab-interval-drill"),
             Tab::Tutorials => t!("tab-tutorials"),
+            Tab::EpLab => t!("tab-ep-lab"),
             Tab::Help => t!("tab-help"),
         }
-    }
-}
-
-/// Axis quiz state: a hidden target axis is dialled into the synthesiser; the student reads the
-/// limb leads and clicks where they think the axis points.
-#[derive(Debug, Default)]
-struct Quiz {
-    target_deg: Option<f64>,
-    guess_deg: Option<f64>,
-    revealed: bool,
-    asked: u32,
-    correct: u32,
-    rng: u64,
-}
-
-impl Quiz {
-    /// Tolerance for a correct answer, degrees (one hexaxial sector is 30°).
-    const TOLERANCE_DEG: f64 = 15.0;
-
-    fn next_random(&mut self) -> f64 {
-        // xorshift64*: deterministic per session, no extra dependency
-        self.rng ^= self.rng >> 12;
-        self.rng ^= self.rng << 25;
-        self.rng ^= self.rng >> 27;
-        let r = self.rng.wrapping_mul(0x2545_F491_4F6C_DD1D);
-        (r >> 11) as f64 / (1u64 << 53) as f64
     }
 }
 
@@ -273,10 +263,7 @@ impl HeartSimApp {
             vertex_count,
             tab: Tab::Simulator,
             layout: TwelveLeadLayout::Stacked,
-            quiz: Quiz {
-                rng: 0x9E37_79B9_7F4A_7C15,
-                ..Quiz::default()
-            },
+            quiz: crate::axis_quiz::AxisQuiz::default(),
             heart,
             pacing: pacing::Pacing::default(),
             therapy: therapy::Therapy::default(),
@@ -287,6 +274,7 @@ impl HeartSimApp {
             heart_history: HeartHistory::new(),
             vector,
             rhythm_quiz,
+            interval_drill: crate::interval_drill::IntervalDrill::default(),
             tour: tour::Tour::from_env(),
             tutorials: Self::load_tutorials(cc, assets),
             cases: assets.map_or_else(
@@ -297,8 +285,11 @@ impl HeartSimApp {
             #[cfg(feature = "export")]
             exports: crate::export_panel::ExportPanel::default(),
             reentry: assets.map_or_else(reentry::Reentry::load_default, reentry::Reentry::from_bundle),
+            ep: assets.map_or_else(ep_lab::EpLabTab::load_default, ep_lab::EpLabTab::from_bundle),
             settings,
             settings_open: false,
+            beep: crate::monitor_beep::MonitorBeep::new(),
+            about_open: false,
         }
     }
 
@@ -325,6 +316,10 @@ impl HeartSimApp {
 
     fn step_simulation(&mut self, frame_dt: Millis) {
         let steps = self.clock.advance(frame_dt);
+        if self.ep_active() {
+            self.step_ep(steps);
+            return;
+        }
         if self.reentry_active() {
             self.step_reentry(steps);
             return;
@@ -337,6 +332,7 @@ impl HeartSimApp {
             for e in &events {
                 if e.region.is_ventricular() && e.kind != heartsim_sim::EventKind::Blocked {
                     self.last_v_activation = e.at;
+                    self.beep.on_ventricular_event(e.at.0);
                 }
             }
             self.synth.on_events(&events);
@@ -579,76 +575,8 @@ impl HeartSimApp {
 
     fn quiz_tab(&mut self, ui: &mut egui::Ui) {
         egui::Panel::left("quizdial").default_size(430.0).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if ui.button(t!("app-quiz-new")).clicked() {
-                    let target = FrontalAxis::normalise(self.quiz.next_random() * 360.0 - 180.0);
-                    self.set_qrs_axis(target);
-                    self.quiz.target_deg = Some(target);
-                    self.quiz.guess_deg = None;
-                    self.quiz.revealed = false;
-                }
-                let can_check =
-                    self.quiz.target_deg.is_some() && self.quiz.guess_deg.is_some() && !self.quiz.revealed;
-                if ui
-                    .add_enabled(can_check, egui::Button::new(t!("app-quiz-check")))
-                    .clicked()
-                {
-                    self.quiz.revealed = true;
-                    self.quiz.asked += 1;
-                    if let (Some(t), Some(g)) = (self.quiz.target_deg, self.quiz.guess_deg)
-                        && FrontalAxis::normalise(g - t).abs() <= Quiz::TOLERANCE_DEG
-                    {
-                        self.quiz.correct += 1;
-                    }
-                }
-                ui.label(t!(
-                    "app-quiz-score",
-                    correct = self.quiz.correct.to_string(),
-                    asked = self.quiz.asked.to_string()
-                ));
-            });
-            match (self.quiz.target_deg, self.quiz.guess_deg, self.quiz.revealed) {
-                (None, ..) => {
-                    ui.label(t!("app-quiz-intro"));
-                }
-                (Some(_), None, _) => {
-                    ui.label(t!("app-quiz-click"));
-                }
-                (Some(t), Some(g), true) => {
-                    let err = FrontalAxis::normalise(g - t);
-                    ui.colored_label(
-                        if err.abs() <= Quiz::TOLERANCE_DEG {
-                            egui::Color32::LIGHT_GREEN
-                        } else {
-                            egui::Color32::LIGHT_RED
-                        },
-                        t!(
-                            "app-quiz-answer",
-                            answer = format!("{t:+.0}"),
-                            chosen = format!("{g:+.0}"),
-                            off = format!("{:.0}", err.abs())
-                        ),
-                    );
-                }
-                (Some(_), Some(g), false) => {
-                    ui.label(t!("app-quiz-your-answer", chosen = format!("{g:+.0}")));
-                }
-            }
-            let side = ui.available_width().min(ui.available_height() - 40.0).max(200.0);
-            let shown = if self.quiz.revealed {
-                self.quiz.target_deg
-            } else {
-                None
-            };
-            if let Some(g) = axis_dial(
-                ui,
-                side,
-                shown,
-                self.quiz.guess_deg,
-                !self.quiz.revealed && self.quiz.target_deg.is_some(),
-                &AxisDialStyle::default(),
-            ) {
-                self.quiz.guess_deg = Some(g);
+            if let Some(target) = self.quiz.panel(ui) {
+                self.set_qrs_axis(target);
             }
         });
         egui::CentralPanel::default().show(ui, |ui| {
@@ -670,7 +598,9 @@ impl HeartSimApp {
                 ui.label(t!("help-tab-heart-vector"));
                 ui.label(t!("help-tab-axis-quiz"));
                 ui.label(t!("help-tab-tutorials"));
+                ui.label(t!("help-tab-ep-lab"));
                 ui.label(t!("help-tab-rhythm-quiz"));
+                ui.label(t!("help-tab-interval-drill"));
                 ui.separator();
                 ui.strong(t!("help-rhythms-heading"));
                 ui.label(t!("help-rhythms-text"));
@@ -696,9 +626,36 @@ impl eframe::App for HeartSimApp {
         let ctx = ui.ctx().clone();
         #[cfg(feature = "export")]
         self.exports_frame(&ctx);
-        self.keyboard_shortcuts(&ctx);
-        if self.settings_open && settings_window(&ctx, &mut self.settings_open, &mut self.settings) {
+        // the documentation tour runs unattended and never shows the first-run dialog
+        let needs_disclaimer = !self.settings.disclaimer_accepted && self.tour.is_none();
+        if !needs_disclaimer {
+            self.keyboard_shortcuts(&ctx);
+        }
+        let beep_available = self.beep.available();
+        if self.settings_open
+            && settings_window_with_audio(&ctx, &mut self.settings_open, &mut self.settings, beep_available)
+        {
             self.settings.apply(&ctx);
+        }
+        // no beep while an imported recording is under review: its beats are not the engine's
+        #[cfg(feature = "export")]
+        let beep_muted = self.exports.review.is_some();
+        #[cfg(not(feature = "export"))]
+        let beep_muted = false;
+        self.beep.set(
+            self.settings.monitor_beep && !beep_muted,
+            self.settings.beep_volume,
+        );
+        if self.about_open {
+            crate::disclaimer::about_window(&ctx, &mut self.about_open);
+        }
+        if needs_disclaimer && crate::disclaimer::first_run_dialog(&ctx) {
+            self.settings.disclaimer_accepted = true;
+            // stored at once: a kill before the next auto-save must not ask again
+            if let Some(storage) = frame.storage_mut() {
+                storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());
+                storage.flush();
+            }
         }
         self.therapy.set_reduced_motion(self.settings.reduced_motion);
         if let Some(h) = &mut self.heart {
@@ -708,6 +665,7 @@ impl eframe::App for HeartSimApp {
         if !self.ecg.is_paused() {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
+        self.beep.flush(self.engine.now().0);
         self.ecg.update(&self.rings);
         // the editor counts live samples; a recording under review must not reach it
         #[cfg(feature = "export")]
@@ -744,6 +702,7 @@ impl eframe::App for HeartSimApp {
                 #[cfg(feature = "export")]
                 self.export_button(ui);
                 ui.toggle_value(&mut self.settings_open, t!("settings-button"));
+                ui.toggle_value(&mut self.about_open, t!("about-button"));
             });
         });
         if matches!(
@@ -772,7 +731,9 @@ impl eframe::App for HeartSimApp {
                     self.tab = Tab::Simulator;
                 }
             }
+            Tab::IntervalDrill => self.interval_drill.ui(ui, &self.library, &self.ecg.style),
             Tab::Tutorials => self.tutorials_tab(ui),
+            Tab::EpLab => self.ep_lab_tab(ui),
             Tab::Help => Self::help_tab(ui),
         }
 

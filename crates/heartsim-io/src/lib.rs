@@ -42,6 +42,11 @@ pub struct ExportInfo {
     /// `YYYY-MM-DD`, printed in the header (an input so exports are reproducible).
     pub date: String,
     pub paper: Paper,
+    /// What was done to the trace if it is not the unfiltered engine signal, in plain ASCII (the
+    /// display filter and artefacts, see `heartsim_ecg::DisplayConfig::describe`); `None` for the
+    /// clean signal. Every writer that carries the trace states it: the PDF footer, a `#` line in
+    /// the CSV, a WFDB header comment, a caption on the PNGs and a line in the bundle's README.
+    pub trace_note: Option<String>,
 }
 
 impl ExportInfo {
@@ -151,6 +156,7 @@ mod tests {
             mm_per_mv: 10.0,
             date: "2026-01-01".into(),
             paper: Paper::A4,
+            trace_note: None,
         };
         assert_eq!(info.stem(), "heartsim_avb_2nd_mobitz-1");
     }

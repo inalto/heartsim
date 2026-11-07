@@ -97,6 +97,19 @@ impl Graph {
     /// nearest-neighbour distance of the cloud. At most `max_edges` nearest edges are kept per cell.
     #[must_use]
     pub fn build(cloud: &CellCloud, kinds: &[CellKind], radius_factor: f32, max_edges: usize) -> Self {
+        Self::build_with_links(cloud, kinds, radius_factor, max_edges, &[])
+    }
+
+    /// [`Graph::build`] with extra undirected edges for muscular connections longer than the
+    /// neighbourhood radius (the coronary-sinus sleeve joining the right atrium at the ostium).
+    #[must_use]
+    pub fn build_with_links(
+        cloud: &CellCloud,
+        kinds: &[CellKind],
+        radius_factor: f32,
+        max_edges: usize,
+        links: &[(u32, u32)],
+    ) -> Self {
         let n = cloud.len();
         let spacing = median_spacing(cloud);
         let radius = (radius_factor * spacing).max(1e-3);
@@ -118,6 +131,16 @@ impl Graph {
             found.retain(|&(_, j)| j as usize != i && src.connects_to(kinds[j as usize]));
             found.sort_unstable_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
             found.truncate(max_edges);
+            for &(a, b) in links {
+                let other = match (a as usize == i, b as usize == i) {
+                    (true, false) => b,
+                    (false, true) => a,
+                    _ => continue,
+                };
+                if !found.iter().any(|&(_, j)| j == other) {
+                    found.push((p.distance(cloud.positions[other as usize]), other));
+                }
+            }
             for &(d, j) in &found {
                 let e = (cloud.positions[j as usize] - p) / d.max(1e-6);
                 let f = cloud.fibres[j as usize];

@@ -66,12 +66,14 @@ pub const CATALOGUES: &[(&str, &str, &str)] = &[
         include_str!("../../../assets/locales/en/app.ftl"),
     ),
     ("en", "ui.ftl", include_str!("../../../assets/locales/en/ui.ftl")),
+    ("en", "ep.ftl", include_str!("../../../assets/locales/en/ep.ftl")),
     (
         "it",
         "app.ftl",
         include_str!("../../../assets/locales/it/app.ftl"),
     ),
     ("it", "ui.ftl", include_str!("../../../assets/locales/it/ui.ftl")),
+    ("it", "ep.ftl", include_str!("../../../assets/locales/it/ep.ftl")),
     (
         "de",
         "app.ftl",

@@ -10,6 +10,7 @@ pub mod defib_panel;
 pub mod drug_tray;
 pub mod ecg_view;
 pub mod electrode_editor;
+pub mod ep_panel;
 pub mod highlight;
 pub mod i18n;
 pub mod ischaemia_panel;
@@ -32,6 +33,7 @@ pub use defib_panel::{DefibPanelState, DefibResponse, DefibSound, defib_panel, d
 pub use drug_tray::drug_tray;
 pub use ecg_view::EcgView;
 pub use electrode_editor::{EditorCommand, ElectrodeEditor, electrode_editor_panel};
+pub use ep_panel::{EpCommand, EpPanelState};
 pub use ischaemia_panel::{
     IschaemiaPanelState, IschaemiaResponse, coronary_tree, ischaemia_panel, territory_glyphs,
 };

@@ -7,6 +7,7 @@
 //!   so mesh vertices can be coloured from cell state.
 
 pub mod bridge;
+pub mod catheter;
 pub mod cloud;
 pub mod electrodes;
 pub mod hood;
@@ -18,6 +19,7 @@ pub mod procedural;
 pub mod spatial;
 pub mod territory;
 
+pub use catheter::{CardiacChamber, Catheter, CatheterAnatomy, CatheterKind, CatheterSite, Cavity};
 pub use cloud::{CellCloud, K_NEIGHBOURS, Neighbour};
 pub use electrodes::ElectrodeSet;
 pub use hood::{Hood, compute_hoods};

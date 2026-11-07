@@ -164,9 +164,15 @@ pub(crate) enum Pending {
 }
 
 /// Where a programmed stimulus is delivered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum StimTarget {
     Atrium(Region),
+    /// A catheter pair in the atria: the front needs `delay_ms` to reach the AV-nodal input from
+    /// that site, instead of the sinus node's `atrial_delay_ms`.
+    AtrialSite {
+        region: Region,
+        delay_ms: f64,
+    },
     His,
     Ventricle(Region),
 }
@@ -281,6 +287,8 @@ pub struct TimingEngine {
     last_vent_via: Option<VentVia>,
     /// Escape timers count from here when nothing has happened yet (reset, shock).
     escape_anchor: f64,
+    /// Conduction time to the nodal input of the atrial stimulus being dispatched (catheter site).
+    site_delay_ms: Option<f64>,
 
     // --- AV node / His ---
     /// Recovery clock of the node: time of the last nodal output (scheduled His activation).
@@ -343,6 +351,7 @@ impl TimingEngine {
             last_ventricular: None,
             last_vent_via: None,
             escape_anchor: 0.0,
+            site_delay_ms: None,
             last_his_output: None,
             last_his_fired: None,
             fast_last_use: None,
@@ -431,6 +440,34 @@ impl TimingEngine {
             ),
             Chamber::AvJunction => {}
         }
+    }
+
+    /// A programmed stimulus from a catheter pair touching `region`, at `at` (brief B22): the
+    /// atria, the His bundle (any AV-junction structure) or the ventricles capture it unless they
+    /// are refractory, which shows as an [`EventKind::Stimulus`] or [`EventKind::Blocked`] event
+    /// with [`Origin::External`]. `atrial_delay_ms` is the conduction time from the pair to the
+    /// AV-nodal input (`None` = the sinus node's), so the A–H relation holds when pacing from anywhere.
+    pub fn stimulate_region(
+        &mut self,
+        region: Region,
+        at: Millis,
+        atrial_delay_ms: Option<f64>,
+    ) -> Result<(), ActionError> {
+        let at = at.0.max(self.now);
+        let target = if region.is_atrial() {
+            match atrial_delay_ms {
+                Some(delay_ms) => StimTarget::AtrialSite { region, delay_ms },
+                None => StimTarget::Atrium(region),
+            }
+        } else if region.is_conduction_system() {
+            StimTarget::His
+        } else if region == Region::Scar {
+            return Err(ActionError::UnsupportedRegion(region));
+        } else {
+            StimTarget::Ventricle(region)
+        };
+        self.schedule(at, Pending::Stimulus { target });
+        Ok(())
     }
 
     /// Events produced since the last drain, without taking them.
@@ -883,6 +920,7 @@ impl Engine for TimingEngine {
         self.last_vent_via = None;
         // Escape timers count from reset, so no escape beat precedes the first sinus beat.
         self.escape_anchor = 0.0;
+        self.site_delay_ms = None;
         self.last_his_output = None;
         self.last_his_fired = None;
         self.fast_last_use = None;

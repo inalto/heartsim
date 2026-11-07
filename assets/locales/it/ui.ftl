@@ -235,3 +235,16 @@ ischaemia-acute = ischemia acuta
 ischaemia-infarct-kind = infarto
 ischaemia-evolving-kind = infarto in evoluzione
 ischaemia-lesion-line = { $branch }: { $kind }, gravità { $severity }
+
+## Filtro di visualizzazione e artefatti (ecg_view.rs, requisito F-15)
+ecg-filter = Filtro
+ecg-filter-off = Spento
+ecg-filter-diagnostic = Diagnostico 0,05–150 Hz
+ecg-filter-monitor = Monitor 0,5–40 Hz
+ecg-filter-hint = Solo visualizzazione: la simulazione, le misure e le esportazioni del segnale pulito restano non filtrate. La banda del monitor stabilizza la linea di base ma distorce il tratto ST.
+ecg-artefacts = Artefatti
+ecg-art-wander = Deriva della linea di base
+ecg-art-respiration = Respiro
+ecg-art-mains = Ronzio di rete
+ecg-art-muscle = Muscolare
+ecg-art-intensity = intensità

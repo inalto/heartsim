@@ -57,6 +57,9 @@ pub struct ExportRequest<'a> {
     pub paper: Paper,
     pub formats: Formats,
     pub date: String,
+    /// What the display did to the rings being exported (filter, artefacts), or `None` for the
+    /// clean engine signal; stated in every file that carries the trace (see `ExportInfo`).
+    pub trace_note: Option<String>,
 }
 
 impl ExportRequest<'_> {
@@ -70,6 +73,7 @@ impl ExportRequest<'_> {
             mm_per_mv: self.style.mm_per_mv,
             date: self.date.clone(),
             paper: self.paper,
+            trace_note: self.trace_note.clone(),
         }
     }
 }
@@ -170,6 +174,9 @@ pub struct ExportPanel {
     pub window_s: f64,
     pub paper: Paper,
     pub formats: Formats,
+    /// Export the trace as the strip shows it (display filter and artefacts) instead of the clean
+    /// engine signal. Off by default; the files then say what was applied.
+    pub as_displayed: bool,
     pub import_path: String,
     /// Outcome of the last action, for the status line.
     pub status: Option<String>,
@@ -186,6 +193,7 @@ impl Default for ExportPanel {
             window_s: DEFAULT_WINDOW_S,
             paper: Paper::A4,
             formats: Formats::default(),
+            as_displayed: false,
             import_path: String::new(),
             status: None,
             review: None,

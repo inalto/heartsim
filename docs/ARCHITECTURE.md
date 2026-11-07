@@ -111,7 +111,17 @@ mapping each cell's template phase to `(u, v)`.
   an unexplained activation at the AV-nodal input / lead tip. Changing APD or CV of calibrated tissue re-solves D on the solver's grid
   (`calibrate::retarget`): scaling them independently stops conduction on a coarse grid. Measured: the short-APD atrial front fails to
   conduct through the narrow atrial bridges at 3–4 mm voxels, so the AF preset runs at 2 mm; flutter, scar VT, torsades and VF could not be
-  made to survive in the heart-shaped model with any initiation tried (S1–S2, bursts, cross-field, phase-seeded wave), and are not shipped.
+  made to survive in the heart-shaped model with any initiation tried (S1–S2, bursts, cross-field, phase-seeded wave), and are not shipped as
+  re-entry presets. (B22 gets flutter only by drawing the circuit: an inert annulus and outer barrier around a seeded wave.)
+
+* EP lab (brief B22, `sim::ep`): `EpLab` wraps `SwitchingEngine` and adds no physiology. A protocol (`ProtocolRun`) is a pure state machine fed
+  by timing events and the paced cell's activation time. A catheter stimulus goes to `TimingEngine::stimulate_region` and the mesh front starts
+  only on the capture event; in Tier 2 the tissue decides. Lesions go to cells (`ablate_cells_permanently`), voxels, and the timing graph (`Block`,
+  `AccessoryPathway`), so they persist across `reset`. Electrograms (`ecg::egm`) are the forward model's dipole kernel on the cells within 15 mm of
+  each electrode, summed per source so A, H and V can be labelled exactly. Flutter (`ep_flutter.ron`): the spherical atria have no annulus, so
+  `PatchTarget::Band` draws one, plus an outer barrier inside the septal contact with the left atrium and with one exit gap, leaving the rest of the
+  atria a dead end. With the barrier further out, outside the septal contact, a periodic wave entered the ring from that side and collided with itself in the
+  isthmus (apparently a loop through the left atrium), which a CTI line would not stop. Measured cycle 235 ms. Patches of this kind stay in Tier 2 (`accept_tissue_as_baseline`), so they are not handed back as lesions.
 
 ### 4.4 Forward ECG
 * Precompute `W[e, j]` for the 9 signal electrodes: equivalent-double-layer / dipole form
@@ -132,8 +142,12 @@ mapping each cell's template phase to `(u, v)`.
   The transmural APD gradient was widened to endo 345 / epi 285 ms (septum uniform 315 ms, since both of its faces are
   endocardium). With the old 30 ms gradient, LV repolarisation was transmurally uniform and the T wave was discordant.
   Known activation-driven gaps (B3): sinus axis ≈ −2°, R amplitude peaks in V2–V3, LAFB/LPFB shift the axis only −14°/−1°.
-* Signal chain: 500 Hz sampling → optional filters → rings. Interval detection (Pan–Tompkins-style QRS, P/T search windows) feeds
-  read-outs and quizzes.
+* Signal chain: 500 Hz sampling → rings (always the clean signal). Interval detection (Pan–Tompkins-style QRS, P/T search windows)
+  reads those rings and feeds read-outs and quizzes. The diagnostic (0.05–150 Hz) and monitor (0.5–40 Hz) filters and the seeded
+  artefacts (baseline wander, respiration, 50/60 Hz mains, muscle) are a **display stage** (`heartsim_ecg::DisplayStage`, F-15):
+  it fills separate rings that only the painters read, so the engine, the analysis and the default exports stay unfiltered and
+  deterministic; artefacts are pure functions of `(seed, lead, sample index)`. An export of the displayed trace carries a trace
+  note (`ExportInfo::trace_note`) in every file.
 
 ### 4.5 Interventions
 `core::scenario::Action` is the only way to mutate an engine; the app queues actions with timestamps, so tutorials, timelines and
