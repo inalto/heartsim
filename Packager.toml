@@ -34,12 +34,14 @@ icons = [
 # `Contents/Resources/assets` (macOS) or `usr/lib/heartsim/assets` (deb, AppImage); the app's lookup
 # (`heartsim_app::asset_dirs`) tries those paths, and `heartsim --assets-dir` in the smoke tests proves it.
 # Locales and the drug table are compiled into the binary; `assets/validation` is for the openCARP bridge only.
+# Directories are given as `{ src, target }` pairs: cargo-packager copies a directory source recursively and keeps the
+# paths relative to it, whereas a `**/*` glob flattens every match to its file name and fails on sub-directories.
 resources = [
     { src = "THIRD_PARTY_LICENSES.html", target = "THIRD_PARTY_LICENSES.html" },
-    "assets/anatomy/default/**/*",
-    "assets/scenarios/**/*",
-    "assets/tutorials/**/*",
-    "assets/cases/**/*",
+    { src = "assets/anatomy/default", target = "assets/anatomy/default" },
+    { src = "assets/scenarios", target = "assets/scenarios" },
+    { src = "assets/tutorials", target = "assets/tutorials" },
+    { src = "assets/cases", target = "assets/cases" },
 ]
 
 # Windows and macOS associate by the last dot-separated extension only, so the compound `.heartsim.ron` suffix is
