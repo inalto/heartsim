@@ -1,8 +1,8 @@
 # A tour of the window
 
-The window has a one-line **menu bar** at the top: the program name and version, a **Menu** that lists the eleven pages (the
-open one is marked and each shows its number-key shortcut) followed by *Export / Import*, *Settings* and *About*, and the name
-of the page that is open. Below it, on the pages that run the simulation, is the **rhythm bar**: the rhythm
+The window has a one-line **menu bar** at the top: the program name and version with the name of the open page on the left,
+and on the right the **☰ menu**, which lists the eleven pages (the open one is marked and each shows its number-key
+shortcut), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark. Below it, on the pages that run the simulation, is the **rhythm bar**: the rhythm
 picker, *Restart*, *Run / Pause*, and sliders for the sinus rate, AV block, Mobitz II ratio, QRS axis shift, QRS width and
 simulation speed, plus the *Pacemaker* window. The **Export / Import** button at the right of the tab row opens the
 [export window](exports.md).

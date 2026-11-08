@@ -37,6 +37,32 @@ pub struct Settings {
     /// Ask GitHub once at start whether a newer release exists (desktop builds with the `update-check`
     /// feature; see [`crate::update_check`]). On by default; off means no request is made at all.
     pub check_for_updates: bool,
+    /// Light, dark, or whatever the operating system says (the default). Chosen from the bottom of the
+    /// hamburger menu; `high_contrast` then applies on top of the chosen one.
+    pub theme: ThemeMode,
+}
+
+/// The colour scheme preference, stored by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ThemeMode {
+    /// Follow the operating system's light/dark setting; dark where it is unknown.
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeMode {
+    /// Every mode, in menu order.
+    pub const ALL: [ThemeMode; 3] = [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark];
+
+    fn preference(self) -> egui::ThemePreference {
+        match self {
+            ThemeMode::System => egui::ThemePreference::System,
+            ThemeMode::Light => egui::ThemePreference::Light,
+            ThemeMode::Dark => egui::ThemePreference::Dark,
+        }
+    }
 }
 
 /// Default loudness of the monitor beep, linear: half scale, audible without being startling.
@@ -54,6 +80,7 @@ impl Default for Settings {
             monitor_beep: false,
             beep_volume: DEFAULT_BEEP_VOLUME,
             check_for_updates: true,
+            theme: ThemeMode::System,
         }
     }
 }
@@ -83,9 +110,11 @@ impl Settings {
         }
     }
 
-    /// Applies the language to the translation layer and the colours to egui.
+    /// Applies the language to the translation layer and the theme and colours to egui: the
+    /// light/dark preference first, then the visuals for whichever theme that resolves to.
     pub fn apply(&self, ctx: &egui::Context) {
         i18n::set_language(self.resolved_language());
+        ctx.set_theme(self.theme.preference());
         ctx.set_visuals(self.visuals(ctx.theme() == egui::Theme::Dark));
     }
 
@@ -225,9 +254,27 @@ mod tests {
             monitor_beep: true,
             beep_volume: 0.25,
             check_for_updates: false,
+            theme: ThemeMode::Light,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
+    }
+
+    #[test]
+    fn the_theme_follows_the_system_by_default_and_is_stored_by_name() {
+        assert_eq!(Settings::default().theme, ThemeMode::System);
+        let old: Settings =
+            ron::from_str("(language: None, high_contrast: false)").expect("old settings load");
+        assert_eq!(old.theme, ThemeMode::System);
+        let dark = Settings {
+            theme: ThemeMode::Dark,
+            ..Settings::default()
+        };
+        let stored = dark.to_storage_string();
+        // compact RON: no space after the colon
+        assert!(stored.contains("theme:Dark"), "{stored}");
+        let back: Settings = ron::from_str(&stored).expect("valid RON");
+        assert_eq!(back.theme, ThemeMode::Dark);
     }
 
     #[test]

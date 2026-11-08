@@ -1,4 +1,4 @@
-use crate::settings::settings_window_with_audio;
+use crate::settings::{ThemeMode, settings_window_with_audio};
 use eframe::egui;
 use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead, Millis, SimClock};
 use heartsim_ecg::{GaussianSynth, LeadRing, estimate_frontal_axis};
@@ -101,6 +101,10 @@ pub struct HeartSimApp {
     /// the documentation tour.
     #[cfg(feature = "update-check")]
     update_check: Option<crate::update_check::UpdateCheck>,
+    /// No assets root with the anatomy pack was found on disk (see [`crate::asset_dirs`]): the 3-D view
+    /// shows the placeholder sphere and the rhythm picker is empty, so a bar under the menu says so.
+    #[cfg(feature = "native")]
+    assets_missing: bool,
 }
 
 /// A snapshot of the model for hosts that cannot look inside it (the web build publishes it to the
@@ -301,6 +305,8 @@ impl HeartSimApp {
             about_open: false,
             #[cfg(feature = "update-check")]
             update_check,
+            #[cfg(feature = "native")]
+            assets_missing: assets.is_none() && crate::asset_dirs::resolved_assets_dir().is_none(),
         }
     }
 
@@ -610,46 +616,86 @@ impl HeartSimApp {
         });
     }
 
-    /// The top bar: the product and its version, one **Menu** with every page (the current one
-    /// marked, with its number-key shortcut), the Export / Import, Settings and About windows, and
-    /// the name of the page that is open. A single menu instead of a row of eleven tabs keeps the
-    /// bar one line high on any window width.
+    /// The top bar: the product, its version and the name of the open page on the left; on the
+    /// right a hamburger menu (☰) with every page (the current one marked, with its number-key
+    /// shortcut), the Export / Import, Settings and About windows, and at the bottom the theme
+    /// (system, light, dark). A single menu instead of a row of eleven tabs keeps the bar one line
+    /// high on any window width.
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.heading("heartsim");
             ui.weak(format!("v{}", crate::disclaimer::VERSION))
                 .on_hover_text(t!("about-version", version = crate::disclaimer::VERSION));
             ui.separator();
-            ui.menu_button(t!("menu-button"), |ui| {
-                for (i, t) in Tab::ALL.into_iter().enumerate() {
-                    let mut button = egui::Button::new(t.title()).selected(self.tab == t);
-                    if let Some(key) = keys::tab_shortcut_label(i) {
-                        button = button.shortcut_text(key);
-                    }
-                    if ui.add(button).clicked() {
-                        self.tab = t;
-                        ui.close();
-                    }
-                }
-                ui.separator();
-                #[cfg(feature = "export")]
-                if ui.button(t!("export-title")).clicked() {
-                    self.exports.open = !self.exports.open;
-                    ui.close();
-                }
-                if ui.button(t!("settings-button")).clicked() {
-                    self.settings_open = true;
-                    ui.close();
-                }
-                if ui.button(t!("about-button")).clicked() {
-                    self.about_open = true;
-                    ui.close();
-                }
-            });
-            ui.separator();
             ui.strong(self.tab.title());
-            #[cfg(feature = "export")]
-            self.export_review_label(ui);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Painted rather than the ☰ glyph: egui's bundled fonts have no U+2630 and show
+                // a missing-glyph box instead.
+                let side = ui.spacing().interact_size.y;
+                let button = egui::Button::new("").min_size(egui::vec2(side, side));
+                let (response, _) = egui::containers::menu::MenuButton::from_button(button)
+                    .ui(ui, |ui| self.hamburger_menu(ui));
+                let stroke = ui.style().interact(&response).fg_stroke;
+                let rect = response.rect;
+                let (w, gap) = (rect.width() * 0.5, rect.height() * 0.18);
+                for k in [-1.0_f32, 0.0, 1.0] {
+                    let y = rect.center().y + gap * k;
+                    ui.painter().hline(
+                        (rect.center().x - w / 2.0)..=(rect.center().x + w / 2.0),
+                        y,
+                        egui::Stroke::new(1.5, stroke.color),
+                    );
+                }
+                response.on_hover_text(t!("menu-button"));
+                #[cfg(feature = "export")]
+                self.export_review_label(ui);
+            });
+        });
+    }
+
+    /// Contents of the hamburger menu (see [`Self::menu_bar`]).
+    fn hamburger_menu(&mut self, ui: &mut egui::Ui) {
+        for (i, t) in Tab::ALL.into_iter().enumerate() {
+            let mut button = egui::Button::new(t.title()).selected(self.tab == t);
+            if let Some(key) = keys::tab_shortcut_label(i) {
+                button = button.shortcut_text(key);
+            }
+            if ui.add(button).clicked() {
+                self.tab = t;
+                ui.close();
+            }
+        }
+        ui.separator();
+        #[cfg(feature = "export")]
+        if ui.button(t!("export-title")).clicked() {
+            self.exports.open = !self.exports.open;
+            ui.close();
+        }
+        if ui.button(t!("settings-button")).clicked() {
+            self.settings_open = true;
+            ui.close();
+        }
+        if ui.button(t!("about-button")).clicked() {
+            self.about_open = true;
+            ui.close();
+        }
+        ui.separator();
+        ui.menu_button(t!("menu-theme"), |ui| {
+            for mode in ThemeMode::ALL {
+                let label = match mode {
+                    ThemeMode::System => t!("settings-theme-system"),
+                    ThemeMode::Light => t!("settings-theme-light"),
+                    ThemeMode::Dark => t!("settings-theme-dark"),
+                };
+                if ui
+                    .add(egui::Button::new(label).selected(self.settings.theme == mode))
+                    .clicked()
+                {
+                    self.settings.theme = mode;
+                    self.settings.apply(ui.ctx());
+                    ui.close();
+                }
+            }
         });
     }
 
@@ -763,6 +809,13 @@ impl eframe::App for HeartSimApp {
         }
 
         egui::Panel::top("tabs").show(ui, |ui| self.menu_bar(ui));
+        #[cfg(feature = "native")]
+        if self.assets_missing {
+            egui::Panel::top("assets_missing").show(ui, |ui| {
+                ui.colored_label(ui.visuals().error_fg_color, t!("assets-missing"));
+                ui.small(t!("assets-missing-hint"));
+            });
+        }
         #[cfg(feature = "update-check")]
         if let Some(check) = &mut self.update_check {
             check.notice_bar(ui);

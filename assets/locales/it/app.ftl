@@ -63,6 +63,12 @@ help-keys-arrows = ← / →: in pausa, sposta il cursore di scorrimento indietr
 help-keys-speed = + / −: aumenta o diminuisce la velocità della simulazione e della carta.
 help-keys-tabs = 1 – 9, 0: apre una pagina, nell'ordine del Menu (il numero è mostrato accanto a ogni pagina).
 menu-button = Menu
+menu-theme = Tema
+settings-theme-system = Sistema
+settings-theme-light = Chiaro
+settings-theme-dark = Scuro
+assets-missing = Le risorse del programma (modello anatomico, ritmi, tutorial, casi) non sono state trovate: il cuore è una sfera segnaposto e l'elenco dei ritmi è vuoto.
+assets-missing-hint = Reinstalla heartsim, oppure imposta HEARTSIM_ASSETS sulla cartella che contiene anatomy/default/manifest.ron. "heartsim --assets-dir" mostra dove ha cercato.
 help-keys-note = Le scorciatoie non funzionano mentre una casella di testo ha il focus della tastiera.
 help-disclaimer = Strumento didattico, non destinato all'uso clinico.
 

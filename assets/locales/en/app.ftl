@@ -62,6 +62,12 @@ help-keys-arrows = ← / →: while paused, move the scrub cursor back or forwar
 help-keys-speed = + / −: simulation and paper speed faster or slower.
 help-keys-tabs = 1 – 9, 0: open a page, in the order of the Menu (the number is shown next to each page).
 menu-button = Menu
+menu-theme = Theme
+settings-theme-system = System
+settings-theme-light = Light
+settings-theme-dark = Dark
+assets-missing = The program's assets (anatomy pack, rhythms, tutorials, cases) were not found: the heart is a placeholder sphere and the rhythm list is empty.
+assets-missing-hint = Reinstall heartsim, or set HEARTSIM_ASSETS to the folder that contains anatomy/default/manifest.ron. "heartsim --assets-dir" prints where it looked.
 help-keys-note = Shortcuts are off while a text box has the keyboard.
 help-disclaimer = Educational tool, not for clinical use.
 
