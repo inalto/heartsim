@@ -103,14 +103,18 @@ mod tests {
     #[test]
     fn the_environment_variable_comes_first_and_the_package_layouts_are_tried() {
         let roots = asset_roots();
-        let joined: Vec<String> = roots.iter().map(|r| r.display().to_string()).collect();
+        // compared by components, so the Windows separator does not matter
         assert!(
-            joined.iter().any(|r| r.ends_with("Resources/assets")),
-            "macOS bundle: {joined:?}"
+            roots
+                .iter()
+                .any(|r| r.ends_with(Path::new("Resources").join(ASSETS_DIR_NAME))),
+            "macOS bundle: {roots:?}"
         );
         assert!(
-            joined.iter().any(|r| r.ends_with("lib/heartsim/assets")),
-            "deb/AppImage: {joined:?}"
+            roots
+                .iter()
+                .any(|r| r.ends_with(Path::new("lib").join("heartsim").join(ASSETS_DIR_NAME))),
+            "deb/AppImage: {roots:?}"
         );
         assert_eq!(roots.last().map(|r| r.ends_with(ASSETS_DIR_NAME)), Some(true));
     }

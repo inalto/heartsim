@@ -212,7 +212,8 @@ jobs:
         run: cargo packager --formats app --out-dir dist/macos --verbose
       - name: Smoke test the bundle (--version, assets in Contents/Resources)
         run: |
-          exe=$(ls dist/macos/*.app/Contents/MacOS/heartsim | head -n 1)
+          exe=$(find dist/macos -path '*.app/Contents/MacOS/heartsim' -type f | head -n 1)
+          test -n "$exe"
           test "$("$exe" --version)" = "heartsim $VERSION"
           assets=$("$exe" --assets-dir)
           test -f "$assets/anatomy/default/manifest.ron" && test -d "$assets/scenarios"
