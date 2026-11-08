@@ -18,8 +18,9 @@ use std::sync::Arc;
 /// Lesion growth below this is not applied to the tissue yet, mm (re-marking cells costs one scan).
 const GROWTH_STEP_MM: f32 = 0.25;
 /// Radius of one lesion of a pre-planned ablation line, mm: overlapping into a continuous line on
-/// the 2 mm voxel grid.
-const LINE_LESION_RADIUS_MM: f64 = 4.0;
+/// the 2 mm voxel grid, and wider than the Tier-2 atrial voxel stamp (4 mm each side of a cell), so
+/// that the dead band parts the two slabs it separates instead of letting them touch over it.
+const LINE_LESION_RADIUS_MM: f64 = 5.0;
 /// A pair more than this from any tissue does not capture, mm.
 const CAPTURE_RANGE_MM: f32 = 6.0;
 /// Fraction of the vein-sleeve junction that must lie in lesions for the veins to count as isolated.

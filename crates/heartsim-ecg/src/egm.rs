@@ -39,8 +39,11 @@ const QUIET_MS: f64 = 12.0;
 const RELATIVE_SLOPE: f32 = 0.1;
 /// The steepest-slope memory decays by this factor per ms (time constant 5 s).
 const SLOPE_DECAY: f32 = 0.9998;
-/// Deflections of the same wave across the pairs of one catheter lie within this, ms.
-const GROUP_MS: f64 = 30.0;
+/// Deflections of the same wave across the pairs of one catheter lie within this, ms. For the
+/// H it also has to cover the distal His–Purkinje potentials a His catheter picks up (the
+/// fascicles fire up to an HV, ≈ 35–55 ms, after the H), which must not open a second "H";
+/// no two beats put their H closer than 50 ms apart.
+const GROUP_MS: f64 = 50.0;
 /// Earliest and latest onset of the A before an H, ms.
 const AH_WINDOW_MS: (f64, f64) = (20.0, 400.0);
 /// Earliest and latest onset of the V after an H, ms.

@@ -30,3 +30,6 @@ Thumbs.db
 # Web build (trunk): generated archive and output
 /crates/heartsim-web/generated/
 /crates/heartsim-web/dist/
+
+# Downloaded open anatomy sources for `cargo xtask bake-anatomy` (never vendored)
+/assets/anatomy-src/

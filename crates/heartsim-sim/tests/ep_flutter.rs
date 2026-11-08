@@ -158,11 +158,12 @@ fn entrainment_tells_the_isthmus_from_a_site_outside_the_circuit() {
             other => panic!("{other:?}"),
         }
     };
-    // the isthmus cell in the middle of the circuit's width: halfway between the annulus and the
-    // outer barrier of the file's patches (28° and 66° from the annulus axis)
+    // the isthmus cell in the middle of the circuit's width: halfway between the annulus band and
+    // the outer barrier of the file's patches (30° and 70° from the annulus axis; the centre and
+    // axis are the ones `ep_flutter.ron` draws its bands with)
     let (centre, axis) = (
-        Vec3::new(-53.0, 18.8, -33.3),
-        Vec3::new(0.695, 0.483, 0.533).normalize(),
+        Vec3::new(-61.9, 16.5, -8.3),
+        Vec3::new(0.684, -0.657, 0.317).normalize(),
     );
     let polar = |p: Vec3| {
         (p - centre)
@@ -175,14 +176,20 @@ fn entrainment_tells_the_isthmus_from_a_site_outside_the_circuit() {
     let isthmus = (0..pack().cells.len())
         .filter(|&i| pack().cells.regions[i] == Region::CavotricuspidIsthmus)
         .map(|i| pack().cells.positions[i])
-        .min_by(|a, b| (polar(*a) - 47.0).abs().total_cmp(&(polar(*b) - 47.0).abs()))
+        .min_by(|a, b| (polar(*a) - 50.0).abs().total_cmp(&(polar(*b) - 50.0).abs()))
         .expect("isthmus cells");
     let inside = entrain(isthmus);
     eprintln!("isthmus {inside:?}");
     assert_eq!(inside.captured, inside.delivered, "{inside:?}");
     assert!(inside.in_circuit, "{inside:?}");
-    let la = pack().cells.positions[pack().cells.landmarks["la_roof"] as usize];
-    let outside = entrain(la);
-    eprintln!("LA roof {outside:?}");
+    // outside the circuit: the right atrial free wall just beyond the barrier (polar ≈ 100°
+    // about the annulus axis; the left atrium is inert in this lesson)
+    let high_ra = (0..pack().cells.len())
+        .filter(|&i| pack().cells.regions[i] == Region::RightAtrium)
+        .map(|i| pack().cells.positions[i])
+        .min_by(|a, b| (polar(*a) - 100.0).abs().total_cmp(&(polar(*b) - 100.0).abs()))
+        .expect("right atrial cells");
+    let outside = entrain(high_ra);
+    eprintln!("high RA {outside:?}");
     assert!(!outside.in_circuit, "{outside:?}");
 }

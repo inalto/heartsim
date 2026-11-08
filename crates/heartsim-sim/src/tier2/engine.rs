@@ -66,6 +66,13 @@ pub struct Tier2Params {
     /// its centre. On a coarse grid (4 mm) the thin atrial walls would otherwise leave voxel
     /// chains one voxel wide, where a short-APD front dies; 0 keeps the cloud-spacing rule.
     pub reach_h: f32,
+    /// The same radius for atrial cells, as a multiple of `voxel_mm`. The default pack's atria
+    /// are one 2.3 mm cell thick; stamped at 0.9 spacings they make a two-voxel slab whose
+    /// stair-steps slow the front (sinus activation lagged Tier 1 by 50 ms RMS); 2.0 gives a
+    /// smooth slab three to four voxels thick that conducts at the calibrated velocity (1.5
+    /// still lagged by 27 ms RMS). Two such slabs touch where the walls are under 8 mm apart,
+    /// which is why a line of lesions is 5 mm wide on each side (`LINE_LESION_RADIUS_MM`).
+    pub atrial_reach_h: f32,
     /// APD targets are quantised to this step when forming tissue classes, ms.
     pub apd_step_ms: f32,
     /// A tissue activation at a sensing site within this time of a timing-engine event of the
@@ -88,6 +95,7 @@ impl Default for Tier2Params {
             shock_drive: 2.0,
             stim_radius_mm: 5.0,
             reach_h: 0.0,
+            atrial_reach_h: 2.0,
             apd_step_ms: 4.0,
             sense_window_ms: 300.0,
             sense_gap_ms: 150.0,
@@ -786,11 +794,28 @@ impl<M: CellModel> Tier2Engine<M> {
     /// `reset` and is not reported by [`Tier2Engine::lesion_cells`], because the Tier-1 engine it
     /// would be reported to already holds it.
     pub fn ablate_sphere_permanently(&mut self, centre: Vec3, radius_mm: f32) {
-        let vox = self.solver.grid().voxels_within(centre, radius_mm, None);
+        let vox = self.lesion_voxels(centre, radius_mm);
         self.solver.set_conducting(&vox, false);
         for &v in &vox {
             self.base_conducting[v as usize] = false;
         }
+    }
+
+    /// Voxels a lesion of `radius_mm` at `centre` destroys: those within the radius, and every
+    /// voxel that belongs to a cell within the radius. A thin wall is stamped onto the grid as a
+    /// slab wider than the wall (`atrial_reach_h`), so a ball alone leaves the slab's outer
+    /// voxels conducting over the lesion and a line of lesions no longer blocks; a lesion that
+    /// kills a cell kills its whole transmural column.
+    fn lesion_voxels(&self, centre: Vec3, radius_mm: f32) -> Vec<u32> {
+        let positions = &self.router.cloud().positions;
+        let mut vox = self.solver.grid().voxels_within(centre, radius_mm, None);
+        vox.extend(
+            (0..self.voxel_cell.len() as u32)
+                .filter(|&v| positions[self.voxel_cell[v as usize] as usize].distance(centre) <= radius_mm),
+        );
+        vox.sort_unstable();
+        vox.dedup();
+        vox
     }
 
     /// Cross-field stimulation of the voxels of `compartment` ([`super::preset::Initiation::CrossField`]):
@@ -943,7 +968,7 @@ impl<M: CellModel> Tier2Engine<M> {
                 .ok_or_else(|| ActionError::UnsupportedSite(format!("{site:?}")))
                 .map(|c| {
                     let p = self.router.cloud().positions[c as usize];
-                    let vox = self.solver.grid().voxels_within(p, *radius_mm as f32, None);
+                    let vox = self.lesion_voxels(p, *radius_mm as f32);
                     self.solver.set_conducting(&vox, false);
                 }),
             Action::Block { region, blocked } => {
@@ -1095,14 +1120,21 @@ fn voxelise(router: &EikonalEngine, params: &Tier2Params) -> (VoxelGrid, Vec<u32
     let origin = lo - Vec3::splat(h);
     let ext = ((hi - lo) / h).ceil();
     let dims = [ext.x as usize + 3, ext.y as usize + 3, ext.z as usize + 3];
-    let r_max = (0.9 * cell_spacing(router)).max(params.reach_h * h);
-    // nearest myocardial cell of every voxel centre within r_max: each cell stamps the voxels
-    // around it (cells in index order, strict `<`, so ties go to the lower cell index)
+    let r_base = 0.9 * cell_spacing(router);
+    let r_ventricular = r_base.max(params.reach_h * h);
+    let r_atrial = r_base.max(params.atrial_reach_h * h);
+    // nearest myocardial cell of every voxel centre within its radius: each cell stamps the
+    // voxels around it (cells in index order, strict `<`, so ties go to the lower cell index)
     let mut best: Vec<(f32, u32)> = vec![(f32::INFINITY, u32::MAX); dims[0] * dims[1] * dims[2]];
-    let reach = (r_max / h).ceil() as i64;
+    let reach = (r_ventricular.max(r_atrial) / h).ceil() as i64;
     // dims < u16::MAX (VoxelGrid invariant)
     let last = dims.map(|d| i64::try_from(d).unwrap_or(i64::MAX) - 1);
     for (k, p) in pts.iter().enumerate() {
+        let r_max = if kinds[myo[k] as usize] == CellKind::Atrial {
+            r_atrial
+        } else {
+            r_ventricular
+        };
         let l = (*p - origin) / h;
         let (ci, cj, ck) = (l.x.round() as i64, l.y.round() as i64, l.z.round() as i64);
         for z in (ck - reach).max(0)..=(ck + reach).min(last[2]) {

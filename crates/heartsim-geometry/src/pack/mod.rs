@@ -117,6 +117,8 @@ pub struct AnatomyPack {
     pub torso: TriMesh,
     /// AHA 17-segment index per cell (0 = none).
     pub aha_segments: Vec<u8>,
+    /// The pack's `LICENSE` text: licence and attribution of the geometry.
+    pub licence: String,
 }
 
 /// Procedural pack licence text (the pack is heartsim's own work).
@@ -180,6 +182,7 @@ impl AnatomyPack {
             electrodes: torso.electrodes,
             torso: torso.mesh,
             aha_segments: heart.aha_segments,
+            licence: PROCEDURAL_LICENSE.to_string(),
         }
     }
 
@@ -228,7 +231,7 @@ impl AnatomyPack {
         }
         put("landmarks.ron", to_ron(&self.landmarks)?.as_bytes())?;
         put("electrodes.ron", self.electrodes.to_ron()?.as_bytes())?;
-        put("LICENSE", PROCEDURAL_LICENSE.as_bytes())?;
+        put("LICENSE", self.licence.as_bytes())?;
         self.manifest.files = files;
         self.manifest.format_version = PACK_FORMAT_VERSION;
         self.manifest.cell_count = self.cells.len() as u32;
@@ -345,6 +348,7 @@ impl AnatomyPack {
             return Err(PackError::Format("landmarks.ron: cell index out of range".into()));
         }
         let electrodes = ElectrodeSet::from_ron(&String::from_utf8_lossy(&read("electrodes.ron")?))?;
+        let licence = String::from_utf8_lossy(&read("LICENSE")?).into_owned();
 
         let mut hoods = BTreeMap::new();
         for m in meshes.iter().filter(|m| m.conducting()) {
@@ -375,6 +379,7 @@ impl AnatomyPack {
             electrodes,
             torso,
             aha_segments,
+            licence,
         })
     }
 }

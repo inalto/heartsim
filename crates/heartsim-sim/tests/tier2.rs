@@ -273,9 +273,13 @@ fn sinus_beat_matches_tier1_activation() {
         n[1]
     );
     assert!(missing * 100 < n[0] + n[1], "{missing} cells never activated");
-    // Geometry only: the same tissue on the axis-aligned voxel grid gave under 8 ms in the old pose, 8.2 ms
-    // with the rotation alone and 8.4 ms now (ventricles 8.7, atria 7.6), so the pose moves it, hence 9 and not 8
-    assert!(all <= 9.0, "activation RMS {all:.1} ms");
+    // Geometry only: the same tissue on the axis-aligned voxel grid. The procedural pack gave
+    // 8.4 ms (ventricles 8.7, atria 7.6). The baked anatomy gives 14 ms (ventricles 12, atria
+    // 20): its walls are curved and trabeculated rather than ellipsoids, so the 2 mm voxel slab
+    // of a 2.3 mm cell lattice stair-steps more, and the one-cell atrial wall most of all
+    // (which is why the engine stamps atrial cells with a 4 mm radius and the atria are
+    // isotropic). 15 ms is still a sixth of the P wave and a seventh of the QRS.
+    assert!(all <= 15.0, "activation RMS {all:.1} ms");
 }
 
 #[test]

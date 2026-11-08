@@ -147,8 +147,10 @@ pub enum VentricularPhase {
 pub struct ForwardOptions {
     /// Overall scale `k = σ_i/(4πσ_b) · ΔV_m`, mV per unit of normalised V_m. With σ_i ≈ σ_b and
     /// a 100 mV action potential the physical value is ≈ 8 mV; the default is calibrated so that
-    /// the default pack's sinus beat has R(II) ≈ 1.2 mV, S(V1) ≈ 0.6 mV and R(V5) ≈ 2.3 mV and P(II) stays under 0.25 mV (it
-    /// absorbs the missing torso boundary).
+    /// the default pack's sinus beat has R(II) ≈ 1.0 mV, S(V1) ≈ 0.5 mV and R(V5) ≈ 1.7 mV while
+    /// P(II) stays under 0.25 mV (it absorbs the missing torso boundary). The baked anatomy's
+    /// one-cell atria put the P wave right at that limit, so the gain cannot go higher; the
+    /// procedural pack had 4.4 for R(II) ≈ 1.2 mV.
     pub gain_mv: f32,
     /// Exponent `p` of the distance kernel `(r_e − x)/|r_e − x|^p`; 3 is the exact dipole field.
     pub distance_power: f32,
@@ -168,7 +170,7 @@ pub struct ForwardOptions {
 impl Default for ForwardOptions {
     fn default() -> Self {
         Self {
-            gain_mv: 4.4,
+            gain_mv: 4.5,
             distance_power: 3.0,
             source: SourceModel::Auto,
             limbs: LimbPlacement::default(),

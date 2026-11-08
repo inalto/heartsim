@@ -5981,6 +5981,9 @@ version = "0.7.2"
 dependencies = [
  "anyhow",
  "clap",
+ "flate2",
+ "glam",
+ "heartsim-core",
  "heartsim-geometry",
  "resvg",
  "toml",

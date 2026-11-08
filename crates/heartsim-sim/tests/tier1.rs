@@ -501,10 +501,11 @@ fn deterministic_and_reset_reproduces() {
 
 /// Golden snapshot: histogram of the default sinus beat's activation times (5 ms bins relative to
 /// the first activation), hashed. Update `GOLDEN` only for an intended model change, and say so in
-/// the commit message.
+/// the commit message (last: the baked anatomy pack of 0.7.0 with its re-tuned fast layer, patches
+/// and atrial conduction).
 #[test]
 fn golden_sinus_activation_histogram() {
-    const GOLDEN: u64 = 12_706_740_700_071_212_075;
+    const GOLDEN: u64 = 13_156_204_337_655_351_566;
     let t1 = sinus_beat(TimingParams::default());
     let t = t1.eikonal().activation_times();
     let t0 = t
