@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-08
+Seventh tagged release: the heart and torso are real anatomy (open CT-derived meshes) instead of spheres and tubes, and the
+frontal QRS-axis panel and the interface's colours are redesigned, in a light and a dark theme.
+
 ### Changed
 - **Real anatomy.** The default anatomy pack is now baked from open, CC BY 4.0 meshes instead of the procedural spheres and
   tubes: the heart is the Rodero et al. 2021 *average* four-chamber mesh (the mean of 19 healthy adults' CT, Zenodo 4593739;
@@ -44,6 +48,18 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   cases show their results in green or rose boxes with a check or an exclamation mark. The high-contrast setting keeps
   its black and white; the ECG paper, strip and 3-D colour maps keep their clinical colours.
 - The screenshot tour takes `HEARTSIM_SCREENSHOT_THEME=light|dark` to shoot in one theme.
+
+### Fixed
+- The engines give the same bits on every platform: their transcendental functions (`exp`, `ln`, `powf`, `tanh`, `sin`,
+  `cos`, `atan2`, `acos`) now come from the pure-Rust `libm` crate through `heartsim_core::math::Deterministic` instead of
+  the system libm, whose last-bit differences between glibc, the MSVC CRT and Apple's libm were enough to turn the chaotic
+  AF of one platform into a regular tachycardia on another (the AF tests failed on the Apple-silicon runner only).
+- With bit-exact arithmetic the persistent-AF presets conducted regularly everywhere: the organised atrial wave on the
+  baked grid reaches the AV node at a constant cycle, and a deterministic node settles into a fixed ratio. The node's
+  concealed penetration now scatters beat to beat in those presets (`AvParams::concealment_spread`, 0.25 around 0.75,
+  from the scenario seed; the stand-in for fibrillatory wavefronts reaching the node from changing directions, after
+  Cohen, Berger & Dushane 1983 and Lian, Müssig & Lang 2006), giving ≈ 100 bpm with an RR coefficient of variation ≈ 0.2.
+  It is 0 in every other preset, so flutter keeps its 2:1 and 4:1.
 
 ### Known limitations
 - The chest-lead near field over the apex: V4 sits 30 mm from the LV apex, which this heart finishes depolarising early,
