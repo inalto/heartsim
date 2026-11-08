@@ -111,6 +111,23 @@ fn flutter_4to1_conducts_every_fourth_wave() {
 }
 
 #[test]
+fn scattered_concealment_makes_a_regular_input_conduct_irregularly() {
+    // The AF presets' stand-in for fibrillatory wavefronts (`AvParams::concealment_spread`): the
+    // same regular flutter input, the node's concealed penetration scattered beat to beat from the
+    // scenario seed. Files without the field get 0, which is what keeps 4:1 flutter regular above.
+    let mut p = timing("flutter_4to1");
+    assert_eq!(p.av.concealment_spread, 0.0);
+    p.av.concealment_spread = 0.35;
+    let (evs, _) = run(p, 42, 40.0, &[]);
+    let (a, v) = (atrial_cycles(&evs, 5000.0), beats(&evs, 5000.0));
+    assert_flutter_rate(&a);
+    let rr = diffs(&v);
+    assert!(cv(&rr) > 0.1, "RR CV {}", cv(&rr));
+    let ratio = a.len() as f64 / v.len() as f64;
+    assert!((2.0..=6.0).contains(&ratio), "mean AV ratio {ratio}");
+}
+
+#[test]
 fn flutter_with_variable_block_has_a_regular_atrium_and_an_irregular_ventricle() {
     let (evs, _) = run(timing("flutter_variable"), 42, 40.0, &[]);
     let (a, v) = (atrial_cycles(&evs, 5000.0), beats(&evs, 5000.0));

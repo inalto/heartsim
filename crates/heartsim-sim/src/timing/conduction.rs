@@ -15,6 +15,7 @@ use super::{
 };
 use crate::defib::VULNERABLE_WINDOW;
 use crate::engine::{Chamber, Circuit, EventKind, Origin};
+use heartsim_core::math::Deterministic;
 use heartsim_core::{Millis, Region};
 
 /// Shrier recovery curve: conduction time for recovery time `rt` (ms), `None` if blocked.
@@ -24,7 +25,7 @@ fn pathway_conduction(p: &AvPathway, rt: f64, erp_bonus_ms: f64, cv_scale: f64) 
     if p.blocked || rt < (p.erp_ms + erp_bonus_ms).max(0.0) {
         return None;
     }
-    Some((p.min_ms + p.recovery_amplitude_ms * (-(rt - p.erp_ms) / p.recovery_tau_ms).exp()) / cv_scale)
+    Some((p.min_ms + p.recovery_amplitude_ms * (-(rt - p.erp_ms) / p.recovery_tau_ms).exp_d()) / cv_scale)
 }
 
 fn since(last: Option<f64>, t: f64) -> f64 {
@@ -114,7 +115,7 @@ impl TimingEngine {
             return rr;
         }
         let phase = t / 1000.0 * s.respiration_rate_bpm / 60.0 * std::f64::consts::TAU;
-        rr * (1.0 - s.respiration_depth * phase.sin())
+        rr * (1.0 - s.respiration_depth * phase.sin_d())
     }
 
     fn on_sinus(&mut self, t: f64) {
@@ -270,8 +271,13 @@ impl TimingEngine {
         };
 
         let Some((via, pathway_region)) = route else {
-            // Blocked: concealed conduction advances the recovery clock part of the way.
-            let c = av.concealment_fraction;
+            // Blocked: concealed conduction advances the recovery clock part of the way; the
+            // depth scatters beat to beat when the preset asks for it (see `AvParams`).
+            let mut c = av.concealment_fraction;
+            if av.concealment_spread > 0.0 {
+                let u = self.circuit_rng.next_f64();
+                c = (c + av.concealment_spread * (2.0 * u - 1.0)).clamp(0.0, 1.0);
+            }
             if let Some(last) = self.last_his_output {
                 self.last_his_output = Some(last + c * (t - last));
             }

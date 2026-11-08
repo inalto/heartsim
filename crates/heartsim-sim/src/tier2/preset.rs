@@ -25,6 +25,7 @@ use super::switching::SwitchingEngine;
 use crate::tier1::{EikonalEngine, EikonalParams, Tier1Engine};
 use crate::timing::TimingParams;
 use glam::Vec3;
+use heartsim_core::math::Deterministic;
 use heartsim_core::scenario::ScenarioError;
 use heartsim_core::{Action, Millis, Region, Scenario, StimSite, TimedAction};
 use heartsim_geometry::CellCloud;
@@ -347,7 +348,7 @@ fn select<M: CellModel>(engine: &Tier2Engine<M>, target: &PatchTarget) -> Vec<u3
                     if len > *radius_mm || len < 1e-3 {
                         return false;
                     }
-                    let angle = (r.dot(axis) / len).clamp(-1.0, 1.0).acos().to_degrees();
+                    let angle = (r.dot(axis) / len).clamp(-1.0, 1.0).acos_d().to_degrees();
                     (*from_deg..=*to_deg).contains(&angle) && gap.is_none_or(|q| p.distance(q) > *gap_mm)
                 })
                 .collect()

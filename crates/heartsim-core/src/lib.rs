@@ -8,6 +8,7 @@
 pub mod axis;
 pub mod case;
 pub mod lead;
+pub mod math;
 pub mod params;
 pub mod region;
 pub mod scenario;

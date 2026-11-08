@@ -64,7 +64,7 @@ The simulator and its texts use them as written.
 | Atrial and venous positions | The atria, the veins and the AF presets | From the Rodero 2021 average mesh (real chambers and inlets); the vein tubes beyond the inlets, the appendage lobe and the landmark cells on them are placed by rule |
 | Heart position in the chest (53 mm left of the midline, 84 mm behind the sternum) and the torso's scale (×0.869) | Electrode distances, hence the precordial amplitudes | Measured on the KCL CT torso 1 (its own ventricular centroid), one subject; the torso is scaled uniformly so its LV has the baked heart's length |
 | `ForwardOptions::gain_mv` 4.5 | Scales the forward-model ECG | Recalibrated on the baked pack for R(II) ≈ 1.0 mV; it cannot go higher because P(II) is at its 0.25 mV limit with one-cell atria; not a physical constant |
-| AV concealment 0.85 in the AF presets | How irregular the ventricular response is | Above the 0.3–0.7 range the documentation cites; needed for an irregular response (about 113 bpm) on the new atria |
+| AV concealment 0.75 ± 0.25 in the AF presets | How irregular the ventricular response is (≈ 100 bpm, RR CV ≈ 0.2) | The fraction is at the top of the 0.3–0.7 range the documentation cites, and the beat-to-beat scatter (`concealment_spread`, from the scenario seed) stands in for the changing penetration of fibrillatory wavefronts that the organised atrial wave does not provide (Cohen, Berger & Dushane 1983; Lian, Müssig & Lang 2006). Without the scatter the node settles into a fixed conduction ratio and the response is regular; it is 0 in every other preset, so flutter keeps its 2:1 and 4:1. |
 | Sinus axis ≈ +43°, P ≈ 105 ms and P(II) ≈ 0.24 mV, QRS ≈ 90 ms, AH 83 ms, HV 43 ms | The forward model's normal sinus beat | Measured on the baked pack; in range, but not compared with a recorded ECG |
 | RBBB frontal axis | The axis read-out during RBBB | The net-area axis over the QRS reads about 170° while the peak amplitudes suggest about +25°; the wide terminal S is the likely cause and was not confirmed |
 
@@ -103,8 +103,8 @@ interface.
   and ≥ +90°. Both fascicular-block axis tests stay ignored with the target values (section 4).
 * After flecainide ends an induced AF, the model stays on the Tier-2 grid with sinus sensed instead of returning to Tier 1.
 * **AF on the baked atria is organised.** The smooth, isotropic, one-cell atrial walls hold one or two stable wavelets
-  rather than fibrillation; the AV node is shown a fast regular input (its sensing site re-arms every 135 ms) and its
-  concealment makes the ventricular response irregular, so the strip reads as AF, but amiodarone does not slow the shown
+  rather than fibrillation; the AV node is shown a fast regular input (its sensing site re-arms every 135 ms) and only the
+  scattered concealment (`concealment_spread`, above) makes the ventricular response irregular, so the strip reads as AF, but amiodarone does not slow the shown
   rate and, with the presets' pacing site on the atrial side of the vein mouths, isolating the veins does not prevent the induction (section 4). Stronger and
   finer dispersion mosaics and a shorter wavelength were tried; a rough, anisotropic atrial wall (the real one) is what
   the substrate lacks.

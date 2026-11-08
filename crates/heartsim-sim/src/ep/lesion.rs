@@ -13,6 +13,7 @@
 //!   5–6 mm deep and 7–8 mm wide, hence the default `r_max` of 4 mm.
 
 use glam::Vec3;
+use heartsim_core::math::Deterministic;
 use serde::{Deserialize, Serialize};
 
 /// Generator settings and the tissue response to them.
@@ -96,7 +97,7 @@ impl RfApplication {
     pub fn readout(&self, now_ms: f64) -> RfReadout {
         let p = &self.params;
         let elapsed_ms = (now_ms - self.start_ms).max(0.0);
-        let growth = 1.0 - (-elapsed_ms / p.tau_ms.max(1.0)).exp();
+        let growth = 1.0 - (-elapsed_ms / p.tau_ms.max(1.0)).exp_d();
         let temperature_c = 37.0 + p.heating_c_per_w * p.power_w * self.contact * growth;
         let impedance_ohm = p.blood_impedance_ohm + p.contact_impedance_ohm * self.contact
             - p.impedance_fall_ohm * self.contact * growth;
@@ -200,7 +201,7 @@ mod tests {
         let p = RfParams::default();
         let rf = RfApplication::new(Vec3::ZERO, 1000.0, 0.0, p);
         let at_tau = rf.readout(1000.0 + p.tau_ms);
-        let expected = p.max_radius_mm * (1.0 - (-1.0f32).exp());
+        let expected = p.max_radius_mm * (1.0 - (-1.0f32).exp_d());
         assert!((at_tau.lesion_radius_mm - expected).abs() < 1e-3, "{at_tau:?}");
         let late = rf.readout(1000.0 + 10.0 * p.tau_ms);
         assert!(late.lesion_radius_mm > at_tau.lesion_radius_mm);

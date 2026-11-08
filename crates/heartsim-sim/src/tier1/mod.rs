@@ -64,6 +64,7 @@ use crate::ischaemia::{InjuryField, IschaemiaState, injury_field};
 use crate::pharma::DrugEffects;
 use crate::timing::{ActionError, HisPurkinjeParams, PacerConfig, Side};
 use glam::Vec3;
+use heartsim_core::math::Deterministic;
 use heartsim_core::{Action, Millis, Parameters, Region, RegionParams, StimSite};
 use heartsim_geometry::CellCloud;
 use queue::{Front, FrontQueue};
@@ -281,7 +282,7 @@ impl RelaxView<'_> {
             let r = self.cv_rest[h.region as usize];
             let di = f.at - h.repol_at;
             if di < r.di_cutoff_ms {
-                factor = (1.0 - r.a * (-di * r.inv_tau).exp()).max(self.min_factor);
+                factor = (1.0 - r.a * (-di * r.inv_tau).exp_d()).max(self.min_factor);
             }
         }
         let arrive = f.at + f64::from(base) / factor;
@@ -532,7 +533,7 @@ impl EikonalEngine {
                 a,
                 inv_tau: 1.0 / p.cv_rest_tau_ms.max(1e-6),
                 di_cutoff_ms: if a > 0.0 {
-                    p.cv_rest_tau_ms * (a / RESTITUTION_EPSILON).ln()
+                    p.cv_rest_tau_ms * (a / RESTITUTION_EPSILON).ln_d()
                 } else {
                     f64::NEG_INFINITY
                 },
@@ -1404,7 +1405,7 @@ impl EikonalEngine {
             base
         } else {
             let di = f.at - h.repol_at;
-            (base * (1.0 - p.apd_rest_amplitude * (-di / p.apd_rest_tau_ms.max(1e-6)).exp()))
+            (base * (1.0 - p.apd_rest_amplitude * (-di / p.apd_rest_tau_ms.max(1e-6)).exp_d()))
                 .max(base * self.eik.min_apd_fraction)
         };
         {

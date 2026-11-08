@@ -45,6 +45,7 @@
 //! with the same wavefront rule → diffuse ST depression with ST elevation in aVR.
 
 use crate::tier1::{CellKind, Graph};
+use heartsim_core::math::Deterministic;
 use heartsim_core::{Action, Region};
 use heartsim_geometry::CellCloud;
 use heartsim_geometry::territory::RV_ANTERIOR_SEGMENT;
@@ -475,7 +476,7 @@ impl IschaemiaState {
             let depth = l.transmural_fraction();
             let stage = depth * l.kind.t_inversion();
             let r = p.frontal_axis_deg.to_radians();
-            let axis = [r.cos(), -r.sin()];
+            let axis = [r.cos_d(), -r.sin_d()];
             for (i, a) in axis.iter().enumerate() {
                 f.q_limb[i] += a * p.frontal_gain * depth;
                 f.t_limb[i] += a * p.frontal_gain * stage;

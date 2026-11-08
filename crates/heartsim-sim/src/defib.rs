@@ -23,6 +23,7 @@
 //! flagged ([`ShockRecord::vulnerable`]); with Tier 2 active (B16/B17) that is what induces VF.
 
 use heartsim_core::Millis;
+use heartsim_core::math::Deterministic;
 use serde::{Deserialize, Serialize};
 
 /// Delay from the R wave to a synchronised shock, ms (devices deliver within ≈ 60 ms of the
@@ -96,7 +97,7 @@ pub fn success_probability(rhythm: RhythmClass, joules: f64) -> f64 {
     if e_c <= 0.0 {
         return p_max;
     }
-    p_max * (1.0 - (-joules.max(0.0) / e_c).exp())
+    p_max * (1.0 - (-joules.max(0.0) / e_c).exp_d())
 }
 
 /// One delivered shock: the animation / sound hook and the audit trail.

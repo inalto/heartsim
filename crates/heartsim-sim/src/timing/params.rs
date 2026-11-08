@@ -221,6 +221,14 @@ pub struct AvParams {
     /// Concealed conduction: a blocked impulse still advances the node's recovery clock by this
     /// fraction of the way towards its arrival time (0 = none, 1 = full reset). Typical 0.3–0.7.
     pub concealment_fraction: f64,
+    /// Beat-to-beat scatter of the concealed penetration: each blocked impulse uses
+    /// `concealment_fraction ± spread` (uniform, clipped to 0–1, from the scenario-seeded
+    /// generator). In fibrillation the wavefronts reach the node from changing directions and
+    /// penetrate it to changing depths, which is what makes the ventricular response irregularly
+    /// irregular (Cohen, Berger & Dushane 1983; Lian, Müssig & Lang 2006); with a regular atrial
+    /// input (flutter) the depth is constant and the response keeps its fixed ratio, so this is
+    /// 0 by default and set only by the AF presets whose grid holds an organised wave.
+    pub concealment_spread: f64,
     /// Complete (3rd-degree) block: nothing crosses the node in either direction.
     pub complete_block: bool,
     /// Mobitz II (infranodal all-or-none drop): conduct `n − 1` of every `n` beats that reach
@@ -241,6 +249,7 @@ impl Default for AvParams {
             retrograde_delay_ms: 80.0,
             reentry_delay_ms: 50.0,
             concealment_fraction: 0.5,
+            concealment_spread: 0.0,
             complete_block: false,
             mobitz2_ratio: 0,
             mobitz2_conducted: 0,

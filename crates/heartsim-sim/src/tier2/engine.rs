@@ -35,6 +35,7 @@ use crate::pharma::DrugEffects;
 use crate::tier1::{CellKind, EikonalEngine, Tier1Engine, resolve_site};
 use crate::timing::{ActionError, TimingEngine, TimingParams};
 use glam::Vec3;
+use heartsim_core::math::Deterministic;
 use heartsim_core::{Action, Millis, Region};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -876,7 +877,7 @@ impl<M: CellModel> Tier2Engine<M> {
                 .filter(|&v| {
                     let r = g.position(v) - centre;
                     let len = r.length().max(1e-3);
-                    let polar = (r.dot(axis) / len).clamp(-1.0, 1.0).acos().to_degrees();
+                    let polar = (r.dot(axis) / len).clamp(-1.0, 1.0).acos_d().to_degrees();
                     len <= limit.radius_mm && (limit.polar_deg.0..=limit.polar_deg.1).contains(&polar)
                 })
                 .collect(),
@@ -889,7 +890,7 @@ impl<M: CellModel> Tier2Engine<M> {
             .iter()
             .map(|&v| {
                 let p = g.position(v) - centre;
-                let theta = p.dot(w).atan2(p.dot(u));
+                let theta = p.dot(w).atan2_d(p.dot(u));
                 (v, (theta + std::f32::consts::PI) / std::f32::consts::TAU * span)
             })
             .collect();

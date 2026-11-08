@@ -20,6 +20,7 @@
 use super::grid::{Compartment, DIRECTIONS, VoxelGrid};
 use super::model::CellModel;
 use glam::Vec3;
+use heartsim_core::math::Deterministic;
 
 /// Active voxels per parallel work item (whole slabs on a 64³ box are 4096 voxels).
 const CHUNK: usize = 4096;
@@ -728,7 +729,7 @@ impl<M: CellModel> Monodomain<M> {
                 s[0] = self.u[v];
                 s[1..M::VARS].copy_from_slice(&self.gates[v * gv..(v + 1) * gv]);
                 let m = &self.tissue[usize::from(self.class[v])].model;
-                (m.recovery(&s[..M::VARS]) - rc).atan2(m.vm(&s[..M::VARS]) - uc)
+                (m.recovery(&s[..M::VARS]) - rc).atan2_d(m.vm(&s[..M::VARS]) - uc)
             })
             .collect();
         let wrap = |d: f32| {

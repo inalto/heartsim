@@ -18,7 +18,7 @@ Scenario(
     )),
     timing: TimingParams(
         sinus: SinusParams(rate_bpm: 70.0),
-        av: AvParams(concealment_fraction: 0.85, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 200.0, recovery_tau_ms: 100.0, erp_ms: 160.0, blocked: false)),
+        av: AvParams(concealment_fraction: 0.75, concealment_spread: 0.25, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 200.0, recovery_tau_ms: 100.0, erp_ms: 160.0, blocked: false)),
     ),
     reentry: Some(ReentrySpec(
         // conduction at 0.3 x stretches a sinus beat over the AV sensing site to 151-315 ms after the sinus event

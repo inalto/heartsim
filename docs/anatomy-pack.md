@@ -120,6 +120,11 @@ Tier-2 grid stamps atrial cells with a 4 mm radius (`Tier2Params::atrial_reach_h
 that conducts at the calibrated velocity, and a lesion kills the whole voxel column of every cell it reaches; the forward
 gain is 4.5 mV. The EP flutter lesson draws its bands on the real right atrium (centre, axis and polar angles printed by
 the bake) and makes the left atrium, Bachmann's bundle, the coronary sinus and the septal strip above the barrier inert.
+The persistent-AF presets give the AV node a beat-to-beat scatter of its concealed penetration (`AvParams::concealment_spread`
+0.25 around 0.75, drawn from the scenario seed: ≈ 100 bpm with an RR coefficient of variation ≈ 0.2): the organised atrial wave on this grid arrives at a constant cycle, and a
+deterministic node fed a constant cycle settles into a fixed conduction ratio and a regular ventricular response, which is not
+AF. The scatter stands in for the changing penetration of fibrillatory wavefronts (Cohen, Berger & Dushane 1983; Lian, Müssig
+& Lang 2006) and is 0 everywhere else, so flutter keeps its fixed ratios.
 
 ### The torso (`bake/torso.rs`)
 

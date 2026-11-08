@@ -7,6 +7,7 @@
 
 use super::model::CellModel;
 use super::solver::{ACTIVATION_THRESHOLD, Tissue, Trajectory, apply_stimulus, stimulus_conductance};
+use heartsim_core::math::Deterministic;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
@@ -86,16 +87,16 @@ pub fn solve_d<M: CellModel>(model: &M, target_m_s: f32, h_mm: f32, dt_ms: f32, 
         .filter(|c| *c > 0.0)
         .map_or(d_max * 1e-5, |c| (target_m_s / c).powi(2) / 4.0)
         .min(d_max * 0.5);
-    let (mut lo, mut hi) = (lo.ln(), d_max.ln());
+    let (mut lo, mut hi) = (lo.ln_d(), d_max.ln_d());
     for _ in 0..BISECTIONS {
         let mid = f32::midpoint(lo, hi);
-        if cv(mid.exp()) < target_m_s {
+        if cv(mid.exp_d()) < target_m_s {
             lo = mid;
         } else {
             hi = mid;
         }
     }
-    let d = hi.exp();
+    let d = hi.exp_d();
     (d, cv(d))
 }
 
@@ -132,7 +133,7 @@ pub fn solve_excitation<M: CellModel>(
     // scan for the peak, then bisection below it
     let samples: Vec<(f32, f32, f32)> = (0..=12)
         .map(|i| {
-            let s = s_max.powf(i as f32 / 12.0);
+            let s = s_max.powf_d(i as f32 / 12.0);
             let (d, cv) = eval(s);
             (s, d, cv)
         })
@@ -167,17 +168,17 @@ pub fn single_cell_apd<M: CellModel>(model: &M, dt_ms: f32) -> f32 {
 /// (bisection on log s over `[0.05, 20]`).
 fn solve_apd_dial<M: CellModel>(model: &M, target_ms: f32, dt_ms: f32) -> f32 {
     let apd = |s: f32| single_cell_apd(&model.scaled_apd(s), dt_ms);
-    let (mut lo, mut hi) = (0.05f32.ln(), 20.0f32.ln());
+    let (mut lo, mut hi) = (0.05f32.ln_d(), 20.0f32.ln_d());
     for _ in 0..BISECTIONS {
         let mid = f32::midpoint(lo, hi);
-        let a = apd(mid.exp());
+        let a = apd(mid.exp_d());
         if a.is_nan() || a < target_ms {
             lo = mid;
         } else {
             hi = mid;
         }
     }
-    hi.exp()
+    hi.exp_d()
 }
 
 /// `model.scaled_apd(s)` with the single-cell APD closest to `target_ms` (bisection on log s

@@ -21,6 +21,7 @@
 //! 9th ed.; Vaughan Williams classes; research doc §2.5.1 and §3.5 for the electrolyte / digoxin
 //! AP changes) and simplified for teaching; they are not dosing guidance.
 
+use heartsim_core::math::Deterministic;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock};
 
@@ -199,13 +200,13 @@ impl Kinetics {
             return 0.0;
         }
         let rise = if self.onset_ms > 0.0 {
-            1.0 - (-3.0 * elapsed_ms / self.onset_ms).exp()
+            1.0 - (-3.0 * elapsed_ms / self.onset_ms).exp_d()
         } else {
             1.0
         };
         let after = elapsed_ms - self.onset_ms - self.hold_ms;
         let decay = if self.half_life_ms > 0.0 && after > 0.0 {
-            0.5f64.powf(after / self.half_life_ms)
+            0.5f64.powf_d(after / self.half_life_ms)
         } else {
             1.0
         };

@@ -7,6 +7,7 @@
 //! velocity at a fixed diffusivity (`CV ∝ sqrt(s·D)`): on a coarse grid the explicit diffusion
 //! limit `dt ≤ h²/(2 tr D)` caps D, so fast tissue (Bachmann's bundle, the Purkinje layer) gets
 //! its speed from the kinetics instead.
+use heartsim_core::math::Deterministic;
 
 /// A cell model integrated with explicit Euler. `state[0]` is the normalised membrane variable.
 pub trait CellModel: Clone + Send + Sync + std::fmt::Debug {
@@ -210,8 +211,8 @@ impl MitchellSchaeffer {
     #[must_use]
     pub fn analytic_apd_ms(&self, di_ms: f32) -> f32 {
         let h_min = self.h_min();
-        let h_max = 1.0 - (1.0 - h_min) * (-di_ms / self.tau_open_ms).exp();
-        self.tau_close_ms * (h_max / h_min).max(1.0).ln()
+        let h_max = 1.0 - (1.0 - h_min) * (-di_ms / self.tau_open_ms).exp_d();
+        self.tau_close_ms * (h_max / h_min).max(1.0).ln_d()
     }
 }
 
@@ -371,7 +372,7 @@ impl CellModel for FentonKarma {
                 (1.0 - w) / self.tau_w_minus_ms,
             )
         };
-        let j_si = -w * (1.0 + (self.k * (u - self.u_c_si)).tanh()) / (2.0 * self.tau_si_ms);
+        let j_si = -w * (1.0 + (self.k * (u - self.u_c_si)).tanh_d()) / (2.0 * self.tau_si_ms);
         state[0] = u + dt_ms * (-(j_fi + j_so + j_si) + i_stim);
         state[1] = v + dt_ms * dv;
         state[2] = w + dt_ms * dw;

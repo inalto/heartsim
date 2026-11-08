@@ -1,6 +1,7 @@
 //! Action-potential template: a normalised shape f(φ) on phase φ ∈ [0, 1] stretched to the
 //! cell's APD. Tier 0 and Tier 1 both play this shape; Tier 2 integrates ODEs instead.
 
+use heartsim_core::math::Deterministic;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -16,7 +17,7 @@ impl ApTemplate {
         let samples = (0..n)
             .map(|i| {
                 let phi = i as f32 / n as f32;
-                let upstroke = 1.0 - (-phi * 80.0).exp();
+                let upstroke = 1.0 - (-phi * 80.0).exp_d();
                 let plateau = 1.0 - (phi / 0.9).powi(6).min(1.0);
                 let dome = 0.85 + 0.15 * (1.0 - (phi * 6.0).min(1.0));
                 (upstroke * plateau * dome).clamp(0.0, 1.0)
@@ -35,13 +36,13 @@ impl ApTemplate {
         if repolarisation_slope == 0.0 && plateau_sag == 0.0 {
             return Self::ventricular(n);
         }
-        let k = 6.0 * 2f32.powf(repolarisation_slope.clamp(-1.5, 1.5));
+        let k = 6.0 * 2f32.powf_d(repolarisation_slope.clamp(-1.5, 1.5));
         let sag = 0.4 * plateau_sag.clamp(0.0, 1.0);
         let samples = (0..n)
             .map(|i| {
                 let phi = i as f32 / n as f32;
-                let upstroke = 1.0 - (-phi * 80.0).exp();
-                let plateau = 1.0 - (phi / 0.9).powf(k).min(1.0);
+                let upstroke = 1.0 - (-phi * 80.0).exp_d();
+                let plateau = 1.0 - (phi / 0.9).powf_d(k).min(1.0);
                 let dome = 0.85 + 0.15 * (1.0 - (phi * 6.0).min(1.0));
                 let scoop = 1.0 - sag * (phi / 0.9).min(1.0).sqrt();
                 (upstroke * plateau * dome * scoop).clamp(0.0, 1.0)
@@ -56,8 +57,8 @@ impl ApTemplate {
         let samples = (0..n)
             .map(|i| {
                 let phi = i as f32 / n as f32;
-                let upstroke = 1.0 - (-phi * 80.0).exp();
-                let decay = (1.0 - phi).powf(1.5);
+                let upstroke = 1.0 - (-phi * 80.0).exp_d();
+                let decay = (1.0 - phi).powf_d(1.5);
                 (upstroke * decay).clamp(0.0, 1.0)
             })
             .collect();
@@ -71,7 +72,7 @@ impl ApTemplate {
         let samples = (0..n)
             .map(|i| {
                 let phi = i as f32 / n as f32;
-                let upstroke = 1.0 - (-phi * 100.0).exp();
+                let upstroke = 1.0 - (-phi * 100.0).exp_d();
                 let plateau = 1.0 - (phi / 0.94).powi(10).min(1.0);
                 let notch = 0.9 + 0.1 * (1.0 - (phi * 10.0).min(1.0));
                 (upstroke * plateau * notch).clamp(0.0, 1.0)
@@ -87,8 +88,8 @@ impl ApTemplate {
         let samples = (0..n)
             .map(|i| {
                 let phi = i as f32 / n as f32;
-                let upstroke = 1.0 - (-phi * 12.0).exp();
-                let decay = (1.0 - phi).powf(1.2);
+                let upstroke = 1.0 - (-phi * 12.0).exp_d();
+                let decay = (1.0 - phi).powf_d(1.2);
                 (0.8 * upstroke * decay).clamp(0.0, 1.0)
             })
             .collect();
