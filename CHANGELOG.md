@@ -4,6 +4,22 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-11-07
+Patch release after the first run of an installer by a person: every package up to 0.7.0 lacked the `assets/` tree, so the
+installed program showed a placeholder sphere instead of the heart. Also the hamburger menu with the theme switch.
+
+### Fixed
+- The installers (MSI, NSIS, dmg, deb, AppImage) did not ship the `assets/` tree, so an installed heartsim showed the placeholder
+  sphere and an empty rhythm picker. The anatomy pack, scenarios, tutorials and cases are now packaged (next to the binary on
+  Windows, in `Contents/Resources` on macOS, in `usr/lib/heartsim` on Linux), the app also looks in those places, a red bar says
+  when nothing was found, and `heartsim --assets-dir` (checked by every installer smoke test) prints where the assets were found
+  or the paths that were tried.
+
+### Changed
+- The menu is a hamburger (☰) at the right end of the menu bar, with the open page's name on the left next to the version.
+  Its bottom entry, **Theme**, chooses system, light or dark; the choice is remembered with the other settings
+  (`theme` in the settings file, default `System`), and the high-contrast switch still applies on top of it.
+
 ## [0.7.0] — 2026-11-07
 Sixth tagged release, the follow-up to the first look at 0.6.0: the 3-D view opens on an oblique that shows the heart as a
 heart, the tab row gives way to a one-line menu bar with the version in view, and the desktop app tells you when a newer
