@@ -19,6 +19,41 @@ pub enum AxisClass {
 }
 
 impl AxisClass {
+    /// Every class in legend order: normal first, then the deviations as a reader meets them
+    /// (left, right, extreme).
+    pub const ALL: [AxisClass; 4] = [
+        AxisClass::Normal,
+        AxisClass::LeftDeviation,
+        AxisClass::RightDeviation,
+        AxisClass::ExtremeDeviation,
+    ];
+
+    /// The sector of the hexaxial wheel this class covers, degrees `(start, end)` with
+    /// `start < end`, clockwise as drawn (0° = lead I to the right, +90° = aVF down). The four
+    /// sectors tile the wheel; [`FrontalAxis::classify`] is the authority on the boundaries.
+    #[must_use]
+    pub fn sector_deg(self) -> (f64, f64) {
+        match self {
+            AxisClass::Normal => (-30.0, 90.0),
+            AxisClass::LeftDeviation => (-90.0, -30.0),
+            AxisClass::RightDeviation => (90.0, 180.0),
+            AxisClass::ExtremeDeviation => (-180.0, -90.0),
+        }
+    }
+
+    /// The range as a reader states it, degrees `(from, to)`: from the boundary shared with the
+    /// normal sector outward, so a deviation reads "beyond −30°, up to −90°". The extreme class
+    /// ends at ±180°, given here as −180.
+    #[must_use]
+    pub fn range_deg(self) -> (i32, i32) {
+        match self {
+            AxisClass::Normal => (-30, 90),
+            AxisClass::LeftDeviation => (-30, -90),
+            AxisClass::RightDeviation => (90, 180),
+            AxisClass::ExtremeDeviation => (-90, -180),
+        }
+    }
+
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -221,6 +256,29 @@ mod tests {
             AxisClass::ExtremeDeviation
         );
     }
+    #[test]
+    fn the_sectors_tile_the_wheel_and_agree_with_classify() {
+        let mut total = 0.0;
+        for class in AxisClass::ALL {
+            let (start, end) = class.sector_deg();
+            assert!(start < end, "{class:?}");
+            total += end - start;
+            // every tenth of a degree inside the sector classifies as the class
+            let mut d = start + 0.05;
+            while d < end {
+                assert_eq!(FrontalAxis { degrees: d }.classify(), class, "{d}°");
+                d += 0.1;
+            }
+            // the stated range has the same end points as the sector
+            let (from, to) = class.range_deg();
+            let mut ends = [f64::from(from), f64::from(to)];
+            ends.sort_by(f64::total_cmp);
+            assert_eq!(ends, [start, end], "{class:?}");
+        }
+        assert!((total - 360.0).abs() < 1e-9);
+        assert_eq!(AxisClass::ALL.len(), 4);
+    }
+
     /// xorshift64*, the generator the quiz uses.
     fn rng(seed: u64) -> impl FnMut() -> f64 {
         let mut state = seed.max(1);

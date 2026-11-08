@@ -6,8 +6,8 @@ use heartsim_geometry::primitives::icosphere;
 use heartsim_render::SceneRenderer;
 use heartsim_sim::{Engine, TimingEngine, TimingParams};
 use heartsim_ui::{
-    AxisDialStyle, EcgView, LeadOrder, TwelveLeadLayout, Viewport3d, ViewportResources, axis_dial, highlight,
-    lead_column, lead_polarity, t, transport_controls,
+    AxisPanel, EcgView, LeadOrder, TwelveLeadLayout, Viewport3d, ViewportResources, axis_panel, cards,
+    highlight, lead_column, t, transport_controls,
 };
 
 use crate::heart_history::HeartHistory;
@@ -421,46 +421,73 @@ impl HeartSimApp {
         self.synth.axis_shift_deg = FrontalAxis::normalise(target_deg - base.qrs_axis_deg());
     }
 
+    /// The rhythm bar: its controls in soft groups (rhythm, transport, sinus and AV node, QRS,
+    /// windows) that wrap as one row each on a narrow window.
     fn rhythm_controls(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            if let Some(i) = scenario_picker(ui, &self.library, self.scenario) {
+            ui.spacing_mut().item_spacing.y = 4.0;
+            let picked = cards::group(ui, |ui| {
+                ui.horizontal(|ui| scenario_picker(ui, &self.library, self.scenario))
+                    .inner
+            })
+            .inner;
+            if let Some(i) = picked {
                 self.load_scenario(i);
             }
-            ui.separator();
-            let transport = transport_controls(ui, self.ecg.is_paused(), &mut self.clock.speed);
+            let transport = cards::group(ui, |ui| {
+                ui.horizontal(|ui| transport_controls(ui, self.ecg.is_paused(), &mut self.clock.speed))
+                    .inner
+            })
+            .inner;
             highlight::mark(&transport.pause, "pause");
             if transport.pause.clicked() {
                 self.ecg.toggle_pause();
             }
-            let mut bpm = self.engine.params.sinus.rate_bpm;
-            if ui
-                .add(egui::Slider::new(&mut bpm, 30.0..=200.0).text(t!("app-sa-rate")))
-                .changed()
-            {
-                self.engine.params.sinus.rate_bpm = bpm;
-            }
-            ui.checkbox(&mut self.engine.params.av.complete_block, t!("app-av-block"));
-            let mut ratio = self.engine.params.av.mobitz2_ratio;
-            if ui
-                .add(egui::Slider::new(&mut ratio, 0..=6).text(t!("app-mobitz")))
-                .changed()
-            {
-                self.engine.params.av.mobitz2_ratio = ratio;
-            }
-            ui.add(
-                egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0).text(t!("app-axis-shift")),
-            );
-            ui.add(egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0).text(t!("app-qrs-width")));
+            cards::group(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let mut bpm = self.engine.params.sinus.rate_bpm;
+                    if ui
+                        .add(egui::Slider::new(&mut bpm, 30.0..=200.0).text(t!("app-sa-rate")))
+                        .changed()
+                    {
+                        self.engine.params.sinus.rate_bpm = bpm;
+                    }
+                    ui.checkbox(&mut self.engine.params.av.complete_block, t!("app-av-block"));
+                    let mut ratio = self.engine.params.av.mobitz2_ratio;
+                    if ui
+                        .add(egui::Slider::new(&mut ratio, 0..=6).text(t!("app-mobitz")))
+                        .changed()
+                    {
+                        self.engine.params.av.mobitz2_ratio = ratio;
+                    }
+                });
+            });
+            cards::group(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0)
+                            .text(t!("app-axis-shift")),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0)
+                            .text(t!("app-qrs-width")),
+                    );
+                });
+            });
             highlight::mark(&transport.speed, "speed");
-            highlight::mark(
-                &ui.toggle_value(&mut self.pacing.open, t!("app-pacemaker")),
-                "pacemaker",
-            );
-            highlight::mark(
-                &ui.toggle_value(&mut self.therapy.open, t!("app-therapy")),
-                "therapy",
-            );
-            self.reentry_controls(ui);
+            cards::group(ui, |ui| {
+                ui.horizontal(|ui| {
+                    highlight::mark(
+                        &ui.toggle_value(&mut self.pacing.open, t!("app-pacemaker")),
+                        "pacemaker",
+                    );
+                    highlight::mark(
+                        &ui.toggle_value(&mut self.therapy.open, t!("app-therapy")),
+                        "therapy",
+                    );
+                    self.reentry_controls(ui);
+                });
+            });
         });
     }
 
@@ -468,26 +495,27 @@ impl HeartSimApp {
         self.ecg.controls(ui, &self.rings);
     }
 
+    /// The right-hand panel of the Simulator and 12-Lead pages: the frontal QRS axis measured from
+    /// the strip (circle, measured-axis and interpretation cards, legend) and the interval read-out.
     fn live_axis_panel(&mut self, ui: &mut egui::Ui) {
         let axis = self.measured_axis();
-        ui.vertical_centered(|ui| {
-            ui.strong(t!("app-frontal-axis"));
-            let side = ui.available_width().min(330.0);
-            axis_dial(ui, side, axis, None, false, &AxisDialStyle::default());
-        });
-        if let Some(a) = axis {
-            ui.separator();
-            ui.label(t!("app-net-polarity"));
-            egui::Grid::new("polarity").show(ui, |ui| {
-                for l in LIMB {
-                    ui.label(l.label());
-                    ui.label(lead_polarity(a, l));
-                    ui.end_row();
-                }
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            cards::title_band(ui, t!("app-frontal-axis"));
+            let panel = AxisPanel {
+                axis,
+                guess: None,
+                interactive: false,
+                max_side: 330.0,
+                show_cards: true,
+                show_torso: true,
+                note: None,
+            };
+            axis_panel(ui, &panel);
+            cards::card(ui, |ui| {
+                cards::heading(ui, t!("readout-heading"));
+                self.ecg.readout(ui);
             });
-        }
-        ui.separator();
-        self.ecg.readout(ui);
+        });
     }
 
     fn simulator_tab(&mut self, ui: &mut egui::Ui) {
@@ -571,32 +599,35 @@ impl HeartSimApp {
         });
     }
 
+    /// The Axis Trainer: the draggable circle with its cards (the reading rule for the class is the
+    /// interpretation card's note) on the left, the six limb leads on the right.
     fn axis_trainer_tab(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("dial").default_size(430.0).show(ui, |ui| {
-            ui.label(t!("app-axis-trainer-hint"));
-            let axis = self.measured_axis();
-            let side = ui.available_width().min(ui.available_height() - 40.0).max(200.0);
-            if let Some(target) = axis_dial(ui, side, axis, None, true, &AxisDialStyle::default()) {
-                self.set_qrs_axis(target);
-            }
-            if ui.button(t!("app-reset-axis")).clicked() {
-                self.synth.axis_shift_deg = 0.0;
-            }
-        });
-        egui::Panel::right("polarity").default_size(200.0).show(ui, |ui| {
-            ui.strong(t!("app-net-qrs-each"));
-            if let Some(a) = self.measured_axis() {
-                for l in LIMB {
-                    ui.label(format!("{:<4} {}", l.label(), lead_polarity(a, l)));
-                }
-                ui.separator();
-                ui.label(match (FrontalAxis { degrees: a }).classify() {
+        egui::Panel::left("dial").default_size(640.0).show(ui, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.label(t!("app-axis-trainer-hint"));
+                let axis = self.measured_axis();
+                let note = axis.map(|a| match (FrontalAxis { degrees: a }).classify() {
                     AxisClass::Normal => t!("app-axis-normal"),
                     AxisClass::LeftDeviation => t!("app-axis-left"),
                     AxisClass::RightDeviation => t!("app-axis-right"),
                     AxisClass::ExtremeDeviation => t!("app-axis-extreme"),
                 });
-            }
+                let panel = AxisPanel {
+                    axis,
+                    guess: None,
+                    interactive: true,
+                    max_side: 420.0,
+                    show_cards: true,
+                    show_torso: true,
+                    note: note.as_deref(),
+                };
+                if let Some(target) = axis_panel(ui, &panel).dragged_to {
+                    self.set_qrs_axis(target);
+                }
+                if ui.button(t!("app-reset-axis")).clicked() {
+                    self.synth.axis_shift_deg = 0.0;
+                }
+            });
         });
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
@@ -605,7 +636,7 @@ impl HeartSimApp {
     }
 
     fn quiz_tab(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("quizdial").default_size(430.0).show(ui, |ui| {
+        egui::Panel::left("quizdial").default_size(640.0).show(ui, |ui| {
             if let Some(target) = self.quiz.panel(ui) {
                 self.set_qrs_axis(target);
             }
@@ -739,6 +770,8 @@ impl HeartSimApp {
 impl eframe::App for HeartSimApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // the palette's panel and window colours for whichever theme is in force this frame
+        heartsim_ui::theme::apply_to_context(&ctx);
         #[cfg(feature = "export")]
         self.exports_frame(&ctx);
         // the documentation tour runs unattended and never shows the first-run dialog

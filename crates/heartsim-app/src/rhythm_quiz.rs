@@ -11,7 +11,7 @@ use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
 use heartsim_ecg::{LeadRing, Tier0Scenario};
 use heartsim_ui::t;
-use heartsim_ui::{StripStyle, TwelveLeadLayout, lead_column, twelve_lead_page};
+use heartsim_ui::{Palette, StripStyle, TwelveLeadLayout, cards, lead_column, twelve_lead_page};
 
 /// Choices per question.
 pub const OPTIONS: usize = 4;
@@ -280,7 +280,7 @@ impl RhythmQuiz {
                     return;
                 }
                 if let Some(e) = &self.error {
-                    ui.colored_label(egui::Color32::LIGHT_RED, e);
+                    cards::result_box(ui, false, e.clone());
                 }
                 let Some(q) = self.question.clone() else {
                     ui.label(t!("rq-intro"));
@@ -291,16 +291,17 @@ impl RhythmQuiz {
                 } else {
                     t!("rq-answer")
                 });
+                let palette = Palette::of(ui);
                 for &i in &q.options {
                     let title = &library.entries[i].scenario.title;
                     let text = match self.chosen {
                         Some(_) if i == q.answer => {
                             egui::RichText::new(t!("rq-correct-choice", title = title.as_str()))
-                                .color(egui::Color32::LIGHT_GREEN)
+                                .color(palette.good().on_soft)
                         }
                         Some(c) if c == i => {
                             egui::RichText::new(t!("rq-your-choice", title = title.as_str()))
-                                .color(egui::Color32::LIGHT_RED)
+                                .color(palette.bad().on_soft)
                         }
                         _ => egui::RichText::new(title),
                     };
@@ -322,12 +323,9 @@ impl RhythmQuiz {
                     if let Some(c) = self.chosen {
                         let e = explanation(library, q.answer, c);
                         if c == q.answer {
-                            ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
+                            cards::result_box(ui, true, t!("feedback-correct"));
                         } else {
-                            ui.colored_label(
-                                egui::Color32::LIGHT_RED,
-                                t!("rq-wrong", title = e.title.as_str()),
-                            );
+                            cards::result_box(ui, false, t!("rq-wrong", title = e.title.as_str()));
                         }
                         ui.add(egui::Label::new(&e.description).wrap());
                         if let Some((title, description)) = &e.chosen {

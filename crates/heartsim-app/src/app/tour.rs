@@ -3,6 +3,7 @@
 //! the strip cursor shortly after a QRS onset (so the scrubbed heart shows the activation wave),
 //! saves a PNG of the window and quits. Runs are 12 s or more: the strip can only be scrubbed
 //! once it holds more than one screen (10 s). Used headless with xvfb + lavapipe (see `docs/images/`).
+//! `HEARTSIM_SCREENSHOT_THEME=light|dark` takes the shots in that theme instead of the stored setting.
 
 use super::{HeartSimApp, Tab, TwelveLeadLayout};
 use eframe::egui;
@@ -193,16 +194,30 @@ pub(super) struct Tour {
     dir: PathBuf,
     step: usize,
     phase: Phase,
+    /// The theme the shots are taken in (`HEARTSIM_SCREENSHOT_THEME`), or the stored setting.
+    theme: Option<egui::Theme>,
 }
 
 impl Tour {
     /// A tour if `HEARTSIM_SCREENSHOT_DIR` is set.
     pub(super) fn from_env() -> Option<Self> {
         let dir = PathBuf::from(std::env::var_os("HEARTSIM_SCREENSHOT_DIR")?);
+        let theme = match std::env::var("HEARTSIM_SCREENSHOT_THEME").ok().as_deref() {
+            Some("light") => Some(egui::Theme::Light),
+            Some("dark") => Some(egui::Theme::Dark),
+            Some(other) => {
+                tracing::warn!(
+                    "HEARTSIM_SCREENSHOT_THEME={other}: expected light or dark; using the stored theme"
+                );
+                None
+            }
+            None => None,
+        };
         Some(Self {
             dir,
             step: 0,
             phase: Phase::Setup,
+            theme,
         })
     }
 }
@@ -232,6 +247,9 @@ impl HeartSimApp {
         };
         match &tour.phase {
             Phase::Setup => {
+                if let Some(theme) = tour.theme {
+                    ctx.set_theme(theme);
+                }
                 // the X pointer rests mid-window under xvfb: keep its hover read-out out of the shots
                 ctx.all_styles_mut(|s| s.interaction.tooltip_delay = f32::INFINITY);
                 if step.tab == Tab::EpLab {

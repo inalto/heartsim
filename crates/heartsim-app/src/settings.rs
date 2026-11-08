@@ -5,7 +5,7 @@
 
 use eframe::egui::{self, Color32, Stroke, Visuals};
 use heartsim_ui::i18n::{self, LANGUAGES};
-use heartsim_ui::t;
+use heartsim_ui::{cards, t};
 use serde::{Deserialize, Serialize};
 
 /// eframe storage key of the preferences.
@@ -180,37 +180,46 @@ pub fn settings_window_with_audio(
         .open(open)
         .resizable(false)
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(t!("settings-language"));
-                let selected = match &settings.language {
-                    None => t!("settings-language-system"),
-                    Some(code) => LANGUAGES
-                        .iter()
-                        .find(|l| l.code == code)
-                        .map_or_else(|| code.clone(), |l| l.name.to_string()),
-                };
-                egui::ComboBox::from_id_salt("settings_language")
-                    .selected_text(selected)
-                    .show_ui(ui, |ui| {
-                        changed |= ui
-                            .selectable_value(&mut settings.language, None, t!("settings-language-system"))
-                            .changed();
-                        for l in LANGUAGES {
+            cards::card(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(t!("settings-language"));
+                    let selected = match &settings.language {
+                        None => t!("settings-language-system"),
+                        Some(code) => LANGUAGES
+                            .iter()
+                            .find(|l| l.code == code)
+                            .map_or_else(|| code.clone(), |l| l.name.to_string()),
+                    };
+                    egui::ComboBox::from_id_salt("settings_language")
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
                             changed |= ui
-                                .selectable_value(&mut settings.language, Some(l.code.to_string()), l.name)
+                                .selectable_value(
+                                    &mut settings.language,
+                                    None,
+                                    t!("settings-language-system"),
+                                )
                                 .changed();
-                        }
-                    });
+                            for l in LANGUAGES {
+                                changed |= ui
+                                    .selectable_value(
+                                        &mut settings.language,
+                                        Some(l.code.to_string()),
+                                        l.name,
+                                    )
+                                    .changed();
+                            }
+                        });
+                });
+                changed |= ui
+                    .checkbox(&mut settings.high_contrast, t!("settings-high-contrast"))
+                    .changed();
+                changed |= ui
+                    .checkbox(&mut settings.reduced_motion, t!("settings-reduced-motion"))
+                    .changed();
             });
-            changed |= ui
-                .checkbox(&mut settings.high_contrast, t!("settings-high-contrast"))
-                .changed();
-            changed |= ui
-                .checkbox(&mut settings.reduced_motion, t!("settings-reduced-motion"))
-                .changed();
             #[cfg(feature = "audio")]
-            {
-                ui.separator();
+            cards::card(ui, |ui| {
                 changed |= ui
                     .checkbox(&mut settings.monitor_beep, t!("settings-beep"))
                     .changed();
@@ -225,16 +234,14 @@ pub fn settings_window_with_audio(
                 if settings.monitor_beep && beep_available == Some(false) {
                     ui.weak(t!("settings-beep-unavailable"));
                 }
-            }
+            });
             #[cfg(feature = "update-check")]
-            {
-                ui.separator();
+            cards::card(ui, |ui| {
                 changed |= ui
                     .checkbox(&mut settings.check_for_updates, t!("settings-update-check"))
                     .changed();
                 ui.weak(t!("settings-update-check-hint"));
-            }
-            ui.separator();
+            });
             ui.weak(t!("settings-hint"));
         });
     changed

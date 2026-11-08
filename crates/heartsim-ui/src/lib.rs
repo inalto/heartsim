@@ -5,6 +5,7 @@ pub mod anatomy_panel;
 pub mod annotations;
 pub mod axis_dial;
 pub mod calipers;
+pub mod cards;
 pub mod colour_bar;
 pub mod defib_panel;
 pub mod drug_tray;
@@ -18,7 +19,9 @@ pub mod labels;
 pub mod pacer_panel;
 pub mod snapshot;
 pub mod strip;
+pub mod theme;
 pub mod timeline_editor;
+pub mod torso_schematic;
 pub mod transport;
 pub mod twelve_lead;
 pub mod vector_view;
@@ -26,7 +29,10 @@ pub mod viewport;
 
 pub use anatomy_panel::{AnatomyPanelState, CameraCommand, LayerToggle, anatomy_panel};
 pub use annotations::{EcgAnnotations, interval_readout};
-pub use axis_dial::{AxisDialStyle, axis_dial, lead_polarity};
+pub use axis_dial::{
+    AxisDialResponse, AxisPanel, AxisPanelResponse, Polarity, axis_circle, axis_dial, axis_legend,
+    axis_panel, lead_polarity, polarity_table,
+};
 pub use calipers::{Caliper, CaliperReading, CaliperSet, Playback};
 pub use colour_bar::{colour_bar, lut_colour};
 pub use defib_panel::{DefibPanelState, DefibResponse, DefibSound, defib_panel, describe_shock};
@@ -39,7 +45,9 @@ pub use ischaemia_panel::{
 };
 pub use pacer_panel::{PaceMark, PaceMarks, PacerPanelResponse, PacerPanelState, lead_glyphs, pacer_panel};
 pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
+pub use theme::Palette;
 pub use timeline_editor::TimelineEditor;
+pub use torso_schematic::torso_schematic;
 pub use transport::{SPEED_RANGE, TransportResponse, transport_controls};
 pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};
 pub use vector_view::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};

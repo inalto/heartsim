@@ -7,7 +7,7 @@
 //! `disclaimer_accepted`, which eframe storage keeps on the desktop and in the browser.
 
 use eframe::egui;
-use heartsim_ui::t;
+use heartsim_ui::{cards, t};
 
 /// The version shown in About: the workspace version, as `heartsim --version` prints it.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -84,9 +84,11 @@ pub fn about_window(ctx: &egui::Context, open: &mut bool, newer: Option<&crate::
             }
             ui.label(t!("about-tagline"));
             ui.weak(t!("about-licence"));
-            ui.separator();
-            ui.strong(t!("about-disclaimer-heading"));
-            disclaimer_body(ui);
+            ui.add_space(4.0);
+            cards::card(ui, |ui| {
+                cards::heading(ui, t!("about-disclaimer-heading"));
+                disclaimer_body(ui);
+            });
         });
 }
 
