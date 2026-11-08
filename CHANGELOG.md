@@ -4,9 +4,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
-## [0.7.1] — 2026-11-07
+## [0.7.2] — 2026-11-08
 Patch release after the first run of an installer by a person: every package up to 0.7.0 lacked the `assets/` tree, so the
 installed program showed a placeholder sphere instead of the heart. Also the hamburger menu with the theme switch.
+(0.7.1 was tagged with the same content but its packages never built — cargo-packager does not take `**/*` globs for
+resource trees — so it has no release.)
 
 ### Fixed
 - The installers (MSI, NSIS, dmg, deb, AppImage) did not ship the `assets/` tree, so an installed heartsim showed the placeholder
