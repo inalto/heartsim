@@ -2,6 +2,8 @@
 //! native window so the same `HeartSimApp` can be mounted in the web build.
 
 pub mod app;
+#[cfg(feature = "native")]
+pub mod asset_dirs;
 pub mod assets;
 #[cfg(feature = "audio")]
 pub mod audio_out;

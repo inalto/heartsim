@@ -14,28 +14,12 @@ use heartsim_ui::t;
 #[cfg(feature = "native")]
 use std::path::{Path, PathBuf};
 
-/// Where the scenario library is looked for: next to the anatomy packs (`$HEARTSIM_ASSETS`, the
-/// installed layout, macOS bundle resources, the working directory, the source tree).
+/// Where the scenario library is looked for: the first assets root (see
+/// [`crate::asset_dirs::asset_roots`]) with a `scenarios` directory.
 #[cfg(feature = "native")]
 #[must_use]
 pub fn default_scenario_dir() -> Option<PathBuf> {
-    let mut roots: Vec<PathBuf> = Vec::new();
-    if let Some(dir) = std::env::var_os("HEARTSIM_ASSETS") {
-        roots.push(dir.into());
-    }
-    if let Some(exe_dir) = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(Path::to_path_buf))
-    {
-        roots.push(exe_dir.join("assets"));
-        roots.push(exe_dir.join("../Resources/assets"));
-    }
-    roots.push(PathBuf::from("assets"));
-    roots.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"));
-    roots
-        .into_iter()
-        .map(|r| r.join("scenarios"))
-        .find(|d| d.is_dir())
+    crate::asset_dirs::find_asset_subdir("scenarios")
 }
 
 /// All loadable rhythm presets, sorted by title. Files that fail to parse are skipped (and

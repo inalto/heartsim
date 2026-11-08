@@ -26,7 +26,7 @@ use heartsim_ui::{
     AnatomyPanelState, CameraCommand, Viewport3d, ViewportResources, anatomy_panel, colour_bar,
 };
 #[cfg(feature = "native")]
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Resting and peak transmembrane potential used to show the engine's normalised V_m in mV
@@ -208,29 +208,12 @@ impl std::fmt::Debug for HeartView {
     }
 }
 
-/// Where the default anatomy pack is looked for, in order: `$HEARTSIM_ASSETS`, next to the
-/// executable (installed layout), macOS bundle resources, the working directory, the source tree.
+/// Where the default anatomy pack is looked for: the first assets root (see
+/// [`crate::asset_dirs::asset_roots`]) that holds `anatomy/default/manifest.ron`.
 #[cfg(feature = "native")]
 #[must_use]
 pub fn default_pack_dir() -> Option<PathBuf> {
-    let rel = Path::new("anatomy").join("default");
-    let mut roots: Vec<PathBuf> = Vec::new();
-    if let Some(dir) = std::env::var_os("HEARTSIM_ASSETS") {
-        roots.push(dir.into());
-    }
-    if let Some(exe_dir) = std::env::current_exe()
-        .ok()
-        .and_then(|e| e.parent().map(Path::to_path_buf))
-    {
-        roots.push(exe_dir.join("assets"));
-        roots.push(exe_dir.join("../Resources/assets"));
-    }
-    roots.push(PathBuf::from("assets"));
-    roots.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"));
-    roots
-        .into_iter()
-        .map(|r| r.join(&rel))
-        .find(|d| d.join("manifest.ron").is_file())
+    crate::asset_dirs::resolved_assets_dir().map(|r| r.join("anatomy").join("default"))
 }
 
 /// Display name of a pack mesh, for the layer list and the labels.
@@ -961,6 +944,7 @@ impl HeartView {
 mod tests {
     use super::*;
     use heartsim_geometry::K_NEIGHBOURS;
+    use std::path::Path;
     use std::sync::OnceLock;
 
     fn pack() -> AnatomyPack {

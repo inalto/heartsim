@@ -41,6 +41,17 @@ $printed = (Get-Content $out -Raw).Trim()
 if ($printed -ne "heartsim $Version") { throw "unexpected --version output: '$printed'" }
 Write-Host $printed
 
+# The installed copy must find its assets (anatomy pack, rhythms, tutorials) next to the executable;
+# without them the app shows a placeholder sphere and an empty rhythm picker.
+$assetsOut = Join-Path $env:RUNNER_TEMP 'assets-dir.txt'
+$assetsErr = Join-Path $env:RUNNER_TEMP 'assets-dir.err'
+$p = Start-Process $exe -ArgumentList '--assets-dir' -NoNewWindow -Wait -PassThru -RedirectStandardOutput $assetsOut -RedirectStandardError $assetsErr
+if ($p.ExitCode -ne 0) { throw "heartsim --assets-dir exited with $($p.ExitCode): $(Get-Content $assetsErr -Raw)" }
+$assetsDir = (Get-Content $assetsOut -Raw).Trim()
+if (-not (Test-Path (Join-Path $assetsDir 'anatomy\default\manifest.ron'))) { throw "assets dir has no anatomy pack: $assetsDir" }
+if (-not (Test-Path (Join-Path $assetsDir 'scenarios'))) { throw "assets dir has no scenarios: $assetsDir" }
+Write-Host "assets: $assetsDir"
+
 if ($isMsi) {
     $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$Installer`"", '/qn', '/norestart' -Wait -PassThru
     if ($p.ExitCode -ne 0) { throw "msiexec uninstall failed ($($p.ExitCode))" }
