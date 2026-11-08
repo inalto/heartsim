@@ -229,33 +229,33 @@ const AORTIC_CENTRE: Vec3 = Vec3::new(10.0, 25.5, 10.0);
 const TRICUSPID_CENTRE: Vec3 = Vec3::new(-50.0, 22.5, 4.0);
 const PULMONARY_CENTRE: Vec3 = Vec3::new(-32.0, 22.5, 26.0);
 
-/// Azimuth (degrees, atan2(z, x)) of the septal direction from the LV axis.
-const SEPTAL_AZIMUTH_DEG: f32 = 160.0;
+/// Azimuth (degrees, atan2(z, x)) of the septal direction from the LV axis in canonical coordinates.
+pub const SEPTAL_AZIMUTH_DEG: f32 = 160.0;
 
 /// Direction of the LV long axis in the heart frame (mitral annulus → apex): `(1, −tan 36°, tan 46°)`
 /// normalised, see the module documentation for the sources. A literal, so the bake does not depend
 /// on the platform's `tan`.
-const APEX_DIRECTION: Vec3 = Vec3::new(0.62015, -0.45057, 0.64219);
+pub const APEX_DIRECTION: Vec3 = Vec3::new(0.62015, -0.45057, 0.64219);
 
 /// Direction from the LV axis to the middle of the septum in the heart frame: the horizontal
 /// right-anterior normal of the long axis, tilted 15° cranially (see the module documentation).
-const SEPTAL_DIRECTION: Vec3 = Vec3::new(-0.61381, 0.23106, 0.75487);
+pub const SEPTAL_DIRECTION: Vec3 = Vec3::new(-0.61381, 0.23106, 0.75487);
 
 /// Terminal of the left anterior fascicle (azimuth°, height mm on the LV endocardium), and the
 /// same for the left posterior fascicle. Durrer et al. 1970 (*Circulation* 41:899) found the LV
 /// breaking through first high on the anterior paraseptal wall, on the central septum, and on the
 /// posterior paraseptal wall about a third of the way from apex to base: y = −25 mm is a third of
 /// the −55…+25 mm long axis.
-const LAF_TERMINAL: (f32, f32) = (95.0, -5.0);
+pub const LAF_TERMINAL: (f32, f32) = (95.0, -5.0);
 /// See [`LAF_TERMINAL`].
-const LPF_TERMINAL: (f32, f32) = (245.0, -25.0);
+pub const LPF_TERMINAL: (f32, f32) = (245.0, -25.0);
 /// Radius of a left fascicle's Purkinje–myocardial junction patch around its terminal, mm. Each
 /// fascicle's network serves a broad endocardial territory rather than a point (Demoulin & Kulbertus,
 /// *Br Heart J* 1972;34:807); 25 mm covers roughly its half of the lower two thirds of the LV.
-const LEFT_PMJ_PATCH_RADIUS_MM: f32 = 25.0;
+pub const LEFT_PMJ_PATCH_RADIUS_MM: f32 = 25.0;
 
 /// RV free-wall cells at a smaller azimuth (seen from the LV axis) than this are on its anterior side.
-const RV_LAD_AZIMUTH_LIMIT_DEG: f32 = 165.0;
+pub const RV_LAD_AZIMUTH_LIMIT_DEG: f32 = 165.0;
 
 const CONDUCTION_SPACING_MM: f32 = 1.5;
 
@@ -643,14 +643,23 @@ fn conduction_geometry() -> Conduction {
 }
 
 fn ventricular_aha(p: Vec3) -> u8 {
-    let apex_base = ((p.y + LV_EPI.y) / (LV_EPI.y + LV_BASE_Y)).clamp(0.0, 1.0);
+    canonical_aha(p, -LV_EPI.y, LV_BASE_Y)
+}
+
+/// AHA segment of a canonical-frame LV/septal point whose long axis runs from `apex_y` (the
+/// epicardial apex) to `base_y` (the mitral plane); the circumferential angle is `atan2(z, x)`
+/// (0° lateral, 90° anterior, 180° septal, 270° inferior).
+#[must_use]
+pub fn canonical_aha(p: Vec3, apex_y: f32, base_y: f32) -> u8 {
+    let apex_base = ((p.y - apex_y) / (base_y - apex_y)).clamp(0.0, 1.0);
     aha_segment(apex_base, p.z.atan2(p.x).to_degrees())
 }
 
 /// [`RV_ANTERIOR_SEGMENT`] on the anterior half of the RV free wall below the LV's equator, 0 elsewhere.
 /// (37 % of the free wall: the zone that makes an LAD occlusion raise ST in V2 and V3, which lie
 /// over it, and an RCA occlusion not to. See `docs/anatomy-pack.md`.)
-fn rv_segment(p: Vec3) -> u8 {
+#[must_use]
+pub fn rv_segment(p: Vec3) -> u8 {
     let azimuth = p.z.atan2(p.x).to_degrees().rem_euclid(360.0);
     if azimuth < RV_LAD_AZIMUTH_LIMIT_DEG && p.y < 0.0 {
         RV_ANTERIOR_SEGMENT
@@ -740,8 +749,10 @@ fn nearest_cell(cells: &Cells, p: Vec3, pred: impl Fn(Region) -> bool) -> Option
 }
 
 /// Rotation from canonical coordinates into the heart frame: the canonical apex (−y) goes to
-/// [`APEX_DIRECTION`] and the canonical septal direction to [`SEPTAL_DIRECTION`].
-fn heart_rotation() -> Quat {
+/// [`APEX_DIRECTION`] and the canonical septal direction to [`SEPTAL_DIRECTION`]. Shared with the
+/// real-mesh bake so a baked heart is posed exactly like the procedural one.
+#[must_use]
+pub fn heart_rotation() -> Quat {
     let apex = APEX_DIRECTION.normalize();
     let septal = (SEPTAL_DIRECTION - apex * SEPTAL_DIRECTION.dot(apex)).normalize();
     let (s, c) = SEPTAL_AZIMUTH_DEG.to_radians().sin_cos();

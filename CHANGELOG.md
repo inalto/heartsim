@@ -4,6 +4,42 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Changed
+- **Real anatomy.** The default anatomy pack is now baked from open, CC BY 4.0 meshes instead of the procedural spheres and
+  tubes: the heart is the Rodero et al. 2021 *average* four-chamber mesh (the mean of 19 healthy adults' CT, Zenodo 4593739;
+  tagged chambers, aorta and pulmonary artery, valve planes, vein inlets, rule-based fibres and universal ventricular
+  coordinates) and the torso is the skin of the KCL whole-torso CT model 1 (Qian & Bishop 2022, Zenodo 7253863), sized to the
+  heart and placed so that the heart sits where that subject's heart was (53 mm left of the midline, 84 mm behind the
+  sternum). The pose stays the measured one (LV long axis 36° / 46°, septum right-anterior); the engines see the same regions,
+  landmarks, PMJ seed sets, AHA segments and electrode names as before. `cargo xtask bake-anatomy` downloads the two archives
+  into the git-ignored `assets/anatomy-src/`, checks their MD5s against the Zenodo records and bakes deterministically
+  (`xtask/src/bake/`: legacy-VTK and openCARP readers, boundary extraction, Taubin smoothing, quadric decimation, swept
+  vessel tubes and valve rings, lattice cell sampling by point-in-tetrahedron); `--procedural` still bakes the idealised
+  heart, which remains the fast fixture of the geometry tests. The pack's `LICENSE` and `ASSETS-LICENSES.md` carry the
+  attribution both licences require; `docs/research/anatomy-meshes.md` records every source considered and why the others
+  were rejected.
+- **Engines re-tuned for the real anatomy**, each change documented next to its value (`docs/anatomy-pack.md`, *What the
+  engines do differently*): the fast endocardial layer covers the thin RV free wall to depth 0.5 and leaves out only the
+  infundibulum (15 mm around `rvot`) instead of an apex–base limit; PMJ patches are 12 mm; atrial working myocardium is
+  isotropic and the atrial CV multiplier 1.25; the coronary-sinus sleeve conducts at 1.2 m/s; the Tier-2 grid stamps atrial
+  cells at a 4 mm radius and a lesion kills the whole voxel column of each cell it reaches (an ablation line now cuts a thin
+  wall); the Tier-2 monodomain stencil takes the smaller of two neighbours' coefficients (stable at the calibrated
+  diffusivity); the His-catheter H grouping window is 50 ms; the forward gain is 4.5 mV. The flutter lesson's bands are
+  drawn on the real right atrium with the left atrium inert (a second loop through it outlived the isthmus line).
+- `AnatomyPack` carries its `licence` text (read from the pack's `LICENSE`, written by `save`).
+
+### Known limitations
+- The chest-lead near field over the apex: V4 sits 30 mm from the LV apex, which this heart finishes depolarising early,
+  and the unbounded homogeneous forward model then shows V4 the receding fronts, so V4 has a QS and the R wave does not
+  progress through it (V3 and V5 are normal). Moving the electrode, rolling the heart, a Brody-effect source scaling and
+  every endocardial timing tried left it below 0.1 mV; the fix is a bounded torso, which the forward model does not have.
+  The tests that measured V4 (R progression, the V3 T inversion, pericarditis in V4) are ignored with this note.
+- AF on the baked atria is organised rather than fibrillatory (the ventricular response is irregular through the AV
+  node's concealment, but amiodarone does not slow the rate the node is shown and the vein-isolation ring does not
+  isolate a vein on the Tier-2 grid); ventricular entrainment terminates the induced AVRT; LBBB, RBBB, RV-apex pacing
+  and the fascicular-block direction miss one morphology criterion each. Each test is ignored with its reason in its
+  doc comment and listed in the guide's *Known limitations* page.
+
 ## [0.6.0] — 2026-11-07
 Fifth tagged release: the wave types that were missing from the strip (flutter, AF, VF, torsades, polymorphic VT, infarct
 evolution) with 14 scenarios, the user-interface gaps (first-run disclaimer and About, ECG display filters and artefacts, the

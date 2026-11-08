@@ -14,6 +14,7 @@
 | [briefs/](briefs/) | One self-contained implementation brief per work package, with recommended model (Opus / Sonnet / Haiku) | subagents |
 | [research/reference-apps.md](research/reference-apps.md) | Feature inventory and UX analysis of Epicardio EHS2, cardiacrhythmsim.com, ecgaxistrainer, Epicardio WebGL | product |
 | [research/electrophysiology-and-ecg-models.md](research/electrophysiology-and-ecg-models.md) | The science: cell models, eikonal activation, conduction system, ECG forward problem, meshes, numerics | sim implementers |
+| [research/anatomy-meshes.md](research/anatomy-meshes.md) | Open heart and torso mesh sources for the anatomy pack: licence table, rejected candidates, posing plan, attribution text (Phase 1 of the real-mesh bake) | anatomy implementers |
 | [research/rust-stack.md](research/rust-stack.md) | Crate-by-crate evaluation of rendering, GUI, compute, audio, packaging, CI | implementers |
 
 Legal note: heartsim is an independent implementation built from the published literature. It contains no code, data or assets from any

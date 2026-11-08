@@ -1764,37 +1764,65 @@ fn cs_os_link(cloud: &CellCloud, max_mm: f32) -> Vec<(u32, u32)> {
 }
 
 /// 0 at the `lv_apex` landmark, 1 at the `his` landmark (top of the septum), by projection on
-/// that axis. Without both landmarks every cell gets 0.5 (no apicobasal structure).
+/// that axis. Right-ventricular free-wall cells use the RV's own axis, `rv_apex` → `rvot`, when
+/// the pack has both landmarks: the RV lies beside the LV, so on a real heart its mid-ventricular
+/// lateral wall projects high on the LV axis, and it is the outflow tract that must count as
+/// basal (the APD gradient runs along it; the fast layer's own exclusion zone is
+/// [`fast_layer`]'s). Without the LV landmarks every cell gets 0.5 (no apicobasal structure).
 fn apex_base_coordinate(cloud: &CellCloud) -> Vec<f32> {
     let lm = |n: &str| cloud.landmarks.get(n).map(|&i| cloud.positions[i as usize]);
-    match (lm("lv_apex"), lm("his").or_else(|| lm("av_node"))) {
-        (Some(apex), Some(base)) if apex.distance(base) > 1.0 => {
-            let axis = base - apex;
-            let l2 = axis.length_squared();
-            cloud
-                .positions
-                .iter()
-                .map(|p| (*p - apex).dot(axis) / l2)
-                .collect()
-        }
-        _ => vec![0.5; cloud.len()],
-    }
+    let axis_of = |apex: Option<Vec3>, base: Option<Vec3>| match (apex, base) {
+        (Some(apex), Some(base)) if apex.distance(base) > 1.0 => Some((apex, base - apex)),
+        _ => None,
+    };
+    let Some((lv_apex, lv_axis)) = axis_of(lm("lv_apex"), lm("his").or_else(|| lm("av_node"))) else {
+        return vec![0.5; cloud.len()];
+    };
+    let rv = axis_of(lm("rv_apex"), lm("rvot"));
+    cloud
+        .positions
+        .iter()
+        .zip(&cloud.regions)
+        .map(|(p, r)| {
+            let (apex, axis) = match rv {
+                Some(rv) if *r == Region::RightVentricle => rv,
+                _ => (lv_apex, lv_axis),
+            };
+            (*p - apex).dot(axis) / axis.length_squared()
+        })
+        .collect()
 }
 
 /// Fast endocardial layer membership: LV (and LV septal surface) → [`LAYER_LV`], RV (and RV
-/// septal surface) → [`LAYER_RV`]; none above the base limit.
+/// septal surface) → [`LAYER_RV`]; none above the base limit. The RV free wall uses its own,
+/// larger depth threshold (`purkinje_layer_depth_rv`) because its wall is barely thicker than
+/// a lattice cell; the septum's RV face keeps the LV's.
 fn fast_layer(cloud: &CellCloud, kinds: &[CellKind], apex_base: &[f32], eik: &EikonalParams) -> Vec<u8> {
     let d = eik.purkinje_layer_depth;
+    // The RV free wall's Purkinje-free zone is the infundibulum, a ball around the `rvot`
+    // landmark; without that landmark it falls back to the apex–base limit like the LV.
+    let rvot = cloud.landmarks.get("rvot").map(|&i| cloud.positions[i as usize]);
+    let rv_excluded = |i: usize| match rvot {
+        Some(rvot) => cloud.positions[i].distance(rvot) <= eik.purkinje_free_rvot_mm,
+        None => apex_base[i] > eik.purkinje_layer_base_limit,
+    };
     (0..cloud.len())
         .map(|i| {
-            if d <= 0.0 || kinds[i] != CellKind::Ventricular || apex_base[i] > eik.purkinje_layer_base_limit {
+            if d <= 0.0 || kinds[i] != CellKind::Ventricular {
                 return 0;
             }
             let depth = cloud.depth[i];
             match cloud.regions[i] {
+                Region::RightVentricle => {
+                    if depth <= eik.purkinje_layer_depth_rv && !rv_excluded(i) {
+                        LAYER_RV
+                    } else {
+                        0
+                    }
+                }
+                _ if apex_base[i] > eik.purkinje_layer_base_limit => 0,
                 Region::LeftVentricle | Region::VentricularSeptum if depth <= d => LAYER_LV,
                 Region::VentricularSeptum if depth >= 1.0 - d => LAYER_RV,
-                Region::RightVentricle if depth <= d => LAYER_RV,
                 _ => 0,
             }
         })

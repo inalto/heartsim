@@ -323,7 +323,12 @@ impl<M: CellModel> Monodomain<M> {
                         if !self.conducting[nu] || g.compartment[nu] != g.compartment[v] {
                             continue;
                         }
-                        let w = f32::midpoint(coeffs[v][d], coeffs[nu][d]) * inv_h2;
+                        // The weaker of the two voxels' coefficients, not their mean: a voxel's
+                        // load then never exceeds the load of a uniform field with its own fibre,
+                        // so the stability bound below holds however sharply the fibres turn
+                        // between neighbours (the mean can exceed it where the fibre field of a
+                        // real heart rotates by tens of degrees per voxel).
+                        let w = coeffs[v][d].min(coeffs[nu][d]) * inv_h2;
                         if w > 0.0 {
                             self.col.push(n);
                             self.weight.push(w);

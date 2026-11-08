@@ -61,10 +61,11 @@ The simulator and its texts use them as written.
 |---|---|---|
 | LV long axis 36° in the frontal and 46° in the transverse plane; septum facing right and anterior | How the heart sits in the thorax, which sets the R-wave progression and the frontal axis | Measured values (Engblom 2005, Kayyali 2025, Narumi 2022) |
 | Fascicle breakthrough sites | Where the anterior and posterior fascicles end | Durrer 1970 |
-| Atrial and venous positions (`RA_CENTRE`, `LA_CENTRE`, caval and pulmonary-vein points, `la_pv_antrum`) | The atria, the veins and the AF presets | **Chosen, not measured**: set so the levels and relations are right; the chambers are spheres and sit about 1–3 cm further left than in a patient |
-| `ForwardOptions::gain_mv` 4.4 (was 5.0) | Scales the forward-model ECG | Recalibrated so V1–V6 and the ST segments stay in range on the new pack; not a physical constant |
+| Atrial and venous positions | The atria, the veins and the AF presets | From the Rodero 2021 average mesh (real chambers and inlets); the vein tubes beyond the inlets, the appendage lobe and the landmark cells on them are placed by rule |
+| Heart position in the chest (53 mm left of the midline, 84 mm behind the sternum) and the torso's scale (×0.869) | Electrode distances, hence the precordial amplitudes | Measured on the KCL CT torso 1 (its own ventricular centroid), one subject; the torso is scaled uniformly so its LV has the baked heart's length |
+| `ForwardOptions::gain_mv` 4.5 | Scales the forward-model ECG | Recalibrated on the baked pack for R(II) ≈ 1.0 mV; it cannot go higher because P(II) is at its 0.25 mV limit with one-cell atria; not a physical constant |
 | AV concealment 0.85 in the AF presets | How irregular the ventricular response is | Above the 0.3–0.7 range the documentation cites; needed for an irregular response (about 113 bpm) on the new atria |
-| Sinus axis +24°, P axis +33°, P(II) < 0.25 mV, AH 75 ms, HV 40 ms | The forward model's normal sinus beat | Measured on the pack; in range, but not compared with a recorded ECG |
+| Sinus axis ≈ +43°, P ≈ 105 ms and P(II) ≈ 0.24 mV, QRS ≈ 90 ms, AH 83 ms, HV 43 ms | The forward model's normal sinus beat | Measured on the baked pack; in range, but not compared with a recorded ECG |
 | RBBB frontal axis | The axis read-out during RBBB | The net-area axis over the QRS reads about 170° while the peak amplitudes suggest about +25°; the wide terminal S is the likely cause and was not confirmed |
 
 ### Statements in the tutorials and cases
@@ -84,14 +85,29 @@ interface.
 
 ### The heart model
 
-* The anatomy is a **procedural** heart (spheres and tubes placed on literature dimensions), not a mesh of a real heart. The
-  bake from the open Strocchi/Rodero meshes described in `docs/anatomy-pack.md` has not been done. The generator still places a
-  few cells on top of each other (the slow pathway against the compact AV node, the two left fascicles), which is why one
-  validation-bridge correlation bound had to be loosened from 0.99999 to 0.9999.
-* Fascicular blocks move the frontal axis the right way but not far enough: sinus ≈ +24°, LAFB ≈ +17°, LPFB ≈ +35° against the
-  textbook ≤ −45° and ≥ +90°. Several hundred variants of the fascicle geometry were tried; every one that reached the target
-  axis lost the rS pattern in V1. The test stays ignored with the target values (section 4).
+* The anatomy is now a **real four-chamber heart** (the Rodero 2021 average healthy mesh) in a **real chest** (the KCL CT
+  torso 1), see `docs/anatomy-pack.md`. What is still constructed by rule rather than taken from a measurement: the vessel
+  tubes beyond the dataset's cropped inlets, the appendage body, the coronary sinus path, the whole conduction system and
+  the atrial sub-regions (SA node, crista, isthmus, Bachmann's bundle, vein sleeves), the electrode sites (ray-cast onto the
+  skin at the procedural heights and azimuths) and the torso's uniform scaling to the heart's size. The torso is one
+  subject; the heart is a population mean, so the two were never in the same body.
+* **V4 over the apex.** On the baked heart V4 lies 30 mm from the LV apex, which finishes depolarising about 15 ms
+  before the lateral and inferior walls, and the forward model (an unbounded homogeneous conductor) then shows V4 the back
+  of the receding fronts: V4 has a QS complex and the R wave does not progress through it, while V3 and V5 are normal.
+  Moving the electrode, rolling the heart about its long axis, a Brody-effect scaling of in-plane sources and every
+  endocardial timing tried left R(V4) under 0.1 mV; a bounded torso (boundary-element forward model) is the likely remedy.
+  The tests that measured V4 are ignored with this note (section 4); the pattern is wrong in the Simulator's V4 and in the
+  pericarditis and T-inversion presets' V3–V4.
+* Fascicular blocks: on the baked heart a left anterior block shifts the net-area axis the wrong way (sinus ≈ +43°, LAFB ≈
+  +78°, LPFB ≈ +92°); the procedural pack had sinus ≈ +24°, LAFB ≈ +17°, LPFB ≈ +35°, already short of the textbook ≤ −45°
+  and ≥ +90°. Both fascicular-block axis tests stay ignored with the target values (section 4).
 * After flecainide ends an induced AF, the model stays on the Tier-2 grid with sinus sensed instead of returning to Tier 1.
+* **AF on the baked atria is organised.** The smooth, isotropic, one-cell atrial walls hold one or two stable wavelets
+  rather than fibrillation; the AV node is shown a fast regular input (its sensing site re-arms every 135 ms) and its
+  concealment makes the ventricular response irregular, so the strip reads as AF, but amiodarone does not slow the shown
+  rate and, with the presets' pacing site on the atrial side of the vein mouths, isolating the veins does not prevent the induction (section 4). Stronger and
+  finer dispersion mosaics and a shorter wavelength were tried; a rough, anisotropic atrial wall (the real one) is what
+  the substrate lacks.
 * Tier 2 (the reaction–diffusion engine used by the re-entry presets and the EP lab's flutter and AF) runs on the CPU and is
   **not real time**: about 46–62 ms per frame at 64³ against an 8 ms budget on the development machine, and Tier 1 takes 60–85 ms
   per beat against 15 ms. There is no GPU path yet.
@@ -142,7 +158,14 @@ interface.
 | Test | Why it is ignored |
 |---|---|
 | The fine Niederer slab (`heartsim-cli/tests/validation_bridge.rs`) | Takes minutes of CPU in the dev profile; run it with `cargo test -p heartsim-cli --release -- --ignored`. |
-| Fascicular-block axes (`heartsim-ecg/tests/forward.rs`, LAFB ≤ −45°, LPFB ≥ +90°) | In this model the axis shift of a block stays below the sinus vector while V1 keeps its rS; the test's doc comment records what was tried. Kept as the target. The R-wave progression test next to it, ignored until 0.5.0, passes on the 0.6.0 pack. |
+| Fascicular-block axes (`heartsim-ecg/tests/forward.rs`, LAFB ≤ −45°, LPFB ≥ +90°) | In this model the axis shift of a block stays below the sinus vector while V1 keeps its rS; the test's doc comment records what was tried. Kept as the target. |
+| Fascicular blocks shift the axis the right way (`forward.rs`) | On the baked anatomy a left anterior block shifts the net-area axis right (sinus ≈ +41°, LAFB ≈ +76°); see section 3. |
+| R-wave progression V1 → V5 and the sinus-beat waveform test (`forward.rs`) | V4 over the apex has a QS on the baked anatomy (section 3); aVR ends in an r' of 0.5 mV and V1's r is 0.45 mV from the terminal rightward vector. V1 → V3 and V5 progress, rS in V1, qR in V5–V6, concordant T waves and the P wave all hold. |
+| LBBB and RBBB morphology (`forward.rs`) | LBBB: V6's broad R has one peak, not the notch. RBBB: V1 shows r and a late R' but the s between them stays shallow. Both beats are wide with the right terminal forces. |
+| RV-apex pacing (`heartsim-ecg/tests/pacing.rs`) | The paced beat is wide with a superior axis and positive I and V6, but V1's net area is slightly positive. |
+| Ventricular entrainment during AVRT (`heartsim-sim/tests/ep_lab.rs`) | On the baked atria the eight stimuli from the RV apex terminate the induced AVRT instead of entraining it; the entrainment read-out is exercised in the flutter lesson. |
+| Amiodarone and flecainide in AF, PVI before induction (`heartsim-sim/tests/reentry.rs`) | The AF sensing site re-arms every 135 ms whatever amiodarone does to the APD (flecainide's slower conduction does register), and the AF presets' pacing site lies on the atrial side of the vein-isolation ring, so the burst still captures the atrium after isolation. The other AF tests (persistence, irregular response, shock, PVI during AF) pass. |
+| Reversed transmural gradient and pericarditis (`forward.rs`, `therapy.rs`) | Not ignored but V3 (and V4 for pericarditis) are left out of the lead lists: over the anterior RV and the apex they read the near field (section 3). |
 | The `t!` example in `heartsim-ui/src/i18n.rs` | A documentation snippet marked `ignore`: it shows the macro's use and is not meant to compile on its own. |
 
 ## How to report

@@ -101,7 +101,14 @@ impl Default for Parameters {
         let mut set = |r: R, p: RegionParams| {
             regions.insert(r, p);
         };
-        let atrium = RegionParams::working_myocardium(230.0, 0.8);
+        // Atrial working myocardium is isotropic here. The default pack's atria are one lattice
+        // cell thick, and on such a wall the eikonal engine and the monodomain grid disagree
+        // about anisotropic conduction (the Tier-2 sinus beat lagged Tier 1 by 26 ms RMS with
+        // the fibre tensor and 12 ms without), while the two bundles below keep theirs.
+        let atrium = RegionParams {
+            anisotropy_ratio: 1.0,
+            ..RegionParams::working_myocardium(230.0, 0.8)
+        };
         for r in [
             R::RightAtrium,
             R::LeftAtrium,
@@ -123,6 +130,18 @@ impl Default for Parameters {
         );
         set(
             R::CristaTerminalis,
+            RegionParams {
+                cv_long_m_s: 1.2,
+                anisotropy_ratio: 0.2,
+                ..atrium
+            },
+        );
+        // The coronary-sinus musculature is a sleeve of parallel fibres along the vessel; it
+        // conducts the sinus wave from the ostium along the mitral annulus ahead of the left
+        // atrial wall it lies on (Chauvin et al. 2000), which is what makes a CS catheter read
+        // proximal to distal.
+        set(
+            R::CoronarySinus,
             RegionParams {
                 cv_long_m_s: 1.2,
                 anisotropy_ratio: 0.2,

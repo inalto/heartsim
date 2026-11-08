@@ -9,7 +9,10 @@ publish = false
 
 [dependencies]
 heartsim-geometry.workspace = true
+heartsim-core.workspace = true
 anyhow.workspace = true
+glam.workspace = true
+flate2.workspace = true
 clap.workspace = true
 resvg.workspace = true
 toml.workspace = true

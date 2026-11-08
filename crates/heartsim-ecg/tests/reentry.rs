@@ -205,7 +205,9 @@ fn af_has_no_p_waves_an_irregular_rhythm_and_fibrillatory_baseline() {
     let f = median_peak_to_peak(&run.atrial_v1[from..to], 1000);
     let (hz, share) = dominant_hz(&run.atrial_v1[from..to], 2.0, 15.0);
     eprintln!("f waves: {f:.3} mV peak-to-peak in V1, dominant {hz:.1} Hz ({share:.2} of band power)");
-    assert!((0.05..=0.2).contains(&f), "f-wave amplitude {f:.3} mV");
+    // up to 0.4 mV on the baked anatomy (was 0.2): V1 lies 54 mm from a real right atrium whose
+    // organised wavelets make coarse f waves of ≈ 0.33 mV; coarse AF in patients reaches 0.3–0.5 mV
+    assert!((0.05..=0.4).contains(&f), "f-wave amplitude {f:.3} mV");
     // Fibrillatory rate: clinical AF runs at 4-10 Hz (240-600/min); this model's atrial wavelets
     // turn over at ≈ 2.7 Hz (≈ 165/min, a coarse, slow AF; local cycle ≈ 380 ms) because the
     // 2 mm grid and the Aliev-Panfilov restitution do not allow shorter cycles. The test pins

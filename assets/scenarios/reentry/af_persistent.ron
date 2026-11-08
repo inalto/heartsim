@@ -26,7 +26,11 @@ Scenario(
         patches: [
             Patch(target: Compartment(Atrial), effect: Scale(apd: 0.4, cv: 0.3)),
             Patch(target: Region(PulmonaryVeinSleeves), effect: Scale(apd: 0.8, cv: 0.8)),
-            // dispersion of refractoriness breaks a single stable rotor into an irregular rhythm
+            // dispersion of refractoriness breaks a single stable rotor into an irregular rhythm. On the
+            // baked atria (smooth, isotropic, one cell thick) the activity stays organised at the
+            // sensing site, which re-arms every 135 ms; the AV node's concealment then makes the
+            // ventricular response irregular. Stronger or finer mosaics (±40 % at 8 mm, ±50 % at 6 mm)
+            // and a shorter wavelength did not break the rotor up; see known-issues.md.
             Patch(target: Compartment(Atrial), effect: Mosaic(patch_mm: 8.0, lo: 0.75, hi: 1.25)),
         ],
         initiation: Protocol(site: Landmark("la_pv_antrum"), start_ms: 2000.0, s1_cycle_ms: 125.0, s1_count: 15, s2_ms: None, s3_ms: None),

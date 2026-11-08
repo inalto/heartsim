@@ -8,7 +8,7 @@ Scenario(
     tier: ReactionDiffusion,
     anatomy: "default",
     seed: 22,
-    notes: Some("Typical flutter is a macro-re-entry around the tricuspid annulus, bounded behind by the crista terminalis and the venae cavae, that must pass through the narrow isthmus between the annulus and the inferior vena cava.\nPacing a little faster than the tachycardia entrains it. If the site is in the circuit the first return beat comes after about one cycle: post-pacing interval minus tachycardia cycle length of 30 ms or less. Outside the circuit the interval is longer by the round trip to the circuit.\nA line of block across the isthmus cuts the only path: the wave dies against the line and sinus rhythm returns.\nThe model is a teaching drawing. The atria of this heart are closed spheres with no holes, so the annulus and an insulating band around the circuit are drawn as inert tissue, and the wave is pre-seeded rather than induced.\n\nSources:\n- Cosio FG et al. Radiofrequency ablation of the inferior vena cava-tricuspid valve isthmus in common atrial flutter. Am J Cardiol 1993;71:705-709.\n- Waldo AL et al. Entrainment and interruption of atrial flutter with atrial pacing: studies in man following open heart surgery. Circulation 1977;56:737-745.\n- Saoudi N et al. A classification of atrial flutter and regular atrial tachycardia according to electrophysiological mechanisms and anatomical bases. Eur Heart J 2001;22:1162-1182."),
+    notes: Some("Typical flutter is a macro-re-entry around the tricuspid annulus, bounded behind by the crista terminalis and the venae cavae, that must pass through the narrow isthmus between the annulus and the inferior vena cava.\nPacing a little faster than the tachycardia entrains it. If the site is in the circuit the first return beat comes after about one cycle: post-pacing interval minus tachycardia cycle length of 30 ms or less. Outside the circuit the interval is longer by the round trip to the circuit.\nA line of block across the isthmus cuts the only path: the wave dies against the line and sinus rhythm returns.\nThe model is a teaching drawing. The right atrium is the Rodero 2021 average heart's, with the real tricuspid orifice and caval openings; a band of inert tissue behind the circuit (where the crista terminalis and the Eustachian ridge insulate it in a patient) keeps the wave on its course, the left atrium is inert so that the lesson stays a right-atrial one, and the wave is pre-seeded rather than induced.\n\nSources:\n- Cosio FG et al. Radiofrequency ablation of the inferior vena cava-tricuspid valve isthmus in common atrial flutter. Am J Cardiol 1993;71:705-709.\n- Waldo AL et al. Entrainment and interruption of atrial flutter with atrial pacing: studies in man following open heart surgery. Circulation 1977;56:737-745.\n- Saoudi N et al. A classification of atrial flutter and regular atrial tachycardia according to electrophysiological mechanisms and anatomical bases. Eur Heart J 2001;22:1162-1182."),
     confused_with: ["ep_af_pvi", "atrial tachycardia with 2:1 block"],
     expected: Some(ExpectedFindings(
         hr_bpm: (70.0, 170.0),
@@ -23,26 +23,52 @@ Scenario(
     reentry: Some(ReentrySpec(
         tier2: (voxel_mm: 2.0, sense_gap_ms: 150.0),
         patches: [
-            Patch(target: Compartment(Atrial), effect: Scale(apd: 0.4, cv: 0.7)),
-            Patch(target: Region(CavotricuspidIsthmus), effect: Scale(apd: 1.0, cv: 0.7)),
-            // the tricuspid annulus
+            // Short wavelength in the right atrium, where the circuit is.
+            Patch(target: Region(RightAtrium), effect: Scale(apd: 0.4, cv: 0.7)),
+            Patch(target: Region(CristaTerminalis), effect: Scale(apd: 0.4, cv: 0.7)),
+            Patch(target: Region(SinoatrialNode), effect: Scale(apd: 0.4, cv: 0.7)),
+            Patch(target: Region(AtrialSeptum), effect: Scale(apd: 0.4, cv: 0.7)),
+            Patch(target: Region(CavotricuspidIsthmus), effect: Scale(apd: 0.4, cv: 0.49)),
+            // The left atrium is inert in this lesson. Typical flutter is a right-atrial circuit
+            // that the left atrium only follows; on the baked atria the two chambers touch along
+            // a 60 mm septal strip and again at the roof and the coronary sinus, and the wave
+            // that leaves the circuit through the gap came back through the left atrium to the
+            // high right atrium as a second loop that outlived the isthmus line. (The septal
+            // cells stay conducting: they carry the AV node's inputs.)
+            Patch(target: Region(LeftAtrium), effect: Obstacle),
+            Patch(target: Region(LeftAtrialAppendage), effect: Obstacle),
+            Patch(target: Region(PulmonaryVeinSleeves), effect: Obstacle),
+            Patch(target: Region(BachmannBundle), effect: Obstacle),
+            Patch(target: Region(CoronarySinus), effect: Obstacle),
+            // The septal strip of the right atrium runs from the isthmus up past the barrier
+            // (through the gap) to the roof; above the gap it is inert, otherwise the wave that
+            // leaves the circuit along it comes back to the gap over the free wall and the
+            // isthmus line no longer ends the tachycardia. This box holds every septal cell beyond
+            // the barrier (polar > 84° about the annulus axis, x ≤ −47.7 mm); the low septum
+            // carries the AV node.
+            Patch(target: Box(lo_mm: (-70.0, 0.0, -46.0), hi_mm: (-47.7, 34.0, -22.0)), effect: Obstacle),
+            // The tricuspid annulus: the orifice itself has no cells; this band only insulates the
+            // rim where the valve plane meets the atrial wall. Geometry from the baked pack (`cargo
+            // xtask bake-anatomy` prints it): RA cell centroid, axis towards the tricuspid centre.
             Patch(
-                target: Band(compartment: Atrial, centre_mm: (-53.0, 18.8, -33.3), radius_mm: 27.0, axis: (0.695, 0.483, 0.533), from_deg: 0.0, to_deg: 28.0),
+                target: Band(compartment: Atrial, centre_mm: (-61.9, 16.5, -8.3), radius_mm: 45.0, axis: (0.684, -0.657, 0.317), from_deg: 0.0, to_deg: 30.0),
                 effect: Obstacle,
             ),
-            // the outer barrier of the circuit, inside the septal contact with the left atrium; one gap lets the wave out to the rest of the atria, a dead end
+            // The outer barrier of the circuit, at the latitude of the inferior vena cava (polar 83°) and the
+            // crista; one gap on the lateral free wall lets the wave out to the rest of the right
+            // atrium, a dead end (a gap on the septal side only opened onto the septal strip).
             Patch(
-                target: Band(compartment: Atrial, centre_mm: (-53.0, 18.8, -33.3), radius_mm: 27.0, axis: (0.695, 0.483, 0.533), from_deg: 66.0, to_deg: 80.0, gap_at_mm: Some((-61.3, 21.6, -12.9)), gap_mm: 8.0),
+                target: Band(compartment: Atrial, centre_mm: (-61.9, 16.5, -8.3), radius_mm: 45.0, axis: (0.684, -0.657, 0.317), from_deg: 70.0, to_deg: 84.0, gap_at_mm: Some((-74.8, 5.1, 16.4)), gap_mm: 8.0),
                 effect: Obstacle,
             ),
         ],
         initiation: PhaseWave(
             compartment: Atrial,
             start_ms: 600.0,
-            centre_mm: Some((-53.0, 18.8, -33.3)),
-            axis: (-0.695, -0.483, -0.533),
+            centre_mm: Some((-61.9, 16.5, -8.3)),
+            axis: (-0.684, 0.657, -0.317),
             span: 2.0,
-            within: Some(PhaseWaveLimit(radius_mm: 27.0, polar_deg: (114.0, 152.0))),
+            within: Some(PhaseWaveLimit(radius_mm: 45.0, polar_deg: (114.0, 148.0))),
         ),
     )),
     ep: Some(EpSpec(goal: TerminateReentry, targets: [CtiLine])),
