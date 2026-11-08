@@ -21,7 +21,7 @@ use heartsim_ecg::{Analysis, Analyzer, LeadRing, Regularity, SignalQuality, Tier
 use heartsim_ui::annotations::EcgAnnotations;
 use heartsim_ui::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
 use heartsim_ui::strip::{StripStyle, StripTrace, SweepMode, draw_strip};
-use heartsim_ui::t;
+use heartsim_ui::{cards, t};
 
 /// Paper speed of the drill strip, mm/s: 1 mm is 20 ms.
 pub const DRILL_SPEED_MM_S: f32 = 50.0;
@@ -295,7 +295,7 @@ impl IntervalDrill {
             return;
         }
         if self.failed {
-            ui.colored_label(egui::Color32::LIGHT_RED, t!("interval-no-strip"));
+            cards::result_box(ui, false, t!("interval-no-strip"));
         }
         let Some(q) = self.question.clone() else {
             if !self.failed {
@@ -359,8 +359,9 @@ impl IntervalDrill {
             let args_truth = format!("{:.0}", q.truth_ms);
             let tolerance = format!("{:.0}", q.interval.tolerance_ms());
             if g.correct {
-                ui.colored_label(
-                    egui::Color32::LIGHT_GREEN,
+                cards::result_box(
+                    ui,
+                    true,
                     t!(
                         "interval-correct",
                         entry = args_entry,
@@ -369,18 +370,16 @@ impl IntervalDrill {
                     ),
                 );
             } else {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(t!(
-                            "interval-wrong",
-                            entry = args_entry,
-                            truth = args_truth,
-                            off = format!("{:.0}", g.error_ms.abs()),
-                            tolerance = tolerance
-                        ))
-                        .color(egui::Color32::LIGHT_RED),
-                    )
-                    .wrap(),
+                cards::result_box(
+                    ui,
+                    false,
+                    t!(
+                        "interval-wrong",
+                        entry = args_entry,
+                        truth = args_truth,
+                        off = format!("{:.0}", g.error_ms.abs()),
+                        tolerance = tolerance
+                    ),
                 );
             }
             if let Some(entry) = library.entries.get(q.scenario) {

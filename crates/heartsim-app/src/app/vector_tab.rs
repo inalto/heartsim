@@ -5,8 +5,7 @@
 use super::HeartSimApp;
 use eframe::egui;
 use heartsim_core::Lead;
-use heartsim_ui::t;
-use heartsim_ui::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};
+use heartsim_ui::{VectorPlane, VectorViewStyle, cards, full_scale_mv, t, vector_plane};
 
 impl HeartSimApp {
     pub(super) fn vector_tab(&mut self, ui: &mut egui::Ui) {
@@ -27,31 +26,37 @@ impl HeartSimApp {
         egui::Panel::right("vector_readout")
             .default_size(260.0)
             .show(ui, |ui| {
-                ui.strong(t!("vector-heading"));
-                ui.label(t!("vector-intro"));
-                if let Some(d) = self.cursor_dipole() {
-                    ui.separator();
-                    ui.monospace(format!("|v| {:.2} mV", d.length()));
-                    ui.monospace(t!(
-                        "vector-x",
-                        value = format!("{:+.2}", d.x),
-                        side = t!("vector-left")
-                    ));
-                    ui.monospace(t!(
-                        "vector-y",
-                        value = format!("{:+.2}", d.y),
-                        side = t!("vector-cranial")
-                    ));
-                    ui.monospace(t!(
-                        "vector-z",
-                        value = format!("{:+.2}", d.z),
-                        side = t!("vector-anterior")
-                    ));
-                }
-                ui.separator();
-                ui.label(t!("vector-scrub-hint"));
-                ui.separator();
-                self.ecg.readout(ui);
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    cards::card(ui, |ui| {
+                        cards::heading(ui, t!("vector-heading"));
+                        ui.label(t!("vector-intro"));
+                        if let Some(d) = self.cursor_dipole() {
+                            ui.add_space(4.0);
+                            ui.monospace(format!("|v| {:.2} mV", d.length()));
+                            ui.monospace(t!(
+                                "vector-x",
+                                value = format!("{:+.2}", d.x),
+                                side = t!("vector-left")
+                            ));
+                            ui.monospace(t!(
+                                "vector-y",
+                                value = format!("{:+.2}", d.y),
+                                side = t!("vector-cranial")
+                            ));
+                            ui.monospace(t!(
+                                "vector-z",
+                                value = format!("{:+.2}", d.z),
+                                side = t!("vector-anterior")
+                            ));
+                        }
+                        ui.add_space(4.0);
+                        ui.weak(t!("vector-scrub-hint"));
+                    });
+                    cards::card(ui, |ui| {
+                        cards::heading(ui, t!("readout-heading"));
+                        self.ecg.readout(ui);
+                    });
+                });
             });
         egui::CentralPanel::default().show(ui, |ui| {
             let now = self.cursor_dipole();

@@ -16,8 +16,15 @@ simulation speed, plus the *Pacemaker* window. The **Export / Import** button at
   and offers a colour-blind-safe palette. *Click on the heart* stimulates there; shift-click ablates.
 * **Left: layers.** Show, hide or fade each chamber, the great vessels, the valve rings and the torso. The heart-vector
   arrow and its loop can be overlaid; *see-through* fades the walls so the arrow stays visible.
-* **Right: the frontal QRS axis** measured from the strip, the net QRS polarity in each limb lead, and the interval
-  read-out (HR, RR, rhythm regularity, PR, QRS, QT, QTc).
+* **Right: the frontal QRS axis** measured from the strip. The hexaxial circle shows the four axis classes as soft
+  sectors; the sector under the pointer brightens and shows its name and range (normal −30° to +90° in green, left deviation −30° to −90° in amber at the upper
+  right, right deviation +90° to +180° in rose at the lower left, extreme or indeterminate −90° to ±180° in grey-yellow
+  at the upper left), degree ticks every 30° in small pills, the six limb leads on the ring and the measured axis as a
+  thick blue arrow. Beside or under it, the *Measured axis* card shows the angle on a badge in the class colour, the
+  *Interpretation* card names the class with its range, the net QRS polarity of each limb lead (as a signed glyph and
+  a word, so it reads without colour) and a small torso schematic with the limb leads at their angles; the legend under
+  the circle is the colour key. The *Measurements* card holds the interval read-out (HR, RR, rhythm regularity, PR, QRS,
+  QT, QTc).
 * **Bottom: the strip.** Pick the lead with the buttons above it. Paper speed (12.5–200 mm/s), gain (5/10/20 mm/mV),
   scrolling paper or a monitor-style sweep bar, monitor colours, grid, wave letters (P, R, T) and PR/RR brackets, and the
   screen calibration in points per millimetre (hold a ruler to the screen and adjust it until 10 small squares measure 1 cm).
@@ -72,8 +79,14 @@ The cardiac dipole at the strip cursor and its loop over the last beat, in the f
 
 ![Axis trainer, dialled to a left axis deviation](../images/axis-trainer.png)
 
-Drag on the circle to rotate the heart's electrical axis and watch all six limb leads change; the right-hand panel names the
-axis class and why. The [Axis Quiz](quizzes.md) hides the axis and asks you to find it.
+Drag on the circle to rotate the heart's electrical axis and watch all six limb leads change: the pointer becomes a hand
+over the circle, the arrow brightens and a tooltip shows its angle. The cards beside the circle name the axis class, its
+range and why (which leads are positive and negative). The [Axis Quiz](quizzes.md) hides the axis and asks you to find it;
+its cards appear with the answer.
+
+The whole window follows the same look, in a light and a dark variant chosen under **Theme** in the ☰ menu: rounded cards
+with soft shadows, pill-shaped labels, a calm blue accent, and green or rose result boxes with a check or an exclamation
+mark in the quizzes and drills. The ECG paper and the 3-D colour maps keep their clinical colours in both themes.
 
 ## Electrodes
 

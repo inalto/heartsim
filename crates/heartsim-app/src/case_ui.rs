@@ -9,7 +9,7 @@
 use eframe::egui;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use heartsim_core::case::Case;
-use heartsim_ui::t;
+use heartsim_ui::{cards, t};
 #[cfg(feature = "native")]
 use std::path::{Path, PathBuf};
 
@@ -362,10 +362,11 @@ impl Cases {
                         }
                         if let Some(c) = chosen {
                             if c == q.answer {
-                                ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
+                                cards::result_box(ui, true, t!("feedback-correct"));
                             } else {
-                                ui.colored_label(
-                                    egui::Color32::LIGHT_RED,
+                                cards::result_box(
+                                    ui,
+                                    false,
                                     t!("case-wrong", answer = q.choices[q.answer].as_str()),
                                 );
                             }

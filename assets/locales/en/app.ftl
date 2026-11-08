@@ -324,3 +324,23 @@ interval-wrong = Not quite: you measured { $entry } ms, the reference is { $trut
 interval-rhythm = Rhythm: { $title }.
 interval-reference-note = The reference is the simulator's own measurement of this strip; the labelled waves show where it measured. Real readers differ a little, which is why a tolerance applies.
 interval-no-strip = No suitable strip was found. Press New question to try again.
+
+## Frontal QRS-axis panel: the cards beside the circle, the sector names and the legend
+axis-measured-heading = Measured axis
+axis-no-axis = No QRS complexes yet
+axis-interpretation-heading = Interpretation
+axis-sector-normal = Normal axis
+axis-sector-left = Left axis deviation
+axis-sector-right = Right axis deviation
+axis-sector-extreme = Extreme axis (indeterminate)
+axis-range = { $from } to { $to }
+axis-interp-normal = The QRS axis lies between { $from } and { $to }: a normal axis.
+axis-interp-left = The QRS axis lies beyond { $from }, up to { $to }: left axis deviation.
+axis-interp-right = The QRS axis lies beyond { $from }, up to { $to }: right axis deviation.
+axis-interp-extreme = The QRS axis lies between { $from } and { $to }, the "north-west" quadrant: extreme axis deviation (indeterminate axis).
+axis-legend-heading = Axis classes (frontal plane)
+axis-polarity-heading = Net QRS polarity
+axis-torso-heading = Limb leads on the torso
+axis-arrow-tooltip = QRS axis { $deg } — drag to turn it
+axis-guess-tooltip = Your answer { $deg } — drag to change it
+readout-heading = Measurements

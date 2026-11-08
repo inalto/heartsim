@@ -4,6 +4,25 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Changed
+- The frontal QRS-axis panel is redesigned after a clinical teaching card: the hexaxial circle shows the four axis classes
+  as soft-coloured sectors, and the one under the pointer brightens and shows its name and range (normal −30° to +90°, left deviation −30° to −90° at the upper
+  right, right deviation +90° to +180° at the lower left, extreme or indeterminate −90° to ±180° at the upper left; the
+  boundaries come from `AxisClass`), degree ticks every 30° in pills, faint dotted inner rings, the limb leads on the ring
+  and a thick arrow with a soft drop shadow. A *Measured axis* card shows the angle on a badge in the class colour, an
+  *Interpretation* card names the class and its range, lists the net QRS polarity of each limb lead as a signed glyph and
+  a word, and draws a small torso schematic with the limb leads at their angles from the electrode geometry; a legend row
+  under the circle doubles as the colour key. On the Simulator and 12-Lead pages the cards stack under the circle; on the
+  Axis Trainer and the Axis Quiz they sit beside it (the trainer's separate polarity panel is folded into the cards).
+- Dragging the axis: over the trainer's circle the pointer becomes a hand (closed while dragging), the arrow brightens
+  and thickens, and a tooltip shows the angle; the read-only circles of the Simulator and 12-Lead pages do none of that.
+- One palette for the whole interface, in a light and a dark variant (`heartsim_ui::theme`), with card, pill, badge and
+  result-box helpers (`heartsim_ui::cards`): the rhythm bar's controls sit in soft groups, the measurement read-outs and
+  the Heart Vector values are cards, the Settings and About windows use cards, and the quizzes, drills, tutorials and
+  cases show their results in green or rose boxes with a check or an exclamation mark. The high-contrast setting keeps
+  its black and white; the ECG paper, strip and 3-D colour maps keep their clinical colours.
+- The screenshot tour takes `HEARTSIM_SCREENSHOT_THEME=light|dark` to shoot in one theme.
+
 ## [0.7.0] — 2026-11-07
 Sixth tagged release, the follow-up to the first look at 0.6.0: the 3-D view opens on an oblique that shows the heart as a
 heart, the tab row gives way to a one-line menu bar with the version in view, and the desktop app tells you when a newer

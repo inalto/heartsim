@@ -9,7 +9,7 @@
 use eframe::egui;
 use heartsim_core::axis::draw_drill_axis;
 use heartsim_core::{AxisClass, FrontalAxis, Lead};
-use heartsim_ui::{AxisDialStyle, axis_dial, lead_polarity, t};
+use heartsim_ui::{AxisPanel, axis_panel, cards, lead_polarity, t};
 
 /// Tolerance for a correct answer, degrees (half a hexaxial sector).
 pub const TOLERANCE_DEG: f64 = 15.0;
@@ -158,12 +158,9 @@ impl AxisQuiz {
             }
             (Some(target), Some(guess), true) => {
                 let err = FrontalAxis::normalise(guess - target);
-                ui.colored_label(
-                    if err.abs() <= TOLERANCE_DEG {
-                        egui::Color32::LIGHT_GREEN
-                    } else {
-                        egui::Color32::LIGHT_RED
-                    },
+                cards::result_box(
+                    ui,
+                    err.abs() <= TOLERANCE_DEG,
                     t!(
                         "app-quiz-answer",
                         answer = format!("{target:+.0}"),
@@ -177,16 +174,18 @@ impl AxisQuiz {
                 ui.label(t!("app-quiz-your-answer", chosen = format!("{guess:+.0}")));
             }
         }
-        let side = ui.available_width().min(ui.available_height() - 40.0).max(200.0);
+        // the cards would give the class away: they appear with the answer
         let shown = if self.revealed { self.target_deg } else { None };
-        if let Some(g) = axis_dial(
-            ui,
-            side,
-            shown,
-            self.guess_deg,
-            !self.revealed && self.target_deg.is_some(),
-            &AxisDialStyle::default(),
-        ) {
+        let panel = AxisPanel {
+            axis: shown,
+            guess: self.guess_deg,
+            interactive: !self.revealed && self.target_deg.is_some(),
+            max_side: 420.0,
+            show_cards: self.revealed,
+            show_torso: false,
+            note: None,
+        };
+        if let Some(g) = axis_panel(ui, &panel).dragged_to {
             self.set_guess(g);
         }
         asked_new

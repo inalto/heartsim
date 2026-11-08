@@ -325,3 +325,23 @@ interval-wrong = Non proprio: hai misurato { $entry } ms, il riferimento è { $t
 interval-rhythm = Ritmo: { $title }.
 interval-reference-note = Il riferimento è la misura del simulatore su questa striscia; le onde etichettate mostrano dove ha misurato. I lettori reali differiscono un poco, per questo c'è una tolleranza.
 interval-no-strip = Nessuna striscia adatta. Premi Nuova domanda per riprovare.
+
+## Pannello dell'asse QRS frontale: le schede accanto al cerchio, i nomi dei settori e la legenda
+axis-measured-heading = Asse misurato
+axis-no-axis = Nessun complesso QRS ancora
+axis-interpretation-heading = Interpretazione
+axis-sector-normal = Asse normale
+axis-sector-left = Deviazione assiale sinistra
+axis-sector-right = Deviazione assiale destra
+axis-sector-extreme = Asse estremo (indeterminato)
+axis-range = da { $from } a { $to }
+axis-interp-normal = L'asse del QRS è compreso tra { $from } e { $to }: asse normale.
+axis-interp-left = L'asse del QRS va oltre { $from }, fino a { $to }: deviazione assiale sinistra.
+axis-interp-right = L'asse del QRS va oltre { $from }, fino a { $to }: deviazione assiale destra.
+axis-interp-extreme = L'asse del QRS è compreso tra { $from } e { $to }, il quadrante «nord-ovest»: deviazione assiale estrema (asse indeterminato).
+axis-legend-heading = Classi dell'asse (piano frontale)
+axis-polarity-heading = Polarità netta del QRS
+axis-torso-heading = Derivazioni degli arti sul torso
+axis-arrow-tooltip = Asse QRS { $deg } — trascina per ruotarlo
+axis-guess-tooltip = La tua risposta { $deg } — trascina per cambiarla
+readout-heading = Misure

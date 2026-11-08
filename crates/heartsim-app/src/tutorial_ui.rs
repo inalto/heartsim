@@ -4,7 +4,7 @@
 
 use eframe::egui;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
-use heartsim_ui::t;
+use heartsim_ui::{Palette, cards, t};
 use std::path::PathBuf;
 
 use crate::tutorial::{
@@ -231,7 +231,14 @@ impl Tutorials {
                 ui.horizontal(|ui| {
                     ui.strong(&t.title);
                     if p.completed {
-                        ui.colored_label(egui::Color32::LIGHT_GREEN, t!("tut-completed"));
+                        let good = Palette::of(ui).good();
+                        cards::pill_coloured(
+                            ui,
+                            t!("tut-completed"),
+                            good.soft,
+                            good.on_soft,
+                            Some(good.strong),
+                        );
                     }
                 });
                 ui.label(&t.summary);
@@ -332,13 +339,13 @@ impl Tutorials {
                     }
                     match chosen {
                         Some(c) if c == q.answer => {
-                            ui.colored_label(egui::Color32::LIGHT_GREEN, t!("feedback-correct"));
+                            cards::result_box(ui, true, t!("feedback-correct"));
                             if !q.explanation.is_empty() {
                                 CommonMarkViewer::new().show(ui, &mut self.markdown, &q.explanation);
                             }
                         }
                         Some(_) => {
-                            ui.colored_label(egui::Color32::LIGHT_RED, t!("tut-try-again"));
+                            cards::result_box(ui, false, t!("tut-try-again"));
                         }
                         None => {}
                     }
