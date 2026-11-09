@@ -183,6 +183,7 @@ impl AxisQuiz {
             max_side: 420.0,
             show_cards: self.revealed,
             show_torso: false,
+            torso_opacity: 0.0,
             note: None,
         };
         if let Some(g) = axis_panel(ui, &panel).dragged_to {

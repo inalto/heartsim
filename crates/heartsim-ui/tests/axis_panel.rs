@@ -140,6 +140,7 @@ fn panel(axis: Option<f64>) -> Harness<'static> {
                 max_side: 360.0,
                 show_cards: true,
                 show_torso: true,
+                torso_opacity: 0.7,
                 note: None,
             };
             axis_panel(ui, &cfg);
@@ -214,6 +215,7 @@ fn sidebar(default_width: f32) -> Harness<'static, Vec<f32>> {
                                 max_side: 330.0,
                                 show_cards: true,
                                 show_torso: true,
+                                torso_opacity: 0.7,
                                 note: None,
                             };
                             axis_panel(ui, &cfg);

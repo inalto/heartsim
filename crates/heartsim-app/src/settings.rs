@@ -1,4 +1,4 @@
-//! User preferences (B19): language, high-contrast theme and reduced motion.
+//! User preferences (B19): language, high-contrast theme, reduced motion and the torso picture.
 //!
 //! Stored with eframe's persistence under [`STORAGE_KEY`]. A missing or unreadable value gives the
 //! defaults, so a corrupt entry never blocks start-up.
@@ -40,6 +40,9 @@ pub struct Settings {
     /// Light, dark, or whatever the operating system says (the default). Chosen from the bottom of the
     /// hamburger menu; `high_contrast` then applies on top of the chosen one.
     pub theme: ThemeMode,
+    /// Opacity, `0.0..=1.0`, of the frontal torso picture behind the limb leads in the axis panel;
+    /// `0.0` draws the outline of the procedural torso instead.
+    pub torso_image_opacity: f32,
 }
 
 /// The colour scheme preference, stored by name.
@@ -67,6 +70,8 @@ impl ThemeMode {
 
 /// Default loudness of the monitor beep, linear: half scale, audible without being startling.
 pub const DEFAULT_BEEP_VOLUME: f32 = 0.5;
+/// Default opacity of the torso picture: present, but the lead pills and electrodes stay the subject.
+pub const DEFAULT_TORSO_IMAGE_OPACITY: f32 = 0.7;
 
 // Written by hand: `beep_volume` defaults to `DEFAULT_BEEP_VOLUME`, not 0.0, also for the fields missing in
 // settings stored by an older version (`#[serde(default)]` on the struct uses this).
@@ -81,6 +86,7 @@ impl Default for Settings {
             beep_volume: DEFAULT_BEEP_VOLUME,
             check_for_updates: true,
             theme: ThemeMode::System,
+            torso_image_opacity: DEFAULT_TORSO_IMAGE_OPACITY,
         }
     }
 }
@@ -148,8 +154,7 @@ impl Settings {
     }
 }
 
-/// Reads "35" or "35 %" as the fraction 0.35 (the volume slider's text box).
-#[cfg(feature = "audio")]
+/// Reads "35" or "35 %" as the fraction 0.35 (the text box of the percent sliders).
 fn parse_percent(text: &str) -> Option<f64> {
     text.trim()
         .trim_end_matches('%')
@@ -217,6 +222,12 @@ pub fn settings_window_with_audio(
                 changed |= ui
                     .checkbox(&mut settings.reduced_motion, t!("settings-reduced-motion"))
                     .changed();
+                let slider = egui::Slider::new(&mut settings.torso_image_opacity, 0.0..=1.0)
+                    .text(t!("settings-torso-opacity"))
+                    .custom_formatter(|v, _| format!("{:.0} %", v * 100.0))
+                    .custom_parser(parse_percent);
+                changed |= ui.add(slider).changed();
+                ui.weak(t!("settings-torso-opacity-hint"));
             });
             #[cfg(feature = "audio")]
             cards::card(ui, |ui| {
@@ -262,9 +273,21 @@ mod tests {
             beep_volume: 0.25,
             check_for_updates: false,
             theme: ThemeMode::Light,
+            torso_image_opacity: 0.4,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
+    }
+
+    #[test]
+    fn the_torso_picture_is_shown_at_its_default_opacity_also_for_older_settings() {
+        let d = Settings::default();
+        assert!((d.torso_image_opacity - DEFAULT_TORSO_IMAGE_OPACITY).abs() < f32::EPSILON);
+        // settings saved before the picture existed load and get the default, not 0.0
+        let old: Settings = ron::from_str("(language: None, theme: Dark)").expect("old settings load");
+        assert!((old.torso_image_opacity - DEFAULT_TORSO_IMAGE_OPACITY).abs() < f32::EPSILON);
+        let off: Settings = ron::from_str("(torso_image_opacity: 0.0)").expect("settings load");
+        assert!(off.torso_image_opacity.abs() < f32::EPSILON);
     }
 
     #[test]

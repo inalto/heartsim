@@ -425,6 +425,9 @@ pub struct AxisPanel<'a> {
     pub show_cards: bool,
     /// The torso schematic at the bottom of the interpretation card.
     pub show_torso: bool,
+    /// Opacity (`0.0..=1.0`) of the torso picture in that schematic; `0.0` draws the outline of
+    /// the procedural torso instead. Read only with `show_torso`.
+    pub torso_opacity: f32,
     /// An extra sentence in the interpretation card (the trainer's reading rule).
     pub note: Option<&'a str>,
 }
@@ -521,7 +524,12 @@ fn axis_cards(ui: &mut Ui, cfg: &AxisPanel<'_>, p: &Palette) {
             ui.add_space(6.0);
             cards::subheading(ui, t!("axis-torso-heading"));
             let w = ui.available_width();
-            torso_schematic(ui, Vec2::new(w, (w * 1.0).clamp(150.0, 220.0)));
+            // the box follows the picture's portrait aspect (401 × 463) so the whole figure fits
+            torso_schematic(
+                ui,
+                Vec2::new(w, (w * 1.15).clamp(150.0, 260.0)),
+                cfg.torso_opacity,
+            );
         }
     });
 }

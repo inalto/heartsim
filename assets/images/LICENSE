@@ -1,0 +1,7 @@
+heartsim images
+
+torso-front-axis.png
+  Frontal view of a human torso, drawn behind the limb-lead schematic of the frontal-axis panel
+  (crates/heartsim-ui/src/torso_schematic.rs; compiled into the application binary).
+  Licence: Creative Commons Attribution (CC BY), https://creativecommons.org/licenses/by/4.0/
+  Supplied by Alain Martini on 2026-11-09 with a transparent background for light and dark panels.

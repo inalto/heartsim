@@ -508,6 +508,7 @@ impl HeartSimApp {
                 max_side: 330.0,
                 show_cards: true,
                 show_torso: true,
+                torso_opacity: self.settings.torso_image_opacity,
                 note: None,
             };
             axis_panel(ui, &panel);
@@ -619,6 +620,7 @@ impl HeartSimApp {
                     max_side: 420.0,
                     show_cards: true,
                     show_torso: true,
+                    torso_opacity: self.settings.torso_image_opacity,
                     note: note.as_deref(),
                 };
                 if let Some(target) = axis_panel(ui, &panel).dragged_to {

@@ -14,6 +14,8 @@ extend-exclude = [
     "assets/anatomy/**",
     "assets/validation/**",
     "assets/generated/**",
+    "assets/images/**",
+    "assets/objects/**",
     "assets/locales/de/**",
     "assets/locales/es/**",
     "assets/locales/fr/**",
