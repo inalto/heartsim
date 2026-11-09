@@ -229,6 +229,7 @@ fn pretty_name(name: &str) -> String {
         "svc" => t!("part-svc"),
         "ivc" => t!("part-ivc"),
         "valve_rings" => t!("part-valve-rings"),
+        "valve_planes" => t!("part-valve-planes"),
         "torso" => t!("part-torso"),
         other => other.to_string(),
     }

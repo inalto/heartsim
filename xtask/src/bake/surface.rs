@@ -368,7 +368,9 @@ pub fn decimate(mesh: &mut TriMesh, target_triangles: usize) {
 }
 
 // ---------------------------------------------------------------------- primitives ------------
+// Swept primitives are test fixtures only since the default pack draws nothing but dataset parts.
 
+#[cfg(test)]
 fn frame(axis: Vec3) -> (Vec3, Vec3) {
     let a = axis.normalize_or_zero();
     let helper = if a.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
@@ -377,6 +379,7 @@ fn frame(axis: Vec3) -> (Vec3, Vec3) {
     (u, v)
 }
 
+#[cfg(test)]
 /// A tube from `start` along `axis` with a radius profile `radius(t)` for `t ∈ [0, 1]` and a
 /// rounded end (closed at the start too). `rings` samples along the length, `segments` around.
 #[must_use]
@@ -446,6 +449,7 @@ pub fn swept_tube(
     mesh
 }
 
+#[cfg(test)]
 /// A torus-like tube swept along a closed polyline (a valve annulus).
 #[must_use]
 pub fn swept_ring(loop_points: &[Vec3], minor_mm: f32, segments: usize) -> TriMesh {
@@ -479,6 +483,7 @@ pub fn swept_ring(loop_points: &[Vec3], minor_mm: f32, segments: usize) -> TriMe
     mesh
 }
 
+#[cfg(test)]
 /// Signed volume by the divergence theorem (positive for outward counter-clockwise winding).
 #[must_use]
 pub fn signed_volume(m: &TriMesh) -> f32 {
@@ -495,6 +500,7 @@ pub fn signed_volume(m: &TriMesh) -> f32 {
         .sum()
 }
 
+#[cfg(test)]
 /// Flip every triangle of a closed mesh whose winding faces inward (the renderer culls back
 /// faces), and recompute the normals.
 pub fn orient_outward(mesh: &mut TriMesh) {

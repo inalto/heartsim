@@ -37,7 +37,7 @@ infinite-medium forward model; they are not measured values. See the doc comment
 |---|---|---|
 | `manifest.ron` | `PackManifest`: `format_version`, name, provenance (`source`), licence, frame, cell spacing, cell count, mesh table, and for every other file its size and CRC-32 | RON |
 | `LICENSE` | licence and attribution of the geometry in this pack | text |
-| `mesh_<name>.glb` | render mesh of one structure (`lv`, `rv`, `ra`, `la`, `aorta`, `pulmonary_artery`, `svc`, `ivc`, `pulmonary_veins`, `valve_rings`); kind `Myocardium` / `Vessel` / `Valve` in the manifest | glTF 2.0 binary, one primitive, `POSITION` + `NORMAL` f32, `u32` indices |
+| `mesh_<name>.glb` | render mesh of one structure (`lv`, `rv`, `ra`, `la`, `aorta`, `pulmonary_artery`, `svc`, `ivc`, `pulmonary_veins`, `valve_planes`; the procedural pack has `valve_rings` instead); kind `Myocardium` / `Vessel` / `Valve` in the manifest | glTF 2.0 binary, one primitive, `POSITION` + `NORMAL` f32, `u32` indices |
 | `torso.glb` | body surface | glTF 2.0 binary |
 | `cells.bin` | `HSCL` v1: `n`, positions `n×3 f32`, fibres `n×3 f32` (unit), region codes `n×u8` (index into `Region::ALL`), transmural depth `n×f32` (0 endo → 1 epi; atria 0.5; septum measured from the LV side) | little-endian |
 | `neighbours.bin` | `HSNB` v1: `n`, `k = 8`, then per cell `k × (index u32, distance_mm f32, fibre_alignment f32)` nearest first | little-endian |
@@ -107,9 +107,12 @@ the same sources give the same bytes.
    pulmonary valve (the procedural pack's 25 mm patches lit most of the real LV endocardium at once).
 5. **AHA segments** from the canonical coordinates (apex–base between the epicardial apex and the mitral plane, angle in the
    short-axis plane), the RV's LAD zone by the same rule as before.
-6. **Render meshes**: the boundary faces of each tag (closed by construction), Taubin-smoothed and quadric-decimated to
-   30 000 triangles per chamber and 6 000 per vessel; the cropped veins are extended by tubes from their inlet discs, the
-   arteries from their far ends, the valve rings swept along the planes' rims, the appendage lobe appended to the LA mesh.
+6. **Render meshes**: only the dataset's own parts, nothing designed. Each is the boundary faces of its tags (closed by
+   construction), Taubin-smoothed and quadric-decimated to 30 000 triangles per chamber and 6 000 per other part: `la` and
+   `ra` are the atrial tags plus their inlet border rings (tags 18–24) and `la` also the appendage inlet lid; `aorta` and
+   `pulmonary_artery` are the wall tags, cropped where the dataset crops them; `svc`, `ivc` and `pulmonary_veins` are the
+   inlet lids (tags 16, 17, 12–15) that close each vessel mouth; `valve_planes` are the four valve-plane discs (tags 7–10).
+   The appendage lobe of the cell cloud has no render mesh: the dataset crops the appendage at its inlet.
 
 ### What the engines do differently on it
 

@@ -176,6 +176,7 @@ part-pulmonary-veins = Vene polmonari
 part-svc = Vena cava superiore
 part-ivc = Vena cava inferiore
 part-valve-rings = Anelli valvolari
+part-valve-planes = Piani valvolari
 part-torso = Torace
 heart-ablated = Ablazione di { $radius } mm attorno a { $region }
 heart-stimulus = Stimolo: { $region } a { $time } ms

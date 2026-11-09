@@ -175,6 +175,7 @@ part-pulmonary-veins = Pulmonary veins
 part-svc = Superior vena cava
 part-ivc = Inferior vena cava
 part-valve-rings = Valve rings
+part-valve-planes = Valve planes
 part-torso = Torso
 heart-ablated = Ablated { $radius } mm around { $region }
 heart-stimulus = Stimulus: { $region } at { $time } ms

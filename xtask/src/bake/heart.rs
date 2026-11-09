@@ -13,7 +13,7 @@
 //! septum at azimuth 160° in the x–z plane (0° = lateral free wall, 90° = anterior, 270° =
 //! inferior), origin at the ventricular centroid. `heart_rotation()` then tilts it into the thorax.
 
-use super::surface::{decimate, faces_to_mesh, merge, swept_ring, swept_tube, taubin_smooth, transform};
+use super::surface::{decimate, faces_to_mesh, merge, taubin_smooth, transform};
 use super::tet::{FittedDisc, TetMesh, fit_disc};
 use anyhow::{Context, Result, bail};
 use glam::{Mat3, Quat, Vec3};
@@ -248,7 +248,6 @@ impl NearSet {
 struct Discs {
     mitral: FittedDisc,
     tricuspid: FittedDisc,
-    aortic: FittedDisc,
     pulmonary: FittedDisc,
     laa: FittedDisc,
     pvs: [FittedDisc; 4],
@@ -334,7 +333,6 @@ pub fn bake_heart(mesh: &TetMesh, opts: HeartOptions) -> Result<BakedHeart> {
     let discs = Discs {
         mitral: disc(tag::MITRAL, tag::LV),
         tricuspid: disc(tag::TRICUSPID, tag::RV),
-        aortic: disc(tag::AORTIC, tag::LV),
         pulmonary: disc(tag::PULMONARY, tag::RV),
         laa: disc(tag::LAA, tag::LA),
         pvs: [
@@ -1076,44 +1074,20 @@ pub fn bake_heart(mesh: &TetMesh, opts: HeartOptions) -> Result<BakedHeart> {
             merge(&std::iter::once(m).chain(extra).collect::<Vec<_>>())
         }
     };
-    let vessel_tube = |d: &FittedDisc, len: f32, wall: f32| -> TriMesh {
-        let r = d.radius_mm + wall;
-        swept_tube(d.centre - d.normal * 1.0, d.normal, len, move |_| r, 6, 24)
+    // Only the parts of the Rodero mesh are drawn, nothing designed: the vessels stop where the
+    // dataset crops them, and the valve planes and vessel inlets are the dataset's own thin lids.
+    // Each part is the boundary of its own tag set; the atria include their border rings (inlet
+    // tag + `BORDER_OFFSET`), the collar of atrial wall round each vein mouth. Render only: the
+    // cell sampling above is unchanged.
+    let part = |tags: &[u16]| -> TriMesh {
+        let mut m = surface_of(tags);
+        taubin_smooth(&mut m, 2);
+        decimate(&mut m, opts.vessel_triangles);
+        m
     };
-    // arteries: the far end of the cropped wall, extended by a tube
-    let artery_extension = |wall_tag: u16, valve: &FittedDisc, len: f32| -> TriMesh {
-        let nodes = mesh.nodes_of_tag(wall_tag);
-        let axis_pts: Vec<(f32, Vec3)> = nodes
-            .iter()
-            .map(|n| {
-                let p = to_canon(mesh.points[*n as usize]);
-                ((p - valve.centre).dot(valve.normal), p)
-            })
-            .collect();
-        let far = axis_pts.iter().map(|(s, _)| *s).fold(f32::NEG_INFINITY, f32::max);
-        let end: Vec<Vec3> = axis_pts
-            .iter()
-            .filter(|(s, _)| *s > far - 4.0)
-            .map(|(_, p)| *p)
-            .collect();
-        let d = fit_disc(&end, valve.centre);
-        swept_tube(
-            d.centre - d.normal * 2.0,
-            d.normal,
-            len,
-            move |t| d.radius_mm * (1.0 - 0.1 * t),
-            6,
-            24,
-        )
-    };
-    let laa_lobe = swept_tube(
-        discs.laa.centre,
-        laa_axis,
-        laa_len,
-        move |t| laa_radius(t) + 1.0,
-        8,
-        24,
-    );
+    // one closed surface per tag, so lids that touch (none do today) stay separate sheets
+    let parts = |tags: &[u16]| -> TriMesh { merge(&tags.iter().map(|t| part(&[*t])).collect::<Vec<_>>()) };
+    let border = |t: u16| t + tag::BORDER_OFFSET;
     let mut named: Vec<NamedMesh> = Vec::new();
     let mut add = |name: &str, kind: MeshKind, m: TriMesh| {
         named.push(NamedMesh {
@@ -1124,96 +1098,40 @@ pub fn bake_heart(mesh: &TetMesh, opts: HeartOptions) -> Result<BakedHeart> {
     };
     add("lv", MeshKind::Myocardium, chamber(&[tag::LV], vec![]));
     add("rv", MeshKind::Myocardium, chamber(&[tag::RV], vec![]));
-    add("ra", MeshKind::Myocardium, chamber(&[tag::RA], vec![]));
-    add("la", MeshKind::Myocardium, chamber(&[tag::LA], vec![laa_lobe]));
-    let vessel = |tags: &[u16], extra: TriMesh| -> TriMesh {
-        let mut m = surface_of(tags);
-        taubin_smooth(&mut m, 2);
-        decimate(&mut m, opts.vessel_triangles);
-        merge(&[m, extra])
-    };
     add(
-        "aorta",
-        MeshKind::Vessel,
-        vessel(&[tag::AORTA], artery_extension(tag::AORTA, &discs.aortic, 28.0)),
+        "ra",
+        MeshKind::Myocardium,
+        chamber(&[tag::RA, border(tag::SVC), border(tag::IVC)], vec![]),
     );
+    // the appendage inlet is the lid of the cropped appendage: drawn with the atrium it closes
     add(
-        "pulmonary_artery",
-        MeshKind::Vessel,
-        vessel(&[tag::PA], artery_extension(tag::PA, &discs.pulmonary, 18.0)),
+        "la",
+        MeshKind::Myocardium,
+        chamber(
+            &[
+                tag::LA,
+                border(tag::LAA),
+                border(tag::LSPV),
+                border(tag::LIPV),
+                border(tag::RIPV),
+                border(tag::RSPV),
+            ],
+            vec![parts(&[tag::LAA])],
+        ),
     );
-    add("svc", MeshKind::Vessel, vessel_tube(&discs.svc, 32.0, 1.5));
-    add("ivc", MeshKind::Vessel, vessel_tube(&discs.ivc, 26.0, 1.5));
+    add("aorta", MeshKind::Vessel, part(&[tag::AORTA]));
+    add("pulmonary_artery", MeshKind::Vessel, part(&[tag::PA]));
+    add("svc", MeshKind::Vessel, parts(&[tag::SVC]));
+    add("ivc", MeshKind::Vessel, parts(&[tag::IVC]));
     add(
         "pulmonary_veins",
         MeshKind::Vessel,
-        merge(
-            &discs
-                .pvs
-                .iter()
-                .map(|d| vessel_tube(d, 22.0, 1.2))
-                .collect::<Vec<_>>(),
-        ),
+        parts(&[tag::LSPV, tag::LIPV, tag::RIPV, tag::RSPV]),
     );
-    let ring_of = |valve_tag: u16, chambers: [u16; 2], d: &FittedDisc| -> TriMesh {
-        let mut rim: Vec<Vec3> = mesh
-            .shared_nodes(valve_tag, chambers[0])
-            .into_iter()
-            .chain(mesh.shared_nodes(valve_tag, chambers[1]))
-            .map(|n| to_canon(mesh.points[n as usize]))
-            .collect();
-        if rim.len() < 24 {
-            rim = mesh
-                .nodes_of_tag(valve_tag)
-                .iter()
-                .map(|n| to_canon(mesh.points[*n as usize]))
-                .collect();
-        }
-        let x = (Vec3::X - d.normal * Vec3::X.dot(d.normal)).normalize();
-        let y = d.normal.cross(x);
-        let bins = 48usize;
-        let mut acc = vec![(0.0f32, 0usize); bins];
-        for p in &rim {
-            let q = *p - d.centre;
-            let (a, b) = (q.dot(x), q.dot(y));
-            let ang = b.atan2(a).rem_euclid(std::f32::consts::TAU);
-            let bin = ((ang / std::f32::consts::TAU) * bins as f32) as usize % bins;
-            acc[bin].0 += (a * a + b * b).sqrt();
-            acc[bin].1 += 1;
-        }
-        let mut radii: Vec<f32> = acc
-            .iter()
-            .map(|(s, n)| if *n > 0 { s / *n as f32 } else { f32::NAN })
-            .collect();
-        for i in 0..bins {
-            if radii[i].is_nan() {
-                let (mut l, mut r) = (i, i);
-                while radii[l].is_nan() {
-                    l = (l + bins - 1) % bins;
-                }
-                while radii[r].is_nan() {
-                    r = (r + 1) % bins;
-                }
-                radii[i] = f32::midpoint(radii[l], radii[r]);
-            }
-        }
-        let loop_pts: Vec<Vec3> = (0..bins)
-            .map(|i| {
-                let ang = std::f32::consts::TAU * (i as f32 + 0.5) / bins as f32;
-                d.centre + (x * ang.cos() + y * ang.sin()) * radii[i]
-            })
-            .collect();
-        swept_ring(&loop_pts, 1.6, 12)
-    };
     add(
-        "valve_rings",
+        "valve_planes",
         MeshKind::Valve,
-        merge(&[
-            ring_of(tag::MITRAL, [tag::LV, tag::LA], &discs.mitral),
-            ring_of(tag::AORTIC, [tag::LV, tag::AORTA], &discs.aortic),
-            ring_of(tag::TRICUSPID, [tag::RV, tag::RA], &discs.tricuspid),
-            ring_of(tag::PULMONARY, [tag::RV, tag::PA], &discs.pulmonary),
-        ]),
+        parts(&[tag::MITRAL, tag::TRICUSPID, tag::AORTIC, tag::PULMONARY]),
     );
 
     // --- to the heart frame ----------------------------------------------------------------------

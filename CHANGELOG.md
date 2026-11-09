@@ -4,6 +4,13 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Changed
+- **The 3-D heart draws only the Rodero et al. 2021 parts.** The default pack's render meshes are the dataset's 24 tagged
+  parts and nothing designed: the aorta and pulmonary artery end where the dataset crops them (no extension tubes), the
+  venae cavae and pulmonary veins are the dataset's inlet lids instead of tubes, the appendage lobe is gone, the atria
+  include their inlet border rings, and the valve rings are replaced by the four valve-plane discs (`valve_planes`). The
+  simulation (cell cloud, landmarks, segments) is byte-identical.
+
 ## [0.10.0] — 2026-11-09
 Ninth tagged release: the frontal-axis panel draws a real torso picture behind the limb leads.
 
