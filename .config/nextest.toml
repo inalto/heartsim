@@ -1,0 +1,11 @@
+# nextest profiles. `cargo xtask ci` / `cargo test` still run everything; these split the suite for GitHub Actions.
+#
+# `ci`   — every push: all but the slow long-simulation tests (the four binaries below take ~5 min on a fast machine and
+#          several times that on the Windows and macOS runners). The golden-ECG, determinism and per-feature tests stay.
+# `slow` — nightly / manual (.github/workflows/slow-tests.yml): exactly the complement, on all three platforms, because the
+#          chaotic AF presets in these binaries are where cross-platform floating-point differences showed up first.
+[profile.ci]
+default-filter = "not (binary_id(heartsim-sim::reentry) | binary_id(heartsim-sim::ep_lab) | binary_id(heartsim-sim::ep_flutter) | binary_id(heartsim-ecg::reentry))"
+
+[profile.slow]
+default-filter = "binary_id(heartsim-sim::reentry) | binary_id(heartsim-sim::ep_lab) | binary_id(heartsim-sim::ep_flutter) | binary_id(heartsim-ecg::reentry)"

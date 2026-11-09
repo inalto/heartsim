@@ -60,7 +60,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
       - uses: taiki-e/install-action@nextest
-      - run: cargo nextest run --workspace --no-fail-fast
+      # The `ci` profile (.config/nextest.toml) leaves out the slow long-simulation binaries; slow-tests.yml runs them nightly.
+      - run: cargo nextest run --workspace --no-fail-fast --profile ci
       - name: Check the monitor-beep audio output (WASAPI / CoreAudio)
         if: runner.os != 'Linux'
         run: cargo check -p heartsim-app --features audio --locked

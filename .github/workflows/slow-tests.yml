@@ -1,0 +1,32 @@
+name: Slow tests
+
+# The long-simulation test binaries (reentry, ep_lab, ep_flutter) that the per-push CI leaves out (`ci` profile in
+# .config/nextest.toml). Nightly on all three platforms: the chaotic AF presets are where cross-platform floating-point
+# differences showed up first. Also runnable by hand, e.g. before tagging a release.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  slow:
+    name: slow tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2025, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux GUI build deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
+      - uses: taiki-e/install-action@nextest
+      - run: cargo nextest run --workspace --no-fail-fast --profile slow
