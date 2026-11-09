@@ -32,7 +32,7 @@ heartsim_sinus_normal 12 500 5000
 heartsim_sinus_normal.dat 16 1000/mV 16 0 0 -1234 0 I
 …
 heartsim_sinus_normal.dat 16 1000/mV 16 0 3 812 0 V6
-# heartsim 0.8.0 - simulated ECG, not a patient recording
+# heartsim 0.9.0 - simulated ECG, not a patient recording
 # scenario: sinus_normal - Sinus rhythm, normal axis
 # start_ms: 2002
 # date: 2026-11-03

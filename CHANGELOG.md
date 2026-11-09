@@ -4,6 +4,23 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-09
+Eighth tagged release: the new-release bar can download and start this system's installer, and the frontal-axis sidebar no
+longer widens on its own.
+
+### Added
+- **In-app update.** *Update now…* in the new-release bar opens a dialog that downloads this system's installer from the
+  GitHub release with a progress bar, checks its size and SHA-256 against the digest the releases API publishes, and starts
+  it (Windows setup/MSI, macOS dmg, `pkexec apt-get install` for the deb, in-place replacement for the AppImage).
+
+### Fixed
+- The frontal-axis sidebar of the Simulator and 12-lead tabs no longer widens on its own: the legend wrapped against the
+  width of a new row instead of the rest of the current one, and the circle-beside-cards row was wider than the panel by
+  its item spacing, so the panel grew every frame.
+
+### Changed
+- Dev builds keep line tables only (dependencies none): test binaries shrink from ~720 MB and link much faster.
+
 ## [0.8.0] — 2026-11-08
 Seventh tagged release: the heart and torso are real anatomy (open CT-derived meshes) instead of spheres and tubes, and the
 frontal QRS-axis panel and the interface's colours are redesigned, in a light and a dark theme.
