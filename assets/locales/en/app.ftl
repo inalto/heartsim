@@ -84,12 +84,25 @@ settings-beep-hint = A short tone at each ventricular activation, at most one pe
 settings-beep-unavailable = No sound device could be opened, so the beep stays silent.
 settings-hint = Changes apply at once and are remembered on this computer.
 settings-update-check = Check for a newer release at start
-settings-update-check-hint = One request to api.github.com that sends only the app version; nothing is downloaded. A notice with a link appears when a newer release exists.
+settings-update-check-hint = One request to api.github.com that sends only the app version. When a newer release exists a notice appears; the update is downloaded only if you choose Update now.
 
 ## Update notice (update_check.rs)
 update-available = heartsim { $version } is available.
 update-download = Download from the release page
 update-dismiss = Dismiss
+update-install = Update now…
+update-modal-title = Update to heartsim { $version }
+update-modal-file = Installer: { $file } ({ $size } MB)
+update-modal-note = The installer is downloaded from GitHub, checked against the SHA-256 published with the release, then started. heartsim closes so the update can replace it.
+update-modal-start = Download and install
+update-modal-cancel = Cancel
+update-modal-close = Close
+update-modal-retry = Retry
+update-modal-progress = { $done } of { $total } MB
+update-modal-installing = Starting the installer… (on Linux the system may ask for your password)
+update-modal-closing = The update is starting; heartsim is closing.
+update-modal-no-installer = The release has no installer for this system. Download it from the release page.
+update-modal-failed = The update did not complete: { $error }
 
 ## Export / Import window (app/exports.rs)
 export-title = Export / Import

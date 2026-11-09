@@ -29,9 +29,10 @@ parallel = ["heartsim-sim/parallel", "heartsim-ecg/parallel", "heartsim-render/p
 # is not in `default` and the release workflow switches it on. The web build never enables it. Without the feature the
 # `monitor_beep` module still compiles (pure logic, no audio device is ever opened).
 audio = ["native", "dep:kira"]
-# One GET of the GitHub releases API at start (switchable off in Settings) and a notice with a download link when a newer
-# release exists. Nothing is downloaded or installed. Desktop only: the browser build has no thread to spawn and no installer.
-update-check = ["native", "dep:ureq", "dep:semver", "dep:serde_json"]
+# One GET of the GitHub releases API at start (switchable off in Settings) and a notice when a newer release exists; on the
+# user's request the dialog downloads this platform's installer, checks its SHA-256 and starts it. Desktop only: the browser
+# build has no thread to spawn and no installer.
+update-check = ["native", "dep:ureq", "dep:semver", "dep:serde_json", "dep:sha2"]
 
 [dependencies]
 heartsim-core.workspace = true
@@ -58,6 +59,7 @@ kira = { workspace = true, optional = true }
 ureq = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `std::time::Instant` is unavailable in the browser: the re-entry frame budget reads `Date.now()`.

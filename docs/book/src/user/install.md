@@ -21,6 +21,20 @@ exists, a thin bar under the menu bar and the About window name the version with
 downloads or installs anything by itself. Turn the check off with *Check for a newer release at start* in **Settings**: the
 app then makes no request at all. Without a network the check fails silently.
 
+**Update now…** in that bar opens a dialog that, once you press *Download and install*, downloads this system's installer
+from the GitHub release with a progress bar, checks its size and SHA-256 against the values GitHub publishes for the file,
+and starts it:
+
+| Installed from | What the update does |
+|---|---|
+| Windows setup or MSI | Starts the new setup and closes heartsim so the files can be replaced. |
+| macOS `.dmg` | Opens the new image in Finder (drag *HeartSim* to *Applications* again) and closes heartsim. |
+| `.deb` | Runs `pkexec apt-get install` on the package (the desktop asks for your password), then restarts heartsim. |
+| AppImage | Replaces the AppImage file in place and starts the new one. |
+
+On any other system the dialog offers the release page instead. The download is kept in the temporary directory under
+`heartsim-update/`.
+
 ## Graphics requirements
 
 heartsim draws the heart with the GPU through Vulkan, Metal or DirectX 12, and falls back to OpenGL ES 3 where those are

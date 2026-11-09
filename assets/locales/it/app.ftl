@@ -85,12 +85,25 @@ settings-beep-hint = Un breve tono a ogni attivazione ventricolare, al massimo u
 settings-beep-unavailable = Non è stato possibile aprire un dispositivo audio: il segnale resta muto.
 settings-hint = Le modifiche hanno effetto subito e vengono ricordate su questo computer.
 settings-update-check = Controlla all'avvio se esiste una versione più recente
-settings-update-check-hint = Una sola richiesta ad api.github.com che invia soltanto la versione dell'app; non viene scaricato nulla. Quando esiste una versione più recente compare un avviso con il collegamento.
+settings-update-check-hint = Una sola richiesta ad api.github.com che invia soltanto la versione dell'app. Quando esiste una versione più recente compare un avviso; l'aggiornamento viene scaricato solo se scegli Aggiorna ora.
 
 ## Avviso di aggiornamento (update_check.rs)
 update-available = È disponibile heartsim { $version }.
 update-download = Scarica dalla pagina della versione
 update-dismiss = Ignora
+update-install = Aggiorna ora…
+update-modal-title = Aggiorna a heartsim { $version }
+update-modal-file = Programma di installazione: { $file } ({ $size } MB)
+update-modal-note = Il programma di installazione viene scaricato da GitHub, confrontato con lo SHA-256 pubblicato con la versione e poi avviato. heartsim si chiude perché l'aggiornamento possa sostituirlo.
+update-modal-start = Scarica e installa
+update-modal-cancel = Annulla
+update-modal-close = Chiudi
+update-modal-retry = Riprova
+update-modal-progress = { $done } di { $total } MB
+update-modal-installing = Avvio dell'installazione… (su Linux il sistema può chiedere la password)
+update-modal-closing = L'aggiornamento si sta avviando; heartsim si chiude.
+update-modal-no-installer = La versione non contiene un programma di installazione per questo sistema. Scaricalo dalla pagina della versione.
+update-modal-failed = L'aggiornamento non è riuscito: { $error }
 
 ## Finestra Esporta / Importa (app/exports.rs)
 export-title = Esporta / Importa

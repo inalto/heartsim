@@ -453,12 +453,17 @@ pub fn axis_panel(ui: &mut Ui, cfg: &AxisPanel<'_>) -> AxisPanelResponse {
     };
     if beside {
         let side = (avail - CARD_WIDTH - gap).min(cfg.max_side).max(MIN_SIDE_BESIDE);
+        let spacing = ui.spacing().item_spacing;
         ui.horizontal_top(|ui| {
+            // the row is exactly `avail` wide: circle, gap, cards and no item spacing between them,
+            // otherwise the panel would be wider than its content allowed and widen every frame
+            ui.spacing_mut().item_spacing.x = 0.0;
             let r = axis_circle(ui, side, cfg.axis, cfg.guess, cfg.interactive, &p);
             out.dragged_to = r.dragged_to;
             out.hovered = r.hovered;
             ui.add_space(gap);
             ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing = spacing;
                 ui.set_width((avail - side - gap).max(CARD_WIDTH));
                 axis_cards(ui, cfg, &p);
             });
@@ -568,7 +573,9 @@ pub fn axis_legend(ui: &mut Ui, p: &Palette) {
                 })
                 .fold(0.0_f32, f32::max);
             let needed = 14.0 + ui.spacing().item_spacing.x + text_w + 2.0 * 8.0 + 2.0;
-            if ui.available_width() < needed && ui.cursor().min.x > ui.max_rect().min.x + 1.0 {
+            // `available_width` is a whole new row in a wrapping layout: the rest of this row is
+            // `available_size_before_wrap`
+            if ui.available_size_before_wrap().x < needed && ui.cursor().min.x > ui.max_rect().min.x + 1.0 {
                 ui.end_row();
             }
             Frame::new()

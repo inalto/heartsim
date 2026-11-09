@@ -25,6 +25,8 @@ pub mod snapshot_ring;
 pub mod tutorial;
 pub mod tutorial_ui;
 pub mod update_check;
+#[cfg(feature = "update-check")]
+pub mod update_install;
 pub mod vector_overlay;
 pub use app::{AppStatus, HeartSimApp};
 pub use assets::AssetBundle;

@@ -116,6 +116,7 @@ fn about_names_a_newer_release_with_its_link_when_the_check_found_one() {
     h.state_mut().newer = Some(Release {
         version: "9.9.9".into(),
         html_url: "https://github.com/inalto/heartsim/releases/tag/v9.9.9".into(),
+        assets: Vec::new(),
     });
     h.run();
     let _ = h.get_by_label(&format!("Version {}", env!("CARGO_PKG_VERSION")));

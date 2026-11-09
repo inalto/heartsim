@@ -26,6 +26,10 @@ work packages in `docs/briefs/`.
 * Dependencies are declared once in the root `[workspace.dependencies]`; crates use `dep.workspace = true`.
 * `cargo build` of the GUI crates takes several minutes cold; run pure-crate tests first:
   `cargo test -p heartsim-core -p heartsim-geometry -p heartsim-sim -p heartsim-ecg`.
+* Feature unification depends on which packages a command selects: `-p heartsim-ui` builds `heartsim-sim` without
+  `parallel`, `--workspace` with it, so alternating the two recompiles the engine crates each time. For one GUI test,
+  keep the workspace selection and filter: `cargo test --workspace --test axis_panel`.
+* The dev profile keeps line tables only (`Cargo.toml`); `CARGO_PROFILE_DEV_DEBUG=full` for a debugger session.
 * No GPU on the dev box: GUI smoke tests use `WGPU_BACKEND=vulkan` with lavapipe if present, otherwise skip render tests.
 
 ## Conventions

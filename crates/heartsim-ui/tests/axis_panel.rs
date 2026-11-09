@@ -195,3 +195,55 @@ fn without_a_qrs_the_badge_is_empty_and_in_italian_the_cards_are_translated() {
     let _ = h.get_by_label("da −30° a +90°");
     i18n::set_language("en");
 }
+
+/// The live sidebar: the panel in a right side panel inside a vertical scroll area, as the
+/// Simulator and 12-lead tabs show it. Returns the panel's width after each frame.
+fn sidebar(default_width: f32) -> Harness<'static, Vec<f32>> {
+    Harness::builder()
+        .with_size(Vec2::new(1400.0, 900.0))
+        .build_ui_state(
+            move |ui, widths: &mut Vec<f32>| {
+                let r = egui::Panel::right("axis_sidebar")
+                    .default_size(default_width)
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            let cfg = AxisPanel {
+                                axis: Some(60.0),
+                                guess: None,
+                                interactive: false,
+                                max_side: 330.0,
+                                show_cards: true,
+                                show_torso: true,
+                                note: None,
+                            };
+                            axis_panel(ui, &cfg);
+                        });
+                    });
+                widths.push(r.response.rect.width());
+            },
+            Vec::new(),
+        )
+}
+
+#[test]
+fn the_sidebar_keeps_its_width_frame_after_frame() {
+    i18n::set_language("en");
+    // narrow (circle above the cards) and wide (cards beside the circle)
+    for default_width in [280.0, 620.0] {
+        let mut h = sidebar(default_width);
+        for _ in 0..30 {
+            h.run_steps(1);
+        }
+        let widths = h.state();
+        let last = *widths.last().expect("frames ran");
+        let settled = widths[widths.len() - 10];
+        assert!(
+            (last - settled).abs() < 0.5,
+            "the {default_width} px sidebar kept widening: {settled} → {last} ({widths:?})"
+        );
+        assert!(
+            last < default_width + 40.0,
+            "the {default_width} px sidebar grew to {last}"
+        );
+    }
+}
