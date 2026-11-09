@@ -4,6 +4,15 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-09
+Ninth tagged release: the frontal-axis panel draws a real torso picture behind the limb leads.
+
+### Added
+- **Torso picture in the axis panel.** The torso schematic of the Simulator and 12-lead tabs draws a frontal torso image
+  (`assets/images/torso-front-axis.png`, CC BY 4.0, supplied by the project author; see `assets/images/LICENSE`) behind the
+  limb-lead pills, in a light and a dark theme. *Settings* has a slider for its opacity (default 70 %); at 0 % the
+  outline drawing of the procedural torso is shown instead. The axis quiz keeps the plain outline.
+
 ## [0.9.0] — 2026-11-09
 Eighth tagged release: the new-release bar can download and start this system's installer, and the frontal-axis sidebar no
 longer widens on its own.

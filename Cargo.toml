@@ -4,7 +4,7 @@ members = ["crates/*", "xtask"]
 default-members = ["crates/*"]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
@@ -15,14 +15,14 @@ categories = ["science", "simulation", "visualization"]
 
 [workspace.dependencies]
 # --- internal crates (versions must equal [workspace.package].version; checked by `cargo xtask release-check`) ---
-heartsim-core = { path = "crates/heartsim-core", version = "0.9.0" }
-heartsim-geometry = { path = "crates/heartsim-geometry", version = "0.9.0" }
-heartsim-sim = { path = "crates/heartsim-sim", version = "0.9.0", default-features = false }
-heartsim-ecg = { path = "crates/heartsim-ecg", version = "0.9.0", default-features = false }
-heartsim-render = { path = "crates/heartsim-render", version = "0.9.0", default-features = false }
-heartsim-ui = { path = "crates/heartsim-ui", version = "0.9.0" }
-heartsim-io = { path = "crates/heartsim-io", version = "0.9.0" }
-heartsim-app = { path = "crates/heartsim-app", version = "0.9.0", default-features = false }
+heartsim-core = { path = "crates/heartsim-core", version = "0.10.0" }
+heartsim-geometry = { path = "crates/heartsim-geometry", version = "0.10.0" }
+heartsim-sim = { path = "crates/heartsim-sim", version = "0.10.0", default-features = false }
+heartsim-ecg = { path = "crates/heartsim-ecg", version = "0.10.0", default-features = false }
+heartsim-render = { path = "crates/heartsim-render", version = "0.10.0", default-features = false }
+heartsim-ui = { path = "crates/heartsim-ui", version = "0.10.0" }
+heartsim-io = { path = "crates/heartsim-io", version = "0.10.0" }
+heartsim-app = { path = "crates/heartsim-app", version = "0.10.0", default-features = false }
 
 # --- GPU / windowing / GUI (versions verified on crates.io 2026-10-31) ---------
 wgpu = { version = "30.0.1", default-features = false, features = ["wgsl", "vulkan", "metal", "dx12", "gles", "webgpu", "webgl"] }
