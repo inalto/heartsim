@@ -4,6 +4,9 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-09
+Tenth tagged release: the 3-D heart is drawn from the Rodero et al. 2021 mesh's own 24 parts only.
+
 ### Changed
 - **The 3-D heart draws only the Rodero et al. 2021 parts.** The default pack's render meshes are the dataset's 24 tagged
   parts and nothing designed: the aorta and pulmonary artery end where the dataset crops them (no extension tubes), the
