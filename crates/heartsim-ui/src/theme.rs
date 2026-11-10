@@ -228,7 +228,8 @@ pub fn apply_to_context(ctx: &Context) {
         v.faint_bg_color = p.accent_soft;
         v.extreme_bg_color = if p.dark { p.panel } else { p.card };
         v.selection.bg_fill = p.accent.gamma_multiply(if p.dark { 0.45 } else { 0.3 });
-        v.selection.stroke = Stroke::new(1.0, p.accent);
+        // no outline on a selected pill or tab (zero width): the fill marks it, the colour is the label text
+        v.selection.stroke = Stroke::new(0.0, p.accent);
         for w in [
             &mut v.widgets.noninteractive,
             &mut v.widgets.inactive,

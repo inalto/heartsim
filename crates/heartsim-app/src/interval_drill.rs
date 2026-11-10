@@ -260,6 +260,7 @@ impl IntervalDrill {
     /// The drill page: the question and controls on the left, the strip on the right.
     pub fn ui(&mut self, ui: &mut egui::Ui, library: &ScenarioLibrary, style: &StripStyle) {
         egui::Panel::left("interval_drill_panel")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
             .default_size(380.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| self.controls(ui, library));

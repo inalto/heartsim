@@ -4,6 +4,21 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-10
+Eleventh tagged release: a theme button beside the menu, light 3-D views, a see-through heart on start and a layout that
+narrows to phone widths.
+
+### Added
+- **Theme button** beside the hamburger menu, cycling system, light and dark with a monitor, sun or moon icon.
+- Light 3-D background in the light theme; the Electrodes torso is a translucent light blue like the axis-panel picture.
+- Side panels never take more than half the window (two fifths below 700 px); the top bar drops the product name on
+  narrow windows; the rhythm controls wrap into rows.
+
+### Changed
+- The Simulator opens with the see-through heart.
+- Selected pills and tabs and the colour bar no longer have an outline.
+- Documentation screenshots retaken (light theme, 1280 × 800).
+
 ## [0.11.0] — 2026-11-09
 Tenth tagged release: the 3-D heart is drawn from the Rodero et al. 2021 mesh's own 24 parts only.
 

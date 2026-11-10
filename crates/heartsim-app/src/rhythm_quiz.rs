@@ -250,6 +250,7 @@ impl RhythmQuiz {
     pub fn ui(&mut self, ui: &mut egui::Ui, library: &ScenarioLibrary, style: &StripStyle) -> Option<usize> {
         let mut open = None;
         egui::Panel::left("rhythm_quiz_choices")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
             .default_size(360.0)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {

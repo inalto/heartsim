@@ -24,6 +24,7 @@ impl HeartSimApp {
                 ui.allocate_rect(rect, egui::Sense::hover());
             });
         egui::Panel::right("vector_readout")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
             .default_size(260.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {

@@ -26,6 +26,8 @@ const MARKER_RADIUS_MM: f32 = 7.0;
 const GRAB_PX: f32 = 14.0;
 /// Torso opacity in this tab.
 const TORSO_ALPHA: f32 = 0.35;
+/// Torso tint in this tab, sRGB: the translucent light blue of `torso-front-axis.png`.
+const TORSO_TINT: [f32; 3] = [0.45, 0.74, 0.96];
 /// Distal leg electrodes are drawn just below the torso (the ankles are out of view), mm.
 const LEG_MARKER_Y_MM: f32 = -420.0;
 /// Where "Save placement" writes and "Load placement" reads.
@@ -164,6 +166,8 @@ impl ElectrodeTab {
             if l.name == "Torso" {
                 l.visible = true;
                 l.alpha = TORSO_ALPHA;
+                let [r, g, b, _] = srgb_color([TORSO_TINT[0], TORSO_TINT[1], TORSO_TINT[2], 1.0]);
+                l.base_color = [r, g, b];
             }
         }
         scene.clip.enabled = false;
@@ -192,6 +196,7 @@ impl ElectrodeTab {
         style: &StripStyle,
     ) {
         egui::Panel::left("electrode_editor")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
             .default_size(340.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -202,6 +207,7 @@ impl ElectrodeTab {
                 });
             });
         egui::Panel::right("electrode_leads")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
             .default_size(420.0)
             .show(ui, |ui| self.leads(ui, rings, style));
         egui::CentralPanel::default().show(ui, |ui| self.viewport(ui, rs));

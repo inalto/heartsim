@@ -265,7 +265,8 @@ impl HeartSimApp {
                     && let Some(h) = &mut self.heart
                 {
                     let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
-                    self.vector.set_see_through(step.vector, &mut alphas);
+                    // the app opens with the see-through heart, so every shot shows that default
+                    self.vector.set_see_through(true, &mut alphas);
                 }
                 self.layout = step.layout;
                 if let Some(deg) = step.axis_deg {

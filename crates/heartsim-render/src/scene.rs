@@ -98,6 +98,27 @@ pub struct SceneSettings {
     pub background_bottom: [f32; 3],
 }
 
+impl SceneSettings {
+    /// The background gradient of the dark theme (the default): slate at the top, near-black
+    /// at the bottom, so the lit heart stands out.
+    pub const DARK_BACKGROUND: ([f32; 3], [f32; 3]) = ([0.17, 0.19, 0.24], [0.05, 0.055, 0.07]);
+    /// The background gradient of the light theme: a pale grey-blue like egui's light panels,
+    /// darker at the bottom so the view still reads as a space.
+    pub const LIGHT_BACKGROUND: ([f32; 3], [f32; 3]) = ([0.96, 0.97, 0.98], [0.80, 0.83, 0.87]);
+
+    /// Picks the background gradient of the dark or the light theme (sRGB constants above,
+    /// converted to linear here).
+    pub fn set_dark_theme(&mut self, dark: bool) {
+        let (top, bottom) = if dark {
+            Self::DARK_BACKGROUND
+        } else {
+            Self::LIGHT_BACKGROUND
+        };
+        self.background_top = srgb3(top);
+        self.background_bottom = srgb3(bottom);
+    }
+}
+
 impl Default for SceneSettings {
     fn default() -> Self {
         Self {
@@ -109,8 +130,8 @@ impl Default for SceneSettings {
             rim_strength: 0.25,
             rim_power: 3.0,
             cut_color: srgb3([0.86, 0.74, 0.55]),
-            background_top: srgb3([0.17, 0.19, 0.24]),
-            background_bottom: srgb3([0.05, 0.055, 0.07]),
+            background_top: srgb3(Self::DARK_BACKGROUND.0),
+            background_bottom: srgb3(Self::DARK_BACKGROUND.1),
         }
     }
 }

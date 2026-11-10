@@ -236,7 +236,13 @@ impl HeartSimApp {
         sphere.recompute_normals();
         let vertex_count = sphere.vertex_count();
         let (heart, electrodes) = Self::load_heart(assets);
+        let mut vector = VectorOverlay::new();
         let heart = heart.map(|mut h| {
+            // the Simulator opens with the see-through heart, so the vector arrow inside the
+            // ventricles shows from the first beat; the switch in the vector controls restores
+            // the opaque walls
+            let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+            vector.set_see_through(true, &mut alphas);
             h.install(rs, &mut scene);
             h
         });
@@ -247,7 +253,6 @@ impl HeartSimApp {
             scene,
             pending_scalars: None,
         });
-        let mut vector = VectorOverlay::new();
         vector.install(rs);
         let settings = crate::settings::Settings::load(cc.storage);
         settings.apply(&cc.egui_ctx);
@@ -426,7 +431,7 @@ impl HeartSimApp {
     fn rhythm_controls(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
-            let picked = cards::group(ui, |ui| {
+            let picked = cards::wrapping_group(ui, "rhythm", |ui| {
                 ui.horizontal(|ui| scenario_picker(ui, &self.library, self.scenario))
                     .inner
             })
@@ -434,7 +439,7 @@ impl HeartSimApp {
             if let Some(i) = picked {
                 self.load_scenario(i);
             }
-            let transport = cards::group(ui, |ui| {
+            let transport = cards::wrapping_group(ui, "transport", |ui| {
                 ui.horizontal(|ui| transport_controls(ui, self.ecg.is_paused(), &mut self.clock.speed))
                     .inner
             })
@@ -443,7 +448,7 @@ impl HeartSimApp {
             if transport.pause.clicked() {
                 self.ecg.toggle_pause();
             }
-            cards::group(ui, |ui| {
+            cards::wrapping_group(ui, "nodes", |ui| {
                 ui.horizontal(|ui| {
                     let mut bpm = self.engine.params.sinus.rate_bpm;
                     if ui
@@ -462,7 +467,7 @@ impl HeartSimApp {
                     }
                 });
             });
-            cards::group(ui, |ui| {
+            cards::wrapping_group(ui, "qrs", |ui| {
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0)
@@ -475,7 +480,7 @@ impl HeartSimApp {
                 });
             });
             highlight::mark(&transport.speed, "speed");
-            cards::group(ui, |ui| {
+            cards::wrapping_group(ui, "windows", |ui| {
                 ui.horizontal(|ui| {
                     highlight::mark(
                         &ui.toggle_value(&mut self.pacing.open, t!("app-pacemaker")),
@@ -537,18 +542,25 @@ impl HeartSimApp {
                 self.draw_timeline_marks(ui.painter(), &window);
                 ui.allocate_rect(rect, egui::Sense::hover());
             });
+        // the side panels keep a remembered width between runs; a maximum keeps a stray wide
+        // value (or a drag) from pushing the 3-D view out of the window
         egui::Panel::right("axis")
             .default_size(280.0)
+            .max_size(crate::responsive::max_side(ui, 480.0))
             .show(ui, |ui| self.live_axis_panel(ui));
         if let Some(h) = &mut self.heart {
-            egui::Panel::left("heart").default_size(280.0).show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    h.controls(ui);
-                    ui.separator();
-                    let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
-                    self.vector.controls(ui, &mut alphas);
+            egui::Panel::left("heart")
+                .default_size(280.0)
+                .max_size(crate::responsive::max_side(ui, 480.0))
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        h.controls(ui);
+                        ui.separator();
+                        let mut alphas: Vec<&mut f32> =
+                            h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                        self.vector.controls(ui, &mut alphas);
+                    });
                 });
-            });
         }
         self.sync_vector_overlay();
         egui::CentralPanel::default().show(ui, |ui| {
@@ -592,6 +604,7 @@ impl HeartSimApp {
         });
         egui::Panel::right("axis")
             .default_size(280.0)
+            .max_size(crate::responsive::max_side(ui, 480.0))
             .show(ui, |ui| self.live_axis_panel(ui));
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
@@ -603,34 +616,37 @@ impl HeartSimApp {
     /// The Axis Trainer: the draggable circle with its cards (the reading rule for the class is the
     /// interpretation card's note) on the left, the six limb leads on the right.
     fn axis_trainer_tab(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("dial").default_size(640.0).show(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.label(t!("app-axis-trainer-hint"));
-                let axis = self.measured_axis();
-                let note = axis.map(|a| match (FrontalAxis { degrees: a }).classify() {
-                    AxisClass::Normal => t!("app-axis-normal"),
-                    AxisClass::LeftDeviation => t!("app-axis-left"),
-                    AxisClass::RightDeviation => t!("app-axis-right"),
-                    AxisClass::ExtremeDeviation => t!("app-axis-extreme"),
+        egui::Panel::left("dial")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
+            .default_size(640.0)
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.label(t!("app-axis-trainer-hint"));
+                    let axis = self.measured_axis();
+                    let note = axis.map(|a| match (FrontalAxis { degrees: a }).classify() {
+                        AxisClass::Normal => t!("app-axis-normal"),
+                        AxisClass::LeftDeviation => t!("app-axis-left"),
+                        AxisClass::RightDeviation => t!("app-axis-right"),
+                        AxisClass::ExtremeDeviation => t!("app-axis-extreme"),
+                    });
+                    let panel = AxisPanel {
+                        axis,
+                        guess: None,
+                        interactive: true,
+                        max_side: 420.0,
+                        show_cards: true,
+                        show_torso: true,
+                        torso_opacity: self.settings.torso_image_opacity,
+                        note: note.as_deref(),
+                    };
+                    if let Some(target) = axis_panel(ui, &panel).dragged_to {
+                        self.set_qrs_axis(target);
+                    }
+                    if ui.button(t!("app-reset-axis")).clicked() {
+                        self.synth.axis_shift_deg = 0.0;
+                    }
                 });
-                let panel = AxisPanel {
-                    axis,
-                    guess: None,
-                    interactive: true,
-                    max_side: 420.0,
-                    show_cards: true,
-                    show_torso: true,
-                    torso_opacity: self.settings.torso_image_opacity,
-                    note: note.as_deref(),
-                };
-                if let Some(target) = axis_panel(ui, &panel).dragged_to {
-                    self.set_qrs_axis(target);
-                }
-                if ui.button(t!("app-reset-axis")).clicked() {
-                    self.synth.axis_shift_deg = 0.0;
-                }
             });
-        });
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
             lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
@@ -638,11 +654,14 @@ impl HeartSimApp {
     }
 
     fn quiz_tab(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("quizdial").default_size(640.0).show(ui, |ui| {
-            if let Some(target) = self.quiz.panel(ui) {
-                self.set_qrs_axis(target);
-            }
-        });
+        egui::Panel::left("quizdial")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
+            .default_size(640.0)
+            .show(ui, |ui| {
+                if let Some(target) = self.quiz.panel(ui) {
+                    self.set_qrs_axis(target);
+                }
+            });
         egui::CentralPanel::default().show(ui, |ui| {
             let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
             lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
@@ -650,16 +669,20 @@ impl HeartSimApp {
     }
 
     /// The top bar: the product, its version and the name of the open page on the left; on the
-    /// right a hamburger menu (☰) with every page (the current one marked, with its number-key
+    /// right a button cycling the theme (system monitor, sun, moon) and a hamburger
+    /// menu (☰) with every page (the current one marked, with its number-key
     /// shortcut), the Export / Import, Settings and About windows, and at the bottom the theme
     /// (system, light, dark). A single menu instead of a row of eleven tabs keeps the bar one line
     /// high on any window width.
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
-            ui.heading("heartsim");
-            ui.weak(format!("v{}", crate::disclaimer::VERSION))
-                .on_hover_text(t!("about-version", version = crate::disclaimer::VERSION));
-            ui.separator();
+            let narrow = crate::responsive::is_narrow(ui.ctx());
+            if !narrow {
+                ui.heading("heartsim");
+                ui.weak(format!("v{}", crate::disclaimer::VERSION))
+                    .on_hover_text(t!("about-version", version = crate::disclaimer::VERSION));
+                ui.separator();
+            }
             ui.strong(self.tab.title());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Painted rather than the ☰ glyph: egui's bundled fonts have no U+2630 and show
@@ -680,6 +703,25 @@ impl HeartSimApp {
                     );
                 }
                 response.on_hover_text(t!("menu-button"));
+                // beside it the theme switch, one button cycling system → light → dark and
+                // showing the current choice: a monitor, a sun or a moon
+                let mode = self.settings.theme;
+                let toggle = ui.add(egui::Button::new("").min_size(egui::vec2(side, side)));
+                let colour = ui.style().interact(&toggle).fg_stroke.color;
+                match mode {
+                    ThemeMode::System => paint_monitor(ui.painter(), toggle.rect, colour),
+                    ThemeMode::Light => paint_sun(ui.painter(), toggle.rect, colour),
+                    ThemeMode::Dark => paint_moon(ui.painter(), toggle.rect, colour),
+                }
+                let (name, next) = match mode {
+                    ThemeMode::System => (t!("settings-theme-system"), ThemeMode::Light),
+                    ThemeMode::Light => (t!("settings-theme-light"), ThemeMode::Dark),
+                    ThemeMode::Dark => (t!("settings-theme-dark"), ThemeMode::System),
+                };
+                if toggle.on_hover_text(name).clicked() {
+                    self.settings.theme = next;
+                    self.settings.apply(ui.ctx());
+                }
                 #[cfg(feature = "export")]
                 self.export_review_label(ui);
             });
@@ -831,18 +873,30 @@ impl eframe::App for HeartSimApp {
         }
         self.sync_scrub();
         self.drive_tour(&ctx);
-        if let Some(rs) = frame.wgpu_render_state.as_ref().filter(|_| self.heart.is_none()) {
-            let scalars = self.view_scalars();
+        if let Some(rs) = frame.wgpu_render_state.as_ref() {
+            let scalars = self.heart.is_none().then(|| self.view_scalars());
             if let Some(res) = rs
                 .renderer
                 .write()
                 .callback_resources
                 .get_mut::<ViewportResources>()
             {
-                res.pending_scalars = Some(scalars);
+                // the 3-D view follows the theme: a light background in the light theme
+                res.scene
+                    .settings
+                    .set_dark_theme(ctx.theme() == egui::Theme::Dark);
+                if let Some(s) = scalars {
+                    res.pending_scalars = Some(s);
+                }
             }
         }
 
+        if ctx.cumulative_pass_nr() == 0
+            && let Some([w, h]) = crate::window_size_from_env()
+        {
+            // the remembered window size is applied at creation; the explicit one wins here
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+        }
         egui::Panel::top("tabs").show(ui, |ui| self.menu_bar(ui));
         #[cfg(feature = "native")]
         if self.assets_missing {
@@ -896,4 +950,68 @@ impl eframe::App for HeartSimApp {
         storage.set_string(TUTORIAL_PROGRESS_KEY, self.tutorials.progress.to_text());
         storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());
     }
+}
+
+/// A line-art sun in `rect`: a disc outline with eight rays, drawn like the hamburger lines
+/// because egui's bundled fonts have no sun or moon glyph.
+fn paint_sun(painter: &egui::Painter, rect: egui::Rect, colour: egui::Color32) {
+    let c = rect.center();
+    let side = rect.height();
+    let stroke = egui::Stroke::new(1.5, colour);
+    painter.circle_stroke(c, side * 0.17, stroke);
+    for k in 0..8 {
+        let a = std::f32::consts::TAU * (k as f32) / 8.0;
+        let dir = egui::vec2(a.cos(), a.sin());
+        painter.line_segment([c + dir * side * 0.27, c + dir * side * 0.37], stroke);
+    }
+}
+
+/// A line-art crescent moon in `rect`: the outline of a disc minus a second disc of the same
+/// radius displaced towards the upper right.
+fn paint_moon(painter: &egui::Painter, rect: egui::Rect, colour: egui::Color32) {
+    let c = rect.center();
+    let r = rect.height() * 0.3;
+    // displacement of the cutting disc, as a fraction of the radius, and its direction
+    let d = 0.9 * r;
+    let u = egui::vec2(std::f32::consts::FRAC_1_SQRT_2, -std::f32::consts::FRAC_1_SQRT_2);
+    let v = egui::vec2(-u.y, u.x);
+    let at = |centre: egui::Pos2, theta: f32| centre + (u * theta.cos() + v * theta.sin()) * r;
+    // the two discs meet at ±alpha from the direction of the cutter
+    let alpha = (d / (2.0 * r)).acos();
+    let steps = 24;
+    let mut points = Vec::with_capacity(2 * steps + 2);
+    for i in 0..=steps {
+        let theta = alpha + (std::f32::consts::TAU - 2.0 * alpha) * (i as f32) / (steps as f32);
+        points.push(at(c, theta));
+    }
+    let cutter = c + u * d;
+    for i in 1..steps {
+        let theta = std::f32::consts::PI + alpha - 2.0 * alpha * (i as f32) / (steps as f32);
+        points.push(at(cutter, theta));
+    }
+    painter.add(egui::Shape::closed_line(points, egui::Stroke::new(1.5, colour)));
+}
+
+/// A line-art desktop monitor in `rect`: a screen outline on a short stand, for "follow the system".
+fn paint_monitor(painter: &egui::Painter, rect: egui::Rect, colour: egui::Color32) {
+    let c = rect.center();
+    let side = rect.height();
+    let stroke = egui::Stroke::new(1.5, colour);
+    let screen = egui::Rect::from_center_size(
+        c - egui::vec2(0.0, side * 0.05),
+        egui::vec2(side * 0.56, side * 0.38),
+    );
+    painter.rect_stroke(screen, 2.0, stroke, egui::StrokeKind::Middle);
+    painter.line_segment(
+        [
+            egui::pos2(c.x, screen.bottom()),
+            egui::pos2(c.x, screen.bottom() + side * 0.12),
+        ],
+        stroke,
+    );
+    painter.hline(
+        (c.x - side * 0.15)..=(c.x + side * 0.15),
+        screen.bottom() + side * 0.12,
+        stroke,
+    );
 }

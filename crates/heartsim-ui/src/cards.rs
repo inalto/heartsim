@@ -52,6 +52,33 @@ pub fn group<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R>
     group_frame(&p).show(ui, add)
 }
 
+/// A [`group`] in a wrapping row (`horizontal_wrapped`) that starts a new row when it would not fit
+/// the rest of the current one. A frame's width is known only after its contents are laid out, so
+/// the wrapping layout cannot break before it and the frame would overflow the window instead; the
+/// width this group had on the previous frame decides (the first frame may overflow once, and
+/// repaints). `id_salt` tells the groups of one row apart.
+pub fn wrapping_group<R>(
+    ui: &mut Ui,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> InnerResponse<R> {
+    let id = ui.scope_id().with(id_salt);
+    let remembered = ui.data(|d| d.get_temp::<f32>(id));
+    if let Some(w) = remembered
+        && ui.available_size_before_wrap().x < w
+        && ui.cursor().min.x > ui.max_rect().min.x + 1.0
+    {
+        ui.end_row();
+    }
+    let r = group(ui, add);
+    let w = r.response.rect.width();
+    if remembered.is_none_or(|old| (old - w).abs() > 0.5) {
+        ui.data_mut(|d| d.insert_temp(id, w));
+        ui.ctx().request_repaint();
+    }
+    r
+}
+
 /// A title band: white text on the strong accent, the full width.
 pub fn title_band(ui: &mut Ui, text: impl Into<String>) -> Response {
     let p = Palette::of(ui);

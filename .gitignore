@@ -33,3 +33,6 @@ Thumbs.db
 
 # Downloaded open anatomy sources for `cargo xtask bake-anatomy` (never vendored)
 /assets/anatomy-src/
+
+# Third-party models of unknown licence, kept locally for reference only (not shipped)
+/assets/objects/*.blend

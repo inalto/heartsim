@@ -433,6 +433,7 @@ impl HeartSimApp {
         let landmarks: Vec<String> = act.lab.cloud().landmarks.keys().cloned().collect();
         let panel = &mut self.ep.panel;
         egui::Panel::left("ep_controls")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
             .default_size(320.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -476,11 +477,14 @@ impl HeartSimApp {
             .collect();
         let now_ms = act.lab.now().0;
         let style = self.ecg.style;
-        egui::Panel::right("ep_egm").default_size(620.0).show(ui, |ui| {
-            egm_controls(ui, panel, act.recorder.conduction_intervals());
-            interval_panel(ui, &act.recorder, act.lab.protocol_outcome());
-            egm_stack(ui, panel, &surface, &act.recorder, &style, now_ms);
-        });
+        egui::Panel::right("ep_egm")
+            .max_size(crate::responsive::max_side(ui, 100_000.0))
+            .default_size(620.0)
+            .show(ui, |ui| {
+                egm_controls(ui, panel, act.recorder.conduction_intervals());
+                interval_panel(ui, &act.recorder, act.lab.protocol_outcome());
+                egm_stack(ui, panel, &surface, &act.recorder, &style, now_ms);
+            });
         // catheters and lesions on the heart
         let pace_midpoint = act
             .recorder

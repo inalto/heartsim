@@ -20,11 +20,14 @@ fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
+    let size = heartsim_app::window_size_from_env().unwrap_or([1280.0, 800.0]);
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 800.0])
+            .with_inner_size(size)
             .with_title(heartsim_app::version_line()),
         renderer: eframe::Renderer::Wgpu,
+        // an explicit size is for one run: it is neither remembered nor overridden by what was
+        persist_window: heartsim_app::window_size_from_env().is_none(),
         ..Default::default()
     };
     eframe::run_native(

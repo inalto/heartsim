@@ -56,3 +56,4 @@ The screenshots in this guide are taken by the app itself:
 ```bash
 HEARTSIM_SCREENSHOT_DIR=docs/images WGPU_BACKEND=vulkan xvfb-run -a -s "-screen 0 1280x800x24" cargo run -p heartsim-app
 ```
+`HEARTSIM_WINDOW_SIZE=900x650` opens the window at another size (logical points), to check the layout on a small screen.

@@ -22,7 +22,7 @@ pub use glyph::{GlyphInstance, GlyphSet, GlyphSetId};
 pub use layer::{Contour, Layer, LayerDesc, LayerId, MeshGpu, ScalarMode, srgb_color, srgb_to_linear};
 pub use lut::{LutId, LutStyle};
 pub use pick::Hit;
-pub use scalar_map::map_hoods;
+pub use scalar_map::{VertexSmoother, map_hoods};
 pub use scene::{
     ClipPlane, SceneOptions, SceneRenderer, SceneSettings, SceneUniforms, ScreenLabel, best_msaa_samples,
 };

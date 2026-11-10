@@ -17,6 +17,7 @@ pub mod heart_history;
 pub mod heart_view;
 pub mod interval_drill;
 pub mod monitor_beep;
+pub mod responsive;
 pub mod rhythm_quiz;
 pub mod scenario_file;
 pub mod scenarios;
@@ -44,6 +45,17 @@ where
     S: AsRef<str>,
 {
     args.into_iter().any(|a| matches!(a.as_ref(), "--version" | "-V"))
+}
+
+/// `HEARTSIM_WINDOW_SIZE=WIDTHxHEIGHT` (logical points, at least 320 × 240): the window size for
+/// this run, for checking the layout on a small screen or taking screenshots at a set size. It
+/// wins over the remembered size (the app resizes itself on its first frame) and is not stored.
+#[must_use]
+pub fn window_size_from_env() -> Option<[f32; 2]> {
+    let s = std::env::var("HEARTSIM_WINDOW_SIZE").ok()?;
+    let (w, h) = s.split_once(['x', 'X'])?;
+    let size = [w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?];
+    (size[0] >= 320.0 && size[1] >= 240.0).then_some(size)
 }
 
 #[cfg(test)]

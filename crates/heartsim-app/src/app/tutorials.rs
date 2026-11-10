@@ -117,12 +117,14 @@ impl HeartSimApp {
         }
         if self.tutorials.is_open() {
             egui::Panel::right("tutorial_reader")
+                .max_size(crate::responsive::max_side(ui, 100_000.0))
                 .resizable(true)
                 .default_size(360.0)
                 .show(ui, |ui| self.tutorials.reader_ui(ui));
         } else if self.cases.is_open() {
             crate::tutorial_ui::publish_highlight(ui.ctx(), None);
             egui::Panel::right("case_reader")
+                .max_size(crate::responsive::max_side(ui, 100_000.0))
                 .resizable(true)
                 .default_size(360.0)
                 .show(ui, |ui| self.cases.reader_ui(ui));

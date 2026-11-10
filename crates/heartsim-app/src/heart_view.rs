@@ -17,7 +17,7 @@ use heartsim_core::{Action, Millis, Parameters, Region, StimSite};
 use heartsim_geometry::{AnatomyPack, Hood, MeshKind, Territory};
 use heartsim_render::{
     ClipPlane, Contour, GlyphInstance, GlyphSetId, LayerDesc, LayerId, LutId, LutStyle, ScalarMode,
-    SceneRenderer, map_hoods, oblique_yaw_deg,
+    SceneRenderer, VertexSmoother, map_hoods, oblique_yaw_deg,
 };
 use heartsim_sim::timing::PacerConfig;
 use heartsim_sim::{EikonalEngine, EikonalParams, Engine, Event, EventKind, TimingEngine, TimingParams};
@@ -35,6 +35,12 @@ const REST_MV: f32 = -85.0;
 const PEAK_MV: f32 = 25.0;
 /// Activation threshold drawn as the wavefront outline, mV.
 const WAVEFRONT_MV: f32 = -30.0;
+/// Passes of edge smoothing on each layer's vertex field before it is drawn. The hoods take the
+/// eight cells nearest a vertex, so across a wavefront neighbouring vertices mix depolarised
+/// and resting cells in jumping proportions: blotches in the colour ramp and a ragged, speckled
+/// wavefront line. Four half-weight passes spread each value over about 2 mm of mesh, well
+/// under the 2.3 mm cell spacing, and leave one clean front.
+const DISPLAY_SMOOTHING_PASSES: usize = 4;
 /// Auto-rotate speed, radians per second of wall-clock time (one turn in ~20 s).
 const AUTO_ROTATE_RAD_S: f32 = 0.3;
 
@@ -144,6 +150,8 @@ struct HeartLayer {
     kind: Option<MeshKind>,
     /// Vertex → cell interpolation; `None` for flat-coloured meshes (vessels, valves, torso).
     hoods: Option<Vec<Hood>>,
+    /// Smooths the hood-interpolated vertex field along the mesh edges (hooded layers only).
+    smoother: Option<VertexSmoother>,
     /// Per-vertex scalars of the current colour mode.
     scalars: Vec<f32>,
     id: Option<LayerId>,
@@ -158,6 +166,8 @@ pub struct HeartView {
     aha_segments: Vec<u8>,
     layers: Vec<HeartLayer>,
     per_cell: Vec<f32>,
+    /// Scratch for [`VertexSmoother::smooth`].
+    scratch: Vec<f32>,
     /// Start of the current beat (last pacemaker discharge or stimulus), ms.
     beat_start_ms: f64,
     now_ms: f64,
@@ -235,13 +245,14 @@ fn pretty_name(name: &str) -> String {
     }
 }
 
-/// Flat colour (linear RGB) of a mesh: oxygenated vessels red, deoxygenated blue (textbook).
+/// Flat colour (linear RGB) of a mesh: oxygenated vessels red, deoxygenated blue (textbook); the
+/// torso the light blue of the frontal torso illustration in the axis panel, so the two agree.
 fn base_colour(name: &str, kind: Option<MeshKind>) -> [f32; 3] {
     match (name, kind) {
         ("aorta" | "pulmonary_veins", _) => [0.55, 0.05, 0.05],
         ("pulmonary_artery" | "svc" | "ivc", _) => [0.12, 0.16, 0.5],
         (_, Some(MeshKind::Valve)) => [0.8, 0.75, 0.55],
-        (_, None) => [0.75, 0.6, 0.5],
+        (_, None) => [0.3, 0.55, 0.85],
         _ => [0.5, 0.16, 0.14],
     }
 }
@@ -310,6 +321,7 @@ impl HeartView {
                     name: m.name.clone(),
                     kind: Some(m.kind),
                     scalars: vec![0.0; if h.is_some() { m.mesh.vertex_count() } else { 0 }],
+                    smoother: h.is_some().then(|| VertexSmoother::new(&m.mesh)),
                     hoods: h,
                     id: None,
                 }
@@ -319,13 +331,15 @@ impl HeartView {
             name: "torso".to_string(),
             kind: None,
             hoods: None,
+            smoother: None,
             scalars: Vec::new(),
             id: None,
         });
         let mut panel = AnatomyPanelState::new(layers.iter().map(|l| (l.name.clone(), 1.0)));
+        // the torso: off until asked for, and translucent like the illustration when on
         if let Some(t) = panel.layers.last_mut() {
             t.visible = false;
-            t.alpha = 0.15;
+            t.alpha = 0.2;
         }
         let n = engine.cloud().len();
         Self {
@@ -336,6 +350,7 @@ impl HeartView {
             aha_segments: pack.aha_segments,
             layers,
             per_cell: vec![0.0; n],
+            scratch: Vec::new(),
             beat_start_ms: 0.0,
             now_ms: 0.0,
             tier1: true,
@@ -572,6 +587,9 @@ impl HeartView {
         for l in &mut self.layers {
             if let Some(h) = &l.hoods {
                 map_hoods(h, &self.per_cell, &mut l.scalars);
+                if let Some(sm) = &l.smoother {
+                    sm.smooth(&mut l.scalars, DISPLAY_SMOOTHING_PASSES, &mut self.scratch);
+                }
             }
         }
     }

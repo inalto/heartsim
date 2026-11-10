@@ -58,7 +58,6 @@ pub fn colour_bar(
     let painter = ui.painter_at(rect.expand(2.0));
     painter.add(Shape::mesh(mesh));
     let text = ui.visuals().text_color();
-    painter.rect_stroke(bar, 0.0, Stroke::new(1.0, text), egui::StrokeKind::Inside);
 
     let mut changed = false;
     let min_span = span * MIN_SPAN_FRACTION;
