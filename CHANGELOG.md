@@ -4,6 +4,15 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-11-19
+Twelfth tagged release: the 3-D torso is a full human figure.
+
+### Changed
+- The Torso layer of the heart view and the Electrodes tab draws a standing human figure (`human.glb` in the default
+  anatomy pack, registered to the heart frame) instead of the box-like torso. It is display-only: electrode sites,
+  picking and the forward model still use the pack's torso surface, so the ECG is unchanged. Without the file the
+  old torso is shown.
+
 ## [0.12.0] — 2026-11-10
 Eleventh tagged release: a theme button beside the menu, light 3-D views, a see-through heart on start and a layout that
 narrows to phone widths.

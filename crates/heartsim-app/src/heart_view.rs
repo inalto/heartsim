@@ -162,6 +162,7 @@ pub struct HeartView {
     engine: EikonalEngine,
     params: Parameters,
     pack_meshes: Vec<heartsim_geometry::NamedMesh>,
+    /// Mesh of the "torso" layer: the human figure when the pack has one, else the pack torso.
     torso: heartsim_geometry::TriMesh,
     aha_segments: Vec<u8>,
     layers: Vec<HeartLayer>,
@@ -346,7 +347,7 @@ impl HeartView {
             engine,
             params,
             pack_meshes: pack.meshes,
-            torso: pack.torso,
+            torso: pack.body.unwrap_or(pack.torso),
             aha_segments: pack.aha_segments,
             layers,
             per_cell: vec![0.0; n],

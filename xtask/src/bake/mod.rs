@@ -254,6 +254,7 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
         landmarks,
         electrodes: torso.electrodes,
         torso: torso.mesh,
+        body: None,
         aha_segments: heart.aha_segments,
         licence: REAL_LICENSE.to_string(),
     };

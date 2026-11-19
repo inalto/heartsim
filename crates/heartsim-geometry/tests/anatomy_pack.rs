@@ -451,3 +451,20 @@ fn default_pack_loads_fast_and_is_complete() {
     assert!(e.standard(Electrode::V6).unwrap().x > hi.x);
     assert!(e.standard(Electrode::RA).unwrap().x < e.standard(Electrode::LA).unwrap().x);
 }
+
+/// The default pack ships the human figure for the 3-D views; it must stand around the pack torso:
+/// as tall as a person, its chest enclosing the electrode sites' surface.
+#[test]
+fn default_pack_has_a_registered_human_body() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/anatomy/default");
+    let pack = AnatomyPack::load(&dir).expect("default pack");
+    let body = pack.body.expect("assets/anatomy/default/human.glb");
+    let (lo, hi) = body.bounds();
+    assert!((hi.y - lo.y - 1616.0).abs() < 1.0);
+    assert!(
+        lo.y < -900.0 && hi.y > 300.0,
+        "{lo} {hi}: heart level near the chest"
+    );
+    let (tlo, thi) = pack.torso.bounds();
+    assert!(lo.x < tlo.x && hi.x > thi.x, "body is wider than the torso block");
+}

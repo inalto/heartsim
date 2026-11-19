@@ -18,9 +18,11 @@
 //! a pack that loads is internally consistent.
 
 mod binary;
+mod body;
 mod glb;
 
 pub use binary::{region_from_u8, region_to_u8};
+pub use body::{BODY_HEIGHT_MM, read_human_body};
 pub use glb::{read_glb, write_glb};
 
 use crate::cloud::CellCloud;
@@ -115,6 +117,10 @@ pub struct AnatomyPack {
     pub landmarks: Landmarks,
     pub electrodes: ElectrodeSet,
     pub torso: TriMesh,
+    /// Full human figure around the heart, in the heart frame, for the 3-D views only (electrodes and
+    /// the forward model use `torso`). Read from the optional `human.glb`, which is not in the
+    /// manifest; `None` when absent or unreadable.
+    pub body: Option<TriMesh>,
     /// AHA 17-segment index per cell (0 = none).
     pub aha_segments: Vec<u8>,
     /// The pack's `LICENSE` text: licence and attribution of the geometry.
@@ -181,6 +187,7 @@ impl AnatomyPack {
             landmarks,
             electrodes: torso.electrodes,
             torso: torso.mesh,
+            body: None,
             aha_segments: heart.aha_segments,
             licence: PROCEDURAL_LICENSE.to_string(),
         }
@@ -362,6 +369,10 @@ impl AnatomyPack {
             hoods.insert(m.name.clone(), h);
         }
 
+        let body = read_file("human.glb")
+            .ok()
+            .and_then(|b| body::read_human_body(&b, &torso).ok());
+
         let cells = CellCloud {
             positions,
             fibres,
@@ -378,6 +389,7 @@ impl AnatomyPack {
             landmarks,
             electrodes,
             torso,
+            body,
             aha_segments,
             licence,
         })
