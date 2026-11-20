@@ -270,7 +270,9 @@ el-loaded = Loaded { $file }
 el-load-failed = Load failed: { $error }
 el-no-3d = 3-D view unavailable: edit the electrodes from the panel.
 el-hidden = Electrodes hidden during the exercise: read the ECG.
-el-drag-hint = Drag an electrode over the torso; drag elsewhere to rotate.
+el-drag-hint = Drag an electrode anywhere on the body; drag elsewhere to rotate.
+el-view-body = Whole body
+el-view-chest = Chest
 
 ## Export panel and scenario picker (export_panel.rs, scenarios.rs)
 export-wrote = Wrote { $names } to { $dir }

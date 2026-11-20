@@ -91,10 +91,10 @@ impl Limb {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            Limb::RightArm => "right wrist",
-            Limb::LeftArm => "left wrist",
-            Limb::LeftLeg => "left ankle",
-            Limb::RightLeg => "right ankle",
+            Limb::RightArm => "right arm",
+            Limb::LeftArm => "left arm",
+            Limb::LeftLeg => "left leg",
+            Limb::RightLeg => "right leg",
         }
     }
 

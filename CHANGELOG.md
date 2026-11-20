@@ -4,6 +4,20 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Changed
+- Limb electrodes are described as on the left/right arm or leg instead of the wrist or ankle, since they can now sit
+  anywhere on the limb.
+- Electrodes tab: a **Whole body / Chest** switch above the figure; the chest view frames the trunk so the chest
+  electrodes are far enough apart to place precisely.
+- Electrode labels no longer cover one another: crowded labels are stacked and joined to their electrodes by a
+  line. Markers keep a minimum size on screen.
+
+### Fixed
+- Electrodes tab: the figure is framed to the shape of the 3-D view, so its arms and the wrist electrodes are no
+  longer cut off in a narrow window, and the side panels leave the view at least 300 px.
+- The drag hint and the electrode labels use the theme's colours (they were white on the light theme's background)
+  and the hint wraps instead of being cut off.
+
 ## [0.15.0] — 2026-11-20
 Fourteenth tagged release: electrodes anywhere on the human figure, limbs included, and every marker on its skin.
 

@@ -23,8 +23,71 @@ use heartsim_ui::{
 
 /// Electrode glyph radius, mm.
 const MARKER_RADIUS_MM: f32 = 7.0;
+/// Electrodes are drawn at least this large on screen (radius, logical px): on the whole figure a
+/// 7 mm sphere is two or three pixels.
+const MARKER_MIN_PX: f32 = 4.5;
 /// A press this close to an electrode on screen grabs it, logical px.
 const GRAB_PX: f32 = 14.0;
+/// The 3-D view keeps at least this width between the side panels, logical px.
+const VIEW_MIN_WIDTH_PX: f32 = 300.0;
+/// Free space around the framed figure or chest, as a fraction of its size.
+const FRAME_MARGIN: f32 = 0.06;
+
+/// What the 3-D view frames.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum View {
+    /// Head to foot: the limb electrodes are in reach.
+    WholeBody,
+    /// The trunk only: the chest electrodes are far enough apart to place precisely.
+    Chest,
+}
+
+/// The camera as the tab last framed it, to tell whether the user has moved it since.
+#[derive(Debug, Clone, Copy)]
+struct Fit {
+    view: View,
+    aspect: f32,
+    camera: OrbitCamera,
+}
+
+/// Whether two cameras look from the same place (the user has not orbited or zoomed).
+fn same_view(a: &OrbitCamera, b: &OrbitCamera) -> bool {
+    a.yaw.to_bits() == b.yaw.to_bits()
+        && a.pitch.to_bits() == b.pitch.to_bits()
+        && a.distance.to_bits() == b.distance.to_bits()
+}
+
+/// Where each label goes so that none covers another: above its marker, or failing that the
+/// first free slot further up, then below. `markers` are screen positions with the label's
+/// size; returns the label rectangles in the same order (crowded chest electrodes become a
+/// staircase joined to their markers by leader lines).
+fn place_labels(markers: &[(egui::Pos2, egui::Vec2)]) -> Vec<egui::Rect> {
+    const FIRST_PX: f32 = 12.0;
+    let mut order: Vec<usize> = (0..markers.len()).collect();
+    order.sort_by(|a, b| markers[*a].0.x.total_cmp(&markers[*b].0.x));
+    let mut placed: Vec<(usize, egui::Rect)> = Vec::with_capacity(markers.len());
+    for i in order {
+        let (at, size) = markers[i];
+        let step = size.y + 2.0;
+        let slot = |k: i32| {
+            // k = 0, 1, 2… above the marker; negative below it
+            let dy = if k >= 0 {
+                -(FIRST_PX + step * k as f32) - size.y * 0.5
+            } else {
+                FIRST_PX + step * (-k - 1) as f32 + size.y * 0.5
+            };
+            egui::Rect::from_center_size(at + egui::vec2(0.0, dy), size)
+        };
+        let rect = (0..12)
+            .chain((1..12).map(|k| -k))
+            .map(slot)
+            .find(|r| placed.iter().all(|(_, q)| !q.expand(1.0).intersects(*r)))
+            .unwrap_or_else(|| slot(0));
+        placed.push((i, rect));
+    }
+    placed.sort_by_key(|(i, _)| *i);
+    placed.into_iter().map(|(_, r)| r).collect()
+}
 /// Torso opacity in this tab.
 const TORSO_ALPHA: f32 = 0.35;
 /// Torso tint in this tab, sRGB: the translucent light blue of `torso-front-axis.png`.
@@ -118,6 +181,12 @@ pub struct ElectrodeTab {
     on_body: bool,
     /// The limb under the cursor while an electrode is dragged.
     drag_limb: Option<Limb>,
+    /// What the 3-D view frames.
+    view: View,
+    /// Bounds of the pack torso, which the chest view frames (`None` without one).
+    chest: Option<(Vec3, Vec3)>,
+    /// The last framing the tab chose itself.
+    fit: Option<Fit>,
     /// Nearest skin point of recently drawn trunk positions: `(stored, drawn)`, compared bitwise.
     skin: Vec<(Vec3, Vec3)>,
     #[cfg(feature = "native")]
@@ -176,6 +245,9 @@ impl ElectrodeTab {
                 .with_exercise_surface(body.and(torso).map(TorsoSurface::new)),
             on_body: body.is_some(),
             drag_limb: None,
+            view: View::WholeBody,
+            chest: body.and(torso).map(TriMesh::bounds),
+            fit: None,
             skin: Vec::new(),
             glyphs: None,
             camera: None,
@@ -207,23 +279,43 @@ impl ElectrodeTab {
         }
     }
 
-    /// Take over the scene for this tab: own camera, translucent torso, electrode glyphs.
-    fn activate(&mut self, scene: &mut SceneRenderer) {
+    /// Take over the scene for this tab: own camera, translucent torso, electrode glyphs. The
+    /// camera frames the chosen view for a viewport of this `aspect` (width / height), and is
+    /// framed again when the view or the viewport's shape changes, unless the user has moved it.
+    fn activate(&mut self, scene: &mut SceneRenderer, aspect: f32) {
         if self.saved_camera.is_none() {
             self.saved_camera = Some(scene.camera);
-            scene.camera = self.camera.unwrap_or_else(|| {
+            if let Some(c) = self.camera {
+                scene.camera = c;
+            }
+        }
+        let refit = match &self.fit {
+            None => true,
+            Some(f) => {
+                f.view != self.view
+                    || ((f.aspect - aspect).abs() > 0.02 && same_view(&f.camera, &scene.camera))
+            }
+        };
+        if refit {
+            let bounds = match (self.view, self.chest) {
+                (View::Chest, Some(b)) => Some(b),
+                _ => scene
+                    .layers()
+                    .iter()
+                    .find(|l| l.name == "Torso")
+                    .map(|l| l.mesh.bounds()),
+            };
+            if let Some((lo, hi)) = bounds {
                 let mut c = scene.camera;
-                if let Some(l) = scene.layers().iter().find(|l| l.name == "Torso") {
-                    let (lo, hi) = l.mesh.bounds();
-                    c.frame(lo, hi);
-                    // a torso fills the view; a whole figure is framed head to foot
-                    if !self.on_body {
-                        c.distance *= 0.8;
-                    }
-                }
+                c.frame_to_fit(lo, hi, aspect, FRAME_MARGIN);
                 c.yaw = 0.0;
                 c.pitch = 0.1;
-                c
+                scene.camera = c;
+            }
+            self.fit = Some(Fit {
+                view: self.view,
+                aspect,
+                camera: scene.camera,
             });
         }
         let id = *self
@@ -298,8 +390,10 @@ impl ElectrodeTab {
         rings: &[LeadRing],
         style: &StripStyle,
     ) {
+        // the side panels leave the 3-D view its minimum width, so the figure is never a sliver
+        let side_cap = ((ui.ctx().content_rect().width() - VIEW_MIN_WIDTH_PX) * 0.5).max(120.0);
         egui::Panel::left("electrode_editor")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
+            .max_size(crate::responsive::max_side(ui, side_cap))
             .default_size(340.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -310,7 +404,7 @@ impl ElectrodeTab {
                 });
             });
         egui::Panel::right("electrode_leads")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
+            .max_size(crate::responsive::max_side(ui, side_cap))
             .default_size(420.0)
             .show(ui, |ui| self.leads(ui, rings, style));
         egui::CentralPanel::default().show(ui, |ui| self.viewport(ui, rs));
@@ -396,7 +490,7 @@ impl ElectrodeTab {
             let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() else {
                 return;
             };
-            self.activate(&mut res.scene);
+            self.activate(&mut res.scene, aspect);
             for (c, p) in &markers {
                 if let Some((u, v, _)) = res.scene.camera.project(*p, aspect) {
                     screen.push((*c, rect.min + egui::vec2(u * rect.width(), v * rect.height())));
@@ -442,14 +536,18 @@ impl ElectrodeTab {
             self.drag_limb = None;
         }
         let markers = self.markers();
+        // millimetres per logical pixel at the camera's target: markers keep a minimum size
+        let mm_per_px =
+            2.0 * scene.camera.distance * (scene.camera.fov_y * 0.5).tan() / rect.height().max(1.0);
+        let base_mm = MARKER_RADIUS_MM.max(MARKER_MIN_PX * mm_per_px);
         let instances: Vec<GlyphInstance> = markers
             .iter()
             .map(|(c, p)| {
                 let [r, g, b] = cable_colour(*c);
                 let radius = if self.editor.selected == Some(*c) {
-                    MARKER_RADIUS_MM * 1.4
+                    base_mm * 1.4
                 } else {
-                    MARKER_RADIUS_MM
+                    base_mm
                 };
                 GlyphInstance::sphere(*p, radius, srgb_color([r, g, b, 1.0]))
             })
@@ -458,19 +556,52 @@ impl ElectrodeTab {
             scene.set_spheres(&rs.device, &rs.queue, id, &instances);
         }
         let painter = ui.painter_at(rect);
-        for (c, p) in markers {
-            if let Some((u, v, _)) = scene.camera.project(p, aspect) {
+        // labels on theme-coloured plates, moved apart where the electrodes crowd together
+        let (text, plate) = (
+            ui.visuals().strong_text_color(),
+            ui.visuals().extreme_bg_color.gamma_multiply(0.8),
+        );
+        let labelled: Vec<(egui::Pos2, std::sync::Arc<egui::Galley>)> = markers
+            .iter()
+            .filter_map(|(c, p)| {
+                let (u, v, _) = scene.camera.project(*p, aspect)?;
                 let at = rect.min + egui::vec2(u * rect.width(), v * rect.height());
-                painter.text(
-                    at + egui::vec2(0.0, -14.0),
-                    egui::Align2::CENTER_BOTTOM,
-                    c.label(),
-                    egui::FontId::proportional(13.0),
-                    egui::Color32::WHITE,
-                );
-            }
+                let galley =
+                    painter.layout_no_wrap(c.label().to_string(), egui::FontId::proportional(13.0), text);
+                rect.contains(at).then_some((at, galley))
+            })
+            .collect();
+        let sizes: Vec<(egui::Pos2, egui::Vec2)> = labelled
+            .iter()
+            .map(|(at, g)| (*at, g.size() + egui::vec2(6.0, 2.0)))
+            .collect();
+        for ((at, galley), slot) in labelled.into_iter().zip(place_labels(&sizes)) {
+            let near = if slot.center().y < at.y {
+                slot.bottom()
+            } else {
+                slot.top()
+            };
+            painter.line_segment(
+                [at, egui::pos2(at.x, near)],
+                egui::Stroke::new(1.0, text.gamma_multiply(0.6)),
+            );
+            painter.rect_filled(slot, 3.0, plate);
+            painter.galley(slot.center() - galley.size() * 0.5, galley, text);
         }
         drop(renderer);
+        if self.chest.is_some() {
+            // view switch, top left of the 3-D view
+            let bar = egui::Rect::from_min_size(
+                rect.min + egui::vec2(6.0, 6.0),
+                egui::vec2(rect.width() - 12.0, 24.0),
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(bar), |ui| {
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.view, View::WholeBody, t!("el-view-body"));
+                    ui.selectable_value(&mut self.view, View::Chest, t!("el-view-chest"));
+                });
+            });
+        }
         let hint = match (self.dragging, self.editor.landmark()) {
             _ if !self.editor.revealed() => {
                 t!("el-hidden")
@@ -495,13 +626,24 @@ impl ElectrodeTab {
     }
 }
 
+/// The hint line along the bottom of the 3-D view: wrapped to its width, in the theme's colours.
 fn painter_hint(ui: &egui::Ui, rect: egui::Rect, text: &str) {
-    ui.painter_at(rect).text(
-        rect.left_top() + egui::vec2(8.0, 8.0),
-        egui::Align2::LEFT_TOP,
-        text,
-        egui::FontId::proportional(14.0),
-        egui::Color32::from_gray(220),
+    let painter = ui.painter_at(rect);
+    let galley = painter.layout(
+        text.to_string(),
+        egui::FontId::proportional(13.0),
+        ui.visuals().text_color(),
+        (rect.width() - 16.0).max(40.0),
+    );
+    let plate = egui::Rect::from_min_size(
+        egui::pos2(rect.left() + 4.0, rect.bottom() - galley.size().y - 8.0),
+        galley.size() + egui::vec2(8.0, 4.0),
+    );
+    painter.rect_filled(plate, 3.0, ui.visuals().extreme_bg_color.gamma_multiply(0.8));
+    painter.galley(
+        plate.min + egui::vec2(4.0, 2.0),
+        galley,
+        ui.visuals().text_color(),
     );
 }
 
@@ -543,6 +685,33 @@ mod tests {
             limb_marker(Vec3::new(0.0, 0.0, 80.0), None, true),
             None,
             "trunk point"
+        );
+    }
+
+    /// Six chest electrodes a few pixels apart get six labels that do not cover one another;
+    /// a lone electrode keeps its label straight above it.
+    #[test]
+    fn crowded_labels_are_moved_apart() {
+        let size = egui::vec2(24.0, 16.0);
+        let crowd: Vec<(egui::Pos2, egui::Vec2)> = (0..6)
+            .map(|k| (egui::pos2(100.0 + 4.0 * k as f32, 200.0 - k as f32), size))
+            .chain([(egui::pos2(300.0, 400.0), size)])
+            .collect();
+        let rects = place_labels(&crowd);
+        assert_eq!(rects.len(), crowd.len());
+        for (i, a) in rects.iter().enumerate() {
+            for b in &rects[i + 1..] {
+                assert!(!a.intersects(*b), "{a:?} covers {b:?}");
+            }
+            assert!(
+                (a.center().x - crowd[i].0.x).abs() < 1e-3,
+                "labels stay over their marker"
+            );
+        }
+        assert!(
+            (rects[6].bottom() - (400.0 - 12.0)).abs() < 1e-3,
+            "{:?}",
+            rects[6]
         );
     }
 }

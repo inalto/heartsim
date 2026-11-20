@@ -182,6 +182,19 @@ impl OrbitCamera {
         self.max_distance = self.distance * 10.0;
     }
 
+    /// As [`Self::frame`], from the nearest distance at which the whole box is inside a viewport
+    /// of the given `aspect` (width / height) when seen along an axis-aligned direction: a tall
+    /// box in a narrow viewport is limited by its width, which [`Self::frame`] ignores. `margin`
+    /// is the free space left around the box, as a fraction of its size.
+    pub fn frame_to_fit(&mut self, lo: Vec3, hi: Vec3, aspect: f32, margin: f32) {
+        self.frame(lo, hi);
+        let half = (hi - lo) * 0.5;
+        let t = (self.fov_y * 0.5).tan().max(1e-6);
+        let across = half.x.max(half.z);
+        let fit = (half.y / t).max(across / (t * aspect.max(1e-3)));
+        self.distance = (fit * (1.0 + margin) + across).clamp(self.min_distance, self.max_distance);
+    }
+
     /// Unit vectors (right, up, backward) of the camera frame in world space. Backward points from
     /// the target towards the eye.
     #[must_use]
@@ -264,6 +277,36 @@ mod tests {
             c.distance <= c.max_distance && c.distance > 50.0,
             "zoom limits follow the scene"
         );
+    }
+
+    /// A standing figure fits a narrow viewport as well as a wide one, and fills most of it.
+    #[test]
+    fn frame_to_fit_keeps_a_tall_box_inside_any_viewport() {
+        let (lo, hi) = (Vec3::new(-390.0, -1117.0, -156.0), Vec3::new(283.0, 434.0, 137.0));
+        for aspect in [0.2_f32, 0.45, 1.0, 2.5] {
+            let mut c = OrbitCamera::default();
+            c.frame_to_fit(lo, hi, aspect, 0.06);
+            c.yaw = 0.0;
+            c.pitch = 0.0;
+            let (mut umin, mut umax, mut vmin, mut vmax) = (1.0_f32, 0.0_f32, 1.0_f32, 0.0_f32);
+            for i in 0..8 {
+                let p = Vec3::new(
+                    if i & 1 == 0 { lo.x } else { hi.x },
+                    if i & 2 == 0 { lo.y } else { hi.y },
+                    if i & 4 == 0 { lo.z } else { hi.z },
+                );
+                let (u, v, _) = c.project(p, aspect).expect("in front of the camera");
+                assert!(
+                    (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v),
+                    "aspect {aspect}: {u} {v}"
+                );
+                (umin, umax, vmin, vmax) = (umin.min(u), umax.max(u), vmin.min(v), vmax.max(v));
+            }
+            assert!(
+                (umax - umin).max(vmax - vmin) > 0.6,
+                "aspect {aspect}: the box fills the limiting dimension"
+            );
+        }
     }
 
     #[test]

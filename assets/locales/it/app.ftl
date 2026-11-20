@@ -271,7 +271,9 @@ el-loaded = Caricato { $file }
 el-load-failed = Caricamento non riuscito: { $error }
 el-no-3d = Vista 3D non disponibile: modifica gli elettrodi dal pannello.
 el-hidden = Elettrodi nascosti durante l'esercizio: leggi l'ECG.
-el-drag-hint = Trascina un elettrodo sul torace; trascina altrove per ruotare.
+el-drag-hint = Trascina un elettrodo in qualsiasi punto del corpo; trascina altrove per ruotare.
+el-view-body = Corpo intero
+el-view-chest = Torace
 
 ## Pannello di esportazione e selettore di scenari (export_panel.rs, scenarios.rs)
 export-wrote = Scritto { $names } in { $dir }
