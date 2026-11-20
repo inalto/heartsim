@@ -12,7 +12,7 @@ use eframe::egui;
 use glam::Vec3;
 use heartsim_core::{Electrode, LEAD_COUNT, Lead};
 use heartsim_ecg::{Cable, ExtraLead, GaussianSynth, LeadRing, Limb, TorsoSurface};
-use heartsim_geometry::pack::{BODY_ANKLES_MM, BODY_WRISTS_MM};
+use heartsim_geometry::pack::{BODY_ANKLES_MM, BODY_WRISTS_MM, BodyRegion, body_region};
 use heartsim_geometry::{ElectrodeSet, TriMesh};
 use heartsim_render::{GlyphInstance, GlyphSetId, OrbitCamera, SceneRenderer, srgb_color};
 use heartsim_ui::t;
@@ -50,55 +50,56 @@ fn cable_colour(c: Cable) -> [f32; 3] {
     }
 }
 
-/// Where an electrode is drawn: its position, except distal-limb electrodes, which are stored at a
-/// nominal [`Limb::anchor_mm`]: on the human figure's wrist or ankle when it is shown (`on_body`),
-/// else legs just below the torso.
-fn marker_position(p: Vec3, on_body: bool) -> Vec3 {
-    match (Limb::at(p), on_body) {
-        (Some(Limb::LeftArm), true) => BODY_WRISTS_MM[0],
-        (Some(Limb::RightArm), true) => BODY_WRISTS_MM[1],
-        (Some(Limb::LeftLeg), true) => BODY_ANKLES_MM[0],
-        (Some(Limb::RightLeg), true) => BODY_ANKLES_MM[1],
-        (Some(Limb::LeftLeg | Limb::RightLeg), false) => Vec3::new(p.x, LEG_MARKER_Y_MM, p.z),
-        _ => p,
-    }
+/// Where a distal-limb electrode (stored at a nominal [`Limb::anchor_mm`], `None` when `p` is a
+/// trunk point) is drawn: where it was dropped (`spot`) or else on the human figure's wrist or
+/// ankle when it is shown (`on_body`), else legs just below the torso.
+fn limb_marker(p: Vec3, spot: Option<Vec3>, on_body: bool) -> Option<Vec3> {
+    let limb = Limb::at(p)?;
+    Some(match (on_body, spot, limb) {
+        (true, Some(s), _) => s,
+        (true, None, Limb::LeftArm) => BODY_WRISTS_MM[0],
+        (true, None, Limb::RightArm) => BODY_WRISTS_MM[1],
+        (true, None, Limb::LeftLeg) => BODY_ANKLES_MM[0],
+        (true, None, Limb::RightLeg) => BODY_ANKLES_MM[1],
+        (false, _, Limb::LeftLeg | Limb::RightLeg) => Vec3::new(p.x, LEG_MARKER_Y_MM, p.z),
+        (false, _, _) => p,
+    })
 }
 
-/// A point on the human figure this close to a wrist is on that arm's distal limb, mm.
-const WRIST_CAPTURE_MM: f32 = 120.0;
-/// Points of the figure below this height are on the legs' distal part (shin, ankle, foot), mm.
-const SHIN_TOP_MM: f32 = -800.0;
-
-/// The distal limb a point of the human figure is on (hand and wrist, shin and foot), if any.
+/// The limb a point of the human figure is on (anywhere on an arm or a leg), if any. A limb is
+/// one conductor, so a drop on the hand, the upper arm or the thigh is a limb electrode.
 fn limb_under(p: Vec3, on_body: bool) -> Option<Limb> {
     if !on_body {
         return None;
     }
-    if p.y < SHIN_TOP_MM {
-        let [l, r] = BODY_ANKLES_MM;
-        return Some(if p.distance(l) < p.distance(r) {
-            Limb::LeftLeg
-        } else {
-            Limb::RightLeg
-        });
-    }
-    let [l, r] = BODY_WRISTS_MM;
-    if p.distance(l) < WRIST_CAPTURE_MM {
-        Some(Limb::LeftArm)
-    } else if p.distance(r) < WRIST_CAPTURE_MM {
-        Some(Limb::RightArm)
-    } else {
-        None
+    match body_region(p) {
+        BodyRegion::Trunk => None,
+        BodyRegion::LeftArm => Some(Limb::LeftArm),
+        BodyRegion::RightArm => Some(Limb::RightArm),
+        BodyRegion::LeftLeg => Some(Limb::LeftLeg),
+        BodyRegion::RightLeg => Some(Limb::RightLeg),
     }
 }
 
+/// Skin points drawn this many entries are remembered at most.
+const SKIN_CACHE_MAX: usize = 256;
+
 /// The surface electrodes are dragged on: the human `body` when there is one, around the `torso`'s
-/// axis so the landmark lines are where the standard sites were defined; else the torso.
+/// axis so the landmark lines are where the standard sites were defined; else the torso. On the
+/// figure, landmark lookups ([`TorsoSurface::at`]) skip the limbs, whose skin is fused with the
+/// chest above the armpit; picking still hits them.
 #[must_use]
 pub fn electrode_surface(torso: Option<&TriMesh>, body: Option<&TriMesh>) -> Option<TorsoSurface> {
     match (torso, body) {
-        (Some(t), Some(b)) => Some(TorsoSurface::with_axis(b, TorsoSurface::new(t).axis())),
-        (t, b) => t.or(b).map(TorsoSurface::new),
+        (t, Some(b)) => {
+            let surface = match t {
+                Some(t) => TorsoSurface::with_axis(b, TorsoSurface::new(t).axis()),
+                None => TorsoSurface::new(b),
+            };
+            Some(surface.excluding(|p| body_region(p) != BodyRegion::Trunk))
+        }
+        (Some(t), None) => Some(TorsoSurface::new(t)),
+        (None, None) => None,
     }
 }
 
@@ -112,8 +113,13 @@ pub struct ElectrodeTab {
     /// The other tabs' camera while this one is shown.
     saved_camera: Option<OrbitCamera>,
     dragging: Option<Cable>,
-    /// Electrodes are on the human figure (limb electrodes drawn on its wrists and ankles).
+    /// Electrodes are on the human figure (limb electrodes drawn on it, trunk electrodes on its
+    /// skin).
     on_body: bool,
+    /// The limb under the cursor while an electrode is dragged.
+    drag_limb: Option<Limb>,
+    /// Nearest skin point of recently drawn trunk positions: `(stored, drawn)`, compared bitwise.
+    skin: Vec<(Vec3, Vec3)>,
     #[cfg(feature = "native")]
     file_status: Option<String>,
 }
@@ -166,8 +172,11 @@ impl ElectrodeTab {
             tracing::warn!("no torso mesh: electrodes can be edited from the panel only");
         }
         Self {
-            editor: ElectrodeEditor::on_surface(sites, surface, sample_rate_hz, capacity),
+            editor: ElectrodeEditor::on_surface(sites, surface, sample_rate_hz, capacity)
+                .with_exercise_surface(body.and(torso).map(TorsoSurface::new)),
             on_body: body.is_some(),
+            drag_limb: None,
+            skin: Vec::new(),
             glyphs: None,
             camera: None,
             saved_camera: None,
@@ -235,18 +244,50 @@ impl ElectrodeTab {
         scene.clip.enabled = false;
     }
 
+    /// The skin point nearest to the stored trunk position `p`: the standard sites RL, LL and
+    /// V7–V9 are off the figure's skin (the stored positions and the ECG stay as they are; only
+    /// the marker moves). Remembered per position, so a frame costs no triangle tests unless an
+    /// electrode moved.
+    fn skin_point(&mut self, p: Vec3) -> Vec3 {
+        let bits = |v: Vec3| v.to_array().map(f32::to_bits);
+        if let Some((_, q)) = self.skin.iter().find(|(k, _)| bits(*k) == bits(p)) {
+            return *q;
+        }
+        let q = self.editor.surface().and_then(|s| s.nearest(p)).unwrap_or(p);
+        if self.skin.len() >= SKIN_CACHE_MAX {
+            self.skin.clear();
+        }
+        self.skin.push((p, q));
+        q
+    }
+
+    /// Where the electrode of `c` stored at `p` is drawn.
+    fn marker_at(&mut self, c: Cable, p: Vec3) -> Vec3 {
+        let spot = self.editor.limb_spot(c);
+        match limb_marker(p, spot, self.on_body) {
+            Some(q) => q,
+            None if self.on_body => self.skin_point(p),
+            None => p,
+        }
+    }
+
     /// Electrodes shown in the viewport (none during an unrevealed exercise: the ECG is the clue).
-    fn markers(&self) -> Vec<(Cable, Vec3)> {
+    fn markers(&mut self) -> Vec<(Cable, Vec3)> {
         if !self.editor.revealed() {
             return Vec::new();
         }
-        let p = self.editor.placement();
-        let mut v: Vec<(Cable, Vec3)> = Electrode::ALL
+        let placed: Vec<(Cable, Vec3)> = {
+            let p = self.editor.placement();
+            Electrode::ALL
+                .into_iter()
+                .map(|e| (Cable::Standard(e), p.position(e)))
+                .chain(p.extras.iter().map(|(x, q)| (Cable::Extra(*x), *q)))
+                .collect()
+        };
+        placed
             .into_iter()
-            .map(|e| (Cable::Standard(e), marker_position(p.position(e), self.on_body)))
-            .collect();
-        v.extend(p.extras.iter().map(|(x, q)| (Cable::Extra(*x), *q)));
-        v
+            .map(|(c, p)| (c, self.marker_at(c, p)))
+            .collect()
     }
 
     /// The whole tab.
@@ -390,15 +431,18 @@ impl ElectrodeTab {
             );
             let (o, dir) = scene.pick_ray(uv, aspect);
             if let Some(hit) = self.editor.surface().and_then(|s| s.ray_hit(o, dir)) {
-                // a drop on a hand or a lower leg puts the electrode on that distal limb
-                match limb_under(hit, self.on_body) {
-                    Some(l) => self.editor.place_on_limb(c, l),
+                // a drop anywhere on an arm or a leg puts the electrode on that limb
+                self.drag_limb = limb_under(hit, self.on_body);
+                match self.drag_limb {
+                    Some(l) => self.editor.place_on_limb(c, l, hit),
                     None => self.editor.drag_to(c, hit),
                 }
             }
+        } else {
+            self.drag_limb = None;
         }
-        let instances: Vec<GlyphInstance> = self
-            .markers()
+        let markers = self.markers();
+        let instances: Vec<GlyphInstance> = markers
             .iter()
             .map(|(c, p)| {
                 let [r, g, b] = cable_colour(*c);
@@ -414,7 +458,7 @@ impl ElectrodeTab {
             scene.set_spheres(&rs.device, &rs.queue, id, &instances);
         }
         let painter = ui.painter_at(rect);
-        for (c, p) in self.markers() {
+        for (c, p) in markers {
             if let Some((u, v, _)) = scene.camera.project(p, aspect) {
                 let at = rect.min + egui::vec2(u * rect.width(), v * rect.height());
                 painter.text(
@@ -431,6 +475,13 @@ impl ElectrodeTab {
             _ if !self.editor.revealed() => {
                 t!("el-hidden")
             }
+            (Some(c), _) if self.drag_limb.is_some() => format!(
+                "{}: {}",
+                c.label(),
+                self.drag_limb
+                    .map(heartsim_ui::labels::limb_name)
+                    .unwrap_or_default()
+            ),
             (Some(c), Some(l)) => format!("{}: {l}", c.label()),
             (Some(c), None) => c.label().to_string(),
             (None, _) => t!("el-drag-hint"),
@@ -458,15 +509,40 @@ fn painter_hint(ui: &egui::Ui, rect: egui::Rect, text: &str) {
 mod tests {
     use super::*;
 
-    /// Distal-limb electrodes are drawn on the figure's wrists and ankles, and a drop there puts
-    /// an electrode back on that limb: the round trip of a limb electrode is stable.
+    /// Distal-limb electrodes are drawn on the figure's wrists and ankles (or where they were
+    /// dropped), and a drop anywhere on a limb puts an electrode on that limb; the chest is none.
     #[test]
     fn limb_electrodes_round_trip_through_the_figure() {
         for l in Limb::ALL {
-            let drawn = marker_position(l.anchor_mm(), true);
+            let drawn = limb_marker(l.anchor_mm(), None, true).expect("limb electrode");
             assert_eq!(limb_under(drawn, true), Some(l), "{l:?} drawn at {drawn}");
+            let spot = Vec3::new(drawn.x, drawn.y + 50.0, drawn.z);
+            assert_eq!(limb_marker(l.anchor_mm(), Some(spot), true), Some(spot));
         }
+        // upper arm, thigh and shoulder
+        assert_eq!(
+            limb_under(Vec3::new(250.0, 100.0, 0.0), true),
+            Some(Limb::LeftArm)
+        );
+        assert_eq!(
+            limb_under(Vec3::new(-350.0, -100.0, 0.0), true),
+            Some(Limb::RightArm)
+        );
+        assert_eq!(
+            limb_under(Vec3::new(80.0, -700.0, 0.0), true),
+            Some(Limb::LeftLeg)
+        );
+        assert_eq!(
+            limb_under(Vec3::new(-190.0, -600.0, 0.0), true),
+            Some(Limb::RightLeg)
+        );
         assert_eq!(limb_under(Vec3::new(0.0, 0.0, 80.0), true), None, "chest");
+        assert_eq!(limb_under(Vec3::new(-50.0, 300.0, 0.0), true), None, "head");
         assert_eq!(limb_under(BODY_WRISTS_MM[0], false), None, "no figure, no limbs");
+        assert_eq!(
+            limb_marker(Vec3::new(0.0, 0.0, 80.0), None, true),
+            None,
+            "trunk point"
+        );
     }
 }

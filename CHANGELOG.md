@@ -4,6 +4,25 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-11-20
+Fourteenth tagged release: electrodes anywhere on the human figure, limbs included, and every marker on its skin.
+
+### Changed
+- Electrodes tab: a drop anywhere on an arm or a leg of the figure (hand, forearm, upper arm, shoulder, shin, thigh)
+  puts the electrode on that limb, and the marker stays where it was dropped. Before, only the hand and the lower
+  leg counted and the marker jumped to the wrist or ankle. While dragging over a limb the hint names it.
+- Electrode markers on the figure are drawn on its skin: RL, LL and V7-V9, whose standard sites lie a few
+  centimetres off or inside the figure, now sit on the surface. The stored sites and the ECG are unchanged.
+- Wrist and ankle markers sit on the front of the limb instead of inside it.
+
+### Fixed
+- A drop on the left hip is no longer read as the left wrist (the limb capture radius is 25 mm instead of 50 mm).
+- Extra chest electrodes (V3R-V9) dropped on a limb are drawn where they were dropped.
+- Snapping to the axillary lines near the armpit no longer puts the electrode on the back of the upper arm; where
+  the figure's arm joins the chest the electrode stays where it was dropped.
+- Misplacement exercises move electrodes along the pack torso, not the figure, so an exercise gives the same
+  placement and ECG as before the figure was added.
+
 ## [0.14.0] — 2026-11-20
 Thirteenth tagged release: electrodes on the full human figure and the HeartSim icon on Windows.
 

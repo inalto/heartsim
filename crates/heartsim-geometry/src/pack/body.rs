@@ -9,9 +9,11 @@
 //! facing +x with +y up has its left on −z (left = up × forward), so the rotation is
 //! `heart = (−z, y, x)`, a proper rotation. Scale and offset were fitted, uniform scale plus
 //! translation, to the default pack's KCL torso: on rays from the torso axis at each standard
-//! site's height and azimuth, the figure's skin is within 3 mm of V1–V6, V3R and V4R and within
-//! 5 mm of the Mason–Likar arm sites. It is 1.55 m tall. Elsewhere the shapes differ (the figure's
-//! back is ~25 mm flatter at V9 and its abdomen ~20 mm fuller at the iliac crests).
+//! site's height and azimuth, the figure's skin is within 3 mm of V1–V6, V3R, V4R, RA and LA. It
+//! is 1.55 m tall. Elsewhere the shapes differ, and those standard sites are *not* on the figure's
+//! skin: LL is 10 mm off, RL 22 mm inside the figure (the abdomen is fuller at the iliac crests),
+//! V7 27 mm, V8 7 mm and V9 19 mm off (the back is flatter). The stored sites stay as they are;
+//! the app draws those markers at the nearest skin point instead.
 
 use crate::mesh::{TriMesh, Vertex};
 use glam::Vec3;
@@ -23,12 +25,84 @@ pub const BODY_HEIGHT_MM: f32 = 1551.18;
 /// Heart-frame position of the source origin, mm.
 const BODY_OFFSET_MM: Vec3 = Vec3::new(-52.94, -341.09, -9.55);
 
-/// Heart-frame wrists of the registered figure (left, right), mm: the narrowest section of each
-/// forearm above the hand. Where a distal arm electrode is drawn.
-pub const BODY_WRISTS_MM: [Vec3; 2] = [Vec3::new(240.0, -330.0, -10.0), Vec3::new(-345.0, -330.0, -10.0)];
-/// Heart-frame ankles of the registered figure (left, right), mm. Where a distal leg electrode is
-/// drawn.
-pub const BODY_ANKLES_MM: [Vec3; 2] = [Vec3::new(78.0, -1040.0, -35.0), Vec3::new(-183.0, -1040.0, -35.0)];
+/// Heart-frame wrists of the registered figure (left, right), mm: points on the anterior skin of
+/// each forearm above the hand. Where a distal arm electrode is drawn when it was not dropped at a
+/// particular spot.
+pub const BODY_WRISTS_MM: [Vec3; 2] = [Vec3::new(237.0, -330.0, 23.3), Vec3::new(-343.0, -330.0, 24.4)];
+/// Heart-frame ankles of the registered figure (left, right), mm: points on the anterior skin just
+/// above the malleoli. Where a distal leg electrode is drawn when it was not dropped at a
+/// particular spot.
+pub const BODY_ANKLES_MM: [Vec3; 2] = [Vec3::new(78.0, -1000.0, -12.9), Vec3::new(-185.0, -1000.0, -13.2)];
+
+/// Sagittal midline of the registered figure (heart-frame x), mm.
+pub const BODY_MIDLINE_X_MM: f32 = BODY_OFFSET_MM.x;
+
+/// Which part of the figure a point on its skin belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BodyRegion {
+    /// Head, neck, chest, abdomen and pelvis: where point electrodes record the local potential.
+    Trunk,
+    LeftArm,
+    RightArm,
+    LeftLeg,
+    RightLeg,
+}
+
+/// Lateral distance from the midline beyond which a point at height `y_mm` is on an arm, mm:
+/// piecewise linear through the measured (y, d) pairs, constant outside them. Below about
+/// y = −80 the arms hang free of the trunk and this runs down the middle of the gap; above it
+/// it cuts off the deltoid and upper arm lateral to the chest wall.
+#[must_use]
+pub fn arm_boundary_mm(y_mm: f32) -> f32 {
+    const B: [(f32, f32); 6] = [
+        (-480.0, 234.0),
+        (-400.0, 218.0),
+        (-280.0, 202.0),
+        (-200.0, 170.0),
+        (-120.0, 156.0),
+        (200.0, 156.0),
+    ];
+    if y_mm <= B[0].0 {
+        return B[0].1;
+    }
+    for w in B.windows(2) {
+        let ((y0, b0), (y1, b1)) = (w[0], w[1]);
+        if y_mm <= y1 {
+            return b0 + (b1 - b0) * (y_mm - y0) / (y1 - y0);
+        }
+    }
+    B[5].1
+}
+
+/// The part of the registered figure a point `p_mm` of its skin is on.
+///
+/// A limb is a linear conductor: an electrode anywhere on an arm or leg records the potential of
+/// that limb's junction with the trunk (Einthoven), so a drop on the hand, forearm, upper arm,
+/// shin or thigh is a limb electrode, not a point on the chest. Rule (measured on the figure):
+/// an arm is farther from the midline than [`arm_boundary_mm`] between y = −520 and 200; below
+/// y = −440 (the groin is near −410; fingertips reach −500 but are caught by the arm rule
+/// first) it is a leg; everything else, head included, is trunk. Left is the patient's left
+/// (+x of the midline).
+#[must_use]
+pub fn body_region(p_mm: Vec3) -> BodyRegion {
+    let left = p_mm.x > BODY_MIDLINE_X_MM;
+    let d = (p_mm.x - BODY_MIDLINE_X_MM).abs();
+    if p_mm.y > -520.0 && p_mm.y < 200.0 && d > arm_boundary_mm(p_mm.y) {
+        if left {
+            BodyRegion::LeftArm
+        } else {
+            BodyRegion::RightArm
+        }
+    } else if p_mm.y < -440.0 {
+        if left {
+            BodyRegion::LeftLeg
+        } else {
+            BodyRegion::RightLeg
+        }
+    } else {
+        BodyRegion::Trunk
+    }
+}
 
 /// Read the GLB `bytes` of the human figure and place it in the heart frame.
 ///

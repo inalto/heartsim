@@ -3,8 +3,10 @@
 
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
+use glam::Vec3;
 use heartsim_core::{Electrode, LEAD_COUNT, Lead, Millis, Scenario};
-use heartsim_ecg::{Finding, GaussianSynth, LeadRing, Limb};
+use heartsim_ecg::placement::LIMB_CAPTURE_MM;
+use heartsim_ecg::{Cable, Finding, GaussianSynth, LeadRing, Limb};
 use heartsim_geometry::AnatomyPack;
 use heartsim_sim::{Engine, TimingEngine, TimingParams};
 use heartsim_ui::{EditorCommand, ElectrodeEditor, electrode_editor_panel};
@@ -174,4 +176,98 @@ fn panel_presets_and_exercises_edit_the_placement() {
     h.get_by_label("Explain").click();
     h.run();
     assert!(h.state().revealed());
+}
+
+fn editor() -> ElectrodeEditor {
+    ElectrodeEditor::new(pack().electrodes.clone(), Some(&pack().torso), RATE_HZ, 1000)
+}
+
+/// A drop on a limb stores the electrode at the limb's anchor (the ECG sees a limb electrode) and
+/// remembers the spot for drawing; the leads equal those of "back on limb".
+#[test]
+fn a_limb_drop_records_the_spot_and_keeps_the_anchor() {
+    let mut ed = editor();
+    let ra = Cable::Standard(Electrode::RA);
+    ed.apply(EditorCommand::Move(ra, pack().electrodes.get("RA").unwrap()));
+    let spot = Vec3::new(-300.0, -100.0, 20.0);
+    ed.place_on_limb(ra, Limb::RightArm, spot);
+    assert_eq!(ed.placement().position(Electrode::RA), Limb::RightArm.anchor_mm());
+    assert_eq!(ed.limb_spot(ra), Some(spot));
+    let dropped = ed.lead_vectors();
+
+    let mut other = editor();
+    other.apply(EditorCommand::Move(ra, pack().electrodes.get("RA").unwrap()));
+    other.apply(EditorCommand::PutOnLimb(Electrode::RA));
+    assert_eq!(other.limb_spot(ra), None, "PutOnLimb has no spot");
+    assert_eq!(other.lead_vectors(), dropped);
+
+    // a second drop elsewhere on the arm only moves the spot
+    let spot2 = Vec3::new(-250.0, 50.0, 0.0);
+    ed.place_on_limb(ra, Limb::RightArm, spot2);
+    assert_eq!(ed.limb_spot(ra), Some(spot2));
+    ed.apply(EditorCommand::PutOnLimb(Electrode::RA));
+    assert_eq!(ed.limb_spot(ra), None);
+}
+
+#[test]
+fn reset_preset_swap_and_scenarios_clear_limb_spots() {
+    let ll = Cable::Standard(Electrode::LL);
+    let drop = |ed: &mut ElectrodeEditor| {
+        ed.place_on_limb(ll, Limb::LeftLeg, Vec3::new(80.0, -700.0, 0.0));
+        assert!(ed.limb_spot(ll).is_some());
+    };
+    for cmd in [
+        EditorCommand::Reset,
+        EditorCommand::Preset(heartsim_ecg::Preset::Posterior),
+        EditorCommand::Swap(Electrode::LL, Electrode::RL),
+        EditorCommand::Exercise(heartsim_ecg::Exercise::V1V2Reversed),
+        EditorCommand::RandomExercise,
+    ] {
+        let mut ed = editor();
+        drop(&mut ed);
+        ed.apply(cmd);
+        assert_eq!(ed.limb_spot(ll), None, "{cmd:?}");
+    }
+    let mut ed = editor();
+    drop(&mut ed);
+    ed.load_scenario(&Scenario::sinus_normal());
+    assert_eq!(ed.limb_spot(ll), None, "load_scenario");
+}
+
+#[test]
+fn dragging_back_to_the_trunk_clears_the_spot_and_never_reads_as_a_limb() {
+    let mut ed = editor();
+    let la = Cable::Standard(Electrode::LA);
+    ed.place_on_limb(la, Limb::LeftArm, Vec3::new(240.0, -300.0, 20.0));
+    assert!(ed.limb_spot(la).is_some());
+    ed.drag_to(la, Vec3::new(60.0, 40.0, 100.0));
+    assert_eq!(ed.limb_spot(la), None);
+    assert_eq!(ed.placement().limb_of(Electrode::LA), None);
+    // even a pick right at an anchor stays a torso point
+    for l in Limb::ALL {
+        for off in [Vec3::ZERO, Vec3::new(5.0, 0.0, 0.0)] {
+            ed.drag_to(la, l.anchor_mm() + off);
+            let p = ed.placement().position(Electrode::LA);
+            assert_eq!(Limb::at(p), None, "{l:?}: {p}");
+            assert!(p.distance(l.anchor_mm()) <= LIMB_CAPTURE_MM + 2.0);
+        }
+    }
+}
+
+/// Exercises move electrodes along the pack torso the sites are defined on, not along the figure
+/// they are dragged on: the placement, and with it the ECG, is the same with and without a figure.
+#[test]
+fn exercises_do_not_depend_on_the_drag_surface() {
+    use heartsim_ecg::{Exercise, TorsoSurface};
+    let body = pack().body.as_ref().expect("default pack ships human.glb");
+    let torso = TorsoSurface::new(&pack().torso);
+    let figure = TorsoSurface::with_axis(body, torso.axis());
+    let mut on_figure = ElectrodeEditor::on_surface(pack().electrodes.clone(), Some(figure), RATE_HZ, 1000)
+        .with_exercise_surface(Some(torso));
+    let mut on_torso = editor();
+    for x in Exercise::ALL {
+        on_figure.apply(EditorCommand::Exercise(x));
+        on_torso.apply(EditorCommand::Exercise(x));
+        assert_eq!(on_figure.placement(), on_torso.placement(), "{}", x.label());
+    }
 }

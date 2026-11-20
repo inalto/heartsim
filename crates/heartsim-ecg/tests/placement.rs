@@ -374,3 +374,29 @@ fn standard_chest_sites_lie_on_the_human_body() {
         assert_eq!(on_body.describe(hit), surface().describe(site), "{name}");
     }
 }
+
+/// Above the armpit the figure's upper arms are fused with the trunk: a horizontal ray from the
+/// torso axis at the V6 azimuths must read the chest wall, not leave through the back of the arm.
+#[test]
+fn excluding_limbs_keeps_chest_rays_on_the_trunk() {
+    use heartsim_geometry::pack::{BodyRegion, body_region};
+    let body = pack().body.as_ref().expect("default pack ships human.glb");
+    let plain = TorsoSurface::with_axis(body, surface().axis());
+    let on_trunk = plain.clone().excluding(|p| body_region(p) != BodyRegion::Trunk);
+    for (y, az) in [
+        (-15.0, 108.0),
+        (-15.0, -108.0),
+        (0.0, 100.0),
+        (-15.0, 90.0),
+        (-15.0, 52.0),
+    ] {
+        if let Some(p) = on_trunk.at(y, az) {
+            assert_eq!(body_region(p), BodyRegion::Trunk, "y {y} az {az}: {p}");
+        }
+    }
+    // the standard chest sites are unaffected
+    for name in ["V1", "V4", "V6"] {
+        let site = Vec3::from(pack().electrodes.sites[name]);
+        assert_eq!(on_trunk.project(site), plain.project(site), "{name}");
+    }
+}

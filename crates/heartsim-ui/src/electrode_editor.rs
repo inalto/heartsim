@@ -13,7 +13,7 @@ use crate::t;
 use egui::Ui;
 use glam::{DVec3, Vec3};
 use heartsim_core::{Electrode, LEAD_COUNT, Scenario};
-use heartsim_ecg::placement::PRECORDIAL;
+use heartsim_ecg::placement::{LIMB_CAPTURE_MM, PRECORDIAL};
 use heartsim_ecg::{
     Cable, DetectorConfig, DipoleSolver, Exercise, ExtraLead, Finding, GaussianSynth, LeadRing, LeadVectors,
     Limb, Placement, Preset, Tier0Field, TorsoSurface, detect_misplacement,
@@ -58,6 +58,8 @@ pub struct ElectrodeEditor {
     standard: Placement,
     field: Tier0Field,
     surface: Option<TorsoSurface>,
+    /// Surface the misplacement exercises move electrodes along; `None` uses `surface`.
+    exercise_surface: Option<TorsoSurface>,
     placement: Placement,
     /// Snap dragged electrodes to intercostal spaces and chest-wall lines.
     pub snap: bool,
@@ -70,6 +72,9 @@ pub struct ElectrodeEditor {
     findings: Option<Vec<Finding>>,
     /// Landmark the last drag snapped to.
     landmark: Option<String>,
+    /// Where on its limb a limb electrode was dropped: for drawing only. The stored position is
+    /// always the limb's anchor (a limb is one conductor), and spots are not saved in scenarios.
+    limb_spots: BTreeMap<Cable, (Limb, Vec3)>,
     rng: u64,
     // --- signal side
     sample_rate_hz: f32,
@@ -109,6 +114,7 @@ impl ElectrodeEditor {
         let standard_leads = field.lead_vectors(&standard);
         Self {
             surface,
+            exercise_surface: None,
             placement: standard.clone(),
             standard,
             solver: DipoleSolver::new(&standard_leads),
@@ -122,6 +128,7 @@ impl ElectrodeEditor {
             revealed: false,
             findings: None,
             landmark: None,
+            limb_spots: BTreeMap::new(),
             rng: 0x9E37_79B9_7F4A_7C15,
             sample_rate_hz,
             extra_vectors: Vec::new(),
@@ -134,6 +141,15 @@ impl ElectrodeEditor {
             dirty: true,
             since_detect: 0,
         }
+    }
+
+    /// Move electrodes along `torso` in the misplacement exercises instead of the drag surface:
+    /// the standard sites are defined on the pack torso, so an exercise gives the same placement,
+    /// and the same ECG, whatever figure the electrodes are dragged on.
+    #[must_use]
+    pub fn with_exercise_surface(mut self, torso: Option<TorsoSurface>) -> Self {
+        self.exercise_surface = torso;
+        self
     }
 
     // --- model --------------------------------------------------------------------------------
@@ -178,6 +194,15 @@ impl ElectrodeEditor {
         self.landmark.as_deref()
     }
 
+    /// Where on its limb the electrode of `c` was dropped, for drawing it there; `None` when it
+    /// was not dropped on a limb or has since left that limb (moved, swapped, preset). Never
+    /// affects the placement.
+    #[must_use]
+    pub fn limb_spot(&self, c: Cable) -> Option<Vec3> {
+        let (limb, spot) = *self.limb_spots.get(&c)?;
+        (self.placement.cable_position(c).and_then(Limb::at) == Some(limb)).then_some(spot)
+    }
+
     /// Where an electrode is, in words.
     #[must_use]
     pub fn describe(&self, c: Cable) -> String {
@@ -208,6 +233,7 @@ impl ElectrodeEditor {
             EditorCommand::Preset(p) => {
                 self.placement = p.build(&self.sites);
                 self.exercise = None;
+                self.limb_spots.clear();
             }
             EditorCommand::Exercise(x) => self.start_exercise(x),
             EditorCommand::RandomExercise => {
@@ -219,28 +245,44 @@ impl ElectrodeEditor {
                 self.start_exercise(Exercise::ALL[k as usize]);
             }
             EditorCommand::Reveal => self.revealed = true,
-            EditorCommand::Swap(a, b) => self.placement.swap(a, b),
-            EditorCommand::Move(c, p) => self.placement.set_cable(c, p),
+            EditorCommand::Swap(a, b) => {
+                self.placement.swap(a, b);
+                self.limb_spots.clear();
+            }
+            EditorCommand::Move(c, p) => {
+                self.placement.set_cable(c, p);
+                self.limb_spots.remove(&c);
+            }
             EditorCommand::PutOnLimb(e) => {
                 if let Some(l) = Limb::of(e) {
                     self.placement.set(e, l.anchor_mm());
+                    self.limb_spots.remove(&Cable::Standard(e));
                 }
             }
-            EditorCommand::SetExtra(x, on) => self.placement.set_extra(x, on, &self.sites),
+            EditorCommand::SetExtra(x, on) => {
+                self.placement.set_extra(x, on, &self.sites);
+                if !on {
+                    self.limb_spots.remove(&Cable::Extra(x));
+                }
+            }
             EditorCommand::Reset => {
                 self.placement = self.standard.clone();
                 self.exercise = None;
+                self.limb_spots.clear();
             }
         }
         self.dirty = true;
     }
 
-    /// Put `c` on the distal `limb` (a drop on a hand or a lower leg of the human figure).
-    pub fn place_on_limb(&mut self, c: Cable, limb: Limb) {
+    /// Put `c` on `limb` (a drop anywhere on an arm or leg of the human figure, at `spot_mm`).
+    /// The electrode is stored at the limb's anchor, because the limb is one conductor; the spot
+    /// is only remembered so that it can be drawn where it was dropped ([`Self::limb_spot`]).
+    pub fn place_on_limb(&mut self, c: Cable, limb: Limb, spot_mm: Vec3) {
         self.landmark = None;
         if self.placement.cable_position(c) != Some(limb.anchor_mm()) {
             self.apply(EditorCommand::Move(c, limb.anchor_mm()));
         }
+        self.limb_spots.insert(c, (limb, spot_mm));
     }
 
     /// Move `c` to the torso point `p` (a pick on the surface), snapping to landmarks when on.
@@ -252,15 +294,27 @@ impl ElectrodeEditor {
             }
             _ => (p, None),
         };
+        let p = Self::off_the_limbs(p);
         self.landmark = landmark;
         if self.placement.cable_position(c) != Some(p) {
             self.apply(EditorCommand::Move(c, p));
         }
     }
 
+    /// `p`, or if it is within capture of a limb anchor (where [`Limb::at`] would read it as a
+    /// limb electrode) the point just outside the capture radius on the line from the anchor.
+    fn off_the_limbs(p: Vec3) -> Vec3 {
+        let Some(l) = Limb::at(p) else { return p };
+        let a = l.anchor_mm();
+        let dir = (p - a).try_normalize().unwrap_or(Vec3::Z);
+        a + dir * (LIMB_CAPTURE_MM + 1.0)
+    }
+
     fn start_exercise(&mut self, x: Exercise) {
         self.placement = self.standard.clone();
-        x.apply(&mut self.placement, &self.sites, self.surface.as_ref());
+        self.limb_spots.clear();
+        let surface = self.exercise_surface.as_ref().or(self.surface.as_ref());
+        x.apply(&mut self.placement, &self.sites, surface);
         self.exercise = Some(x);
         self.revealed = false;
         self.selected = None;
@@ -283,6 +337,7 @@ impl ElectrodeEditor {
     pub fn load_scenario(&mut self, scenario: &Scenario) {
         self.placement = Placement::from_scenario(scenario, &self.sites);
         self.exercise = None;
+        self.limb_spots.clear();
         self.dirty = true;
     }
 

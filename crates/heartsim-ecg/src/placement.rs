@@ -27,6 +27,7 @@ use crate::leadvec::LeadVectors;
 use crate::misplacement::Finding;
 use glam::{DMat3, DVec3, Vec3};
 use heartsim_core::{ELECTRODE_COUNT, Electrode, LEAD_COUNT, Lead, Scenario};
+use heartsim_geometry::mesh::closest_point_on_triangle;
 use heartsim_geometry::procedural::torso::TORSO_CENTRE_MM;
 use heartsim_geometry::{ElectrodeSet, TriMesh};
 use std::collections::BTreeMap;
@@ -34,8 +35,11 @@ use std::collections::BTreeMap;
 /// Effective distance of the distal-limb junctions from the heart, mm — the Einthoven default of
 /// the forward model ([`crate::LimbPlacement`]); it fixes the Tier-0 field scale `k = R²/√3`.
 pub const EINTHOVEN_DISTANCE_MM: f64 = 125.0;
-/// A position within this distance of a [`Limb::anchor_mm`] is "on that limb", mm.
-pub const LIMB_CAPTURE_MM: f32 = 50.0;
+/// A position within this distance of a [`Limb::anchor_mm`] is "on that limb", mm. Limb
+/// electrodes are stored exactly at the anchor, so the radius only has to absorb rounding (scenario
+/// files, float round trips); it is kept small because a point on the trunk must never read as a
+/// limb: the whole figure's left-hip skin is 37 mm from the left-arm anchor.
+pub const LIMB_CAPTURE_MM: f32 = 25.0;
 /// Distance of a wrist electrode from the torso axis, mm.
 const WRIST_OFFSET_MM: f32 = 200.0;
 /// Distance of an ankle electrode from the torso axis, mm.
@@ -556,6 +560,9 @@ pub struct TorsoSurface {
     axis: (f32, f32),
     lo: Vec3,
     hi: Vec3,
+    /// Surface points [`Self::at`] must not return (limbs of a whole figure), see
+    /// [`Self::excluding`].
+    exclude: Option<fn(Vec3) -> bool>,
 }
 
 /// A snapped electrode site.
@@ -592,7 +599,19 @@ impl TorsoSurface {
             axis,
             lo,
             hi,
+            exclude: None,
         }
+    }
+
+    /// The same surface where [`Self::at`] (and with it [`Self::project`] and [`Self::snap`])
+    /// skips the points for which `exclude` is true and takes the nearest hit that is not: on a
+    /// whole figure the upper arms are fused with the chest above the armpit, and a horizontal
+    /// ray from the torso axis would otherwise leave through the back of the arm instead of the
+    /// chest wall. [`Self::ray_hit`] (mouse picking) is unaffected: limbs stay pickable.
+    #[must_use]
+    pub fn excluding(mut self, exclude: fn(Vec3) -> bool) -> Self {
+        self.exclude = Some(exclude);
+        self
     }
 
     /// Torso axis (x, z), mm.
@@ -610,10 +629,16 @@ impl TorsoSurface {
     /// Nearest surface point along the ray (`dir` need not be normalised), if it hits.
     #[must_use]
     pub fn ray_hit(&self, origin: Vec3, dir: Vec3) -> Option<Vec3> {
+        self.ray_hit_where(origin, dir, |_| true)
+    }
+
+    /// Nearest hit along the ray whose point satisfies `keep`.
+    fn ray_hit_where(&self, origin: Vec3, dir: Vec3, keep: impl Fn(Vec3) -> bool) -> Option<Vec3> {
         let mut best: Option<f32> = None;
         for [a, b, c] in &self.triangles {
             if let Some(t) = ray_triangle(origin, dir, *a, *b, *c)
                 && best.is_none_or(|b| t < b)
+                && keep(origin + dir * t)
             {
                 best = Some(t);
             }
@@ -621,15 +646,29 @@ impl TorsoSurface {
         best.map(|t| origin + dir * t)
     }
 
+    /// The point of the surface nearest to `p` (limbs included), if it has any triangle. Used to
+    /// draw an electrode on the skin of a body whose surface is not exactly where it was defined.
+    #[must_use]
+    pub fn nearest(&self, p: Vec3) -> Option<Vec3> {
+        self.triangles
+            .iter()
+            .map(|[a, b, c]| closest_point_on_triangle(p, *a, *b, *c))
+            .min_by(|a, b| a.distance_squared(p).total_cmp(&b.distance_squared(p)))
+    }
+
     /// Surface point at height `y_mm` and azimuth `azimuth_deg`, found by a horizontal ray from
-    /// the torso axis.
+    /// the torso axis (the nearest hit not skipped by [`Self::excluding`]).
     #[must_use]
     pub fn at(&self, y_mm: f32, azimuth_deg: f32) -> Option<Vec3> {
         if !(self.lo.y..=self.hi.y).contains(&y_mm) {
             return None;
         }
         let (s, c) = azimuth_deg.to_radians().sin_cos();
-        self.ray_hit(Vec3::new(self.axis.0, y_mm, self.axis.1), Vec3::new(s, 0.0, c))
+        let (origin, dir) = (Vec3::new(self.axis.0, y_mm, self.axis.1), Vec3::new(s, 0.0, c));
+        match self.exclude {
+            Some(exclude) => self.ray_hit_where(origin, dir, |p| !exclude(p)),
+            None => self.ray_hit(origin, dir),
+        }
     }
 
     /// The surface point at the height and azimuth of `p`.
@@ -904,6 +943,59 @@ mod tests {
         let d = DVec3::new(0.3, -1.1, 0.4);
         let back = DipoleSolver::new(&lv).dipole(&lv.project(d));
         assert!((back - d).length() < 1e-6);
+    }
+
+    #[test]
+    fn limb_capture_is_tight_around_the_anchor() {
+        for l in Limb::ALL {
+            let a = l.anchor_mm();
+            for d in [Vec3::X, Vec3::Y, Vec3::Z, -Vec3::X, -Vec3::Y, -Vec3::Z] {
+                assert_eq!(Limb::at(a + d * 10.0), Some(l), "10 mm from {l:?}");
+                assert_eq!(Limb::at(a + d * 37.0), None, "37 mm from {l:?}");
+            }
+        }
+    }
+
+    fn quad(z: f32) -> TriMesh {
+        use heartsim_geometry::Vertex;
+        let v = |x: f32, y: f32| Vertex {
+            position: [x, y, z],
+            normal: [0.0, 0.0, 1.0],
+        };
+        TriMesh {
+            vertices: vec![
+                v(-100.0, -100.0),
+                v(100.0, -100.0),
+                v(100.0, 100.0),
+                v(-100.0, 100.0),
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        }
+    }
+
+    #[test]
+    fn nearest_is_the_closest_surface_point() {
+        let s = TorsoSurface::new(&quad(50.0));
+        let n = s.nearest(Vec3::new(10.0, 20.0, 80.0)).unwrap();
+        assert!(n.distance(Vec3::new(10.0, 20.0, 50.0)) < 1e-4, "{n}");
+        let n = s.nearest(Vec3::new(300.0, 0.0, 50.0)).unwrap();
+        assert!(n.distance(Vec3::new(100.0, 0.0, 50.0)) < 1e-4, "{n}");
+        assert_eq!(TorsoSurface::new(&TriMesh::default()).nearest(Vec3::ZERO), None);
+    }
+
+    /// `at` skips excluded points and takes the next hit; `ray_hit` still reports the first.
+    #[test]
+    fn excluded_points_are_skipped_by_at_but_not_by_picking() {
+        let mut m = quad(50.0);
+        let far = quad(120.0);
+        m.indices.extend(far.indices.iter().map(|i| i + 4));
+        m.vertices.extend(far.vertices);
+        let plain = TorsoSurface::with_axis(&m, (0.0, 0.0));
+        let skip_near = plain.clone().excluding(|p| p.z < 100.0);
+        assert!((plain.at(0.0, 0.0).unwrap().z - 50.0).abs() < 1e-3);
+        assert!((skip_near.at(0.0, 0.0).unwrap().z - 120.0).abs() < 1e-3);
+        let hit = skip_near.ray_hit(Vec3::new(0.0, 0.0, 0.0), Vec3::Z).unwrap();
+        assert!((hit.z - 50.0).abs() < 1e-3);
     }
 
     #[test]

@@ -22,7 +22,10 @@ mod body;
 mod glb;
 
 pub use binary::{region_from_u8, region_to_u8};
-pub use body::{BODY_ANKLES_MM, BODY_HEIGHT_MM, BODY_WRISTS_MM, read_human_body};
+pub use body::{
+    BODY_ANKLES_MM, BODY_HEIGHT_MM, BODY_MIDLINE_X_MM, BODY_WRISTS_MM, BodyRegion, arm_boundary_mm,
+    body_region, read_human_body,
+};
 pub use glb::{read_glb, write_glb};
 
 use crate::cloud::CellCloud;

@@ -468,3 +468,102 @@ fn default_pack_has_a_registered_human_body() {
     let (tlo, thi) = pack.torso.bounds();
     assert!(lo.x < tlo.x && hi.x > thi.x, "body is wider than the torso block");
 }
+
+mod body_regions {
+    use super::*;
+    use heartsim_geometry::pack::{
+        BODY_ANKLES_MM, BODY_MIDLINE_X_MM, BODY_WRISTS_MM, BodyRegion, arm_boundary_mm, body_region,
+    };
+
+    fn body() -> heartsim_geometry::TriMesh {
+        AnatomyPack::load(&default_pack_dir())
+            .expect("default pack")
+            .body
+            .expect("human.glb")
+    }
+
+    /// The wrist and ankle markers sit on the figure's skin and are classified as their own limb.
+    #[test]
+    fn wrist_and_ankle_constants_are_on_their_limb() {
+        let body = body();
+        let cases = [
+            (BODY_WRISTS_MM[0], BodyRegion::LeftArm),
+            (BODY_WRISTS_MM[1], BodyRegion::RightArm),
+            (BODY_ANKLES_MM[0], BodyRegion::LeftLeg),
+            (BODY_ANKLES_MM[1], BodyRegion::RightLeg),
+        ];
+        for (p, region) in cases {
+            let skin = body.closest_point(p).unwrap();
+            assert!(
+                skin.distance(p) < 2.0,
+                "{p} is {} mm from the skin",
+                skin.distance(p)
+            );
+            assert_eq!(body_region(p), region, "{p}");
+        }
+    }
+
+    /// Every site of the electrode set, the ones that float off the skin included, is trunk.
+    #[test]
+    fn all_standard_sites_are_trunk() {
+        let pack = AnatomyPack::load(&default_pack_dir()).expect("default pack");
+        assert_eq!(pack.electrodes.sites.len(), 15);
+        for (name, p) in &pack.electrodes.sites {
+            assert_eq!(body_region(Vec3::from(*p)), BodyRegion::Trunk, "{name}");
+        }
+    }
+
+    /// Between the armpit and the fingertips the boundary runs in the gap between arm and trunk
+    /// (no skin within 10 mm of it); the legs start below the groin and keep to their side.
+    #[test]
+    fn arm_boundary_runs_in_the_gap_and_legs_keep_their_side() {
+        let body = body();
+        for v in &body.vertices {
+            let p = Vec3::from(v.position);
+            if (-480.0..=-100.0).contains(&p.y) {
+                let d = (p.x - BODY_MIDLINE_X_MM).abs();
+                assert!(
+                    (d - arm_boundary_mm(p.y)).abs() >= 10.0,
+                    "{p}: d {d} vs boundary {}",
+                    arm_boundary_mm(p.y)
+                );
+            }
+            if p.y < -560.0 {
+                let want = if p.x > BODY_MIDLINE_X_MM {
+                    BodyRegion::LeftLeg
+                } else {
+                    BodyRegion::RightLeg
+                };
+                assert_eq!(body_region(p), want, "{p}");
+            }
+        }
+    }
+
+    #[test]
+    fn spot_checks() {
+        let body = body();
+        let pos = |v: &heartsim_geometry::Vertex| Vec3::from(v.position);
+        let deltoid = body
+            .vertices
+            .iter()
+            .map(pos)
+            .filter(|p| (p.y - 100.0).abs() < 20.0)
+            .max_by(|a, b| a.x.total_cmp(&b.x))
+            .unwrap();
+        assert_eq!(body_region(deltoid), BodyRegion::LeftArm, "{deltoid}");
+        let thigh = body
+            .vertices
+            .iter()
+            .map(pos)
+            .find(|p| (p.y + 700.0).abs() < 3.0 && p.x < BODY_MIDLINE_X_MM)
+            .unwrap();
+        assert_eq!(body_region(thigh), BodyRegion::RightLeg, "{thigh}");
+        let head = body
+            .vertices
+            .iter()
+            .map(pos)
+            .max_by(|a, b| a.y.total_cmp(&b.y))
+            .unwrap();
+        assert_eq!(body_region(head), BodyRegion::Trunk, "{head}");
+    }
+}
