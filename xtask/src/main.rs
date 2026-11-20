@@ -24,7 +24,8 @@ enum Task {
     Ci,
     /// Format all crates.
     Fmt,
-    /// Render `assets/icon.svg` into PNG/ICO/ICNS under `assets/generated/icons/` for cargo-packager.
+    /// Render `assets/icon.svg` into PNG/ICO/ICNS under `assets/generated/icons/` for cargo-packager, and the
+    /// window and executable icons under `crates/heartsim-app/icon/`.
     Icons,
     /// Write `THIRD_PARTY_LICENSES.html` with cargo-about (needs `cargo install cargo-about --locked`).
     Licenses,
@@ -126,6 +127,10 @@ fn main() -> Result<()> {
             icons::run(
                 &root.join("assets/icon.svg"),
                 &root.join("assets/generated/icons"),
+            )?;
+            icons::write_app_icons(
+                &root.join("assets/icon.svg"),
+                &root.join("crates/heartsim-app/icon"),
             )
         }
         Task::Licenses => licenses(&repo_root()),

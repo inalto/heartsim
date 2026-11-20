@@ -567,8 +567,18 @@ pub struct Snapped {
 }
 
 impl TorsoSurface {
+    /// Surface of `mesh`, its axis the centre of the mesh's bounding box in x and z.
     #[must_use]
     pub fn new(mesh: &TriMesh) -> Self {
+        let (lo, hi) = mesh.bounds();
+        Self::with_axis(mesh, (f32::midpoint(lo.x, hi.x), f32::midpoint(lo.z, hi.z)))
+    }
+
+    /// Surface of `mesh` around a given torso `axis` (x, z), mm: for a whole body, whose
+    /// bounding box (arms, feet) is not centred on the chest, so azimuths — and with them the
+    /// vertical landmark lines — are measured as on the torso the sites were defined on.
+    #[must_use]
+    pub fn with_axis(mesh: &TriMesh, axis: (f32, f32)) -> Self {
         let (lo, hi) = mesh.bounds();
         let p = |i: u32| Vec3::from(mesh.vertices[i as usize].position);
         Self {
@@ -579,10 +589,16 @@ impl TorsoSurface {
                 .iter()
                 .map(|t| [p(t[0]), p(t[1]), p(t[2])])
                 .collect(),
-            axis: (f32::midpoint(lo.x, hi.x), f32::midpoint(lo.z, hi.z)),
+            axis,
             lo,
             hi,
         }
+    }
+
+    /// Torso axis (x, z), mm.
+    #[must_use]
+    pub fn axis(&self) -> (f32, f32) {
+        self.axis
     }
 
     /// Azimuth of `p` around the torso axis, degrees (0° anterior, + towards the patient's left).

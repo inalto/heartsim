@@ -11,7 +11,8 @@
 use eframe::egui;
 use glam::Vec3;
 use heartsim_core::{Electrode, LEAD_COUNT, Lead};
-use heartsim_ecg::{Cable, ExtraLead, GaussianSynth, LeadRing, Limb};
+use heartsim_ecg::{Cable, ExtraLead, GaussianSynth, LeadRing, Limb, TorsoSurface};
+use heartsim_geometry::pack::{BODY_ANKLES_MM, BODY_WRISTS_MM};
 use heartsim_geometry::{ElectrodeSet, TriMesh};
 use heartsim_render::{GlyphInstance, GlyphSetId, OrbitCamera, SceneRenderer, srgb_color};
 use heartsim_ui::t;
@@ -49,11 +50,55 @@ fn cable_colour(c: Cable) -> [f32; 3] {
     }
 }
 
-/// Where an electrode is drawn: its position, except distal leg electrodes (below the torso).
-fn marker_position(p: Vec3) -> Vec3 {
-    match Limb::at(p) {
-        Some(Limb::LeftLeg | Limb::RightLeg) => Vec3::new(p.x, LEG_MARKER_Y_MM, p.z),
+/// Where an electrode is drawn: its position, except distal-limb electrodes, which are stored at a
+/// nominal [`Limb::anchor_mm`]: on the human figure's wrist or ankle when it is shown (`on_body`),
+/// else legs just below the torso.
+fn marker_position(p: Vec3, on_body: bool) -> Vec3 {
+    match (Limb::at(p), on_body) {
+        (Some(Limb::LeftArm), true) => BODY_WRISTS_MM[0],
+        (Some(Limb::RightArm), true) => BODY_WRISTS_MM[1],
+        (Some(Limb::LeftLeg), true) => BODY_ANKLES_MM[0],
+        (Some(Limb::RightLeg), true) => BODY_ANKLES_MM[1],
+        (Some(Limb::LeftLeg | Limb::RightLeg), false) => Vec3::new(p.x, LEG_MARKER_Y_MM, p.z),
         _ => p,
+    }
+}
+
+/// A point on the human figure this close to a wrist is on that arm's distal limb, mm.
+const WRIST_CAPTURE_MM: f32 = 120.0;
+/// Points of the figure below this height are on the legs' distal part (shin, ankle, foot), mm.
+const SHIN_TOP_MM: f32 = -800.0;
+
+/// The distal limb a point of the human figure is on (hand and wrist, shin and foot), if any.
+fn limb_under(p: Vec3, on_body: bool) -> Option<Limb> {
+    if !on_body {
+        return None;
+    }
+    if p.y < SHIN_TOP_MM {
+        let [l, r] = BODY_ANKLES_MM;
+        return Some(if p.distance(l) < p.distance(r) {
+            Limb::LeftLeg
+        } else {
+            Limb::RightLeg
+        });
+    }
+    let [l, r] = BODY_WRISTS_MM;
+    if p.distance(l) < WRIST_CAPTURE_MM {
+        Some(Limb::LeftArm)
+    } else if p.distance(r) < WRIST_CAPTURE_MM {
+        Some(Limb::RightArm)
+    } else {
+        None
+    }
+}
+
+/// The surface electrodes are dragged on: the human `body` when there is one, around the `torso`'s
+/// axis so the landmark lines are where the standard sites were defined; else the torso.
+#[must_use]
+pub fn electrode_surface(torso: Option<&TriMesh>, body: Option<&TriMesh>) -> Option<TorsoSurface> {
+    match (torso, body) {
+        (Some(t), Some(b)) => Some(TorsoSurface::with_axis(b, TorsoSurface::new(t).axis())),
+        (t, b) => t.or(b).map(TorsoSurface::new),
     }
 }
 
@@ -67,6 +112,8 @@ pub struct ElectrodeTab {
     /// The other tabs' camera while this one is shown.
     saved_camera: Option<OrbitCamera>,
     dragging: Option<Cable>,
+    /// Electrodes are on the human figure (limb electrodes drawn on its wrists and ankles).
+    on_body: bool,
     #[cfg(feature = "native")]
     file_status: Option<String>,
 }
@@ -84,15 +131,18 @@ impl ElectrodeTab {
                 .and_then(|d| std::fs::read_to_string(d.join("electrodes.ron")).ok())
                 .and_then(|t| ElectrodeSet::from_ron(&t).ok())
                 .unwrap_or_else(heartsim_geometry::procedural::procedural_electrodes);
-            let torso: Option<TriMesh> = dir
-                .and_then(|d| std::fs::read(d.join("torso.glb")).ok())
-                .and_then(|b| heartsim_geometry::pack::read_glb(&b).ok());
-            Self::new(sites, torso.as_ref(), sample_rate_hz, capacity)
+            let read = |file: &str| dir.as_ref().and_then(|d| std::fs::read(d.join(file)).ok());
+            let torso: Option<TriMesh> =
+                read("torso.glb").and_then(|b| heartsim_geometry::pack::read_glb(&b).ok());
+            let body: Option<TriMesh> =
+                read("human.glb").and_then(|b| heartsim_geometry::pack::read_human_body(&b).ok());
+            Self::new(sites, torso.as_ref(), body.as_ref(), sample_rate_hz, capacity)
         }
         #[cfg(not(feature = "native"))]
         {
             Self::new(
                 heartsim_geometry::procedural::procedural_electrodes(),
+                None,
                 None,
                 sample_rate_hz,
                 capacity,
@@ -100,15 +150,24 @@ impl ElectrodeTab {
         }
     }
 
-    /// The tab for electrode `sites` on `torso` (e.g. both taken from an anatomy pack already in
-    /// memory). Without a torso the electrodes can only be edited from the panel.
+    /// The tab for electrode `sites` on `torso`, dragged on the human `body` when there is one
+    /// (e.g. all taken from an anatomy pack already in memory). Without either the electrodes can
+    /// only be edited from the panel.
     #[must_use]
-    pub fn new(sites: ElectrodeSet, torso: Option<&TriMesh>, sample_rate_hz: f32, capacity: usize) -> Self {
-        if torso.is_none() {
+    pub fn new(
+        sites: ElectrodeSet,
+        torso: Option<&TriMesh>,
+        body: Option<&TriMesh>,
+        sample_rate_hz: f32,
+        capacity: usize,
+    ) -> Self {
+        let surface = electrode_surface(torso, body);
+        if surface.is_none() {
             tracing::warn!("no torso mesh: electrodes can be edited from the panel only");
         }
         Self {
-            editor: ElectrodeEditor::new(sites, torso, sample_rate_hz, capacity),
+            editor: ElectrodeEditor::on_surface(sites, surface, sample_rate_hz, capacity),
+            on_body: body.is_some(),
             glyphs: None,
             camera: None,
             saved_camera: None,
@@ -148,7 +207,10 @@ impl ElectrodeTab {
                 if let Some(l) = scene.layers().iter().find(|l| l.name == "Torso") {
                     let (lo, hi) = l.mesh.bounds();
                     c.frame(lo, hi);
-                    c.distance *= 0.8;
+                    // a torso fills the view; a whole figure is framed head to foot
+                    if !self.on_body {
+                        c.distance *= 0.8;
+                    }
                 }
                 c.yaw = 0.0;
                 c.pitch = 0.1;
@@ -181,7 +243,7 @@ impl ElectrodeTab {
         let p = self.editor.placement();
         let mut v: Vec<(Cable, Vec3)> = Electrode::ALL
             .into_iter()
-            .map(|e| (Cable::Standard(e), marker_position(p.position(e))))
+            .map(|e| (Cable::Standard(e), marker_position(p.position(e), self.on_body)))
             .collect();
         v.extend(p.extras.iter().map(|(x, q)| (Cable::Extra(*x), *q)));
         v
@@ -328,7 +390,11 @@ impl ElectrodeTab {
             );
             let (o, dir) = scene.pick_ray(uv, aspect);
             if let Some(hit) = self.editor.surface().and_then(|s| s.ray_hit(o, dir)) {
-                self.editor.drag_to(c, hit);
+                // a drop on a hand or a lower leg puts the electrode on that distal limb
+                match limb_under(hit, self.on_body) {
+                    Some(l) => self.editor.place_on_limb(c, l),
+                    None => self.editor.drag_to(c, hit),
+                }
             }
         }
         let instances: Vec<GlyphInstance> = self
@@ -386,4 +452,21 @@ fn painter_hint(ui: &egui::Ui, rect: egui::Rect, text: &str) {
         egui::FontId::proportional(14.0),
         egui::Color32::from_gray(220),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Distal-limb electrodes are drawn on the figure's wrists and ankles, and a drop there puts
+    /// an electrode back on that limb: the round trip of a limb electrode is stable.
+    #[test]
+    fn limb_electrodes_round_trip_through_the_figure() {
+        for l in Limb::ALL {
+            let drawn = marker_position(l.anchor_mm(), true);
+            assert_eq!(limb_under(drawn, true), Some(l), "{l:?} drawn at {drawn}");
+        }
+        assert_eq!(limb_under(Vec3::new(0.0, 0.0, 80.0), true), None, "chest");
+        assert_eq!(limb_under(BODY_WRISTS_MM[0], false), None, "no figure, no limbs");
+    }
 }

@@ -92,11 +92,23 @@ impl ElectrodeEditor {
     /// and keeping `capacity` samples of reference and extra leads.
     #[must_use]
     pub fn new(sites: ElectrodeSet, torso: Option<&TriMesh>, sample_rate_hz: f32, capacity: usize) -> Self {
+        Self::on_surface(sites, torso.map(TorsoSurface::new), sample_rate_hz, capacity)
+    }
+
+    /// As [`Self::new`], on a surface already built (e.g. the whole human figure around the
+    /// pack torso's axis).
+    #[must_use]
+    pub fn on_surface(
+        sites: ElectrodeSet,
+        surface: Option<TorsoSurface>,
+        sample_rate_hz: f32,
+        capacity: usize,
+    ) -> Self {
         let standard = Placement::standard(&sites);
         let field = Tier0Field::new(&sites);
         let standard_leads = field.lead_vectors(&standard);
         Self {
-            surface: torso.map(TorsoSurface::new),
+            surface,
             placement: standard.clone(),
             standard,
             solver: DipoleSolver::new(&standard_leads),
@@ -221,6 +233,14 @@ impl ElectrodeEditor {
             }
         }
         self.dirty = true;
+    }
+
+    /// Put `c` on the distal `limb` (a drop on a hand or a lower leg of the human figure).
+    pub fn place_on_limb(&mut self, c: Cable, limb: Limb) {
+        self.landmark = None;
+        if self.placement.cable_position(c) != Some(limb.anchor_mm()) {
+            self.apply(EditorCommand::Move(c, limb.anchor_mm()));
+        }
     }
 
     /// Move `c` to the torso point `p` (a pick on the surface), snapping to landmarks when on.

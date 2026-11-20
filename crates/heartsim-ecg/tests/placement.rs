@@ -360,3 +360,17 @@ fn snapping_finds_the_intercostal_spaces() {
         );
     }
 }
+
+/// The Electrodes tab drags on the whole human figure around the pack torso's axis; the twelve-lead
+/// chest sites the ECG uses must lie on its skin, and its landmarks must name them as on the torso.
+#[test]
+fn standard_chest_sites_lie_on_the_human_body() {
+    let body = pack().body.as_ref().expect("default pack ships human.glb");
+    let on_body = TorsoSurface::with_axis(body, surface().axis());
+    for name in ["V1", "V2", "V3", "V4", "V5", "V6", "V3R", "V4R"] {
+        let site = Vec3::from(pack().electrodes.sites[name]);
+        let hit = on_body.project(site).expect("ray hits the chest");
+        assert!(hit.distance(site) < 4.0, "{name}: {site} vs skin {hit}");
+        assert_eq!(on_body.describe(hit), surface().describe(site), "{name}");
+    }
+}

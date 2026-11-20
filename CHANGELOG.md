@@ -4,6 +4,19 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-20
+Thirteenth tagged release: electrodes on the full human figure and the HeartSim icon on Windows.
+
+### Changed
+- The Electrodes tab drags and snaps electrodes on the human figure, which is refitted (1.55 m) so that its skin
+  lies within 3 mm of the standard chest sites; landmark names are unchanged and so is the ECG. Limb electrodes are
+  drawn on the figure's wrists and ankles, and a drop on a hand or lower leg puts an electrode on that limb. The tab
+  frames the whole figure.
+
+### Fixed
+- Windows: the window and taskbar show the HeartSim icon instead of the egui logo, and `heartsim.exe` carries the
+  icon as a resource (shortcuts, Explorer, pinned taskbar buttons).
+
 ## [0.13.0] — 2026-11-19
 Twelfth tagged release: the 3-D torso is a full human figure.
 

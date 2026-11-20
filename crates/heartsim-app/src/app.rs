@@ -200,6 +200,7 @@ impl HeartSimApp {
                     let tab = crate::electrode_tab::ElectrodeTab::new(
                         pack.electrodes.clone(),
                         Some(&pack.torso),
+                        pack.body.as_ref(),
                         rate,
                         capacity,
                     );

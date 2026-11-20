@@ -460,7 +460,7 @@ fn default_pack_has_a_registered_human_body() {
     let pack = AnatomyPack::load(&dir).expect("default pack");
     let body = pack.body.expect("assets/anatomy/default/human.glb");
     let (lo, hi) = body.bounds();
-    assert!((hi.y - lo.y - 1616.0).abs() < 1.0);
+    assert!((hi.y - lo.y - heartsim_geometry::pack::BODY_HEIGHT_MM).abs() < 1.0);
     assert!(
         lo.y < -900.0 && hi.y > 300.0,
         "{lo} {hi}: heart level near the chest"

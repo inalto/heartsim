@@ -34,6 +34,9 @@ audio = ["native", "dep:kira"]
 # build has no thread to spawn and no installer.
 update-check = ["native", "dep:ureq", "dep:semver", "dep:serde_json", "dep:sha2"]
 
+[build-dependencies]
+embed-resource.workspace = true
+
 [dependencies]
 heartsim-core.workspace = true
 heartsim-geometry.workspace = true

@@ -45,6 +45,32 @@ pub fn run(svg_path: &Path, out_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The icons compiled into the `heartsim` executable (`crates/heartsim-app/icon/`): the window
+/// icon PNG and the ICO the Windows build embeds as the program's icon resource. They are checked
+/// in, because the binary is built before the packaging step generates anything; `cargo xtask
+/// icons` rewrites them and a test keeps them equal to a fresh render of the SVG.
+pub fn app_icons(svg_path: &Path) -> Result<[(&'static str, Vec<u8>); 2]> {
+    let svg = fs::read_to_string(svg_path).with_context(|| format!("reading {}", svg_path.display()))?;
+    let tree = usvg::Tree::from_str(&svg, &usvg::Options::default()).context("parsing icon SVG")?;
+    let ico = ICO_SIZES
+        .iter()
+        .map(|&s| render_png(&tree, s).map(|png| (s, png)))
+        .collect::<Result<Vec<_>>>()?;
+    Ok([
+        ("heartsim-256.png", render_png(&tree, 256)?),
+        ("heartsim.ico", encode_ico(&ico)),
+    ])
+}
+
+/// Write [`app_icons`] into `dir`.
+pub fn write_app_icons(svg_path: &Path, dir: &Path) -> Result<()> {
+    for (name, bytes) in app_icons(svg_path)? {
+        fs::write(dir.join(name), bytes).with_context(|| format!("writing {name}"))?;
+    }
+    eprintln!("app icons written to {}", dir.display());
+    Ok(())
+}
+
 fn render_png(tree: &usvg::Tree, size: u32) -> Result<Vec<u8>> {
     let mut pixmap =
         tiny_skia::Pixmap::new(size, size).ok_or_else(|| anyhow!("cannot allocate {size}x{size} pixmap"))?;
@@ -118,6 +144,17 @@ mod tests {
             icns.len()
         );
         assert_eq!(u32::from_be_bytes(icns[12..16].try_into().unwrap()), 18);
+    }
+
+    /// The icons compiled into the executable are those of the current `assets/icon.svg`
+    /// (run `cargo xtask icons` after editing it).
+    #[test]
+    fn app_icons_match_the_svg() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        for (name, fresh) in app_icons(&root.join("assets/icon.svg")).unwrap() {
+            let checked_in = fs::read(root.join("crates/heartsim-app/icon").join(name)).unwrap();
+            assert!(checked_in == fresh, "{name} is stale: run `cargo xtask icons`");
+        }
     }
 
     #[test]

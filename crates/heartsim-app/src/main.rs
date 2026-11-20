@@ -24,7 +24,13 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size(size)
-            .with_title(heartsim_app::version_line()),
+            .with_title(heartsim_app::version_line())
+            // the title-bar and taskbar icon (eframe would show the egui logo); generated from
+            // assets/icon.svg by `cargo xtask icons`
+            .with_icon(std::sync::Arc::new(
+                eframe::icon_data::from_png_bytes(include_bytes!("../icon/heartsim-256.png"))
+                    .expect("the embedded icon is a valid PNG"),
+            )),
         renderer: eframe::Renderer::Wgpu,
         // an explicit size is for one run: it is neither remembered nor overridden by what was
         persist_window: heartsim_app::window_size_from_env().is_none(),

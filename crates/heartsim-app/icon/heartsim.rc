@@ -1,0 +1,3 @@
+// Windows resources of heartsim.exe: the program icon Explorer, shortcuts and pinned taskbar entries
+// show. Compiled by build.rs on Windows targets only.
+1 ICON "heartsim.ico"

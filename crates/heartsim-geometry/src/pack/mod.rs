@@ -22,7 +22,7 @@ mod body;
 mod glb;
 
 pub use binary::{region_from_u8, region_to_u8};
-pub use body::{BODY_HEIGHT_MM, read_human_body};
+pub use body::{BODY_ANKLES_MM, BODY_HEIGHT_MM, BODY_WRISTS_MM, read_human_body};
 pub use glb::{read_glb, write_glb};
 
 use crate::cloud::CellCloud;
@@ -117,9 +117,9 @@ pub struct AnatomyPack {
     pub landmarks: Landmarks,
     pub electrodes: ElectrodeSet,
     pub torso: TriMesh,
-    /// Full human figure around the heart, in the heart frame, for the 3-D views only (electrodes and
-    /// the forward model use `torso`). Read from the optional `human.glb`, which is not in the
-    /// manifest; `None` when absent or unreadable.
+    /// Full human figure around the heart, in the heart frame: what the 3-D views draw and the
+    /// Electrodes tab drags on. The standard sites and the forward model stay on `torso`. Read from
+    /// the optional `human.glb`, which is not in the manifest; `None` when absent or unreadable.
     pub body: Option<TriMesh>,
     /// AHA 17-segment index per cell (0 = none).
     pub aha_segments: Vec<u8>,
@@ -371,7 +371,7 @@ impl AnatomyPack {
 
         let body = read_file("human.glb")
             .ok()
-            .and_then(|b| body::read_human_body(&b, &torso).ok());
+            .and_then(|b| body::read_human_body(&b).ok());
 
         let cells = CellCloud {
             positions,
