@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-11-21
+Sixteenth tagged release: the heart sounds can be heard on desktop, in step with the strip, with slow motion and replay.
+Playback has been built and tested without a sound device; real latency is not yet measured.
+
 ### Added
 - Heart sounds, phase 2 (desktop audio, `audio` feature): *Play heart sounds* in the strip's *Display* popup and in a new
   *Heart sounds* section of the Settings window (off by default, remembered, with volume and an *Audio offset* of 0–300 ms,
