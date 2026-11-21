@@ -7,6 +7,9 @@
 //!   directory; the page shows a loading screen meanwhile. The wasm itself carries no pack.
 //! * **Single thread.** The engines run without rayon (results are bit-identical, see the
 //!   determinism tests); Tier 1 and Tier 2 therefore run on the UI thread, one fixed step at a time.
+//! * **Sound** (B26) goes through Web Audio ([`audio`] on `wasm32`): the same heart-sound player as
+//!   the desktop, a sink that schedules `AudioBuffer`s on the context clock, started by the
+//!   learner's first click.
 //! * **No files.** No export / import window, PDF, PNG or CSV files, saved scenario files or
 //!   electrode-placement files; settings (quiz score, tutorial progress) live in `localStorage`
 //!   through eframe's storage.
@@ -16,6 +19,8 @@
 
 pub mod archive;
 
+#[cfg(target_arch = "wasm32")]
+mod audio;
 #[cfg(target_arch = "wasm32")]
 mod web;
 #[cfg(target_arch = "wasm32")]

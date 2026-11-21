@@ -85,8 +85,9 @@ The labels come from the model's own schedule, not from finding peaks in the tra
 timing of the simulated beats and published timing rules; it is not a recording. Murmurs, S3, S4, clicks and listening sites
 are not modelled yet. An imported recording has no heart-sound lane.
 
-**Listening to the heart sounds.** Desktop builds made with the `audio` feature can play the lane through the sound card (the
-browser version is silent for now). Tick *Play heart sounds* under *Heart sounds* in the *Display* popup, or in the *Heart
+**Listening to the heart sounds.** Desktop builds made with the `audio` feature play the lane through the sound card, and the
+browser version plays it through the browser's Web Audio, with the same switch, volume, offset, sync check, slow motion and
+*Play* button. Tick *Play heart sounds* under *Heart sounds* in the *Display* popup, or in the *Heart
 sounds* section of the Settings window; it is **off by default**, and switching it on also shows the lane (hiding the lane
 afterwards leaves the sound on). What you hear is the trace you see, sample for sample, so a 30 ms split of S2 is heard as a
 30 ms split.
@@ -110,6 +111,15 @@ afterwards leaves the sound on). What you hear is the trace you see, sample for 
   an *Audio offset* slider (0–300 ms, default 60 ms). Press *Check sync*: a click sounds once a second while a dot lights up
   beside the button. Move the slider until the click and the light come together; Bluetooth headphones may need 150 ms or
   more. *Stop the sync check* (or closing the window) ends it.
+* **"Click anywhere to enable sound" (browser).** Browsers play sound only after you have clicked or pressed a key on the
+  page. When the sound is switched on but the browser is still waiting for that, the *Display* popup and the Settings window
+  say *Click anywhere to enable sound*, and a small notice says so at the top right of the heart-sound lane; the first click or
+  key press anywhere on the page starts it (ticking the switch with the mouse already counts). This happens after every
+  reload of the page with the sound on, and after the phone or the system took the audio away. When you switch to another tab
+  the sound stops; when you come back it restarts from the present, without playing what was missed. A browser without Web
+  Audio says *Sound is not available in this browser* and stays silent. In the browser the views run about 0.15 s behind
+  the simulation while the sound plays (a 100 ms look-ahead, 40 ms of queue and the latency the browser reports), and the
+  *Audio offset* starts at 0 ms because the browser reports most of its own delay.
 * The sound never affects the simulation: with the sound on or off, the same rhythm gives the same trace. Without a sound
   device the program runs as usual and says "No sound device could be opened".
 * The sounds are a **model** computed from the simulated beats, not a recording of a patient.

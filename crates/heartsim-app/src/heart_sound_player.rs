@@ -1,9 +1,11 @@
 //! Playing the phonocardiogram (brief B25): what to hand the [`PcmSink`] each frame, and how far
 //! behind the engine the views are drawn while sound plays.
 //!
-//! Pure and always compiled: the sink is a trait object, the device one comes from a factory that
-//! exists only in builds with the `audio` feature and is called the first time the learner switches
-//! the heart sounds on. Nothing here reaches back into the simulation: the player reads the PCG ring
+//! Pure and always compiled: the sink is a trait object made by a factory that the embedding crate
+//! provides (B26): the kira output compiled in with the `audio` feature ([`DEVICE_FACTORY`]), the
+//! Web Audio output that `heartsim-web` registers, or none. "Is sound available here" means "is there
+//! a factory" ([`HeartSoundPlayer::has_output`]). The factory is called the first time the learner
+//! switches the heart sounds on. Nothing here reaches back into the simulation: the player reads the PCG ring
 //! and the engine's clock, and writes to the sink.
 //!
 //! * **Live at 1×** every new ring sample is pushed once, in order. The sink waits for
@@ -19,18 +21,21 @@
 //! * A new engine (scenario load, restart, EP lab, re-entry) or a clock that goes back: clear and
 //!   re-anchor.
 //!
-//! The views follow through [`HeartSoundPlayer::display_delay_ms`]: [`QUEUE_TARGET_MS`] plus the
-//! user's audio offset (the device's own latency) while sound is playing, zero otherwise, changed
-//! over [`DELAY_RAMP_S`] so the strip never jumps.
+//! The views follow through [`HeartSoundPlayer::display_delay_ms`]: the sink's own constant delay
+//! ([`PcmSink::latency_ms`]: [`QUEUE_TARGET_MS`] for kira, look-ahead plus the browser's reported
+//! latency on the web) plus the user's audio offset while sound is playing, zero otherwise, changed
+//! over [`DELAY_RAMP_S`] so the strip never jumps. While a browser waits for the learner's click
+//! ([`SinkReadiness::WaitingForGesture`]) nothing is pushed and nothing is delayed.
 
 use std::fmt;
 
 use heartsim_ecg::PCG_RATE_HZ;
-use heartsim_ui::HeartSoundStatus;
+pub use heartsim_ui::HeartSoundStatus;
 
 use crate::heart_sounds::HeartSounds;
 use crate::sound_out::{
-    BACKLOG_FACTOR, HEADROOM_GAIN, PcmSink, QUEUE_TARGET_MS, ms_for_samples, samples_for_ms, sync_click,
+    BACKLOG_FACTOR, HEADROOM_GAIN, PcmSink, QUEUE_TARGET_MS, SinkReadiness, ms_for_samples, samples_for_ms,
+    sync_click,
 };
 
 /// Time over which the display delay moves to a new value, s. Designed (brief B25: about 0.3 s):
@@ -45,22 +50,30 @@ pub const SYNC_CLICK_PERIOD_MS: f64 = 1000.0;
 /// enough that its onset is the event.
 pub const SYNC_FLASH_MS: f64 = 120.0;
 
-/// Creates the device sink the first time the heart sounds are switched on.
-pub type PcmSinkFactory = fn() -> Result<Box<dyn PcmSink>, String>;
+/// A plain function that creates a sink (the compiled-in desktop output, tests).
+pub type PcmSinkFn = fn() -> Result<Box<dyn PcmSink>, String>;
+/// Creates the sink the first time the heart sounds are switched on. A closure, so that an
+/// embedding crate can hand over state it shares with the sink (the web build's audio context and
+/// its gesture listeners).
+pub type PcmSinkFactory = Box<dyn FnMut() -> Result<Box<dyn PcmSink>, String>>;
 
 #[cfg(feature = "audio")]
 fn create_device_sink() -> Result<Box<dyn PcmSink>, String> {
     Ok(Box::new(crate::audio_out::heart_sound_sink()?))
 }
 
-/// The factory of this build: the kira output with feature `audio`, none without it.
+/// The factory compiled into this crate: the kira output with feature `audio`, none without it.
+/// An embedding crate may register another one ([`HeartSoundPlayer::set_factory`]).
 #[cfg(feature = "audio")]
-pub const DEVICE_FACTORY: Option<PcmSinkFactory> = Some(create_device_sink);
-/// The factory of this build: the kira output with feature `audio`, none without it.
+pub const DEVICE_FACTORY: Option<PcmSinkFn> = Some(create_device_sink);
+/// The factory compiled into this crate: the kira output with feature `audio`, none without it.
+/// An embedding crate may register another one ([`HeartSoundPlayer::set_factory`]).
 #[cfg(not(feature = "audio"))]
-pub const DEVICE_FACTORY: Option<PcmSinkFactory> = None;
+pub const DEVICE_FACTORY: Option<PcmSinkFn> = None;
 
-/// Whether this build can play heart sounds at all (the `audio` feature; never the web build).
+/// Whether this crate was built with the desktop audio output (the `audio` feature). Whether a
+/// running app can play heart sounds is [`HeartSoundPlayer::has_output`]: the web build registers
+/// its own factory.
 pub const AUDIO_BUILD: bool = DEVICE_FACTORY.is_some();
 
 /// What the app tells the player once per frame, after stepping the simulation.
@@ -151,6 +164,8 @@ enum SinkState {
 pub struct HeartSoundPlayer {
     sink: SinkState,
     factory: Option<PcmSinkFactory>,
+    /// What to report when the factory fails.
+    unavailable: HeartSoundStatus,
     mode: Mode,
     generation: Option<u64>,
     last_sim_ms: f64,
@@ -190,16 +205,45 @@ impl Default for HeartSoundPlayer {
 
 impl HeartSoundPlayer {
     /// A player that opens this build's device sink the first time it is enabled (none without
-    /// the `audio` feature: then it stays silent and says "no sound device").
+    /// the `audio` feature, until an embedding crate registers one with [`Self::set_factory`]).
     #[must_use]
     pub fn new() -> Self {
-        Self::with_factory_opt(DEVICE_FACTORY)
+        Self::with_factory_opt(DEVICE_FACTORY.map(|f| Box::new(f) as PcmSinkFactory))
     }
 
-    /// A player whose sink comes from `factory` on first enable (tests).
+    /// A player with no output at all (the web build before it registers its own, a desktop
+    /// build without `audio`): silent, and the interface shows no sound controls.
     #[must_use]
-    pub fn with_factory(factory: PcmSinkFactory) -> Self {
-        Self::with_factory_opt(Some(factory))
+    pub fn without_output() -> Self {
+        Self::with_factory_opt(None)
+    }
+
+    /// A player whose sink comes from `factory` on first enable.
+    #[must_use]
+    pub fn with_factory(factory: impl FnMut() -> Result<Box<dyn PcmSink>, String> + 'static) -> Self {
+        Self::with_factory_opt(Some(Box::new(factory)))
+    }
+
+    /// Use `factory` for the sink from now on (the web build registers its Web Audio output when it
+    /// creates the app); a sink already open is dropped. `unavailable` is the status shown when
+    /// the factory fails ([`HeartSoundStatus::NoDevice`] on a desktop,
+    /// [`HeartSoundStatus::Unsupported`] in a browser).
+    pub fn set_factory(
+        &mut self,
+        factory: impl FnMut() -> Result<Box<dyn PcmSink>, String> + 'static,
+        unavailable: HeartSoundStatus,
+    ) {
+        self.factory = Some(Box::new(factory));
+        self.unavailable = unavailable;
+        self.sink = SinkState::NotTried;
+        self.mode = Mode::Off;
+    }
+
+    /// Whether heart sounds can be played at all here: there is a factory (or a sink). The Display
+    /// popup's switch and the Settings card exist exactly then.
+    #[must_use]
+    pub fn has_output(&self) -> bool {
+        self.factory.is_some() || matches!(self.sink, SinkState::Ready(_))
     }
 
     /// A player with a ready sink (tests).
@@ -215,6 +259,7 @@ impl HeartSoundPlayer {
         Self {
             sink: SinkState::NotTried,
             factory,
+            unavailable: HeartSoundStatus::NoDevice,
             mode: Mode::Off,
             generation: None,
             last_sim_ms: f64::NEG_INFINITY,
@@ -312,7 +357,7 @@ impl HeartSoundPlayer {
     }
 
     fn open_sink(&mut self) {
-        let Some(factory) = self.factory else {
+        let Some(factory) = self.factory.as_mut() else {
             tracing::debug!("heart sounds: this build has no audio output");
             self.sink = SinkState::Failed;
             return;
@@ -376,9 +421,25 @@ impl HeartSoundPlayer {
         if matches!(self.sink, SinkState::NotTried) {
             self.open_sink();
         }
-        if !matches!(self.sink, SinkState::Ready(_)) {
-            self.status = HeartSoundStatus::NoDevice;
-            self.mode = Mode::Off;
+        let readiness = match &self.sink {
+            SinkState::Ready(s) => s.readiness(),
+            _ => SinkReadiness::Unavailable,
+        };
+        if readiness != SinkReadiness::Running {
+            // a browser waiting for a click is a normal state: nothing is pushed, nothing delayed,
+            // and the stream re-anchors once it runs
+            if self.mode != Mode::Off {
+                self.clear_sink();
+                self.mode = Mode::Off;
+            }
+            sounds.set_wall_active(false);
+            self.status = if readiness == SinkReadiness::WaitingForGesture {
+                HeartSoundStatus::WaitingForClick
+            } else if matches!(self.sink, SinkState::Ready(_)) {
+                HeartSoundStatus::Unsupported
+            } else {
+                self.unavailable
+            };
             return 0.0;
         }
         let volume = if input.volume.is_nan() {
@@ -444,7 +505,7 @@ impl HeartSoundPlayer {
             }
             self.mode = want;
         }
-        let target_ms = f64::from(QUEUE_TARGET_MS) + f64::from(input.offset_ms.max(0.0));
+        let target_ms = f64::from(self.sink_latency_ms()) + f64::from(input.offset_ms.max(0.0));
         match self.mode {
             Mode::Live => {
                 self.live(sounds);
@@ -487,6 +548,21 @@ impl HeartSoundPlayer {
         }
     }
 
+    /// The sink's constant delay, ms (never below the queue target).
+    fn sink_latency_ms(&self) -> f32 {
+        match &self.sink {
+            SinkState::Ready(s) => s.latency_ms().max(QUEUE_TARGET_MS),
+            _ => QUEUE_TARGET_MS,
+        }
+    }
+
+    /// The part of the sink's delay beyond what [`PcmSink::queued_ms`] counts, samples: zero for
+    /// kira, the look-ahead and the browser's latencies on the web. The playhead and the sync-check
+    /// marker subtract it from what has been handed over.
+    fn beyond_queue_samples(&self) -> u64 {
+        samples_for_ms(f64::from(self.sink_latency_ms() - QUEUE_TARGET_MS)) as u64
+    }
+
     fn target_samples() -> u64 {
         samples_for_ms(f64::from(QUEUE_TARGET_MS)) as u64
     }
@@ -514,8 +590,9 @@ impl HeartSoundPlayer {
                 self.clear_sink();
             }
             from = pushed - new.min(target);
-        } else if self.started && q == 0 && new > target {
-            // the device ran dry: re-anchor at the newest samples, never replay
+        } else if q == 0 && new > target {
+            // the device ran dry, or the stream starts after a long frame (B26): (re-)anchor at the
+            // newest target's worth, never replay, so the delay is the constant one
             from = pushed - target;
         }
         let mut buf = std::mem::take(&mut self.scratch);
@@ -576,7 +653,8 @@ impl HeartSoundPlayer {
         if s.next >= s.end && q == 0 {
             s.tail += input.dt_s.max(0.0) * f64::from(PCG_RATE_HZ);
         }
-        let offset = samples_for_ms(f64::from(input.offset_ms.max(0.0))) as f64;
+        let offset =
+            (samples_for_ms(f64::from(input.offset_ms.max(0.0))) as u64 + self.beyond_queue_samples()) as f64;
         let pos = (s.start + consumed) as f64 + s.tail - offset;
         let head = (pos.max(s.start as f64) as u64).clamp(s.playhead, s.end);
         s.playhead = head;
@@ -600,7 +678,7 @@ impl HeartSoundPlayer {
         self.scratch = buf;
         self.calib_pos += took;
         self.calib_pushed += took;
-        let offset = samples_for_ms(f64::from(input.offset_ms.max(0.0))) as u64;
+        let offset = samples_for_ms(f64::from(input.offset_ms.max(0.0))) as u64 + self.beyond_queue_samples();
         let q = self.queued_samples();
         // what the listener hears now, if the offset equals the device's latency
         self.flash = self

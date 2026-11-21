@@ -554,7 +554,24 @@ impl EcgView {
         lane: &PcgLane<'_>,
         calipers: &CaliperSet,
     ) {
-        let available = self.heart_sound_status != HeartSoundStatus::NoDevice;
+        if self.play_heart_sounds == Some(true)
+            && self.heart_sound_status == HeartSoundStatus::WaitingForClick
+        {
+            // B26: a browser plays sound only after a click or a key press; say so where the
+            // learner looks for the sound
+            ui.painter().text(
+                lane_win.rect.right_top() + egui::vec2(-6.0, 4.0),
+                egui::Align2::RIGHT_TOP,
+                t!("ecg-sound-click-notice"),
+                egui::FontId::proportional(12.0),
+                self.style.trace,
+            );
+            return;
+        }
+        let available = !matches!(
+            self.heart_sound_status,
+            HeartSoundStatus::NoDevice | HeartSoundStatus::Unsupported
+        );
         if self.play_heart_sounds != Some(true) || !self.playback.is_paused() || !available {
             return;
         }

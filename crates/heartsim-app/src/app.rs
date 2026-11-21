@@ -297,6 +297,7 @@ impl HeartSimApp {
                 ecg.show_heart_sounds = settings.heart_sounds;
                 ecg.play_heart_sounds =
                     crate::heart_sound_player::AUDIO_BUILD.then_some(settings.heart_sound_audio);
+                // (a factory registered later by the embedding crate, B26, sets it each frame)
                 ecg
             },
             history: SnapshotRing::standard(),
@@ -944,17 +945,13 @@ impl eframe::App for HeartSimApp {
         self.heart_sound_popup_to_settings();
         let mut settings_changed = false;
         if self.settings_open {
-            let info = HeartSoundInfo {
-                available: self.sound_player.available(),
-                calibrating: self.sound_player.calibrating(),
-                flash: self.sound_player.sync_flash(),
-            };
+            let info = HeartSoundInfo::from_player(&self.sound_player);
             let response = settings_window_full(
                 &ctx,
                 &mut self.settings_open,
                 &mut self.settings,
                 beep_available,
-                crate::heart_sound_player::AUDIO_BUILD.then_some(&info),
+                info.as_ref(),
             );
             if response.changed {
                 self.settings.apply(&ctx);

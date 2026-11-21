@@ -2,6 +2,7 @@
 //! status object for the smoke test (`window.heartsimStatus`).
 
 use crate::archive::{ARCHIVE_NAME, unpack};
+use crate::audio::{AudioStatus, WebAudio};
 use heartsim_app::{AssetBundle, HeartSimApp};
 use wasm_bindgen::{JsCast as _, JsValue};
 use wasm_bindgen_futures::JsFuture;
@@ -47,13 +48,19 @@ async fn run() -> Result<(), JsValue> {
     show_loading_text("Starting the renderer…");
 
     let status = Status::new()?;
+    let audio = WebAudio::new();
+    let sound_param = sound_requested(&web_sys::window().ok_or("no window")?);
+    let app_audio = audio.clone();
     eframe::WebRunner::new()
         .start(
-            canvas,
+            canvas.clone(),
             eframe::WebOptions::default(),
-            Box::new(move |cc| Ok(Box::new(WebApp::new(cc, &assets, status)))),
+            Box::new(move |cc| Ok(Box::new(WebApp::new(cc, &assets, status, app_audio, sound_param)))),
         )
         .await?;
+    // after eframe's own canvas listeners: a click that switches the sound on has been handled by
+    // the app when ours runs, so it starts the sound on that same click
+    audio.install(&canvas)?;
     remove_loading_screen();
     Ok(())
 }
@@ -73,6 +80,15 @@ async fn download_assets() -> Result<AssetBundle, String> {
         .map_err(|e| format!("{e:?}"))?;
     let bytes = js_sys::Uint8Array::new(&buffer).to_vec();
     unpack(&bytes).map_err(|e| e.to_string())
+}
+
+/// `?sound=1` in the page URL switches the heart sounds on at start (the smoke test uses it, so it
+/// does not have to find an egui widget).
+fn sound_requested(window: &web_sys::Window) -> bool {
+    window
+        .location()
+        .search()
+        .is_ok_and(|q| q.trim_start_matches('?').split('&').any(|kv| kv == "sound=1"))
 }
 
 fn show_loading_text(text: &str) {
@@ -95,15 +111,31 @@ fn remove_loading_screen() {
 
 /// `window.heartsimStatus`: plain properties a browser test can poll — `frames` (egui frames drawn),
 /// `simTimeMs`, `stripSamples` (ECG samples pushed to the strip), `anatomy` (pack loaded) and
-/// `backend` is left to the page's own `navigator.gpu` probe.
-struct Status(js_sys::Object);
+/// `audio` (B26: `state` "off" / "waiting" / "running" / "unavailable", `sampleRate`, `chunks`
+/// scheduled, `queuedMs` ahead of the audio clock, `latencyMs` the views are drawn behind, `late`
+/// chunks scheduled in the past); `backend` is left to the page's own `navigator.gpu` probe.
+struct Status(js_sys::Object, js_sys::Object);
 
 impl Status {
     fn new() -> Result<Self, JsValue> {
         let obj = js_sys::Object::new();
         let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
         js_sys::Reflect::set(&window, &JsValue::from_str("heartsimStatus"), &obj)?;
-        Ok(Self(obj))
+        let audio = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &JsValue::from_str("audio"), &audio)?;
+        Ok(Self(obj, audio))
+    }
+
+    fn publish_audio(&self, a: &AudioStatus) {
+        let set = |k: &str, v: &JsValue| {
+            js_sys::Reflect::set(&self.1, &JsValue::from_str(k), v).ok();
+        };
+        set("state", &JsValue::from_str(a.state));
+        set("sampleRate", &JsValue::from_f64(a.sample_rate_hz));
+        set("chunks", &JsValue::from_f64(a.chunks as f64));
+        set("queuedMs", &JsValue::from_f64(a.queued_ms));
+        set("latencyMs", &JsValue::from_f64(a.latency_ms));
+        set("late", &JsValue::from_f64(a.late as f64));
     }
 
     fn publish(&self, frames: u64, s: &heartsim_app::AppStatus) {
@@ -117,18 +149,34 @@ impl Status {
     }
 }
 
-/// The desktop app plus the status publisher.
+/// The desktop app plus the status publisher and the Web Audio output.
 struct WebApp {
     inner: HeartSimApp,
     status: Status,
+    audio: WebAudio,
     frames: u64,
 }
 
 impl WebApp {
-    fn new(cc: &eframe::CreationContext<'_>, assets: &AssetBundle, status: Status) -> Self {
+    fn new(
+        cc: &eframe::CreationContext<'_>,
+        assets: &AssetBundle,
+        status: Status,
+        audio: WebAudio,
+        sound: bool,
+    ) -> Self {
+        let mut inner = HeartSimApp::with_assets(cc, assets);
+        inner.set_heart_sound_output(
+            audio.factory(),
+            heartsim_app::heart_sound_player::HeartSoundStatus::Unsupported,
+        );
+        if sound {
+            inner.set_heart_sound_audio(true);
+        }
         Self {
-            inner: HeartSimApp::with_assets(cc, assets),
+            inner,
             status,
+            audio,
             frames: 0,
         }
     }
@@ -137,8 +185,10 @@ impl WebApp {
 impl eframe::App for WebApp {
     fn ui(&mut self, ui: &mut eframe::egui::Ui, frame: &mut eframe::Frame) {
         eframe::App::ui(&mut self.inner, ui, frame);
+        self.audio.frame(self.inner.heart_sound_audio());
         self.frames += 1;
         self.status.publish(self.frames, &self.inner.status());
+        self.status.publish_audio(&self.audio.status());
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

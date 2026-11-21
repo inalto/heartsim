@@ -96,6 +96,7 @@ fn the_sync_check_is_asked_for_and_stopped() {
         available: Some(true),
         calibrating: true,
         flash: true,
+        ..HeartSoundInfo::default()
     });
     h.run();
     h.get_by_label("Stop the sync check").click();

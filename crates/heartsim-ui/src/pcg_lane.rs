@@ -34,6 +34,10 @@ pub enum HeartSoundStatus {
     Calibrating,
     /// No audio device could be opened (or this build has none).
     NoDevice,
+    /// The browser's audio waits for a click or a key press (autoplay policy, B26): a normal state.
+    WaitingForClick,
+    /// This browser has no usable Web Audio (B26).
+    Unsupported,
 }
 
 impl HeartSoundStatus {
@@ -47,6 +51,8 @@ impl HeartSoundStatus {
             HeartSoundStatus::Paused => Some(t!("ecg-sound-paused")),
             HeartSoundStatus::Calibrating => Some(t!("ecg-sound-calibrating")),
             HeartSoundStatus::NoDevice => Some(t!("ecg-sound-no-device")),
+            HeartSoundStatus::WaitingForClick => Some(t!("ecg-sound-click-to-enable")),
+            HeartSoundStatus::Unsupported => Some(t!("ecg-sound-unsupported")),
             HeartSoundStatus::Off | HeartSoundStatus::Playing | HeartSoundStatus::PlayingSlice => None,
         }
     }

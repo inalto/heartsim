@@ -379,3 +379,49 @@ fn the_lane_button_plays_from_the_cursor_or_between_the_calipers() {
     h.run();
     assert_eq!(h.state_mut().request.take(), Some(LaneRequest::Stop));
 }
+
+// --- B26: the browser waits for a click ------------------------------------------------------------
+
+#[test]
+fn the_lane_says_click_to_enable_sound_while_the_browser_waits() {
+    use heartsim_ui::HeartSoundStatus;
+    i18n::set_language("en");
+    let s = signal(4.0);
+    let lane = PcgLane {
+        ring: &s.pcg,
+        marks: &s.marks,
+    };
+    let ctx = egui::Context::default();
+    let mut view = EcgView::new();
+    view.show_heart_sounds = true;
+    view.play_heart_sounds = Some(true);
+    let notice = "Click anywhere to enable sound";
+    let playing = frame(&ctx, |ui| {
+        view.strip_with_sounds(ui, STRIP, &s.rings, Lead::II, Some(lane));
+    });
+    assert_eq!(texts(&playing, notice).len(), 0, "not while playing");
+    view.heart_sound_status = HeartSoundStatus::WaitingForClick;
+    let waiting = frame(&ctx, |ui| {
+        view.strip_with_sounds(ui, STRIP, &s.rings, Lead::II, Some(lane));
+    });
+    let at = texts(&waiting, notice);
+    assert_eq!(at.len(), 1, "one notice on the lane");
+    assert!(at[0].right() <= STRIP.right() + 1.0 && at[0].top() > STRIP.center().y);
+    // the sound switched off: no notice
+    view.play_heart_sounds = Some(false);
+    let off = frame(&ctx, |ui| {
+        view.strip_with_sounds(ui, STRIP, &s.rings, Lead::II, Some(lane));
+    });
+    assert_eq!(texts(&off, notice).len(), 0);
+    // and the popup's notes
+    assert!(
+        HeartSoundStatus::WaitingForClick
+            .note()
+            .unwrap()
+            .starts_with(notice)
+    );
+    assert_eq!(
+        HeartSoundStatus::Unsupported.note().as_deref(),
+        Some("Sound is not available in this browser, so the heart sounds stay silent.")
+    );
+}

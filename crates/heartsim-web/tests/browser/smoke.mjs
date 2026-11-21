@@ -9,7 +9,11 @@
 //   * the anatomy pack arrived and was loaded (`anatomy === 1`),
 //   * frames are drawn and the ECG strip advances (`stripSamples` and `simTimeMs` grow),
 //   * the screenshot is not a blank canvas,
-//   * nothing panicked (console errors).
+//   * nothing panicked (console errors),
+//   * heart sounds (B26, opened with `?sound=1`): `audio.state` is "waiting" before any input and
+//     "running" after one click on the canvas; chunks keep being scheduled, the queue stays between
+//     50 and 300 ms, and after hiding and showing the page it runs again with nothing scheduled in
+//     the past. Chromium runs with the autoplay policy that requires a gesture, as for a visitor.
 // Environment: HEARTSIM_DIST (default ../../dist), HEARTSIM_BROWSER (chromium | firefox | webkit),
 // HEARTSIM_BROWSER_PATH (use an already installed browser binary instead of Playwright's).
 import { createServer } from 'node:http';
@@ -46,7 +50,9 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const engine = { chromium, firefox, webkit }[process.env.HEARTSIM_BROWSER ?? 'chromium'];
 const browser = await engine.launch({
   executablePath: process.env.HEARTSIM_BROWSER_PATH || undefined,
-  args: process.env.HEARTSIM_BROWSER ? [] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  args: process.env.HEARTSIM_BROWSER
+    ? []
+    : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=user-gesture-required'],
 });
 const failures = [];
 const check = (ok, what) => {
@@ -59,7 +65,7 @@ try {
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await page.goto(base);
+  await page.goto(`${base}?sound=1`);
 
   await page.waitForFunction(() => (window.heartsimStatus?.frames ?? 0) > 5, null, { timeout: 120_000 });
   const first = await page.evaluate(() => ({ ...window.heartsimStatus }));
@@ -78,7 +84,45 @@ try {
   await import('node:fs/promises').then((fs) => fs.writeFile(join(here, 'smoke.png'), png));
   // a blank (single-colour) 1280x800 PNG is a few KB; a drawn UI with a strip and a heart is far larger
   check(png.length > 40_000, `screenshot has content (${png.length} bytes)`);
+
+  // --- heart sounds through Web Audio (B26) ---
+  const audio = () => page.evaluate(() => ({ ...window.heartsimStatus.audio }));
+  const before = await audio();
+  check(before.state === 'waiting', `sound waits for a click before any input (${before.state})`);
+  await page.locator('canvas#heartsim_canvas').click({ position: { x: 24, y: 780 } });
+  const running = await page
+    .waitForFunction(() => window.heartsimStatus.audio?.state === 'running', null, { timeout: 10_000 })
+    .then(() => true, () => false);
+  const a1 = await audio();
+  check(running, `sound runs after one click (${a1.state}, ${a1.sampleRate} Hz, latency ${a1.latencyMs?.toFixed(0)} ms)`);
+  const queued = [];
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(250);
+    queued.push((await audio()).queuedMs);
+  }
+  const a2 = await audio();
+  check(a2.chunks > a1.chunks, `chunks are scheduled over two seconds (${a1.chunks} -> ${a2.chunks})`);
+  check(queued.every((q) => q >= 50 && q <= 300), `queue stays between 50 and 300 ms (${queued.map((q) => q.toFixed(0)).join(', ')})`);
+  const setHidden = (hidden) =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, 'hidden', { value: h, configurable: true });
+      Object.defineProperty(document, 'visibilityState', { value: h ? 'hidden' : 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, hidden);
+  await setHidden(true);
+  await page.waitForTimeout(1000);
+  await setHidden(false);
+  const again = await page
+    .waitForFunction(() => window.heartsimStatus.audio?.state === 'running', null, { timeout: 10_000 })
+    .then(() => true, () => false);
+  await page.waitForTimeout(1000);
+  const a3 = await audio();
+  check(again, `sound runs again after hiding and showing the page (${a3.state})`);
+  check(a3.chunks > a2.chunks, `scheduling resumed (${a2.chunks} -> ${a3.chunks})`);
+  check(a3.late === 0, `nothing scheduled in the past (${a3.late})`);
+
   check(!errors.some((e) => /panick|unreachable|RuntimeError/i.test(e)), `no panics (${errors.length} console errors)`);
+  check(!errors.some((e) => /audio|sound/i.test(e)), 'no audio errors in the console');
   if (errors.length) console.log(errors.slice(0, 5).join('\n'));
 } finally {
   await browser.close();

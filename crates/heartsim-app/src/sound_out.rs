@@ -32,8 +32,11 @@ pub const BACKLOG_FACTOR: f32 = 3.0;
 /// enough not to swallow a sound.
 pub const FADE_MS: f32 = 10.0;
 /// Default of the user's audio offset (the sound card's own latency, which kira does not report),
-/// ms. Designed (maintainer's decision for B25): typical of a desktop mixer's buffer.
-pub const DEFAULT_AUDIO_OFFSET_MS: f32 = 60.0;
+/// ms. Designed (maintainer's decision for B25): typical of a desktop mixer's buffer. In the browser
+/// (B26) the default is 0: Web Audio reports its own output latency and the sink adds it itself
+/// ([`PcmSink::latency_ms`]), so a desktop-sized default there would draw the views later than the
+/// sound is heard, which "never early" forbids.
+pub const DEFAULT_AUDIO_OFFSET_MS: f32 = if cfg!(target_arch = "wasm32") { 0.0 } else { 60.0 };
 /// Range of the audio-offset slider, ms. Designed: 0 for a low-latency interface, up to 300 ms for
 /// Bluetooth headphones (100–300 ms, research note §8).
 pub const AUDIO_OFFSET_RANGE_MS: std::ops::RangeInclusive<f32> = 0.0..=300.0;
@@ -87,6 +90,22 @@ pub fn ms_for_samples(samples: usize) -> f32 {
     samples as f32 * 1000.0 / PCG_RATE_HZ
 }
 
+/// Whether a sink can play now (B26). A desktop device is always [`SinkReadiness::Running`] once
+/// opened; a browser's audio context waits for the learner's click and can be suspended or
+/// interrupted later, which is a normal state, not a failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SinkReadiness {
+    /// Samples pushed now are heard.
+    #[default]
+    Running,
+    /// The output exists but waits for a click or a key press (browser autoplay policy, a hidden
+    /// tab, an interruption). The player pushes nothing meanwhile.
+    WaitingForGesture,
+    /// The output turned out to be unusable after it was created (the browser refused the audio
+    /// context).
+    Unavailable,
+}
+
 /// Where heart-sound samples go: mono `f32` at the PCG rate, write-only. Nothing the sink knows
 /// (queue depth, device clock) may reach the simulation; the player reads [`PcmSink::queued_ms`]
 /// only to decide how much to hand over.
@@ -99,6 +118,19 @@ pub trait PcmSink {
     fn clear(&mut self);
     /// Linear gain applied before the limiter: [`HEADROOM_GAIN`] times the user's volume.
     fn set_gain(&mut self, gain: f32);
+    /// The sink's own constant delay from handing over the newest sample to hearing it, ms, as far
+    /// as the sink knows it (B26): the [`QUEUE_TARGET_MS`] the player keeps queued plus whatever
+    /// the output reports beyond it. The views are drawn this much plus the user's audio offset
+    /// behind the engine. The kira sink reports only the queue (its device latency is unknown and is
+    /// the user's offset); the Web Audio sink adds its look-ahead and the browser's reported
+    /// latencies. Never below [`QUEUE_TARGET_MS`].
+    fn latency_ms(&self) -> f32 {
+        QUEUE_TARGET_MS
+    }
+    /// Whether samples pushed now are heard.
+    fn readiness(&self) -> SinkReadiness {
+        SinkReadiness::Running
+    }
 }
 
 /// What a [`FakeSink`] has been asked to do.
@@ -121,6 +153,10 @@ pub struct FakeLog {
     primed: bool,
     /// Most samples the queue holds.
     pub capacity: usize,
+    /// What [`PcmSink::latency_ms`] reports; 0 stands for the default, [`QUEUE_TARGET_MS`].
+    pub latency_ms: f32,
+    /// What [`PcmSink::readiness`] reports.
+    pub readiness: SinkReadiness,
 }
 
 /// A sink for tests: records pushes and drains when the test says so, at the rate it chooses.
@@ -151,6 +187,18 @@ impl FakeSink {
         let s = Self::new();
         s.0.borrow_mut().prime_samples = samples_for_ms(f64::from(QUEUE_TARGET_MS));
         s
+    }
+
+    /// A fake that reports `latency_ms` as its constant delay, like the Web Audio sink (B26).
+    #[must_use]
+    pub fn with_latency_ms(self, latency_ms: f32) -> Self {
+        self.0.borrow_mut().latency_ms = latency_ms;
+        self
+    }
+
+    /// Make the fake report `readiness` from now on.
+    pub fn set_readiness(&self, readiness: SinkReadiness) {
+        self.0.borrow_mut().readiness = readiness;
     }
 
     /// Let the "device" consume `ms` of audio; returns the samples taken.
@@ -211,6 +259,15 @@ impl PcmSink for FakeSink {
 
     fn set_gain(&mut self, gain: f32) {
         self.0.borrow_mut().gain = gain;
+    }
+
+    fn latency_ms(&self) -> f32 {
+        let l = self.0.borrow().latency_ms;
+        if l > 0.0 { l } else { QUEUE_TARGET_MS }
+    }
+
+    fn readiness(&self) -> SinkReadiness {
+        self.0.borrow().readiness
     }
 }
 
@@ -343,6 +400,13 @@ impl Resampler {
             y += self.history[j] * (a[j] + (b[j] - a[j]) * w);
         }
         y
+    }
+
+    /// How many input samples the next [`Resampler::next`] call will pull (a caller converting a
+    /// finite block stops before it runs out).
+    #[must_use]
+    pub fn needs(&self) -> usize {
+        (self.frac + self.step).floor() as usize
     }
 
     /// Time of the last output sample in input samples, counting the first input pulled as 0.

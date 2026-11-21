@@ -4,9 +4,9 @@
 //! `app.rs` keeps one-line hooks.
 
 use super::HeartSimApp;
-use crate::heart_sound_player::{AUDIO_BUILD, PlayerInput};
+use crate::heart_sound_player::{PcmSinkFactory, PlayerInput};
 use heartsim_sim::Engine as _;
-use heartsim_ui::LaneRequest;
+use heartsim_ui::{HeartSoundStatus, LaneRequest};
 
 impl HeartSimApp {
     /// Before the Settings window: a change made in the Display popup last frame becomes the
@@ -23,7 +23,41 @@ impl HeartSimApp {
         if settings_changed && self.settings.heart_sounds {
             self.ecg.show_heart_sounds = true;
         }
-        self.ecg.play_heart_sounds = AUDIO_BUILD.then_some(self.settings.heart_sound_audio);
+        self.ecg.play_heart_sounds = self
+            .sound_player
+            .has_output()
+            .then_some(self.settings.heart_sound_audio);
+    }
+
+    /// Register the heart-sound output of the embedding crate (B26: the web build's Web Audio
+    /// sink), replacing the one compiled in. `unavailable` is what the interface says when the
+    /// factory fails. The factory is called the first time the sound is switched on, never before.
+    pub fn set_heart_sound_output(&mut self, factory: PcmSinkFactory, unavailable: HeartSoundStatus) {
+        self.sound_player.set_factory(factory, unavailable);
+        self.ecg.play_heart_sounds = Some(self.settings.heart_sound_audio);
+    }
+
+    /// The "Play heart sounds" setting.
+    #[must_use]
+    pub fn heart_sound_audio(&self) -> bool {
+        self.settings.heart_sound_audio
+    }
+
+    /// Switch the heart sounds on or off as the Settings window does (on also shows the lane); the
+    /// web build's `?sound=1` uses it.
+    pub fn set_heart_sound_audio(&mut self, on: bool) {
+        self.settings.heart_sound_audio = on;
+        if on {
+            self.settings.heart_sounds = true;
+            self.ecg.show_heart_sounds = true;
+        }
+        self.ecg.play_heart_sounds = self.sound_player.has_output().then_some(on);
+    }
+
+    /// What the heart-sound player reports (for hosts: `window.heartsimStatus` on the web).
+    #[must_use]
+    pub fn heart_sound_status(&self) -> HeartSoundStatus {
+        self.sound_player.status()
     }
 
     /// Run the heart-sound player for this frame (after the simulation stepped) and hand its
@@ -35,7 +69,7 @@ impl HeartSimApp {
             None => {}
         }
         let input = PlayerInput {
-            enabled: AUDIO_BUILD && self.settings.heart_sound_audio,
+            enabled: self.sound_player.has_output() && self.settings.heart_sound_audio,
             volume: self.settings.heart_sound_volume,
             offset_ms: self.settings.audio_offset_ms,
             paused: self.ecg.is_paused(),

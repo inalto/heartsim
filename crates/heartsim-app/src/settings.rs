@@ -197,6 +197,23 @@ pub struct HeartSoundInfo {
     pub calibrating: bool,
     /// The sync check's marker is lit this frame.
     pub flash: bool,
+    /// What the player reports (B26: a browser waiting for a click, a browser without Web Audio).
+    pub status: heartsim_ui::HeartSoundStatus,
+}
+
+impl HeartSoundInfo {
+    /// The Settings card's state from the player, or `None` where there is no audio output at all
+    /// (no factory, B26): the card is then absent. The Display popup's switch follows the same rule
+    /// ([`crate::heart_sound_player::HeartSoundPlayer::has_output`]).
+    #[must_use]
+    pub fn from_player(player: &crate::heart_sound_player::HeartSoundPlayer) -> Option<Self> {
+        player.has_output().then(|| Self {
+            available: player.available(),
+            calibrating: player.calibrating(),
+            flash: player.sync_flash(),
+            status: player.status(),
+        })
+    }
 }
 
 /// What the Settings window reports back.
@@ -208,8 +225,8 @@ pub struct SettingsResponse {
     pub calibrate: Option<bool>,
 }
 
-/// The Settings window with the heart-sound section: `heart_sounds` is `None` in builds without
-/// audio output (the web build), and the section is then absent.
+/// The Settings window with the heart-sound section: `heart_sounds` is `None` where the app has no
+/// audio output (no sink factory, [`HeartSoundInfo::from_player`]), and the section is then absent.
 pub fn settings_window_full(
     ctx: &egui::Context,
     open: &mut bool,
@@ -287,8 +304,20 @@ fn heart_sound_section(
             });
             ui.weak(t!("settings-hs-sync-hint"));
         });
-        if settings.heart_sound_audio && info.available == Some(false) {
-            ui.weak(t!("settings-hs-unavailable"));
+        if settings.heart_sound_audio {
+            use heartsim_ui::HeartSoundStatus;
+            match info.status {
+                HeartSoundStatus::Unsupported => {
+                    ui.weak(t!("settings-hs-unsupported"));
+                }
+                HeartSoundStatus::WaitingForClick => {
+                    ui.weak(t!("settings-hs-click-to-enable"));
+                }
+                _ if info.available == Some(false) => {
+                    ui.weak(t!("settings-hs-unavailable"));
+                }
+                _ => {}
+            }
         }
         ui.weak(t!("settings-hs-headphones"));
         ui.weak(t!("settings-hs-model"));

@@ -4,6 +4,23 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Heart sounds, phase 3 (browser, brief B26): the web build plays the heart sounds through Web Audio with the same player,
+  samples and controls as the desktop (switch, volume, audio offset, sync check, slow motion, muting above 1×, pause, *Play*
+  from the cursor with the moving playhead). Chunks of the phonocardiogram are resampled to the context rate and scheduled on
+  the audio clock 100 ms ahead (contiguous to the sample, merged to at least 20 ms, re-anchored with a fade-in after a gap,
+  drift-corrected); the views are drawn the look-ahead, the 40 ms queue and the browser's reported latency behind. Sound
+  starts on the learner's first click or key press; until then the *Display* popup, the Settings window and the heart-sound
+  lane say *Click anywhere to enable sound*. Hidden tabs suspend the audio context; on return playback restarts from the
+  present. `?sound=1` in the URL switches the sound on at start. `window.heartsimStatus.audio` reports the state, the sample
+  rate, the chunks scheduled, the queue and the latency. Still a plain static site: no threads, no AudioWorklet, no headers.
+
+### Changed
+- The heart-sound output is chosen at run time: the embedding crate registers a sink factory (`HeartSoundPlayer::set_factory`,
+  `HeartSimApp::set_heart_sound_output`), and the sound controls appear wherever there is one. `PcmSink` reports its own
+  constant delay (`latency_ms`, 40 ms for kira as before) and whether it can play now (`readiness`).
+- In the browser the *Audio offset* defaults to 0 ms (desktop: 60 ms, unchanged).
+
 ## [0.17.0] — 2026-11-21
 Sixteenth tagged release: the heart sounds can be heard on desktop, in step with the strip, with slow motion and replay.
 Playback has been built and tested without a sound device; real latency is not yet measured.

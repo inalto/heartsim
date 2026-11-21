@@ -160,7 +160,16 @@ interface.
   0.1 s ahead of the sound; the strip and the lane are delayed there as elsewhere. When those Tier-2 engines cannot keep up
   with real time, fewer samples arrive than the sound card plays and the heart sounds break up. The Axis Trainer, the Axis
   Quiz and the Electrodes page draw their leads live (not delayed). Above 1× the heart sounds are muted; while paused only
-  the lane's *Play* button sounds; slices always play at 1×. The browser version has no heart-sound audio yet (phase 3).
+  the lane's *Play* button sounds; slices always play at 1×.
+* Heart-sound audio in the browser (B26): the views are delayed by a 100 ms look-ahead, the 40 ms queue and the
+  `baseLatency` and `outputLatency` the browser reports. A browser that does not report `outputLatency` (or reports 0) adds
+  nothing for it, so the sound is then heard that much after the picture until the *Audio offset* is set with *Check sync*;
+  the offset starts at 0 ms in the browser (60 ms on the desktop) so that the picture is never drawn after the sound. Sound
+  starts only after a click or a key press on the page (autoplay policy); after a reload with the sound on, the first click
+  starts it. When the tab is hidden the simulation stops (no animation frames), what is scheduled plays out and the audio
+  context is suspended; on return the old stream is dropped and playback restarts from the present. A main-thread frame
+  longer than about 120 ms (three times the queue) makes a gap in the sound, which then restarts with a short fade-in;
+  shorter long frames are absorbed by the look-ahead. No browser has been listened to.
 
 ### Browser version
 

@@ -27,7 +27,10 @@ console_error_panic_hook.workspace = true
 log.workspace = true
 web-sys = { workspace = true, features = [
     "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement",
-    "Response", "console",
+    "Response", "console", "Location", "Event", "EventTarget",
+    # heart sounds through Web Audio (B26)
+    "AudioContext", "BaseAudioContext", "AudioNode", "AudioDestinationNode", "AudioParam", "GainNode",
+    "AudioBuffer", "AudioBufferSourceNode", "AudioScheduledSourceNode",
 ] }
 
 [lints]

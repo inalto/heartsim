@@ -31,3 +31,6 @@ mechanical, fully specified tasks. Order and parallelism: `../ROADMAP.md`.
 | B23 | Validation bridge: openCARP/VTK export-import, benchmark report | cli, geometry | Opus | M8 |
 | B24 | Silent phonocardiogram: S1/S2 synthesised from engine events, drawn under the ECG (heart sounds, phase 1) | ecg, sim, ui, app | Opus | M9 |
 | B25 | Audible heart sounds on desktop: the PCG ring played a constant delay behind the simulation, slow-motion re-synthesis, play from cursor (heart sounds, phase 2) | ecg, app, ui | Opus | M9 |
+| B26 | Heart sounds in the browser: Web Audio sink, click-gated start, latency reported by the sink (heart sounds, phase 3) | web, app | Opus | M9 |
+| B27 | Gallops, murmurs and listening sites: S3, S4, clicks, snap, rub, murmur envelopes, `auscultation` scenario section, valve scenarios, five sites with bell and diaphragm (heart sounds, phase 4) | core, ecg, ui, app | Opus | M9 |
+| B28 | Teaching auscultation: sound trainer with listen counter, auscultation quiz, tutorial, breath-hold, small-speaker mode, WAV export, licensed reference clips (heart sounds, phase 5) | core, ecg, app, ui, io, cli | Opus | M9 |

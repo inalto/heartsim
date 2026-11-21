@@ -38,11 +38,37 @@ works from a sub-path such as `https://<user>.github.io/heartsim/` and from any 
 | Screenshot tour (`HEARTSIM_SCREENSHOT_DIR`) | inert | no environment |
 | `--version`, logging to the terminal | none; panics and `log` output go to the browser console | |
 
-Audio: the desktop monitor beep and the heart-sound audio (brief B25; `audio` feature, `kira` and `rtrb`) are not compiled
-for the web, and nothing in the web build depends on them. The heart-sound trace under the strip (brief B24) is drawn on the web
-as on the desktop, but on the web it is still **silent**: the *Play heart sounds* switch is absent there. The player logic and the
-resampler (`heartsim-app/src/heart_sound_player.rs`, `sound_out.rs`) compile for wasm32 and are device-independent; web sound
-(phase 3) should hand the same chunks to Web Audio, with the context started from the learner's click on the switch.
+## Audio (brief B26)
+
+The desktop's `audio` feature (`kira`, `rtrb`, the monitor beep) is not compiled for the web. The **heart sounds** are: the
+same `HeartSoundPlayer` as on the desktop (`heartsim-app/src/heart_sound_player.rs`) writes to a Web Audio sink
+(`heartsim-web/src/audio.rs`, `wasm32` only) that `heartsim-web` registers when it creates the app
+(`HeartSimApp::set_heart_sound_output`). The *Play heart sounds* switch and the Settings card appear wherever a sink factory
+exists; volume, audio offset, the sync check, slow motion, muting above 1×, pause and *Play* from the cursor work as on the
+desktop. The monitor beep stays desktop-only.
+
+* **Scheduling.** There is no audio thread: each chunk of the phonocardiogram is resampled from 4 kHz to the context's
+  `sampleRate` (an `AudioBuffer` below 8 kHz is not guaranteed), given gain and the soft limiter in the samples, wrapped in an
+  `AudioBuffer` and started with `AudioBufferSourceNode.start(when)` through one `GainNode` that only fades out on a clear. The
+  start times are decided by `heartsim-app/src/web_schedule.rs` (pure, tested natively with a fake clock): contiguous to the
+  sample; a new stream no earlier than `LOOKAHEAD_MS` (100 ms) after `currentTime`, placed so that its newest sample is heard
+  100 + 40 ms after the push; continued through a long frame as long as the scheduled audio has not run out (a frame up to
+  about 120 ms is absorbed), otherwise re-anchored with a 10 ms fade-in;
+  pushes under 20 ms merged; the resampling ratio nudged by at most 0.5 % to absorb the drift between the audio clock and the
+  frame clock. The views are drawn the look-ahead, the 40 ms queue, `baseLatency` and `outputLatency` (where reported) plus the
+  user's offset behind the engine; the offset defaults to 0 ms in the browser. Nothing from `currentTime` reaches the
+  simulation.
+* **Gesture gate.** States *off*, *waiting*, *running*, *unavailable*. The factory creates no `AudioContext`; the context is
+  created, or `resume()`d, from `pointerdown`, `pointerup`, `mousedown` and `touchend` on the canvas and `keydown` on the
+  window (capture), whenever the setting is on and the context is not `running` (`suspended` and iOS's `interrupted` alike).
+  eframe runs the app logic inside its own canvas listeners, installed before ours, so a click that ticks the switch starts the
+  sound on that same click. While waiting, the Display popup, the Settings card and the lane say *Click anywhere to enable
+  sound*. A browser without `AudioContext` shows *Sound is not available in this browser*.
+* **Life cycle.** On `visibilitychange` to hidden, what is scheduled plays out and the context is suspended; on visible the old
+  stream is dropped, the context resumed and the player's next push starts a new stream.
+* **Static site.** No threads, no `SharedArrayBuffer`, no AudioWorklet, no headers.
+* **Status and URL.** `window.heartsimStatus.audio` = `{ state, sampleRate, chunks, queuedMs, latencyMs, late }`; `?sound=1`
+  switches the sound on at start (the smoke test uses it).
 
 Persistence: eframe's `persistence` feature stores the Rhythm Quiz score, the tutorial progress and the Settings window's choices
 (language, high contrast, reduced motion) in `localStorage`.
@@ -75,7 +101,10 @@ Servers that gzip or brotli `.wasm` on the fly make the transfer smaller still.
 * `cargo check --target wasm32-unknown-unknown -p heartsim-web` with `RUSTFLAGS=-D warnings` (CI job *Web*).
 * Browser smoke test (`crates/heartsim-web/tests/browser`, Playwright): serves `dist/`, opens it in headless Chromium on
   software WebGL (set `HEARTSIM_BROWSER_PATH` to use an installed Chromium) and checks `window.heartsimStatus` — the pack loaded, frames are drawn, the strip's sample count and the
-  simulation clock advance — plus a non-blank screenshot and no panics. CI job *Web / smoke*.
+  simulation clock advance — plus a non-blank screenshot and no panics. With `?sound=1` and Chromium's
+  `--autoplay-policy=user-gesture-required` it also checks the heart sounds: *waiting* before input, *running* after one click
+  on the canvas, chunks scheduled over two seconds with 50–300 ms queued, *running* again after the page is hidden and shown,
+  nothing scheduled in the past, no audio errors in the console. CI job *Web / smoke*.
 
 ## Manual test matrix
 
@@ -83,6 +112,11 @@ Run `trunk serve` (or open a deployed build) and go through: loading screen disa
 rotating with the mouse; strip scrolls and the beat on the heart matches the QRS; pick a rhythm; 12-lead tab; Electrodes tab
 (drag an electrode); a tutorial page and its check; Rhythm Quiz; reload the page and see the quiz score again; resize the
 window (canvas follows); background the tab and return.
+
+Sound (B26), with headphones: switch on *Play heart sounds* and hear S1/S2 (on the click, or the next one); run *Check sync* in
+Settings and note the offset at which click and dot coincide; slow motion (0.25×) stretches an RBBB's S2 split; above 1× it is
+muted; pause, then *Play* in the lane with the moving playhead; switch to another tab and return (no burst, restarts from the
+present); reload with sound on (*Click anywhere to enable sound*, then the first click starts it).
 
 | browser | GPU API expected | status |
 |---|---|---|
@@ -92,6 +126,7 @@ window (canvas follows); background the tab and return.
 | Firefox on Linux / Intel macOS | WebGL2 | |
 | Safari 26 (macOS Tahoe, iOS 26) | WebGPU | |
 | Safari 17-18 | WebGL2 | |
+| Sound: Chromium, Firefox, Safari macOS, Safari iOS | — | not done (no browser with a sound device was available) |
 
 Record browser version, GPU API (`navigator.gpu` present?), whether the check list passed, and the frame rate of the Simulator
 tab. Safari and Firefox are listed because the brief asks for them; they have not been tested for this change.
