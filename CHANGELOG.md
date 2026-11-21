@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-21
+
 ### Added
 - Heart sounds, phase 4 part A (gallops and murmurs, brief B27): an optional `auscultation` section in the scenario files
   (`s3`, `s4`, `rub`, `fixed_split`, `lesions: [(kind, severity)]`; no format bump, files without it sound exactly as

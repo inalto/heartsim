@@ -68,7 +68,7 @@ More screenshots: [LBBB with the heart-vector arrow, scrubbed](docs/images/simul
 
 ## Status
 
-Version 0.18.0 (2026-11-21). The work packages B01–B26 in [docs/briefs/](docs/briefs/) are implemented; [CHANGELOG.md](CHANGELOG.md)
+Version 0.19.0 (2026-11-21). The work packages B01–B27 in [docs/briefs/](docs/briefs/) are implemented; [CHANGELOG.md](CHANGELOG.md)
 lists what each release added and [docs/ROADMAP.md](docs/ROADMAP.md) the milestones. The program has so far been tested
 headless (software rendering, no display) and on GitHub's runners: nobody has yet used it on a real screen, and several
 physiology numbers are cited from memory. See [known limitations and open questions](docs/book/src/known-issues.md).
