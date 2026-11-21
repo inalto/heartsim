@@ -146,6 +146,11 @@ interface.
 
 * The display filters are causal, so the drawn trace lags the unfiltered one by a few milliseconds.
 * The monitor beep is up to one frame late and is rate-limited to one tone per 180 ms of simulated time.
+* The heart-sound trace is silent and models S1 and S2 only. Several of its numbers were seen only in extracts of the papers
+  (the QS2 intercept, the 40 ms QRS-to-S1 figure, the chirp frequencies of A2 and P2), and the S1 loudness curve, the
+  interventricular delays and the shapes of M1 and T1 are design choices; each is marked in `PcgParams`. The timing has not yet
+  been checked against a recording with simultaneous ECG and PCG. A2 lands 20–35 ms before the drawn T end at 50–100 bpm.
+  The S1 and S2 labels of a beat appear about 0.15 s after its QRS, once a second paced front can no longer change it.
 
 ### Browser version
 

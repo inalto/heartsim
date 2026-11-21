@@ -132,3 +132,36 @@ fn the_stack_draws_an_empty_recording_and_drags_a_caliper() {
     });
     harness.run();
 }
+
+/// Every catheter's channel name reads at WCAG AA on the light paper and on the dark recording
+/// screen, and so do the traces and the stimulus marks of both.
+#[test]
+fn channel_names_and_traces_are_legible_on_both_backgrounds() {
+    use heartsim_ui::ep_panel::{channel_name_colour, egm_style_for};
+    use heartsim_ui::theme::contrast_ratio;
+    let paper = StripStyle::paper();
+    let dark = egm_style_for(&paper, true);
+    assert!(dark.is_dark(), "the dark theme records on a dark screen");
+    assert!(
+        !egm_style_for(&paper, false).is_dark(),
+        "the light theme stays light"
+    );
+    for style in [paper, dark] {
+        assert!(contrast_ratio(style.trace, style.paper) >= 4.5, "trace");
+        for kind in [
+            CatheterKind::Hra,
+            CatheterKind::His,
+            CatheterKind::Cs,
+            CatheterKind::Rva,
+            CatheterKind::Abl,
+        ] {
+            let c = channel_name_colour(kind, style.paper);
+            assert!(
+                contrast_ratio(c, style.paper) >= 4.5,
+                "{kind:?} on {:?}: {:.2}",
+                style.paper,
+                contrast_ratio(c, style.paper)
+            );
+        }
+    }
+}

@@ -227,6 +227,7 @@ impl HeartSimApp {
         self.engine = engine.timing().clone();
         self.sample_accumulator = 0.0;
         self.rings.iter_mut().for_each(heartsim_ecg::LeadRing::clear);
+        self.sounds.reset(0, preset.timing.sinus.respiration_rate_bpm);
         self.last_v_activation = Millis(-1000.0);
         self.scenario = None;
         self.timeline = Timeline::default();
@@ -294,6 +295,8 @@ impl HeartSimApp {
                     self.beep.on_ventricular_event(e.at.0);
                 }
             }
+            // the heart sounds follow the re-entry model's ventricular events like the strip does
+            self.sounds.on_events(&events);
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, dt, act.engine.now());
             }
@@ -304,6 +307,7 @@ impl HeartSimApp {
                 for (ring, v) in self.rings.iter_mut().zip(s.0) {
                     ring.push(v as f32);
                 }
+                self.sounds.push_for_ecg_sample(act.engine.now());
             }
             if started.elapsed() > FRAME_BUDGET {
                 break;
@@ -357,7 +361,7 @@ impl HeartSimApp {
         let mut picked = None;
         egui::ComboBox::from_id_salt("reentry_picker")
             .selected_text(title)
-            .width(280.0)
+            .width(190.0)
             .show_ui(ui, |ui| {
                 for (i, p) in self.reentry.presets.iter().enumerate() {
                     if ui

@@ -160,6 +160,24 @@ impl StripWindow {
         }
     }
 
+    /// The same window for a signal sampled `factor` times faster (the heart-sound lane under the
+    /// strip), laid on `rect`: the head, the sweep pages and every sample's x scale by exactly
+    /// `factor`, so the sample of the fast signal that ends with a strip sample is drawn in that
+    /// sample's slot and both scroll and sweep together. `rect` should span the same x range.
+    #[must_use]
+    pub fn rescaled(&self, rect: Rect, factor: u64) -> Self {
+        let factor = factor.max(1);
+        Self {
+            rect,
+            mode: self.mode,
+            head: self.head * factor,
+            sample_rate_hz: self.sample_rate_hz * factor as f32,
+            px_per_sample: self.px_per_sample / factor as f32,
+            visible_samples: self.visible_samples * factor,
+            px_per_mv: self.px_per_mv,
+        }
+    }
+
     /// Seconds of signal across the strip width.
     #[must_use]
     pub fn seconds_visible(&self) -> f32 {
@@ -423,7 +441,27 @@ impl TracePoints {
     }
 }
 
+/// Which of the labels `(centre_x, width)`, given left to right, can be drawn without touching the
+/// previous drawn one (at least `gap` points between neighbours). Used so that at fast rates or in
+/// narrow cells the wave letters and interval read-outs thin out instead of piling on each other.
+#[must_use]
+pub fn labels_that_fit(labels: &[(f32, f32)], gap: f32) -> Vec<bool> {
+    let mut keep = Vec::with_capacity(labels.len());
+    let mut right_edge = f32::NEG_INFINITY;
+    for &(centre, width) in labels {
+        let left = centre - width / 2.0;
+        let fits = left >= right_edge + gap;
+        if fits {
+            right_edge = centre + width / 2.0;
+        }
+        keep.push(fits);
+    }
+    keep
+}
+
 /// P/R/T letters above their peaks, PR brackets under the baseline, RR spans along the top.
+/// Labels that would overlap the previous one of their row are left out (the RR and PR read-outs
+/// go first, being wider; a bracket whose text does not fit inside its span is not drawn at all).
 fn draw_marks(
     painter: &egui::Painter,
     win: &StripWindow,
@@ -436,6 +474,7 @@ fn draw_marks(
     let font = FontId::proportional(11.0);
     let rect = win.rect;
     if trace.show_waves {
+        let mut letters: Vec<(f32, f32, WaveKind, f32)> = Vec::new();
         for m in marks.marks {
             if !matches!(m.kind, WaveKind::P | WaveKind::R | WaveKind::T) {
                 continue;
@@ -444,8 +483,14 @@ fn draw_marks(
             let (Some(x), Some(v)) = (win.x_of_sample(abs), ring.at(abs)) else {
                 continue;
             };
-            let v = sign * v;
-            let y = win.y_of_mv(v);
+            letters.push((x, win.y_of_mv(sign * v), m.kind, sign * v));
+        }
+        letters.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let spans: Vec<(f32, f32)> = letters.iter().map(|l| (l.0, 8.0)).collect();
+        for ((x, y, kind, v), keep) in letters.into_iter().zip(labels_that_fit(&spans, 3.0)) {
+            if !keep {
+                continue;
+            }
             let (pos, align) = if v >= 0.0 {
                 (
                     Pos2::new(x, (y - 3.0).max(rect.top() + 12.0)),
@@ -457,13 +502,20 @@ fn draw_marks(
                     Align2::CENTER_TOP,
                 )
             };
-            painter.text(pos, align, m.kind.label(), font.clone(), style.marker);
+            painter.text(pos, align, kind.label(), font.clone(), style.marker);
         }
     }
     if !trace.show_intervals {
         return;
     }
     let stroke = Stroke::new(1.0, style.marker);
+    let small = FontId::proportional(10.0);
+    let text_width = |text: &str| {
+        painter
+            .layout_no_wrap(text.to_owned(), small.clone(), style.marker)
+            .size()
+            .x
+    };
     let bracket = |x0: f32, x1: f32, y: f32, tick: f32, text: String, above: bool| {
         painter.line_segment([Pos2::new(x0, y), Pos2::new(x1, y)], stroke);
         painter.line_segment([Pos2::new(x0, y - tick), Pos2::new(x0, y + tick)], stroke);
@@ -477,7 +529,7 @@ fn draw_marks(
             Pos2::new(f32::midpoint(x0, x1), y + dy),
             align,
             text,
-            FontId::proportional(10.0),
+            small.clone(),
             style.marker,
         );
     };
@@ -485,6 +537,9 @@ fn draw_marks(
     let x_of = |idx: usize| win.x_of_sample(marks.first_sample + idx as u64);
     let pr_y = (rect.bottom() - 14.0).max(rect.center().y + 4.0);
     let rr_y = (rect.top() + 28.0).min(rect.center().y - 4.0);
+    // (x0, x1, text) per row, then thinned by the label widths
+    let mut pr_row: Vec<(f32, f32, String)> = Vec::new();
+    let mut rr_row: Vec<(f32, f32, String)> = Vec::new();
     let mut prev_r: Option<usize> = None;
     for b in marks.beats {
         if let Some(p) = b.p
@@ -492,22 +547,39 @@ fn draw_marks(
             && x1 > x0
         {
             let pr = ms(b.qrs_onset.saturating_sub(p.onset));
-            bracket(x0, x1, pr_y, 3.0, format!("PR {pr:.0}"), false);
+            pr_row.push((x0, x1, format!("PR {pr:.0}")));
         }
         if let Some(r0) = prev_r
             && let (Some(x0), Some(x1)) = (x_of(r0), x_of(b.r_peak))
             && x1 > x0
         {
             let rr = ms(b.r_peak - r0);
-            bracket(x0, x1, rr_y, 3.0, format!("RR {rr:.0}"), true);
+            rr_row.push((x0, x1, format!("RR {rr:.0}")));
         }
         prev_r = Some(b.r_peak);
+    }
+    for (row, y, above) in [(pr_row, pr_y, false), (rr_row, rr_y, true)] {
+        let mut row: Vec<_> = row
+            .into_iter()
+            .map(|(x0, x1, text)| (x0, x1, text_width(&text) + 4.0, text))
+            .filter(|(x0, x1, w, _)| x1 - x0 >= *w)
+            .collect();
+        row.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let spans: Vec<(f32, f32)> = row
+            .iter()
+            .map(|(x0, x1, w, _)| (f32::midpoint(*x0, *x1), *w))
+            .collect();
+        for ((x0, x1, _, text), keep) in row.into_iter().zip(labels_that_fit(&spans, 2.0)) {
+            if keep {
+                bracket(x0, x1, y, 3.0, text, above);
+            }
+        }
     }
 }
 
 /// The paper grid as one cached mesh (one tessellation-free shape instead of hundreds of line
 /// segments). Lines are snapped to physical pixels so 1-px lines stay crisp on HiDPI screens.
-fn grid_shape(ui: &Ui, id: Id, rect: Rect, style: &StripStyle) -> Shape {
+pub(crate) fn grid_shape(ui: &Ui, id: Id, rect: Rect, style: &StripStyle) -> Shape {
     type Cached = (([u32; 6], Color32, Color32), Arc<Mesh>);
     let ppp = ui.ctx().pixels_per_point();
     let key = (
@@ -578,6 +650,26 @@ fn grid_mesh(rect: Rect, style: &StripStyle, ppp: f32) -> Mesh {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn labels_never_overlap_the_previous_drawn_one() {
+        // 8-pt letters 6 pt apart: every other one survives
+        let spans: Vec<(f32, f32)> = (0..6).map(|i| (10.0 + 6.0 * i as f32, 8.0)).collect();
+        let keep = labels_that_fit(&spans, 1.0);
+        let kept: Vec<_> = spans
+            .iter()
+            .zip(&keep)
+            .filter(|(_, k)| **k)
+            .map(|(s, _)| *s)
+            .collect();
+        assert!(kept.len() < spans.len() && !kept.is_empty());
+        for w in kept.windows(2) {
+            assert!(w[1].0 - w[1].1 / 2.0 >= w[0].0 + w[0].1 / 2.0 + 1.0, "{w:?}");
+        }
+        // widely spaced labels all stay
+        let wide: Vec<(f32, f32)> = (0..4).map(|i| (50.0 * i as f32, 20.0)).collect();
+        assert!(labels_that_fit(&wide, 2.0).iter().all(|k| *k));
+    }
 
     fn win(style: &StripStyle, head: u64) -> StripWindow {
         StripWindow::new(

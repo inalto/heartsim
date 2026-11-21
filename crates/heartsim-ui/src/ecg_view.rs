@@ -3,19 +3,38 @@
 
 use crate::annotations::{EcgAnnotations, interval_readout};
 use crate::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
+use crate::pcg_lane::{PcgLane, draw_caliper_lines, draw_pcg_lane, lane_height};
 use crate::strip::{GAINS_MM_MV, SPEEDS_MM_S, StripStyle, StripTrace, StripWindow, SweepMode, draw_strip};
 use crate::t;
-use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, page_cells};
+use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, cell_is_annotated, intervals_fit_cells, page_cells};
 use egui::{Rect, Ui};
 use heartsim_core::Lead;
 use heartsim_ecg::artefact::INTENSITY_RANGE;
 use heartsim_ecg::{Analysis, Analyzer, DisplayConfig, DisplayStage, FilterMode, LeadRing, MainsFrequency};
+
+/// Which annotations a strip may carry (before the Display toggles are applied).
+#[derive(Debug, Clone, Copy)]
+struct Annotate {
+    waves: bool,
+    intervals: bool,
+}
+
+impl Annotate {
+    const ALL: Self = Self {
+        waves: true,
+        intervals: true,
+    };
+}
 
 /// How often (in signal time) the wave labels and intervals are re-measured, ms.
 pub const ANALYSIS_PERIOD_MS: f64 = 250.0;
 
 /// ECG display state. Rings are passed in on every call (they belong to the app's model).
 #[derive(Debug)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent display switches of the Display popup"
+)]
 pub struct EcgView {
     pub style: StripStyle,
     pub playback: Playback,
@@ -24,6 +43,9 @@ pub struct EcgView {
     pub show_waves: bool,
     /// Draw PR and RR brackets.
     pub show_intervals: bool,
+    /// Draw the heart-sound lane (B24) under the strip and under the 12-lead page, where the caller
+    /// has a phonocardiogram. Off by default.
+    pub show_heart_sounds: bool,
     /// Bandwidth filter and artefacts applied to what the painters draw (F-15). The analyser, the
     /// calipers' reading of wave positions and the default exports keep using the raw rings.
     display: DisplayStage,
@@ -31,11 +53,15 @@ pub struct EcgView {
     annotations: Option<EcgAnnotations>,
     strip_calipers: CaliperSet,
     page_calipers: Vec<CaliperSet>,
+    /// Calipers of the 12-lead page's heart-sound lane when its last cell does not span the page.
+    page_sound_calipers: CaliperSet,
     page_layout: Option<TwelveLeadLayout>,
     /// Where the 12-lead page was last drawn, screen points (snapshot size).
     page_rect: Option<Rect>,
     /// Result of the last snapshot export, for the status line.
     pub last_export: Option<String>,
+    /// The Display popup is to open on the next frame.
+    open_display_popup: bool,
 }
 
 impl Default for EcgView {
@@ -46,14 +72,17 @@ impl Default for EcgView {
             order: LeadOrder::Standard,
             show_waves: true,
             show_intervals: true,
+            show_heart_sounds: false,
             display: DisplayStage::default(),
             analyzer: Analyzer::default(),
             annotations: None,
             strip_calipers: CaliperSet::default(),
             page_calipers: Vec::new(),
+            page_sound_calipers: CaliperSet::default(),
             page_layout: None,
             page_rect: None,
             last_export: None,
+            open_display_popup: false,
         }
     }
 }
@@ -135,12 +164,39 @@ impl EcgView {
         self.display.invalidate();
         self.strip_calipers.reset();
         self.page_calipers.iter_mut().for_each(CaliperSet::reset);
+        self.page_sound_calipers.reset();
     }
 
-    /// Paper speed, gain, mode, colours, grid, calibration, labels, caliper reset and (while
-    /// paused) the scrub slider.
-    pub fn controls(&mut self, ui: &mut Ui, rings: &[LeadRing]) {
+    /// The strip's one row of everyday controls: the lead selector (when `lead` is given), paper
+    /// speed, gain, Scroll/Sweep, Calipers, the scrub slider while paused, and the Display button
+    /// that opens the rest ([`Self::display_controls`]).
+    pub fn controls(&mut self, ui: &mut Ui, rings: &[LeadRing], lead: Option<&mut Lead>) {
+        self.controls_with(ui, rings, lead, |_, _| {});
+    }
+
+    /// [`Self::controls`] with `before` drawn at the start of the same wrapping row (the 12-lead
+    /// page's layout choice and Save PNG), so the page needs one row of controls, not two. It gets
+    /// the view too, for the settings it shares (the lead order).
+    pub fn controls_with(
+        &mut self,
+        ui: &mut Ui,
+        rings: &[LeadRing],
+        lead: Option<&mut Lead>,
+        before: impl FnOnce(&mut Ui, &mut Self),
+    ) {
         ui.horizontal_wrapped(|ui| {
+            before(ui, self);
+            if let Some(selected) = lead {
+                let leads = ui
+                    .horizontal(|ui| {
+                        for l in Lead::ALL {
+                            ui.selectable_value(selected, l, l.label());
+                        }
+                    })
+                    .response;
+                crate::highlight::mark(&leads, "lead_selector");
+                ui.separator();
+            }
             let speed = egui::ComboBox::from_id_salt("ecg_speed")
                 .selected_text(format!("{} mm/s", self.style.mm_per_s))
                 .show_ui(ui, |ui| {
@@ -149,6 +205,7 @@ impl EcgView {
                     }
                 });
             name_combo(&speed.response, &t!("ecg-speed"));
+            speed.response.on_hover_text(t!("ecg-speed"));
             let gain = egui::ComboBox::from_id_salt("ecg_gain")
                 .selected_text(format!("{} mm/mV", self.style.mm_per_mv))
                 .show_ui(ui, |ui| {
@@ -157,26 +214,10 @@ impl EcgView {
                     }
                 });
             name_combo(&gain.response, &t!("ecg-gain"));
+            gain.response.on_hover_text(t!("ecg-gain"));
             for m in [SweepMode::Scroll, SweepMode::Sweep] {
                 ui.selectable_value(&mut self.style.mode, m, m.label());
             }
-            let mut dark = self.style.is_dark();
-            if ui.checkbox(&mut dark, t!("ecg-monitor-colours")).changed() {
-                self.style = if dark {
-                    self.style.monitor()
-                } else {
-                    self.style.with_paper_colours()
-                };
-            }
-            ui.checkbox(&mut self.style.show_grid, t!("ecg-grid"));
-            ui.checkbox(&mut self.show_waves, t!("ecg-waves"));
-            ui.checkbox(&mut self.show_intervals, t!("ecg-intervals"));
-            ui.add(
-                egui::Slider::new(&mut self.style.px_per_mm, 1.5..=8.0)
-                    .text(t!("ecg-px-per-mm"))
-                    .max_decimals(2),
-            )
-            .on_hover_text(t!("ecg-calibration-hint"));
             if ui
                 .button(t!("ecg-calipers"))
                 .on_hover_text(t!("ecg-calipers-hint"))
@@ -184,9 +225,9 @@ impl EcgView {
             {
                 self.strip_calipers.reset();
                 self.page_calipers.iter_mut().for_each(CaliperSet::reset);
+                self.page_sound_calipers.reset();
             }
             if self.playback.is_paused() {
-                ui.separator();
                 let fs = fs_of(rings);
                 let visible = rings
                     .first()
@@ -194,55 +235,123 @@ impl EcgView {
                     .min((10.0 * fs) as u64);
                 let max = rings.first().map_or(0.0, |r| Playback::max_scrub_ms(r, visible));
                 let mut back_s = self.playback.scrub_ms() / 1000.0;
-                if ui
-                    .add(
-                        egui::Slider::new(&mut back_s, 0.0..=(max / 1000.0).max(0.0))
-                            .text(t!("ecg-scrub-back")),
-                    )
-                    .changed()
+                if crate::controls::slider(
+                    ui,
+                    &t!("ecg-scrub-back"),
+                    egui::Slider::new(&mut back_s, 0.0..=(max / 1000.0).max(0.0)).max_decimals(1),
+                    crate::controls::S,
+                )
+                .changed()
                 {
                     self.playback.set_scrub_ms(back_s * 1000.0, max);
                 }
             }
+            self.display_button(ui);
         });
-        self.display_controls(ui);
     }
 
-    /// The display filter and artefact controls (F-15). They change only what is drawn.
+    /// The Display button: opens the popup with the paper, label, filter and artefact controls. It
+    /// is drawn as selected, and says what is on, while a filter or an artefact changes the trace,
+    /// because those change what the learner sees.
+    fn display_button(&mut self, ui: &mut Ui) {
+        let cfg = *self.display.config();
+        let mut parts = Vec::new();
+        if cfg.filter != FilterMode::Off {
+            parts.push(filter_name(cfg.filter));
+        }
+        let artefacts = [
+            cfg.artefacts.baseline_wander,
+            cfg.artefacts.respiration,
+            cfg.artefacts.mains,
+            cfg.artefacts.muscle,
+        ]
+        .into_iter()
+        .filter(|on| *on)
+        .count();
+        if artefacts > 0 {
+            parts.push(t!(
+                "ecg-display-artefacts",
+                count = i64::try_from(artefacts).unwrap_or_default()
+            ));
+        }
+        let active = !parts.is_empty();
+        let label = if active {
+            t!("ecg-display-active", what = parts.join(", "))
+        } else {
+            t!("ecg-display")
+        };
+        let response = ui.add(egui::Button::selectable(active, label));
+        let response = response.on_hover_text(t!("ecg-display-hint"));
+        let mut popup = egui::Popup::from_toggle_button_response(&response)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+        if std::mem::take(&mut self.open_display_popup) {
+            popup = popup.open_memory(egui::SetOpenCommand::Bool(true));
+        }
+        popup.show(|ui| {
+            ui.set_min_width(300.0);
+            self.display_controls(ui);
+        });
+    }
+
+    /// Everything the Display popup holds: monitor colours, grid, wave letters, PR/RR brackets and
+    /// the screen scale, then the display filter and the artefacts (F-15). Only what is drawn
+    /// changes.
     pub fn display_controls(&mut self, ui: &mut Ui) {
+        let mut dark = self.style.is_dark();
+        if ui.checkbox(&mut dark, t!("ecg-monitor-colours")).changed() {
+            self.style = if dark {
+                self.style.monitor()
+            } else {
+                self.style.with_paper_colours()
+            };
+        }
+        ui.checkbox(&mut self.style.show_grid, t!("ecg-grid"));
+        ui.checkbox(&mut self.show_waves, t!("ecg-waves"));
+        ui.checkbox(&mut self.show_intervals, t!("ecg-intervals"));
+        ui.checkbox(&mut self.show_heart_sounds, t!("ecg-heart-sounds"))
+            .on_hover_text(t!("ecg-heart-sounds-hint"));
+        crate::controls::slider(
+            ui,
+            &t!("ecg-px-per-mm"),
+            egui::Slider::new(&mut self.style.px_per_mm, 1.5..=8.0).max_decimals(2),
+            crate::controls::PT_PER_MM,
+        )
+        .on_hover_text(t!("ecg-calibration-hint"));
+        ui.separator();
         let mut cfg = *self.display.config();
-        ui.horizontal_wrapped(|ui| {
-            ui.label(t!("ecg-filter"));
-            for m in FilterMode::ALL {
-                let label = match m {
-                    FilterMode::Off => t!("ecg-filter-off"),
-                    FilterMode::Diagnostic => t!("ecg-filter-diagnostic"),
-                    FilterMode::Monitor => t!("ecg-filter-monitor"),
-                };
-                ui.selectable_value(&mut cfg.filter, m, label)
-                    .on_hover_text(t!("ecg-filter-hint"));
-            }
-            ui.separator();
-            ui.label(t!("ecg-artefacts"));
-            let a = &mut cfg.artefacts;
-            ui.checkbox(&mut a.baseline_wander, t!("ecg-art-wander"));
-            ui.checkbox(&mut a.respiration, t!("ecg-art-respiration"));
+        ui.strong(t!("ecg-filter"));
+        for m in FilterMode::ALL {
+            ui.radio_value(&mut cfg.filter, m, filter_name(m))
+                .on_hover_text(t!("ecg-filter-hint"));
+        }
+        ui.separator();
+        ui.strong(t!("ecg-artefacts"));
+        let a = &mut cfg.artefacts;
+        ui.checkbox(&mut a.baseline_wander, t!("ecg-art-wander"));
+        ui.checkbox(&mut a.respiration, t!("ecg-art-respiration"));
+        ui.horizontal(|ui| {
             ui.checkbox(&mut a.mains, t!("ecg-art-mains"));
             if a.mains {
                 for hz in MainsFrequency::ALL {
                     ui.selectable_value(&mut a.mains_hz, hz, format!("{:.0} Hz", hz.hz()));
                 }
             }
-            ui.checkbox(&mut a.muscle, t!("ecg-art-muscle"));
-            if a.any() {
-                ui.add(
-                    egui::Slider::new(&mut a.intensity, INTENSITY_RANGE.0..=INTENSITY_RANGE.1)
-                        .text(t!("ecg-art-intensity"))
-                        .max_decimals(2),
-                );
-            }
         });
+        ui.checkbox(&mut a.muscle, t!("ecg-art-muscle"));
+        if a.any() {
+            crate::controls::slider(
+                ui,
+                &t!("ecg-art-intensity"),
+                egui::Slider::new(&mut a.intensity, INTENSITY_RANGE.0..=INTENSITY_RANGE.1).max_decimals(2),
+                "",
+            );
+        }
         self.display.set_config(cfg);
+    }
+
+    /// Opens the Display popup on the next frame (the documentation tour's shots).
+    pub fn request_display_popup(&mut self) {
+        self.open_display_popup = true;
     }
 
     /// The rings the painters (and a "save what is shown" export) read: `raw` filtered and with the
@@ -284,19 +393,70 @@ impl EcgView {
         interval_readout(ui, self.analysis());
     }
 
-    fn trace<'a>(&'a self, lead: Lead, label: &'a str, invert: bool, head: u64) -> StripTrace<'a> {
+    fn trace<'a>(
+        &'a self,
+        lead: Lead,
+        label: &'a str,
+        invert: bool,
+        head: u64,
+        annotate: Annotate,
+    ) -> StripTrace<'a> {
         StripTrace {
             label,
             invert,
             head,
             marks: self.annotations.as_ref().map(|a| a.lead(lead)),
-            show_waves: self.show_waves,
-            show_intervals: self.show_intervals,
+            show_waves: annotate.waves && self.show_waves,
+            show_intervals: annotate.intervals && self.show_intervals,
         }
     }
 
     /// One interactive strip of `lead` filling `rect`. Returns its window.
     pub fn strip(&mut self, ui: &mut Ui, rect: Rect, rings: &[LeadRing], lead: Lead) -> StripWindow {
+        self.strip_with_sounds(ui, rect, rings, lead, None)
+    }
+
+    /// [`Self::strip`] with the heart-sound lane under it when [`Self::show_heart_sounds`] is on and
+    /// `sounds` runs in step with the rings ([`PcgLane::factor`]); otherwise exactly [`Self::strip`].
+    /// The lane shares the strip's time axis, scrub and calipers: a caliper can be dragged in either.
+    pub fn strip_with_sounds(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        rings: &[LeadRing],
+        lead: Lead,
+        sounds: Option<PcgLane<'_>>,
+    ) -> StripWindow {
+        let lane = sounds
+            .filter(|_| self.show_heart_sounds)
+            .and_then(|l| Some((l, l.factor(rings.first()?)?)));
+        let (rect, lane_rect) = match lane {
+            Some(_) => {
+                let h = lane_height(rect.height());
+                let (top, bottom) = rect.split_top_bottom_at_y(rect.bottom() - h);
+                (top, Some(bottom))
+            }
+            None => (rect, None),
+        };
+        let win = self.ecg_strip(ui, rect, rings, lead);
+        if let (Some((lane, factor)), Some(lane_rect)) = (lane, lane_rect) {
+            let id = ui.scope_id().with("ecg_view_sounds");
+            let lane_win = win.rescaled(lane_rect, factor);
+            draw_pcg_lane(ui, id, &lane_win, &lane, &self.style);
+            strip_interact(
+                ui,
+                id,
+                &lane_win,
+                lane.ring,
+                &mut self.strip_calipers,
+                &mut self.playback,
+            );
+            draw_caliper_lines(ui, &lane_win, &self.strip_calipers, &self.style);
+        }
+        win
+    }
+
+    fn ecg_strip(&mut self, ui: &mut Ui, rect: Rect, rings: &[LeadRing], lead: Lead) -> StripWindow {
         let id = ui.scope_id().with("ecg_view_strip");
         let head = self.head(rings);
         let rings = self.display.rings(rings);
@@ -307,7 +467,7 @@ impl EcgView {
             rect,
             ring,
             &self.style,
-            &self.trace(lead, lead.label(), false, head),
+            &self.trace(lead, lead.label(), false, head, Annotate::ALL),
         );
         strip_interact(ui, id, &win, ring, &mut self.strip_calipers, &mut self.playback);
         draw_calipers(ui, &win, ring, false, &self.strip_calipers, &self.style);
@@ -316,6 +476,54 @@ impl EcgView {
 
     /// The 12-lead page in `rect`, each cell with its own calipers. Returns the cell windows.
     pub fn page(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        rings: &[LeadRing],
+        layout: TwelveLeadLayout,
+    ) -> Vec<StripWindow> {
+        self.page_with_sounds(ui, rect, rings, layout, None)
+    }
+
+    /// [`Self::page`] with the heart-sound lane along the bottom (under the rhythm strip of the
+    /// clinical layout) when [`Self::show_heart_sounds`] is on and `sounds` runs in step with the
+    /// rings. Where the page's last cell spans the full width (12 × 1, 3 × 4 + rhythm) the lane
+    /// shares that cell's calipers.
+    pub fn page_with_sounds(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        rings: &[LeadRing],
+        layout: TwelveLeadLayout,
+        sounds: Option<PcgLane<'_>>,
+    ) -> Vec<StripWindow> {
+        let lane = sounds
+            .filter(|_| self.show_heart_sounds)
+            .and_then(|l| Some((l, l.factor(rings.first()?)?)));
+        let Some((lane, factor)) = lane else {
+            return self.page_cells(ui, rect, rings, layout);
+        };
+        let h = lane_height(rect.height() * 0.6);
+        let (top, lane_rect) = rect.split_top_bottom_at_y(rect.bottom() - h);
+        let wins = self.page_cells(ui, top, rings, layout);
+        let head = self.head(rings);
+        let probe = StripWindow::new(lane_rect, &self.style, fs_of(rings), head);
+        let lane_win = probe.rescaled(lane_rect, factor);
+        let id = ui.scope_id().with("ecg_view_page_sounds");
+        draw_pcg_lane(ui, id, &lane_win, &lane, &self.style);
+        let spans = |w: &StripWindow| {
+            (w.rect.left() - lane_rect.left()).abs() < 0.5 && (w.rect.right() - lane_rect.right()).abs() < 0.5
+        };
+        let calipers = match (wins.last(), self.page_calipers.last_mut()) {
+            (Some(w), Some(c)) if spans(w) && w.head == head => c,
+            _ => &mut self.page_sound_calipers,
+        };
+        strip_interact(ui, id, &lane_win, lane.ring, calipers, &mut self.playback);
+        draw_caliper_lines(ui, &lane_win, calipers, &self.style);
+        wins
+    }
+
+    fn page_cells(
         &mut self,
         ui: &mut Ui,
         rect: Rect,
@@ -331,13 +539,25 @@ impl EcgView {
         let head = self.head(rings);
         let rings = self.display.rings(rings);
         let base = ui.scope_id().with("ecg_view_page");
+        let intervals_fit = intervals_fit_cells(
+            self.annotations.as_ref().and_then(|a| a.analysis.rr_ms),
+            self.style.mm_per_s * self.style.px_per_mm,
+        );
         let mut wins = Vec::with_capacity(cells.len());
         for (i, cell) in cells.iter().enumerate() {
             let ring = &rings[cell.lead as usize];
             let id = base.with(i);
             let probe = StripWindow::new(cell.rect, &self.style, ring.sample_rate_hz, head);
             let cell_head = head.saturating_sub(cell.columns_before_head as u64 * probe.visible_samples);
-            let trace = self.trace(cell.lead, cell.lead.label(), cell.invert, cell_head);
+            // Wave letters and interval read-outs crowd a 12-lead page: the clinical grid carries
+            // them on its rhythm strip only; the other layouts draw them in every cell, and
+            // `draw_strip` drops the ones that would touch their neighbour.
+            let annotate = Annotate {
+                waves: cell_is_annotated(layout, i, cells.len()),
+                intervals: cell_is_annotated(layout, i, cells.len())
+                    && (layout == TwelveLeadLayout::Clinical || intervals_fit),
+            };
+            let trace = self.trace(cell.lead, cell.lead.label(), cell.invert, cell_head, annotate);
             let win = draw_strip(ui, id, cell.rect, ring, &self.style, &trace);
             strip_interact(ui, id, &win, ring, &mut self.page_calipers[i], &mut self.playback);
             draw_calipers(ui, &win, ring, cell.invert, &self.page_calipers[i], &self.style);
@@ -407,6 +627,15 @@ impl EcgView {
     /// Calipers of the single-lead strip, for programmatic placement.
     pub fn strip_calipers_mut(&mut self) -> &mut CaliperSet {
         &mut self.strip_calipers
+    }
+}
+
+/// The display filter's name with its band, as in the radio list and on the Display button.
+fn filter_name(m: FilterMode) -> String {
+    match m {
+        FilterMode::Off => t!("ecg-filter-off"),
+        FilterMode::Diagnostic => t!("ecg-filter-diagnostic"),
+        FilterMode::Monitor => t!("ecg-filter-monitor"),
     }
 }
 

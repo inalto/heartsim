@@ -32,9 +32,12 @@ impl HeartSimApp {
         self.engine = TimingEngine::new(s.timing.clone());
         self.engine.set_shock_seed(s.scenario.seed);
         self.synth = synth;
+        self.adjust_baseline = super::AdjustBaseline::of(&s.timing, &self.synth);
         self.timeline = Timeline::new(s.scenario.timeline.clone());
         self.sample_accumulator = 0.0;
         self.rings.iter_mut().for_each(heartsim_ecg::LeadRing::clear);
+        self.sounds
+            .reset(s.scenario.seed, s.timing.sinus.respiration_rate_bpm);
         self.last_v_activation = Millis(-1000.0);
         if let Some(h) = &mut self.heart {
             h.retime(&s.timing);

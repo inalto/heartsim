@@ -81,3 +81,27 @@ fn measure_with_calipers_then_get_graded_with_an_explanation() {
     );
     let _ = h.get_by_label_contains("Not quite: you measured");
 }
+
+/// The two buttons that are disabled until the learner has done something say what is missing
+/// when hovered, and the strip takes the height of the page.
+#[test]
+fn disabled_buttons_explain_themselves_on_hover() {
+    let mut h = harness();
+    h.run();
+    h.get_by_label("New question").click();
+    h.run();
+
+    h.get_by_label("Use caliper reading").hover();
+    h.run();
+    h.run();
+    let _ = h.get_by_label("Place the calipers first");
+
+    h.get_by_label("Check answer").hover();
+    h.run();
+    h.run();
+    let _ = h.get_by_label("Enter a measurement first");
+    assert!(
+        h.query_by_label("Place the calipers first").is_none(),
+        "only the hovered button explains itself"
+    );
+}

@@ -6,3 +6,6 @@ tab-12-lead = ECG 12 dérivations
 tab-help = Aide
 tab-electrodes = Électrodes
 tab-tutorials = Tutoriels
+nav-group-explore = Explorer
+nav-group-practise = S'exercer
+nav-group-learn = Apprendre

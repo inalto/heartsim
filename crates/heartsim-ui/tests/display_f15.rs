@@ -65,7 +65,7 @@ fn harness() -> Harness<'static, Model> {
         .build_ui_state(
             |ui, m: &mut Model| {
                 m.view.update(&m.rings);
-                m.view.display_controls(ui);
+                m.view.controls(ui, &m.rings, None);
             },
             Model {
                 view: EcgView::new(),
@@ -79,6 +79,10 @@ fn the_controls_set_the_filter_and_the_artefacts() {
     let mut h = harness();
     h.run();
     assert!(h.state().view.display_config().is_identity());
+    // the filter and the artefacts live in the Display popup, closed until the button is pressed
+    assert!(h.query_by_label("Monitor 0.5–40 Hz").is_none());
+    h.get_by_label("Display").click();
+    h.run();
 
     h.get_by_label("Monitor 0.5–40 Hz").click();
     h.run();
@@ -105,13 +109,28 @@ fn the_controls_set_the_filter_and_the_artefacts() {
     let a = h.state().view.display_config().artefacts;
     assert!(a.baseline_wander && a.respiration && a.muscle);
     // an intensity slider appears once something is on
-    assert!(h.query_all_by_label_contains("intensity").next().is_some());
+    assert!(h.query_all_by_label_contains("Intensity").next().is_some());
+}
+
+#[test]
+fn the_display_button_says_when_a_filter_or_an_artefact_is_on() {
+    let mut h = harness();
+    h.run();
+    let _ = h.get_by_label("Display");
+    h.state_mut().view.set_display_config(everything_on(3));
+    h.run();
+    let _ = h.get_by_label_contains("Display · Monitor 0.5–40 Hz, artefacts: 4");
+    h.state_mut().view.set_display_config(DisplayConfig::default());
+    h.run();
+    let _ = h.get_by_label("Display");
 }
 
 #[test]
 fn the_controls_exist_in_italian() {
     let mut h = harness();
     i18n::set_language("it");
+    h.run();
+    h.get_by_label("Visualizzazione").click();
     h.run();
     let _ = h.get_by_label("Filtro");
     let _ = h.get_by_label("Artefatti");

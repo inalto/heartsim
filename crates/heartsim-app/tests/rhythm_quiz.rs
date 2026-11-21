@@ -86,3 +86,33 @@ fn quiz_flow_start_answer_feedback_next() {
     h.run();
     assert_eq!(h.state().opened, Some(q2.answer));
 }
+
+/// After an answer the right option says "(correct)" and a wrong choice says "(your answer)" in
+/// words (the tick and the cross are painted beside them), the other options stay as they were,
+/// and none of the four can be answered again.
+#[test]
+fn answered_options_are_marked_without_relying_on_colour() {
+    let mut h = harness();
+    h.get_by_label("New question").click();
+    h.run();
+    let q = h.state().quiz.question.clone().unwrap();
+    let wrong = *q.options.iter().find(|&&i| i != q.answer).unwrap();
+    h.get_by_label(&title(&h, wrong)).click();
+    h.run();
+    let _ = h.get_by_label(&format!("{}  (correct)", title(&h, q.answer)));
+    let _ = h.get_by_label(&format!("{}  (your answer)", title(&h, wrong)));
+    let others = q.options.iter().filter(|&&i| i != q.answer && i != wrong);
+    for &i in others {
+        assert!(
+            h.query_by_label(&title(&h, i)).is_some(),
+            "plain option kept its name"
+        );
+    }
+    // a second click on any option changes nothing
+    h.get_by_label(&format!("{}  (correct)", title(&h, q.answer)))
+        .click();
+    h.run();
+    assert_eq!((h.state().quiz.asked, h.state().quiz.correct), (1, 0));
+    // the score says what it counts
+    let _ = h.get_by_label("Score: 0 of 1 correct");
+}

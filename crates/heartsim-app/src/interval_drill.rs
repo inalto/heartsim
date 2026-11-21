@@ -27,8 +27,11 @@ use heartsim_ui::{cards, t};
 pub const DRILL_SPEED_MM_S: f32 = 50.0;
 /// Strips tried before a question gives up (some rhythms have no measurable PR or a ragged QT).
 const MAX_TRIES: usize = 24;
-/// Height of the drill strip, screen points.
-const STRIP_HEIGHT: f32 = 280.0;
+/// Smallest and largest height of the drill strip, screen points. The strip takes the height the
+/// page has (a taller lane, not a stretched grid: the paper scale of 1 mm per 20 ms and 10 mm/mV
+/// never changes) up to a maximum beyond which the trace would only float in empty paper.
+const STRIP_MIN_HEIGHT: f32 = 240.0;
+const STRIP_MAX_HEIGHT: f32 = 640.0;
 /// Unit suffix of the measurement box.
 const MS: &str = " ms";
 
@@ -328,30 +331,50 @@ impl IntervalDrill {
             ui.label(t!("interval-calipers-reading", ms = format!("{ms:.0}")));
         }
         let can_copy = self.caliper_ms().is_some() && self.grade.is_none();
-        if ui
-            .add_enabled(can_copy, egui::Button::new(t!("interval-calipers-use")))
-            .clicked()
+        let mut use_button = ui.add_enabled(can_copy, egui::Button::new(t!("interval-calipers-use")));
+        if self.grade.is_none() {
+            use_button = use_button.on_disabled_hover_text(t!("interval-calipers-use-disabled"));
+        }
+        if use_button.clicked()
             && let Some(ms) = self.caliper_ms()
         {
             self.entry_ms = ms.round();
         }
         ui.horizontal(|ui| {
-            let label = ui.label(t!("interval-your-value"));
+            let label = ui.strong(t!("interval-your-value"));
+            // an input field: outlined, on the field background, empty until a value is entered
+            let p = heartsim_ui::Palette::of(ui);
+            let widgets = &mut ui.visuals_mut().widgets;
+            for w in [&mut widgets.inactive, &mut widgets.hovered] {
+                w.weak_bg_fill = if p.dark { p.panel } else { p.card };
+                w.bg_fill = w.weak_bg_fill;
+            }
+            widgets.inactive.bg_stroke = egui::Stroke::new(1.0, p.muted);
             ui.add_enabled(
                 self.grade.is_none(),
                 egui::DragValue::new(&mut self.entry_ms)
                     .range(0.0..=1500.0)
                     .speed(1.0)
                     .max_decimals(0)
+                    .custom_formatter(|v, _| {
+                        if v < 0.5 {
+                            "—".to_owned()
+                        } else {
+                            format!("{v:.0}")
+                        }
+                    })
+                    .custom_parser(|text| text.trim().trim_end_matches("ms").trim().parse::<f64>().ok())
                     .suffix(MS),
             )
+            .on_hover_text(t!("interval-value-hint"))
             .labelled_by(label.id);
         });
         let can_check = self.grade.is_none() && self.entry_ms > 0.0;
-        if ui
-            .add_enabled(can_check, egui::Button::new(t!("app-quiz-check")))
-            .clicked()
-        {
+        let mut check = ui.add_enabled(can_check, egui::Button::new(t!("app-quiz-check")));
+        if self.grade.is_none() {
+            check = check.on_disabled_hover_text(t!("interval-check-disabled"));
+        }
+        if check.clicked() {
             self.answer(self.entry_ms);
         }
         if let Some(g) = self.grade {
@@ -399,7 +422,10 @@ impl IntervalDrill {
             mode: SweepMode::Scroll,
             ..*style
         };
-        let size = egui::vec2(ui.available_width(), STRIP_HEIGHT.min(ui.available_height()));
+        let size = egui::vec2(
+            ui.available_width(),
+            ui.available_height().clamp(STRIP_MIN_HEIGHT, STRIP_MAX_HEIGHT),
+        );
         let rect = egui::Rect::from_min_size(ui.cursor().min, size);
         let revealed = self.grade.is_some();
         let ring = &self.rings[Lead::II as usize];

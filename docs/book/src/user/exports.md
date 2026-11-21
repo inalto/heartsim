@@ -1,6 +1,6 @@
 # Exporting and reviewing ECGs
 
-The **Export / Import** button at the right of the tab row opens the export window. It saves the last seconds of the strip
+The **Export / Import** entry of the hamburger menu opens the export window. It saves the last seconds of the strip
 in several formats at once, and loads a recording back for review with the calipers.
 
 ## Exporting
@@ -45,7 +45,7 @@ The same files come out of the command line, byte for byte, for the same scenari
 Type the path of a `.csv`, `.hea` (or `.dat`) or `.zip` file in the export window and press **Import**, or simply drop the file on
 the heartsim window. The recording replaces the live strip and the simulation pauses:
 
-* the Simulator strip and the 12-Lead page show the recording; drag the *s back* slider or the strip to move through it;
+* the Simulator strip and the 12-Lead page show the recording; drag the *Scrub back* slider or the strip to move through it;
 * calipers, wave letters and the interval read-out work as on a live strip;
 * the tab row names the file under review.
 

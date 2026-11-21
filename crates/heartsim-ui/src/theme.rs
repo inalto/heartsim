@@ -191,6 +191,17 @@ impl Palette {
         self.class(AxisClass::RightDeviation)
     }
 
+    /// Amber text that reads at 4.5:1 on the panel and on the selected (accent-tinted) fill of a
+    /// toggle, in both themes: for a label that flags a change on a toggle button.
+    #[must_use]
+    pub fn warn_text(&self) -> Color32 {
+        if self.dark {
+            Color32::from_rgb(252, 215, 150)
+        } else {
+            self.warn().on_soft
+        }
+    }
+
     /// Amber, for a warning or an equiphasic lead.
     #[must_use]
     pub fn warn(&self) -> ClassColours {
@@ -316,6 +327,29 @@ mod tests {
                 assert!(contrast_ratio(fg, bg) >= 4.5, "{} theme text", theme_name(&p));
             }
             assert!(contrast_ratio(WHITE, p.accent_strong) >= 4.5, "title band");
+        }
+    }
+
+    /// The amber text of a toggle that counts changes ("Adjust · 2") reads on the panel and on the
+    /// selected fill, which is the accent blended over the panel, in both themes.
+    #[test]
+    fn amber_toggle_text_reads_on_the_panel_and_on_the_selected_fill() {
+        for p in [Palette::light(), Palette::dark()] {
+            let a = if p.dark { 0.45 } else { 0.3 };
+            let mix = |x: u8, y: u8| (f32::from(x) * (1.0 - a) + f32::from(y) * a).round() as u8;
+            let selected = Color32::from_rgb(
+                mix(p.panel.r(), p.accent.r()),
+                mix(p.panel.g(), p.accent.g()),
+                mix(p.panel.b(), p.accent.b()),
+            );
+            let text = p.warn_text();
+            assert!(contrast_ratio(text, p.panel) >= 4.5, "{} panel", theme_name(&p));
+            assert!(
+                contrast_ratio(text, selected) >= 4.5,
+                "{} selected: {:.2}",
+                theme_name(&p),
+                contrast_ratio(text, selected)
+            );
         }
     }
 

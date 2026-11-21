@@ -116,8 +116,14 @@ fn led(ui: &mut Ui, on: bool, colour: Color32, label: &str) {
 const PACE_COLOUR: Color32 = Color32::from_rgb(255, 170, 30);
 const SENSE_COLOUR: Color32 = Color32::from_rgb(60, 200, 90);
 
-fn slider(ui: &mut Ui, value: &mut f64, range: std::ops::RangeInclusive<f64>, text: &str) -> bool {
-    ui.add(egui::Slider::new(value, range).text(text)).changed()
+fn slider(
+    ui: &mut Ui,
+    value: &mut f64,
+    range: std::ops::RangeInclusive<f64>,
+    text: &str,
+    unit: &str,
+) -> bool {
+    crate::controls::slider(ui, text, egui::Slider::new(value, range), unit).changed()
 }
 
 fn site_combo(ui: &mut Ui, label: &str, lead: &mut LeadParams, sites: &[LeadSite]) -> bool {
@@ -167,7 +173,13 @@ pub fn pacer_panel(ui: &mut Ui, state: &mut PacerPanelState) -> PacerPanelRespon
                 .on_hover_text(t!("pacer-async-hint"))
                 .changed();
         });
-        r.changed |= slider(ui, &mut c.lower_rate_bpm, RATE_RANGE_PPM, &t!("pacer-rate"));
+        r.changed |= slider(
+            ui,
+            &mut c.lower_rate_bpm,
+            RATE_RANGE_PPM,
+            &t!("pacer-rate"),
+            crate::controls::PPM,
+        );
         ui.separator();
         ui.label(t!("pacer-atrium"));
         r.changed |= slider(
@@ -175,12 +187,14 @@ pub fn pacer_panel(ui: &mut Ui, state: &mut PacerPanelState) -> PacerPanelRespon
             &mut c.atrial_output_ma,
             OUTPUT_RANGE_MA,
             &t!("pacer-a-output"),
+            crate::controls::MA,
         );
         r.changed |= slider(
             ui,
             &mut c.atrial_sensitivity_mv,
             SENSITIVITY_RANGE_MV,
             &t!("pacer-a-sensitivity"),
+            crate::controls::MV,
         );
         ui.label(t!("pacer-ventricle"));
         r.changed |= slider(
@@ -188,17 +202,37 @@ pub fn pacer_panel(ui: &mut Ui, state: &mut PacerPanelState) -> PacerPanelRespon
             &mut c.ventricular_output_ma,
             OUTPUT_RANGE_MA,
             &t!("pacer-v-output"),
+            crate::controls::MA,
         );
         r.changed |= slider(
             ui,
             &mut c.ventricular_sensitivity_mv,
             SENSITIVITY_RANGE_MV,
             &t!("pacer-v-sensitivity"),
+            crate::controls::MV,
         );
         ui.separator();
-        r.changed |= slider(ui, &mut c.av_delay_ms, 50.0..=300.0, &t!("pacer-av-delay"));
-        r.changed |= slider(ui, &mut c.upper_rate_bpm, 80.0..=180.0, &t!("pacer-upper-rate"));
-        r.changed |= slider(ui, &mut c.pvarp_ms, 150.0..=500.0, &t!("pacer-pvarp"));
+        r.changed |= slider(
+            ui,
+            &mut c.av_delay_ms,
+            50.0..=300.0,
+            &t!("pacer-av-delay"),
+            crate::controls::MS,
+        );
+        r.changed |= slider(
+            ui,
+            &mut c.upper_rate_bpm,
+            80.0..=180.0,
+            &t!("pacer-upper-rate"),
+            crate::controls::PPM,
+        );
+        r.changed |= slider(
+            ui,
+            &mut c.pvarp_ms,
+            150.0..=500.0,
+            &t!("pacer-pvarp"),
+            crate::controls::MS,
+        );
         ui.separator();
         ui.label(t!("pacer-leads"));
         let mut moved = false;
@@ -226,7 +260,13 @@ pub fn pacer_panel(ui: &mut Ui, state: &mut PacerPanelState) -> PacerPanelRespon
                 lv,
                 &[LeadSite::LvLateral, LeadSite::LvPosterior],
             );
-            r.changed |= slider(ui, &mut c.vv_delay_ms, -80.0..=80.0, &t!("pacer-vv-offset"));
+            r.changed |= slider(
+                ui,
+                &mut c.vv_delay_ms,
+                -80.0..=80.0,
+                &t!("pacer-vv-offset"),
+                crate::controls::MS,
+            );
         }
         r.changed |= moved;
         r.leads_moved |= moved;

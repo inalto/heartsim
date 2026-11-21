@@ -4,7 +4,6 @@
 
 use super::HeartSimApp;
 use eframe::egui;
-use heartsim_core::Lead;
 use heartsim_ui::{VectorPlane, VectorViewStyle, cards, full_scale_mv, t, vector_plane};
 
 impl HeartSimApp {
@@ -13,12 +12,7 @@ impl HeartSimApp {
             .resizable(true)
             .default_size(200.0)
             .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    for l in Lead::ALL {
-                        ui.selectable_value(&mut self.selected_lead, l, l.label());
-                    }
-                });
-                self.paper_controls(ui);
+                self.ecg.controls(ui, &self.rings, Some(&mut self.selected_lead));
                 let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
                 self.ecg.strip(ui, rect, &self.rings, self.selected_lead);
                 ui.allocate_rect(rect, egui::Sense::hover());

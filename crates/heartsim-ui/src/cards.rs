@@ -79,29 +79,12 @@ pub fn wrapping_group<R>(
     r
 }
 
-/// A title band: white text on the strong accent, the full width.
+/// A panel title: the same heading as a card's ([`heading`]), with a little room below. It was a
+/// filled band once; a filled bar drew the eye to the title before the content it names.
 pub fn title_band(ui: &mut Ui, text: impl Into<String>) -> Response {
-    let p = Palette::of(ui);
-    Frame::new()
-        .fill(p.accent_strong)
-        .corner_radius(CornerRadius::same(CARD_RADIUS))
-        .inner_margin(Margin::symmetric(12, 6))
-        .outer_margin(Margin {
-            left: 1,
-            right: 1,
-            top: 2,
-            bottom: 6,
-        })
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.label(
-                RichText::new(text.into())
-                    .size(16.0)
-                    .strong()
-                    .color(Color32::WHITE),
-            )
-        })
-        .inner
+    let response = heading(ui, text);
+    ui.add_space(4.0);
+    response
 }
 
 /// A card heading.
@@ -212,6 +195,102 @@ pub fn status_icon(painter: &Painter, centre: Pos2, radius: f32, ok: bool, c: Cl
         );
         painter.circle_filled(centre + Vec2::new(0.0, 0.46 * r), r * 0.14, c.on_strong);
     }
+}
+
+/// A cross on a filled disc, drawn as shapes: the wrong-answer mark that pairs with the check mark
+/// of [`status_icon`].
+pub fn cross_icon(painter: &Painter, centre: Pos2, radius: f32, c: ClassColours) {
+    painter.circle_filled(centre, radius, c.strong);
+    let d = 0.38 * radius;
+    let stroke = Stroke::new(radius * 0.26, c.on_strong);
+    painter.line_segment([centre + Vec2::new(-d, -d), centre + Vec2::new(d, d)], stroke);
+    painter.line_segment([centre + Vec2::new(-d, d), centre + Vec2::new(d, -d)], stroke);
+}
+
+/// The state of one answer option after the learner has (or has not yet) answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnswerState {
+    /// Not answered yet: a normal clickable button.
+    Open,
+    /// Answered, and this option is neither the right one nor the learner's: plainly inactive.
+    Inactive,
+    /// The right answer: tick icon, filled success background, heavier outline.
+    Correct,
+    /// The learner's wrong choice: cross icon, filled error background, heavier outline.
+    Wrong,
+}
+
+/// One answer option as a full-width row. After the answer the right one carries a tick and a
+/// filled green background and the learner's wrong choice a cross and a filled rose background, so
+/// the state never rests on colour alone (WCAG 1.4.1); the text keeps at least 4.5:1 on its
+/// background in both themes. Only [`AnswerState::Open`] reacts to clicks.
+pub fn answer_option(ui: &mut Ui, state: AnswerState, text: &str) -> Response {
+    const ICON_COL: f32 = 28.0;
+    const PAD: f32 = 8.0;
+    let p = Palette::of(ui);
+    let width = ui.available_width();
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let colour = match state {
+        AnswerState::Open | AnswerState::Inactive => p.text,
+        AnswerState::Correct => p.good().on_soft,
+        AnswerState::Wrong => p.bad().on_soft,
+    };
+    let galley = ui.painter().layout(
+        text.to_owned(),
+        font,
+        colour,
+        (width - ICON_COL - 2.0 * PAD).max(40.0),
+    );
+    let height = (galley.size().y + 2.0 * PAD).max(32.0);
+    let sense = if state == AnswerState::Open {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), sense);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, state == AnswerState::Open, text));
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let radius = CornerRadius::same(8);
+        match state {
+            AnswerState::Open => {
+                let v = ui.style().interact(&response);
+                painter.rect(rect, radius, v.weak_bg_fill, v.bg_stroke, StrokeKind::Inside);
+            }
+            AnswerState::Inactive => {
+                painter.rect_stroke(rect, radius, Stroke::new(1.0, p.card_stroke), StrokeKind::Inside);
+            }
+            AnswerState::Correct | AnswerState::Wrong => {
+                let c = if state == AnswerState::Correct {
+                    p.good()
+                } else {
+                    p.bad()
+                };
+                painter.rect(
+                    rect,
+                    radius,
+                    c.soft,
+                    Stroke::new(2.0, c.strong),
+                    StrokeKind::Inside,
+                );
+                let centre = Pos2::new(rect.left() + PAD + ICON_COL / 2.0 - 4.0, rect.center().y);
+                if state == AnswerState::Correct {
+                    status_icon(painter, centre, 9.0, true, c);
+                } else {
+                    cross_icon(painter, centre, 9.0, c);
+                }
+            }
+        }
+        painter.galley(
+            Pos2::new(
+                rect.left() + PAD + ICON_COL,
+                rect.center().y - galley.size().y / 2.0,
+            ),
+            galley,
+            colour,
+        );
+    }
+    response
 }
 
 /// A small rounded colour swatch.

@@ -28,6 +28,8 @@ A strip from a random scenario of the library is shown without its name. Pick th
 are the rhythms it is most often mistaken for. After answering you see the explanation and can open the scenario in the
 Simulator to look at it on the heart. The score is kept between sessions.
 
+After an answer the right option shows a tick on a green fill and a wrong choice a cross on a rose fill, so the result does not depend on colour. The score reads "Score: 3 of 12 correct".
+
 The explanation is shown after every answer, right or wrong: what the rhythm is, why (the teaching notes of the scenario), the
 rhythms it is most often confused with, and, when you chose another one, what that rhythm is.
 
@@ -39,7 +41,7 @@ Measure an interval with the calipers, as you would on paper. Press **New questi
 (1 mm is 20 ms) and the question names an interval: the **PR interval** (start of the P wave to start of the QRS), the **QRS
 duration**, or the **QT interval** (start of the QRS to end of the T wave). Press **Place calipers**, drag the two lines to the
 start and end of the interval (or shift-click the strip for another pair), press **Use caliper reading** or type the value, and
-press **Check answer**.
+press **Check answer**. The strip uses the height of the window (the paper scale stays 1 mm = 20 ms); the two buttons that are greyed out until you have placed the calipers or entered a value say so when you hover them.
 
 An answer is correct within ±20 ms for PR and QT and ±15 ms for QRS, about one small square. The reference is the simulator's own
 measurement of the same strip, taken only on a regular rhythm with a clean signal and a value inside the scenario's textbook

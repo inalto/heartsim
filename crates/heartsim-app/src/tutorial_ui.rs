@@ -44,6 +44,9 @@ impl std::fmt::Debug for Tutorials {
     }
 }
 
+/// Widest a tutorial card grows, points.
+const TUTORIAL_CARD_MAX_WIDTH: f32 = 720.0;
+
 impl Tutorials {
     #[must_use]
     pub fn new(library: TutorialLibrary, progress_path: Option<PathBuf>) -> Self {
@@ -225,44 +228,93 @@ impl Tutorials {
             ui.label(t!("tut-none"));
         }
         let mut start = None;
+        // equal-width cards, as wide as the column but no wider than a line of text reads well
+        let width = ui.available_width().min(TUTORIAL_CARD_MAX_WIDTH);
         for (i, t) in self.library.tutorials.iter().enumerate() {
             let p = self.progress.get(&t.id);
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
-                    ui.strong(&t.title);
-                    if p.completed {
-                        let good = Palette::of(ui).good();
-                        cards::pill_coloured(
-                            ui,
-                            t!("tut-completed"),
-                            good.soft,
-                            good.on_soft,
-                            Some(good.strong),
+            let total = t.pages.len().max(1);
+            let reached = if p == TutorialProgress::default() {
+                0
+            } else {
+                (p.furthest + 1).min(total)
+            };
+            ui.scope(|ui| {
+                ui.set_max_width(width);
+                cards::card(ui, |ui| {
+                    ui.set_width(width - 22.0);
+                    cards::heading(ui, &t.title);
+                    ui.add(egui::Label::new(&t.summary).wrap());
+                    ui.add_space(4.0);
+                    // progress: "3 of 6 pages" with a thin bar, or "Completed" with a tick
+                    ui.horizontal(|ui| {
+                        if p.completed {
+                            let good = Palette::of(ui).good();
+                            let (rect, _) =
+                                ui.allocate_exact_size(egui::Vec2::splat(18.0), egui::Sense::hover());
+                            cards::status_icon(ui.painter(), rect.center(), 8.0, true, good);
+                            ui.label(
+                                egui::RichText::new(t!("tut-completed"))
+                                    .color(good.on_soft)
+                                    .strong(),
+                            );
+                        } else if reached > 0 {
+                            ui.label(t!(
+                                "tut-progress",
+                                done = reached.to_string(),
+                                total = total.to_string()
+                            ));
+                        } else {
+                            ui.label(t!("tut-pages", count = total.to_string()));
+                        }
+                    });
+                    if p.completed || reached > 0 {
+                        ui.add(
+                            egui::ProgressBar::new(if p.completed {
+                                1.0
+                            } else {
+                                reached as f32 / total as f32
+                            })
+                            .desired_width(ui.available_width())
+                            .desired_height(6.0)
+                            .corner_radius(3),
                         );
                     }
-                });
-                ui.label(&t.summary);
-                let frac = (p.furthest + 1) as f32 / t.pages.len().max(1) as f32;
-                ui.add(
-                    egui::ProgressBar::new(if p == TutorialProgress::default() {
-                        0.0
-                    } else {
-                        frac
-                    })
-                    .desired_width(220.0)
-                    .text(t!("tut-pages", count = t.pages.len().to_string())),
-                );
-                ui.horizontal(|ui| {
-                    if ui.button(t!("tut-start", title = t.title.as_str())).clicked() {
-                        start = Some((i, 0));
-                    }
-                    if p.page > 0
-                        && ui
-                            .button(t!("tut-resume", page = (p.page + 1).to_string()))
-                            .clicked()
-                    {
-                        start = Some((i, p.page));
-                    }
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        // the visible word is short; the title is the accessible name and the hover
+                        let named = |response: egui::Response, name: String| {
+                            let label = name.clone();
+                            response.widget_info(move || {
+                                egui::WidgetInfo::labeled(egui::Role::Button, true, &label)
+                            });
+                            response.on_hover_text(name)
+                        };
+                        if p.completed {
+                            let r = ui.button(t!("tut-start-again"));
+                            if named(r, t!("tut-start-again-hint", title = t.title.as_str())).clicked() {
+                                start = Some((i, 0));
+                            }
+                        } else if p.page > 0 {
+                            let r = ui.button(t!("tut-continue"));
+                            let name = t!(
+                                "tut-resume",
+                                title = t.title.as_str(),
+                                page = (p.page + 1).to_string()
+                            );
+                            if named(r, name).clicked() {
+                                start = Some((i, p.page));
+                            }
+                            let r = ui.button(t!("tut-start-again"));
+                            if named(r, t!("tut-start-again-hint", title = t.title.as_str())).clicked() {
+                                start = Some((i, 0));
+                            }
+                        } else {
+                            let r = ui.button(t!("tut-start-short"));
+                            if named(r, t!("tut-start", title = t.title.as_str())).clicked() {
+                                start = Some((i, 0));
+                            }
+                        }
+                    });
                 });
             });
         }

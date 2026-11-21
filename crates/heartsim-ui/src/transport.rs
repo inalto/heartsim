@@ -27,10 +27,11 @@ pub fn transport_controls(ui: &mut Ui, paused: bool, speed: &mut f64) -> Transpo
         t!("transport-pause")
     };
     let pause = ui.button(label);
-    let speed_response = ui.add(
-        Slider::new(speed, SPEED_RANGE)
-            .logarithmic(true)
-            .text(t!("transport-speed")),
+    let speed_response = crate::controls::slider(
+        ui,
+        &t!("transport-speed"),
+        Slider::new(speed, SPEED_RANGE).logarithmic(true).max_decimals(2),
+        crate::controls::TIMES,
     );
     TransportResponse {
         pause,

@@ -11,12 +11,24 @@ tab-rhythm-quiz = Rhythm Quiz
 tab-tutorials = Tutorials
 tab-help = Help
 
+## Page groups of the top bar (nav.rs)
+nav-group-explore = Explore
+nav-group-practise = Practise
+nav-group-learn = Learn
+nav-shortcut = Shortcut: key { $key }
+
 ## Toolbar
 app-av-block = AV block
-app-sa-rate = SA rate bpm
-app-mobitz = Mobitz II n
-app-axis-shift = axis shift °
+app-sa-rate = SA rate
+app-mobitz = Mobitz II: drop every n-th beat
+app-axis-shift = Axis shift
 app-qrs-width = QRS width
+app-mobitz-short = Mobitz II
+app-mobitz-off = off
+app-adjust = Adjust
+app-adjust-count = Adjust · { $count }
+app-adjust-hint = Sinus rate, AV block, QRS axis and width. Shown when a value differs from the rhythm's own.
+app-adjust-changed = Changed from this rhythm: { $what }
 app-pacemaker = Pacemaker
 app-therapy = Therapy
 app-frontal-axis = Frontal QRS axis
@@ -36,7 +48,7 @@ app-axis-extreme = Both I and aVF negative: extreme (north-west) axis.
 ## Axis quiz
 app-quiz-new = New question
 app-quiz-check = Check answer
-app-quiz-score = Score { $correct }/{ $asked }
+app-quiz-score = Score: { $correct } of { $asked } correct
 app-quiz-intro = Press New question, read the six limb leads, then click the axis on the circle.
 app-quiz-click = Click the circle where you think the QRS axis points.
 app-quiz-answer = Answer { $answer }°, you chose { $chosen }° (off by { $off }°)
@@ -180,15 +192,15 @@ part-torso = Torso
 heart-ablated = Ablated { $radius } mm around { $region }
 heart-stimulus = Stimulus: { $region } at { $time } ms
 heart-ablation-cleared = Ablation lesions cleared
-heart-tier1 = 3-D activation (Tier 1)
-heart-tier1-hint = Off: ECG strip only (Tier 0); the heart is drawn without a colour map.
+heart-tier1 = 3-D activation
+heart-tier1-hint = Off: ECG strip only; the heart is drawn without a colour map.
 heart-reset-window = Reset window
 heart-colour-blind = Colour-blind safe
 heart-wavefront = Wavefront outline
 heart-click = Click on the heart
 heart-stimulate = Stimulate
 heart-ablate = Ablate
-heart-lesion-radius = lesion radius mm
+heart-lesion-radius = Lesion radius
 heart-shift-click = Shift-click ablates.
 heart-clear-ablation = Clear ablation
 heart-territory = Territory: { $territory }
@@ -217,10 +229,10 @@ tut-self-study-hint = Pages in order; answer each check before moving on.
 tut-tutor = Tutor
 tut-tutor-hint = Free navigation for presenting to a group; checks are optional.
 tut-none = No tutorials installed (assets/tutorials).
-tut-completed = completed
+tut-completed = Completed
 tut-pages = { $count } pages
 tut-start = Start { $title }
-tut-resume = Resume at page { $page }
+tut-resume = Continue { $title } at page { $page }
 tut-close = Close tutorial
 tut-page-of = Page { $page } of { $total }
 tut-contents = Contents
@@ -259,7 +271,7 @@ vec-arrow = Arrow
 vec-loop = Loop (last beat)
 vec-see-through = See-through heart
 vec-see-through-hint = Make the heart translucent so the vector inside it shows.
-vec-scale = mm per mV
+vec-scale = Scale
 
 ## Electrode tab (electrode_tab.rs)
 el-save = Save placement
@@ -281,7 +293,7 @@ scenario-custom = Custom (sliders)
 scenario-rhythm = Rhythm:
 scenario-restart = Restart
 scenario-restart-hint = Reload the scenario from t = 0.
-scenario-about = About
+scenario-about = About this rhythm
 rq-next = Next question
 rq-question = What is the rhythm?
 rq-answer = Answer:
@@ -289,10 +301,10 @@ el-save-hint = Write a scenario with these electrodes to { $file }
 
 ## Re-entry presets (app/reentry.rs)
 reentry-picker = Re-entry presets…
-reentry-tier1 = Tier 1
-reentry-tier2 = Tier 2 · { $count } phase singularities · quiet { $quiet } s
+reentry-tier1 = Fast model
+reentry-tier2 = Tissue model · { $count } phase singularities · quiet { $quiet } s
 reentry-speed = { $tier } · { $speed }× real time
-reentry-speed-hint = Tier 2 is not real time on every machine; the simulation runs as fast as it can.
+reentry-speed-hint = The tissue model is not real time on every machine; the simulation runs as fast as it can.
 reentry-stop = Stop
 
 ## First-run disclaimer and About (requirement N-09; wording follows docs/book/src/user/disclaimer.md)
@@ -368,3 +380,11 @@ axis-torso-heading = Limb leads on the torso
 axis-arrow-tooltip = QRS axis { $deg } — drag to turn it
 axis-guess-tooltip = Your answer { $deg } — drag to change it
 readout-heading = Measurements
+interval-calipers-use-disabled = Place the calipers first
+interval-check-disabled = Enter a measurement first
+interval-value-hint = Click to type a value, or drag to adjust it
+tut-progress = { $done } of { $total } pages
+tut-start-short = Start
+tut-continue = Continue
+tut-start-again = Start again
+tut-start-again-hint = Start { $title } again from page 1

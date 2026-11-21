@@ -6,3 +6,6 @@ tab-12-lead = 12-Kanal-EKG
 tab-help = Hilfe
 tab-electrodes = Elektroden
 tab-tutorials = Anleitungen
+nav-group-explore = Erkunden
+nav-group-practise = Üben
+nav-group-learn = Lernen

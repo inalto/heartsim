@@ -1,11 +1,23 @@
 # A tour of the window
 
-The window has a one-line **menu bar** at the top: the program name and version with the name of the open page on the left,
-and on the right the **☰ menu**, which lists the eleven pages (the open one is marked and each shows its number-key
-shortcut), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark. Below it, on the pages that run the simulation, is the **rhythm bar**: the rhythm
-picker, *Restart*, *Run / Pause*, and sliders for the sinus rate, AV block, Mobitz II ratio, QRS axis shift, QRS width and
-simulation speed, plus the *Pacemaker* window. The **Export / Import** button at the right of the tab row opens the
-[export window](exports.md).
+The window has a one-line **top bar**: the program name and version, then the eleven pages as **tabs** in three groups, and on
+the right a button that cycles the theme and the **hamburger menu** (three lines). The groups are *Explore* (Simulator, 12-Lead ECG,
+Heart Vector, Electrodes, EP Lab), *Practise* (Axis Trainer, Axis Quiz, Rhythm Quiz, Interval Drill) and *Learn* (Tutorials, Help).
+The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for eleven tabs
+the bar shows three group buttons instead (*Explore*, *Practise*, *Learn*): the group of the open page carries its name, and a
+click lists the pages of that group. On a phone-narrow window the bar shows only the name of the open page, and the hamburger
+menu is the way to the other pages. The hamburger menu always lists the eleven pages (the open one marked, each with its
+number-key shortcut), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
+
+Below the bar, on the pages that run the simulation, is the **rhythm bar**. Its one row holds the rhythm picker, *Restart*,
+*About this rhythm* (hover it for the description, click it for the full explanation), *Run / Pause* with the simulation speed, the *Pacemaker* and *Therapy*
+windows, the re-entry presets and an **Adjust** button. *Adjust* opens a second row with the sinus rate, *AV block*,
+*Mobitz II* (drop every n-th beat) and the QRS axis shift and width. The row is closed when you start, and the app remembers
+whether you opened it. When one of its values differs from the rhythm's own the button says so (*Adjust · 2*, in colour; hover
+it for the names), so a changed value is never hidden. On the Axis Trainer the axis shift is the point of the page, so the row
+is always open there. The **Export / Import** window opens from the hamburger menu; see [Exporting](exports.md).
+
+Every slider has its label before it and its unit after the value (*SA rate*, the slider, *72 bpm*).
 
 ## Simulator
 
@@ -25,18 +37,26 @@ simulation speed, plus the *Pacemaker* window. The **Export / Import** button at
   a word, so it reads without colour) and a small torso schematic with the limb leads at their angles; the legend under
   the circle is the colour key. The *Measurements* card holds the interval read-out (HR, RR, rhythm regularity, PR, QRS,
   QT, QTc).
-* **Bottom: the strip.** Pick the lead with the buttons above it. Paper speed (12.5–200 mm/s), gain (5/10/20 mm/mV),
-  scrolling paper or a monitor-style sweep bar, monitor colours, grid, wave letters (P, R, T) and PR/RR brackets, and the
-  screen calibration in points per millimetre (hold a ruler to the screen and adjust it until 10 small squares measure 1 cm).
+* **Bottom: the strip.** One row of controls sits above it: the lead buttons, paper speed (12.5–200 mm/s), gain (5/10/20 mm/mV),
+  scrolling paper or a monitor-style sweep bar, *Clear calipers*, the *Scrub back* slider while paused, and a **Display** button.
+  *Display* opens a popup with monitor colours, grid, wave letters (P, R, T), PR/RR brackets, the screen scale in points per
+  millimetre (hold a ruler to the screen and adjust it until 10 small squares measure 1 cm), the filter and the artefacts.
+  Labels never overlap: a wave letter or an interval that would touch the one before it is left out, and on the 12-lead page the
+  3 × 4 grid shows them on its rhythm strip only, while the 12 × 1 and 6 × 2 pages add the RR and PR read-outs only when a beat is wide
+  enough on screen (slow rates, or 50 mm/s paper).
 
-**Filter and artefacts.** The second row of controls above the strip (and the 12-lead page) changes how the trace is *drawn*:
+  In the 3-D views a small **orientation gizmo** in the top-right corner turns with the camera: L / R is the patient's left and right,
+  S / I superior (towards the head) and inferior, A / P anterior and posterior. Hover it for the key; it does not take clicks.
+
+**Filter and artefacts.** The *Display* popup above the strip (and the 12-lead page) changes how the trace is *drawn*. While a filter or an
+artefact is on, the *Display* button is filled and names it (*Display · Monitor 0.5–40 Hz, artefacts: 2*), because it changes what you see:
 
 * *Filter*: **Off**, **Diagnostic 0.05–150 Hz** or **Monitor 0.5–40 Hz**. The diagnostic band is what a 12-lead ECG machine
   records (the 0.05 Hz corner leaves the ST segment undistorted); the monitor band is what a bedside monitor shows (steadier
   baseline, softer QRS peaks, but ST segments and notches are distorted, which is why a monitor trace must not be used to
   judge ST changes).
 * *Artefacts*: **Baseline wander**, **Respiration** (a baseline swing and a small change of the QRS height), **Mains hum**
-  (50 or 60 Hz, your choice) and **Muscle** tremor, with an *intensity* slider (1 is the reference amplitude). They are
+  (50 or 60 Hz, your choice) and **Muscle** tremor, with an *Intensity* slider (1 is the reference amplitude). They are
   generated from a fixed seed, so the same settings always draw the same trace. Try the monitor filter on mains hum: it is only
   a few dB weaker, because a 40 Hz low-pass is not a notch filter.
 
@@ -45,12 +65,32 @@ and the exports of the clean signal are not filtered and do not change when you 
 is a few milliseconds later than the unfiltered one. When a saved 12-lead PNG or an export shows the filtered trace, it says
 which filter and artefacts were applied (see [Exporting](exports.md)).
 
-**Pause and scrub.** Press *Pause*, then drag the *s back* slider or the strip itself (away from any caliper): the heart, the vector arrow and the
+**Heart sounds.** *Heart sounds* in the *Display* popup (off by default, remembered) adds a lane under the strip, and under
+the 12-lead page, with a **phonocardiogram**: a picture of the first and second heart sounds on the same time axis as the ECG.
+It scrolls, sweeps, pauses and scrubs with the strip, and calipers placed on the strip reach down into it (they can be
+dragged in either lane), so you can measure from the QRS to S1 or from the end of the T wave to S2.
+
+* **S1** is the closure of the mitral (M1) and tricuspid (T1) valves, about 40 ms after the QRS starts. Its loudness follows the
+  PR interval: loudest at 80–120 ms, soft when the PR is long (first-degree block), varying from beat to beat when P waves and QRS
+  complexes are dissociated (complete block, VT).
+* **S2** is the closure of the aortic (A2) and pulmonic (P2) valves near the end of the T wave. P2 follows A2 by about 10 ms in
+  expiration and 40 ms at the peak of inspiration (the patient breathes 12 times a minute; the split comes and goes with it).
+  RBBB delays P2 (a wide split, still wider on inspiration); LBBB and right-ventricular pacing delay A2 until it falls *after* P2
+  (a paradoxical split, widest in expiration). When the two are more than 20 ms apart the lane labels them **A2** and **P2**,
+  joined in the order they occur (**A2·P2**, or **P2·A2** for a paradoxical split) when they are too close to label apart.
+* There are no heart sounds in ventricular fibrillation or asystole, and a ventricular beat that comes too early to eject has an
+  S1 but no S2.
+
+The labels come from the model's own schedule, not from finding peaks in the trace. The trace is a **model**, built from the
+timing of the simulated beats and published timing rules; it is not a recording and it is silent. Murmurs, S3, S4, clicks and
+listening sites are not modelled yet. An imported recording has no heart-sound lane.
+
+**Pause and scrub.** Press *Pause*, then drag the *Scrub back* slider or the strip itself (away from any caliper): the heart, the vector arrow and the
 read-out all follow the cursor, up to 60 s back. *Run* continues from where the simulation stopped; time never jumps.
 
 **Calipers.** Shift-click a strip to add a pair of vertical cursors: the strip shows the interval in ms and the rate it
 corresponds to. Drag a line or the band between a pair to move it (it snaps to the nearby wave when released), click a line to
-select it and use the arrow keys to nudge it by one sample (with shift, ten). *Calipers ✕* or Esc removes them all.
+select it and use the arrow keys to nudge it by one sample (with shift, ten). *Clear calipers* or Esc removes them all.
 
 ![LBBB with the heart-vector arrow, scrubbed to the middle of the QRS](../images/simulator-lbbb-vector.png)
 

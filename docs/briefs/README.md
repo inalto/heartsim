@@ -29,3 +29,4 @@ mechanical, fully specified tasks. Order and parallelism: `../ROADMAP.md`.
 | B21 | WASM build (trunk, WebGPU/WebGL2) | app, web | Sonnet | M6 |
 | B22 | EP lab: catheters, EGMs, PES, ablation | sim, ecg, render, ui | Opus | M7 |
 | B23 | Validation bridge: openCARP/VTK export-import, benchmark report | cli, geometry | Opus | M8 |
+| B24 | Silent phonocardiogram: S1/S2 synthesised from engine events, drawn under the ECG (heart sounds, phase 1) | ecg, sim, ui, app | Opus | M9 |

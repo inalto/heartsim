@@ -27,6 +27,7 @@
 //! the loss of R, and the inversion of T, in the leads over the territory
 //! (`heartsim_sim::ischaemia::InfarctPattern`).
 
+use crate::activation::{BranchBlocks, LeftConduction, Ventricle};
 use crate::leadvec::LeadVectors;
 use glam::DVec3;
 use heartsim_core::{FrontalAxis, LEAD_COUNT, Lead, Millis, Region, TwelveLead};
@@ -487,16 +488,10 @@ const PREEXCITED_AF_WINDOW_MS: f64 = 500.0;
 
 /// Random numbers in `[0, 1)` tied to one event: the same event always draws the same wave. Only
 /// IEEE arithmetic on the time's bits, so it is the same on every platform.
-fn event_noise<const N: usize>(at_ms: f64) -> [f64; N] {
+pub(crate) fn event_noise<const N: usize>(at_ms: f64) -> [f64; N] {
     let mut rng = ShockRng::new(at_ms.to_bits());
     std::array::from_fn(|_| rng.next_f64())
 }
-
-/// Bundle-branch block events seen since the last His activation (bit set).
-const BLOCK_RBB: u8 = 1;
-const BLOCK_LBB: u8 = 2;
-const BLOCK_LAF: u8 = 4;
-const BLOCK_LPF: u8 = 8;
 
 /// Ventricular activations closer than this belong to the same beat (fusion fronts), ms.
 const SAME_BEAT_MS: f64 = 150.0;
@@ -524,7 +519,7 @@ pub struct GaussianSynth {
     /// Drug / ischaemia morphology of new beats.
     pub modulation: SynthModulation,
     active: Vec<ActiveWave>,
-    branch_blocks: u8,
+    branch_blocks: BranchBlocks,
     last_beat_ms: Option<f64>,
     last_rr_ms: Option<f64>,
     /// Last paced ventricular beat: time and pacer channel (biventricular fusion).
@@ -578,7 +573,7 @@ impl GaussianSynth {
             qt_rate_exponent: 0.0,
             modulation: SynthModulation::NONE,
             active: Vec::new(),
-            branch_blocks: 0,
+            branch_blocks: BranchBlocks::default(),
             last_beat_ms: None,
             last_rr_ms: None,
             last_paced_v: None,
@@ -651,17 +646,11 @@ impl GaussianSynth {
     pub fn on_events(&mut self, events: &[Event]) {
         for ev in events {
             if ev.kind == EventKind::Blocked {
-                self.branch_blocks |= match ev.region {
-                    Region::RightBundleBranch => BLOCK_RBB,
-                    Region::LeftBundleBranch => BLOCK_LBB,
-                    Region::LeftAnteriorFascicle => BLOCK_LAF,
-                    Region::LeftPosteriorFascicle => BLOCK_LPF,
-                    _ => 0,
-                };
+                self.branch_blocks.record_block(ev.region);
                 continue;
             }
             match ev.region {
-                Region::HisBundle => self.branch_blocks = 0,
+                Region::HisBundle => self.branch_blocks.clear(),
                 r if r.is_atrial() => {
                     if let Origin::Circuit(c) = ev.origin {
                         self.on_atrial_circuit(c, ev);
@@ -710,7 +699,7 @@ impl GaussianSynth {
         let t = ev.at.0;
         self.last_rr_ms = self.last_beat_ms.map(|l| t - l);
         self.last_beat_ms = Some(t);
-        self.branch_blocks = 0;
+        self.branch_blocks.clear();
         let [a, b, size] = event_noise::<3>(t);
         match c {
             Circuit::Torsades => {
@@ -776,10 +765,10 @@ impl GaussianSynth {
                 self.last_beat_ms = Some(t);
             }
         }
-        let ectopic = if ev.region == Region::RightVentricle {
-            Template::EctopicRv
-        } else {
-            Template::EctopicLv
+        let site = Ventricle::of_site(ev.region);
+        let ectopic = match site {
+            Ventricle::Right => Template::EctopicRv,
+            Ventricle::Left => Template::EctopicLv,
         };
         match (ev.kind, ev.origin) {
             // Pre-excited AF: nothing to fuse with on most beats, so the pathway's front is the
@@ -790,13 +779,12 @@ impl GaussianSynth {
                     .is_some_and(|a| t - a < PREEXCITED_AF_WINDOW_MS) =>
             {
                 let same_beat = self.beat_started_before(t);
-                self.branch_blocks = 0;
+                self.branch_blocks.clear();
                 if !same_beat {
                     self.last_preexcited_ms = Some(t);
-                    let tpl = if ev.region == Region::RightVentricle {
-                        Template::PreexcitedRv
-                    } else {
-                        Template::PreexcitedLv
+                    let tpl = match site {
+                        Ventricle::Right => Template::PreexcitedRv,
+                        Ventricle::Left => Template::PreexcitedLv,
                     };
                     self.spawn(tpl, ev.at, 0.0, 1.0);
                 }
@@ -806,13 +794,12 @@ impl GaussianSynth {
                     .last_preexcited_ms
                     .is_some_and(|p| (0.0..SAME_BEAT_MS).contains(&(t - p))) =>
             {
-                self.branch_blocks = 0;
+                self.branch_blocks.clear();
             }
             (EventKind::Conducted, Origin::AccessoryPathway) => {
-                let d = if ev.region == Region::RightVentricle {
-                    Template::DeltaRv
-                } else {
-                    Template::DeltaLv
+                let d = match site {
+                    Ventricle::Right => Template::DeltaRv,
+                    Ventricle::Left => Template::DeltaLv,
                 };
                 self.spawn(d, ev.at, 0.0, 1.0);
             }
@@ -823,26 +810,20 @@ impl GaussianSynth {
                     .last_pace_ms
                     .is_some_and(|p| (PACED_CAPTURE_MS..SAME_BEAT_MS).contains(&(t - p))) =>
             {
-                self.branch_blocks = 0;
+                self.branch_blocks.clear();
             }
             (EventKind::Conducted, _) => {
-                let b = std::mem::take(&mut self.branch_blocks);
-                let lbbb = b & BLOCK_LBB != 0 || b & (BLOCK_LAF | BLOCK_LPF) == BLOCK_LAF | BLOCK_LPF;
-                let (rotation, width) = if lbbb {
-                    (0.0, 1.0)
-                } else if b & BLOCK_LAF != 0 {
-                    (LAFB_ROTATION_DEG, FASCICULAR_WIDTH_SCALE)
-                } else if b & BLOCK_LPF != 0 {
-                    (LPFB_ROTATION_DEG, FASCICULAR_WIDTH_SCALE)
-                } else {
-                    (0.0, 1.0)
+                // the same pattern decides the split of the heart sounds (`pcg::BeatAssembler`)
+                let pattern = self.branch_blocks.take();
+                let (rotation, width) = match pattern.left {
+                    LeftConduction::AnteriorFascicleBlocked => (LAFB_ROTATION_DEG, FASCICULAR_WIDTH_SCALE),
+                    LeftConduction::PosteriorFascicleBlocked => (LPFB_ROTATION_DEG, FASCICULAR_WIDTH_SCALE),
+                    LeftConduction::Intact | LeftConduction::Blocked => (0.0, 1.0),
                 };
-                let tpl = if lbbb {
-                    Template::Lbbb
-                } else if b & BLOCK_RBB != 0 {
-                    Template::Rbbb
-                } else {
-                    Template::Normal
+                let tpl = match pattern.late_ventricle() {
+                    Some(Ventricle::Left) => Template::Lbbb,
+                    Some(Ventricle::Right) => Template::Rbbb,
+                    None => Template::Normal,
                 };
                 self.spawn(tpl, ev.at, rotation, width);
             }

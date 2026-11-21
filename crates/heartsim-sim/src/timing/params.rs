@@ -147,6 +147,35 @@ impl Default for SinusParams {
     }
 }
 
+/// Respiratory angle at `t_ms`, radians: `2π · t · rate`. The sinus node's respiratory modulation
+/// (`RR · (1 − depth · sin angle)`) and the heart-sound model's inspiratory splitting of S2 both read
+/// this one clock, so a sinus arrhythmia and the split it comes with are always in step.
+///
+/// The angle runs whatever `respiration_depth` is: the patient breathes even when the sinus rate
+/// does not follow it, so S2 still splits on inspiration with `respiration_depth = 0`.
+#[must_use]
+pub fn respiration_angle_rad(respiration_rate_bpm: f64, t_ms: f64) -> f64 {
+    t_ms / 1000.0 * respiration_rate_bpm / 60.0 * std::f64::consts::TAU
+}
+
+/// Respiratory phase at `t_ms` as a fraction of the breath, `0.0..1.0`. The first half (`0.0..0.5`,
+/// `sin angle > 0`) is inspiration: the sinus cycle is shortest there (heart rate rises on
+/// inspiration) and inspiration peaks at `0.25`; the second half is expiration, deepest at `0.75`.
+/// Runs at any `respiration_depth`, including 0 (see [`respiration_angle_rad`]).
+#[must_use]
+pub fn respiratory_phase(respiration_rate_bpm: f64, t_ms: f64) -> f64 {
+    let turns = respiration_angle_rad(respiration_rate_bpm, t_ms) / std::f64::consts::TAU;
+    turns.rem_euclid(1.0)
+}
+
+/// How far into inspiration the phase is, `0.0` (any time in expiration) to `1.0` (peak inspiration):
+/// `max(0, sin 2π·phase)`, the positive half of the same sine that shortens the sinus cycle.
+#[must_use]
+pub fn inspiration_depth(phase: f64) -> f64 {
+    use heartsim_core::math::Deterministic;
+    (phase * std::f64::consts::TAU).sin_d().max(0.0)
+}
+
 // ---------------------------------------------------------------------------------------------
 // AV node
 // ---------------------------------------------------------------------------------------------

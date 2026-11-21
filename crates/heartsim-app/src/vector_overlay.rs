@@ -151,7 +151,12 @@ impl VectorOverlay {
         {
             self.set_see_through(see_through, alphas);
         }
-        ui.add(egui::Slider::new(&mut self.scale_mm_per_mv, 10.0..=120.0).text(t!("vec-scale")));
+        heartsim_ui::controls::slider(
+            ui,
+            &t!("vec-scale"),
+            egui::Slider::new(&mut self.scale_mm_per_mv, 10.0..=120.0),
+            heartsim_ui::controls::MM_PER_MV,
+        );
     }
 
     /// Lower (or restore) the layer opacities.

@@ -43,6 +43,11 @@ pub struct Settings {
     /// Opacity, `0.0..=1.0`, of the frontal torso picture behind the limb leads in the axis panel;
     /// `0.0` draws the outline of the procedural torso instead.
     pub torso_image_opacity: f32,
+    /// The second row of the rhythm bar (sinus rate, AV block, QRS axis and width) is open.
+    /// Closed by default; the Adjust toggle says when a value in it is away from the rhythm's own.
+    pub adjust_open: bool,
+    /// The heart-sound lane under the strip (B24, the Display popup's "Heart sounds"). Off by default.
+    pub heart_sounds: bool,
 }
 
 /// The colour scheme preference, stored by name.
@@ -87,6 +92,8 @@ impl Default for Settings {
             check_for_updates: true,
             theme: ThemeMode::System,
             torso_image_opacity: DEFAULT_TORSO_IMAGE_OPACITY,
+            adjust_open: false,
+            heart_sounds: false,
         }
     }
 }
@@ -274,6 +281,8 @@ mod tests {
             check_for_updates: false,
             theme: ThemeMode::Light,
             torso_image_opacity: 0.4,
+            adjust_open: true,
+            heart_sounds: true,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -288,6 +297,22 @@ mod tests {
         assert!((old.torso_image_opacity - DEFAULT_TORSO_IMAGE_OPACITY).abs() < f32::EPSILON);
         let off: Settings = ron::from_str("(torso_image_opacity: 0.0)").expect("settings load");
         assert!(off.torso_image_opacity.abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn the_adjust_row_is_closed_by_default_and_older_settings_load_closed() {
+        assert!(!Settings::default().adjust_open);
+        let old: Settings = ron::from_str("(language: None, theme: Dark)").expect("old settings load");
+        assert!(!old.adjust_open);
+    }
+
+    #[test]
+    fn the_heart_sound_lane_is_off_by_default_and_older_settings_load_without_it() {
+        assert!(!Settings::default().heart_sounds);
+        let old: Settings = ron::from_str("(language: None, adjust_open: true)").expect("old settings load");
+        assert!(!old.heart_sounds);
+        let on: Settings = ron::from_str("(heart_sounds: true)").expect("settings load");
+        assert!(on.heart_sounds);
     }
 
     #[test]

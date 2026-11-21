@@ -4,13 +4,63 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Heart sounds, phase 1 (silent): *Heart sounds* in the strip's *Display* popup (off by default, remembered) draws a
+  phonocardiogram lane under the Simulator strip and under the 12-lead page, on the strip's time axis, with scrub, sweep, pause
+  and calipers shared with the strip. S1 (M1 + T1) and S2 (A2 + P2) are synthesised from the same timing-engine events as the
+  ECG: S1 about 40 ms after the QRS onset and louder with a short PR, A2 at the rate-dependent QS2 near the end of the T wave,
+  the A2–P2 split following the breathing (10 ms in expiration, 40 ms in inspiration) and the order of ventricular activation
+  (wide in RBBB, paradoxical in LBBB and RV pacing). No sounds in VF or asystole. `S1`/`S2` labels, and `A2`/`P2` when the split
+  exceeds 20 ms, come from the model's schedule. No audio is played yet.
+- `heartsim_ecg::pcg` (beat assembler, electromechanical model, 4 kHz synthesiser, every parameter in `PcgParams` with its
+  source or marked designed) and `Recording::pcg` from `Tier0Scenario::record`; `heartsim_ecg::activation` holds the
+  bundle-branch decision now shared by the QRS templates and the heart sounds. The timing engine exposes the respiratory phase
+  that drives both the sinus arrhythmia and the S2 split (`TimingEngine::respiratory_phase`).
+- Golden PCG snapshots for eight rhythms (`crates/heartsim-ecg/tests/pcg.rs`).
+- Screenshot tour: `HEARTSIM_SCREENSHOT_OPEN=sounds` switches the heart-sound lane on; `HEARTSIM_SCREENSHOT_ONLY` takes only the
+  named shots.
+
 ### Changed
+- Top bar: the eleven pages are tabs in three groups (Explore, Practise, Learn) with the open page marked and its
+  number-key shortcut in the hover text. On a window too narrow for eleven tabs the bar shows three group menus;
+  on a phone-narrow window it keeps the page name and the hamburger menu. The bar stays one line high. The hamburger
+  menu and the shortcuts are unchanged.
+- Rhythm bar: one row with the rhythm picker, Restart, About this rhythm (was "About"), Run/Pause and speed,
+  Pacemaker, Therapy and the re-entry presets. The sinus rate, AV block, Mobitz II, QRS axis shift and QRS width sit
+  in a second row behind a new **Adjust** button, closed at start and remembered; the button shows how many values are
+  away from the rhythm's own ("Adjust · 2"). The Axis Trainer always shows the row.
+- Strip controls: one row (lead, paper speed, gain, Scroll/Sweep, Clear calipers, Scrub back) and a **Display** button
+  that opens a popup with monitor colours, grid, wave letters, PR/RR, screen scale, the filter and the artefacts. The
+  button is filled and names the filter and the artefact count while any is on. The 12-lead page's layout choices share
+  that row. "Calipers ✕" is now "Clear calipers".
+- Sliders show their label before the control and the unit after the value ("SA rate", slider, "72 bpm") in the rhythm bar,
+  strip, pacemaker, EP lab, heart and vector panels. "Mobitz II n" reads "Mobitz II: drop every n-th beat".
+- "3-D activation (Tier 1)" is "3-D activation", and the EP lab and re-entry status lines no longer say "Tier 1" or
+  "Tier 2" ("2.44× real time", "Re-entry model, 0.33× real time").
+- The "Frontal QRS axis" title is a heading like the card headings instead of a filled blue bar.
 - Limb electrodes are described as on the left/right arm or leg instead of the wrist or ankle, since they can now sit
   anywhere on the limb.
 - Electrodes tab: a **Whole body / Chest** switch above the figure; the chest view frames the trunk so the chest
   electrodes are far enough apart to place precisely.
 - Electrode labels no longer cover one another: crowded labels are stacked and joined to their electrodes by a
   line. Markers keep a minimum size on screen.
+- 12-lead page: the wave letters and the PR/RR read-outs no longer pile up. The 3 x 4 clinical grid shows them on its
+  rhythm strip only. The 12 x 1 and 6 x 2 pages keep the wave letters and add the RR and PR read-outs only when a beat
+  is at least 110 points wide (a slow rate or 50 mm/s paper). Everywhere, including the single-lead strip, a label that
+  would touch the one before it is left out, so fast rhythms stay legible.
+- Rhythm Quiz: after an answer the right option carries a tick on a green fill and a wrong choice a cross on a rose
+  fill, the other options stay plain; the colours are not the only signal. The explanation text no longer breaks in the
+  middle of a sentence. The score reads "Score: 3 of 12 correct" in all three quizzes.
+- Interval Drill: the strip takes the height of the page (the paper scale is unchanged, up to a maximum height); the
+  disabled "Use caliper reading" and "Check answer" buttons say why on hover; "Your measurement" looks like an input.
+- Tutorials: the cards have equal widths; the button says Start, Continue or Start again (the title is its hover text);
+  each card shows "3 of 6 pages" with a thin progress bar, or Completed with a tick.
+- EP Lab: the channel names (I, aVF, HRA 1-2, His 1-2, CS 1-2 ...) sit in a gutter left of the electrograms, in the
+  catheter's colour, so no trace crosses a name. In the dark theme the electrograms are light traces on a dark screen.
+- Orientation gizmo in the corner of the 3-D heart and of the Electrodes view: L/R, S/I and A/P axes that turn with the
+  camera (hover it for the key). It does not take clicks.
+- "About this rhythm" is a button: hover shows the description, a click opens the full explanation. The paper-speed and
+  gain boxes have hover text; the "Adjust · 2" label reads at 4.5:1 on its selected fill in the light theme.
 
 ### Fixed
 - Electrodes tab: the figure is framed to the shape of the 3-D view, so its arms and the wrist electrodes are no

@@ -134,10 +134,17 @@ impl AxisQuiz {
             if ui.button(t!("app-quiz-new")).clicked() {
                 asked_new = Some(self.next_question());
             }
-            if ui
-                .add_enabled(self.can_check(), egui::Button::new(t!("app-quiz-check")))
-                .clicked()
-            {
+            let check = ui.add_enabled(self.can_check(), egui::Button::new(t!("app-quiz-check")));
+            let check = if self.revealed {
+                check
+            } else {
+                check.on_disabled_hover_text(if self.target_deg.is_none() {
+                    t!("app-quiz-intro")
+                } else {
+                    t!("app-quiz-click")
+                })
+            };
+            if check.clicked() {
                 self.check();
             }
             ui.label(t!(

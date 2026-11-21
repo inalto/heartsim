@@ -4,6 +4,11 @@
 //! saves a PNG of the window and quits. Runs are 12 s or more: the strip can only be scrubbed
 //! once it holds more than one screen (10 s). Used headless with xvfb + lavapipe (see `docs/images/`).
 //! `HEARTSIM_SCREENSHOT_THEME=light|dark` takes the shots in that theme instead of the stored setting.
+//! `HEARTSIM_SCREENSHOT_OPEN=adjust,display,changed` (any of them, comma-separated) opens the rhythm bar's
+//! Adjust row, opens the strip's Display popup, and moves the sinus rate and QRS width off the rhythm's own
+//! values (so the Adjust toggle shows its count); without it every shot shows the default, collapsed state.
+//! `sounds` in the same list switches on the heart-sound lane under the strip (B24).
+//! `HEARTSIM_SCREENSHOT_ONLY=simulator-sinus.png,…` takes only the named shots.
 
 use super::{HeartSimApp, Tab, TwelveLeadLayout};
 use eframe::egui;
@@ -190,12 +195,26 @@ enum Phase {
 
 /// Tour progress.
 #[derive(Debug)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent switches of HEARTSIM_SCREENSHOT_OPEN"
+)]
 pub(super) struct Tour {
     dir: PathBuf,
     step: usize,
     phase: Phase,
     /// The theme the shots are taken in (`HEARTSIM_SCREENSHOT_THEME`), or the stored setting.
     theme: Option<egui::Theme>,
+    /// `HEARTSIM_SCREENSHOT_OPEN=adjust`: the Adjust row is open.
+    open_adjust: bool,
+    /// `HEARTSIM_SCREENSHOT_OPEN=display`: the strip's Display popup is open.
+    open_display: bool,
+    /// `HEARTSIM_SCREENSHOT_OPEN=changed`: two Adjust values are away from the rhythm's own.
+    changed: bool,
+    /// `HEARTSIM_SCREENSHOT_OPEN=sounds`: the heart-sound lane is on.
+    sounds: bool,
+    /// `HEARTSIM_SCREENSHOT_ONLY`: the file names to take; empty takes every shot.
+    only: Vec<String>,
 }
 
 impl Tour {
@@ -213,11 +232,23 @@ impl Tour {
             }
             None => None,
         };
+        let open = std::env::var("HEARTSIM_SCREENSHOT_OPEN").unwrap_or_default();
+        let wants = |name: &str| open.split(',').any(|w| w.trim() == name);
         Some(Self {
             dir,
             step: 0,
             phase: Phase::Setup,
             theme,
+            open_adjust: wants("adjust"),
+            open_display: wants("display"),
+            changed: wants("changed"),
+            sounds: wants("sounds"),
+            only: std::env::var("HEARTSIM_SCREENSHOT_ONLY")
+                .unwrap_or_default()
+                .split(',')
+                .map(|f| f.trim().to_owned())
+                .filter(|f| !f.is_empty())
+                .collect(),
         })
     }
 }
@@ -241,6 +272,12 @@ impl HeartSimApp {
         let Some(mut tour) = self.tour.take() else {
             return;
         };
+        while STEPS
+            .get(tour.step)
+            .is_some_and(|s| !tour.only.is_empty() && !tour.only.iter().any(|f| f == s.file))
+        {
+            tour.step += 1;
+        }
         let Some(step) = STEPS.get(tour.step).copied() else {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
@@ -258,6 +295,17 @@ impl HeartSimApp {
                     self.load_scenario(i);
                 }
                 self.tab = step.tab;
+                self.settings.adjust_open = tour.open_adjust;
+                if tour.changed {
+                    self.engine.params.sinus.rate_bpm = 55.0;
+                    self.synth.qrs_width_scale = 1.4;
+                }
+                if tour.open_display {
+                    self.ecg.request_display_popup();
+                }
+                if tour.sounds {
+                    self.ecg.show_heart_sounds = true;
+                }
                 self.vector.arrow = step.vector;
                 self.vector.show_loop = step.vector;
                 // the EP lab makes the heart see-through itself, for its catheters
@@ -305,6 +353,9 @@ impl HeartSimApp {
                 }
             }
             Phase::Settle(n) => {
+                if tour.open_display {
+                    self.ecg.request_display_popup();
+                }
                 tour.phase = if *n == 0 {
                     let slot = Arc::new(Mutex::new(None));
                     let out = Arc::clone(&slot);

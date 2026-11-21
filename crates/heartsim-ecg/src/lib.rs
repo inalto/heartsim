@@ -21,7 +21,12 @@
 //!   snapping, and the lead vectors / forward-model rows a placement implies (B10).
 //! * [`misplacement`] — detecting cable reversals and displaced electrodes by comparing the
 //!   derived leads with the standard placement (B10).
+//! * [`activation`] — the order of ventricular activation (bundle-branch blocks, ectopic and paced
+//!   sites), decided once for the QRS template and the splitting of the heart sounds.
+//! * [`pcg`] — the silent phonocardiogram (B24): beats, the electromechanical model of S1 and S2,
+//!   and their synthesis at 4 kHz from the same events as the ECG.
 
+pub mod activation;
 pub mod analysis;
 pub mod artefact;
 pub mod axis_est;
@@ -31,6 +36,7 @@ pub mod filter;
 pub mod forward;
 pub mod leadvec;
 pub mod misplacement;
+pub mod pcg;
 pub mod placement;
 pub mod ring;
 pub mod scenario;
@@ -54,6 +60,7 @@ pub use forward::{
 };
 pub use leadvec::LeadVectors;
 pub use misplacement::{DetectorConfig, Finding, detect_misplacement};
+pub use pcg::{PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, SoundMark};
 pub use placement::{
     Cable, DipoleSolver, Exercise, ExtraLead, Limb, Placement, Preset, Snapped, Tier0Field, TorsoSurface,
 };

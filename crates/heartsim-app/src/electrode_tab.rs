@@ -485,12 +485,14 @@ impl ElectrodeTab {
             )
         });
         let mut screen = Vec::with_capacity(markers.len());
+        let camera_basis;
         {
             let mut renderer = rs.renderer.write();
             let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() else {
                 return;
             };
             self.activate(&mut res.scene, aspect);
+            camera_basis = res.scene.camera.basis();
             for (c, p) in &markers {
                 if let Some((u, v, _)) = res.scene.camera.project(*p, aspect) {
                     screen.push((*c, rect.min + egui::vec2(u * rect.width(), v * rect.height())));
@@ -618,6 +620,7 @@ impl ElectrodeTab {
             (None, _) => t!("el-drag-hint"),
         };
         painter_hint(ui, rect, &hint);
+        heartsim_ui::orientation_gizmo(ui, rect, camera_basis, heartsim_ui::GizmoCorner::TopRight);
         response.on_hover_cursor(if self.dragging.is_some() {
             egui::CursorIcon::Grabbing
         } else {

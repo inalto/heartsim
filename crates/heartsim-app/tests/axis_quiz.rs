@@ -57,7 +57,7 @@ fn drill_flow_new_question_answer_explanation_next() {
     assert_eq!((h.state().quiz.asked, h.state().quiz.correct), (1, 1));
     let _ = h.get_by_label_contains("you chose");
     let _ = h.get_by_label_contains("net QRS vector");
-    let _ = h.get_by_label("Score 1/1");
+    let _ = h.get_by_label("Score: 1 of 1 correct");
 
     // next question clears the explanation; a wrong answer scores nothing and resets the streak
     h.get_by_label("New question").click();

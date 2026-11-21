@@ -153,6 +153,7 @@ impl HeartSimApp {
         self.engine = lab.timing().clone();
         self.sample_accumulator = 0.0;
         self.rings.iter_mut().for_each(LeadRing::clear);
+        self.sounds.reset(0, preset.timing.sinus.respiration_rate_bpm);
         self.last_v_activation = Millis(-1000.0);
         self.scenario = None;
         self.timeline = Timeline::default();
@@ -236,6 +237,8 @@ impl HeartSimApp {
                     self.last_v_activation = e.at;
                 }
             }
+            // the heart sounds follow the lab's ventricular events like the strip does
+            self.sounds.on_events(&events);
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, dt, act.lab.now());
             }
@@ -247,6 +250,7 @@ impl HeartSimApp {
                 for (ring, v) in self.rings.iter_mut().zip(s.0) {
                     ring.push(v as f32);
                 }
+                self.sounds.push_for_ecg_sample(act.lab.now());
             }
             if started.elapsed() > FRAME_BUDGET {
                 break;
@@ -392,11 +396,11 @@ impl HeartSimApp {
                 }
             }
             if let Some(act) = &self.ep.active {
-                let tier = match act.lab.engine().tier() {
-                    Tier::One => t!("ep-status-tier-1"),
-                    Tier::Two => t!("ep-status-tier-2"),
-                };
-                ui.label(t!("ep-speed", tier = tier, speed = number(act.speed, 2)));
+                let speed = number(act.speed, 2);
+                ui.label(match act.lab.engine().tier() {
+                    Tier::One => t!("ep-status-tier-1", speed = speed),
+                    Tier::Two => t!("ep-status-tier-2", speed = speed),
+                });
             }
             if let Some(s) = &self.ep.status {
                 ui.colored_label(egui::Color32::LIGHT_RED, s);

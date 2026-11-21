@@ -38,8 +38,9 @@ works from a sub-path such as `https://<user>.github.io/heartsim/` and from any 
 | Screenshot tour (`HEARTSIM_SCREENSHOT_DIR`) | inert | no environment |
 | `--version`, logging to the terminal | none; panics and `log` output go to the browser console | |
 
-Audio: the app has no sound yet (brief B21 mentions a `kira` / Web Audio beep). When a monitor beep is added it should use Web
-Audio from a user gesture; nothing in the web build depends on `kira`.
+Audio: the desktop monitor beep (`audio` feature, `kira`) is not compiled for the web, and nothing in the web build depends on
+`kira`. The heart-sound trace under the strip (brief B24) is drawn on the web as on the desktop; it is silent on both, being the
+waveform the later audio phases will play. Web sound, when it comes, should use Web Audio started from a user gesture.
 
 Persistence: eframe's `persistence` feature stores the Rhythm Quiz score, the tutorial progress and the Settings window's choices
 (language, high contrast, reduced motion) in `localStorage`.

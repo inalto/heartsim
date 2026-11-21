@@ -8,6 +8,7 @@
 //! no randomness, no I/O.
 
 use crate::analysis::{Analysis, Analyzer};
+use crate::pcg::{PCG_PERIOD_MS, PCG_RATE_HZ, PcgParams, PcgSynth};
 use crate::synth::{FRIDERICIA_EXPONENT, GaussianSynth, MorphologyOverrides, SynthModulation, UnknownWave};
 use heartsim_core::scenario::{ExpectedFindings, ScenarioError};
 use heartsim_core::{LEAD_COUNT, Lead, Millis, Scenario};
@@ -65,12 +66,19 @@ pub struct Tier0Scenario {
     pub morphology: MorphologyOverrides,
 }
 
-/// Twelve leads sampled every [`STEP_MS`] (oldest first) plus the engine events that made them.
+/// Twelve leads sampled every [`STEP_MS`] (oldest first), the phonocardiogram of the same run and
+/// the engine events that made both.
 #[derive(Debug, Clone)]
 pub struct Recording {
     /// `leads[l][i]` = lead `l` (`Lead as usize`) at `t = (i + 1) · STEP_MS`, mV.
     pub leads: Vec<Vec<f32>>,
     pub events: Vec<Event>,
+    /// Heart-sound trace (B24, arbitrary units, normal S1 ≈ 1): `pcg[k]` at
+    /// `t = (k + 1) / pcg_rate_hz`, so every ECG sample has `pcg_rate_hz · STEP_MS / 1000` PCG samples
+    /// ending at the same time.
+    pub pcg: Vec<f32>,
+    /// Sampling rate of [`Recording::pcg`], Hz ([`PCG_RATE_HZ`]).
+    pub pcg_rate_hz: f32,
 }
 
 impl Tier0Scenario {
@@ -98,9 +106,22 @@ impl Tier0Scenario {
         Ok(s)
     }
 
+    /// The heart-sound synthesiser for this scenario: default model, the scenario's seed and the
+    /// breathing rate of its sinus node.
+    #[must_use]
+    pub fn pcg_synth(&self) -> PcgSynth {
+        PcgSynth::new(
+            PcgParams::default(),
+            self.scenario.seed,
+            self.timing.sinus.respiration_rate_bpm,
+        )
+    }
+
     /// Run the scenario for `seconds`, applying its timeline.
     pub fn record(&self, seconds: f64) -> Result<Recording, Tier0Error> {
         let mut synth = self.synth().map_err(Tier0Error::Morphology)?;
+        let mut pcg_synth = self.pcg_synth();
+        let per_step = (STEP_MS / PCG_PERIOD_MS).round() as usize;
         let mut eng = TimingEngine::new(self.timing.clone());
         eng.set_shock_seed(self.scenario.seed);
         let mut timeline = self.scenario.timeline.clone();
@@ -109,6 +130,7 @@ impl Tier0Scenario {
         let steps = (seconds * 1000.0 / STEP_MS).round() as usize;
         let mut leads: Vec<Vec<f32>> = (0..LEAD_COUNT).map(|_| Vec::with_capacity(steps)).collect();
         let mut events = Vec::new();
+        let mut pcg = Vec::with_capacity(steps * per_step);
         for _ in 0..steps {
             while let Some(a) = timeline.get(next)
                 && a.at.0 <= eng.now().0
@@ -121,13 +143,23 @@ impl Tier0Scenario {
             synth.on_events(&evs);
             synth.on_pacer_markers(&eng.drain_pacer_markers());
             synth.modulation = SynthModulation::from_state(&eng.drug_effects(), eng.ischaemia());
+            // the heart sounds read the same events and never feed back into the ECG
+            pcg_synth.on_events(&evs);
             events.extend(evs);
             let s = synth.sample(eng.now());
             for (buf, v) in leads.iter_mut().zip(s.0) {
                 buf.push(v as f32);
             }
+            for i in (0..per_step).rev() {
+                pcg.push(pcg_synth.sample(Millis(eng.now().0 - i as f64 * PCG_PERIOD_MS)));
+            }
         }
-        Ok(Recording { leads, events })
+        Ok(Recording {
+            leads,
+            events,
+            pcg,
+            pcg_rate_hz: PCG_RATE_HZ,
+        })
     }
 
     /// Static checks of the teaching content (non-empty texts, ≥ 2 differentials, an

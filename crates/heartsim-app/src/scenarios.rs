@@ -154,7 +154,7 @@ pub fn scenario_picker(
     ui.label(t!("scenario-rhythm"));
     let combo = egui::ComboBox::from_id_salt("scenario_picker")
         .selected_text(title)
-        .width(320.0)
+        .width(230.0)
         .show_ui(ui, |ui| {
             for (i, s) in library.entries.iter().enumerate() {
                 if ui
@@ -177,11 +177,25 @@ pub fn scenario_picker(
         if r.clicked() {
             picked = current;
         }
-        ui.label(t!("scenario-about")).on_hover_ui(|ui| {
+        // a real button: hover gives the one-line description, a click opens the explanation
+        let about = ui.button(t!("scenario-about")).on_hover_ui(|ui| {
             ui.set_max_width(420.0);
             ui.strong(&s.scenario.title);
             ui.label(&s.scenario.description);
         });
+        egui::Popup::from_toggle_button_response(&about)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                ui.set_max_width(460.0);
+                ui.strong(&s.scenario.title);
+                ui.add(egui::Label::new(&s.scenario.description).wrap());
+                if let Some(text) = crate::rhythm_quiz::teaching_text(s.scenario.notes.as_deref()) {
+                    ui.add_space(4.0);
+                    egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
+                        ui.add(egui::Label::new(text).wrap());
+                    });
+                }
+            });
     }
     picked
 }

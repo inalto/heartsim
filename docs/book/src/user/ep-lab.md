@@ -6,6 +6,8 @@ and every intracardiac electrogram at 100 or 200 mm/s.
 
 ![The EP lab during orthodromic AVRT: catheters in the see-through heart, electrograms on the right](../images/ep-lab-avrt.png)
 
+The channel names (I, aVF, HRA 1-2, His 1-2, CS 1-2 ...) stand in a column left of the traces, coloured like the catheters (HRA yellow, His green, CS blue, RVA magenta, ABL red). In the dark theme the electrograms are light traces on a dark screen, as on a recording system.
+
 Everything on the screen comes from one simulation: the wave on the heart, the surface ECG and the electrograms are the same cells
 seen three ways. A paced stimulus counts as captured only if the cell under the electrode actually activates, so a train can report
 fewer captures than stimuli delivered; in the accessory-pathway procedure, entrainment captures about five of eight.

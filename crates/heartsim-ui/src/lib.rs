@@ -7,6 +7,7 @@ pub mod axis_dial;
 pub mod calipers;
 pub mod cards;
 pub mod colour_bar;
+pub mod controls;
 pub mod defib_panel;
 pub mod drug_tray;
 pub mod ecg_view;
@@ -16,7 +17,9 @@ pub mod highlight;
 pub mod i18n;
 pub mod ischaemia_panel;
 pub mod labels;
+pub mod orientation;
 pub mod pacer_panel;
+pub mod pcg_lane;
 pub mod snapshot;
 pub mod strip;
 pub mod theme;
@@ -43,7 +46,9 @@ pub use ep_panel::{EpCommand, EpPanelState};
 pub use ischaemia_panel::{
     IschaemiaPanelState, IschaemiaResponse, coronary_tree, ischaemia_panel, territory_glyphs,
 };
+pub use orientation::{GizmoCorner, orientation_gizmo};
 pub use pacer_panel::{PaceMark, PaceMarks, PacerPanelResponse, PacerPanelState, lead_glyphs, pacer_panel};
+pub use pcg_lane::PcgLane;
 pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
 pub use theme::Palette;
 pub use timeline_editor::TimelineEditor;

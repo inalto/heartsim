@@ -60,7 +60,7 @@ Watch one beat travel through the heart:
             markdown: r#"
 The simulation has just been **paused** a few milliseconds after the start of a QRS complex.
 
-While paused you can scroll back along the strip with the **s back** slider. The 3-D heart follows
+While paused you can scroll back along the strip with the **Scrub back** slider. The 3-D heart follows
 the cursor: whatever instant the strip shows, the heart shows the same instant. Move back to the P
 wave and compare the colour of the atria with that of the ventricles.
 

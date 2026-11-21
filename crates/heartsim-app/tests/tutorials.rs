@@ -137,8 +137,10 @@ fn navigation_self_study_gating_and_tutor_mode() {
 
     button(&mut h, "Close tutorial");
     assert!(!h.state().tutorials.is_open());
+    // the card shows how far the learner got, in words and not by colour alone
+    let _ = h.get_by_label(&format!("5 of {} pages", basics.pages.len()));
     // resume where we left off
-    click(&mut h, "Resume at page 5");
+    click(&mut h, &format!("Continue {} at page 5", basics.title));
     assert_eq!(page(&h), Some(4));
 }
 

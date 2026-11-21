@@ -10,8 +10,9 @@ use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
 use heartsim_ecg::{LeadRing, Tier0Scenario};
+use heartsim_ui::cards::AnswerState;
 use heartsim_ui::t;
-use heartsim_ui::{Palette, StripStyle, TwelveLeadLayout, cards, lead_column, twelve_lead_page};
+use heartsim_ui::{StripStyle, TwelveLeadLayout, cards, lead_column, twelve_lead_page};
 
 /// Choices per question.
 pub const OPTIONS: usize = 4;
@@ -108,6 +109,36 @@ pub fn record_strip(scenario: &Tier0Scenario) -> Result<Vec<LeadRing>, String> {
         .collect())
 }
 
+/// Joins the hard line breaks that fall inside a sentence. The scenario notes are wrapped by hand
+/// in places, and a label wraps by itself, so a break after a word that does not end a sentence
+/// would leave a ragged half line. A newline after `.`, `:`, `;`, `?` or `!` (or a blank line)
+/// stays: those separate the paragraphs the author meant.
+#[must_use]
+pub fn reflow(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let lines: Vec<&str> = text.split('\n').collect();
+    for (i, line) in lines.iter().enumerate() {
+        out.push_str(line);
+        let Some(next) = lines.get(i + 1) else { break };
+        let ends_sentence = line.trim_end().ends_with(['.', ':', ';', '?', '!', ')']);
+        if line.trim().is_empty() || next.trim().is_empty() || ends_sentence {
+            out.push('\n');
+        } else {
+            out.push(' ');
+        }
+    }
+    out
+}
+
+/// The teaching text of a scenario's notes: without the trailing `Sources:` block and with the
+/// mid-sentence line breaks joined ([`reflow`]). `None` when there is nothing left.
+#[must_use]
+pub fn teaching_text(notes: Option<&str>) -> Option<String> {
+    notes
+        .map(|n| reflow(n.split("\n\nSources:").next().unwrap_or(n).trim()))
+        .filter(|n| !n.is_empty())
+}
+
 /// What the quiz shows after an answer, as plain data so it can be tested without a window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Explanation {
@@ -129,11 +160,7 @@ pub struct Explanation {
 #[must_use]
 pub fn explanation(library: &ScenarioLibrary, answer: usize, chosen: usize) -> Explanation {
     let s = &library.entries[answer].scenario;
-    let teaching = s
-        .notes
-        .as_deref()
-        .map(|n| n.split("\n\nSources:").next().unwrap_or(n).trim().to_owned())
-        .filter(|n| !n.is_empty());
+    let teaching = teaching_text(s.notes.as_deref());
     let confused_with = s
         .confused_with
         .iter()
@@ -292,26 +319,23 @@ impl RhythmQuiz {
                 } else {
                     t!("rq-answer")
                 });
-                let palette = Palette::of(ui);
                 for &i in &q.options {
                     let title = &library.entries[i].scenario.title;
-                    let text = match self.chosen {
-                        Some(_) if i == q.answer => {
-                            egui::RichText::new(t!("rq-correct-choice", title = title.as_str()))
-                                .color(palette.good().on_soft)
-                        }
+                    let (state, text) = match self.chosen {
+                        None => (AnswerState::Open, title.clone()),
+                        Some(_) if i == q.answer => (
+                            AnswerState::Correct,
+                            t!("rq-correct-choice", title = title.as_str()),
+                        ),
                         Some(c) if c == i => {
-                            egui::RichText::new(t!("rq-your-choice", title = title.as_str()))
-                                .color(palette.bad().on_soft)
+                            (AnswerState::Wrong, t!("rq-your-choice", title = title.as_str()))
                         }
-                        _ => egui::RichText::new(title),
+                        Some(_) => (AnswerState::Inactive, title.clone()),
                     };
-                    if ui
-                        .add_enabled(self.chosen.is_none(), egui::Button::new(text).wrap())
-                        .clicked()
-                    {
+                    if cards::answer_option(ui, state, &text).clicked() {
                         self.answer(i);
                     }
+                    ui.add_space(2.0);
                 }
                 // Pinned above the (scrolling) explanation so it is never pushed out of view.
                 if self.chosen.is_some() {
@@ -479,6 +503,27 @@ mod tests {
             ))
         );
         assert_eq!(x.title, lib.entries[answer].scenario.title);
+    }
+
+    #[test]
+    fn reflow_joins_mid_sentence_breaks_and_keeps_paragraphs() {
+        assert_eq!(
+            reflow("a stimulus artefact\nfollowed by a wide QRS."),
+            "a stimulus artefact followed by a wide QRS."
+        );
+        assert_eq!(reflow("One.\nTwo."), "One.\nTwo.");
+        assert_eq!(reflow("One.\n\nTwo"), "One.\n\nTwo");
+        let lib = library();
+        for (i, e) in lib.entries.iter().enumerate() {
+            let t = explanation(&lib, i, i).teaching.unwrap_or_default();
+            for l in t.lines().filter(|l| !l.trim().is_empty()) {
+                assert!(
+                    l.trim_end().ends_with(['.', ':', ';', '?', '!', ')']),
+                    "{}: paragraph does not end a sentence: {l:?}",
+                    e.scenario.id
+                );
+            }
+        }
     }
 
     #[test]

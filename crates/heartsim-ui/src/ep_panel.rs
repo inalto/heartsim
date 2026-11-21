@@ -213,8 +213,56 @@ fn x_of_time(rect: Rect, now_ms: f64, px_per_ms: f32, t_ms: f64) -> f32 {
     rect.right() - (now_ms - t_ms) as f32 * px_per_ms
 }
 
+/// Widest and narrowest the channel-name gutter of the electrogram stack gets, points.
+const NAME_GUTTER_MIN_PX: f32 = 56.0;
+const NAME_GUTTER_MAX_PX: f32 = 120.0;
+
+/// The colour of a channel name: the catheter's own colour (HRA yellow, His green, CS blue, RVA
+/// magenta, ABL red) darkened as far as needed to read at 4.5:1 on `background`, which the light
+/// paper needs for the yellow and green. On the dark recording screen the colours are used as
+/// they are.
+#[must_use]
+pub fn channel_name_colour(kind: CatheterKind, background: Color32) -> Color32 {
+    let base = catheter_colour(kind);
+    let mut c = base;
+    for _ in 0..20 {
+        if crate::theme::contrast_ratio(c, background) >= 4.5 {
+            break;
+        }
+        // darken on a light background, lighten on a dark one
+        c = if crate::theme::relative_luminance(background) > 0.5 {
+            Color32::from_rgb(
+                (f32::from(c.r()) * 0.88) as u8,
+                (f32::from(c.g()) * 0.88) as u8,
+                (f32::from(c.b()) * 0.88) as u8,
+            )
+        } else {
+            Color32::from_rgb(
+                c.r().saturating_add((255 - c.r()) / 6 + 1),
+                c.g().saturating_add((255 - c.g()) / 6 + 1),
+                c.b().saturating_add((255 - c.b()) / 6 + 1),
+            )
+        };
+    }
+    c
+}
+
+/// The style the electrogram stack draws with: EP recording systems use dark screens, so in the
+/// dark theme the stack is light traces on a dark background whatever the strip's paper is; in the
+/// light theme the strip's own style is kept.
+#[must_use]
+pub fn egm_style_for(style: &StripStyle, dark_theme: bool) -> StripStyle {
+    if dark_theme && !style.is_dark() {
+        style.monitor()
+    } else {
+        *style
+    }
+}
+
 /// The electrogram stack: surface leads, then every bipole of every catheter, one time base, with
 /// stimulus marks and a caliper dragged across all rows. `now_ms` is the time of the newest sample.
+/// The channel names sit in a gutter at the left, in the catheter's colour, so no trace crosses a
+/// name.
 pub fn egm_stack(
     ui: &mut Ui,
     state: &mut EpPanelState,
@@ -227,8 +275,32 @@ pub fn egm_stack(
     if rows == 0 {
         return;
     }
+    let style = &egm_style_for(style, ui.ctx().theme() == egui::Theme::Dark);
     let size = ui.available_size();
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+    let (full, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+    let name_font = egui::FontId::proportional(12.0);
+    let names: Vec<(String, Color32)> = surface
+        .iter()
+        .map(|(label, _)| ((*label).to_owned(), style.trace))
+        .chain(
+            recorder
+                .channels()
+                .iter()
+                .map(|c| (c.label.clone(), channel_name_colour(c.kind, style.paper))),
+        )
+        .collect();
+    let widest = names
+        .iter()
+        .map(|(n, c)| {
+            ui.painter()
+                .layout_no_wrap(n.clone(), name_font.clone(), *c)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max);
+    let gutter = (widest + 14.0).clamp(NAME_GUTTER_MIN_PX, NAME_GUTTER_MAX_PX);
+    let rect = Rect::from_min_max(Pos2::new(full.left() + gutter, full.top()), full.max);
+    let gutter_rect = Rect::from_min_max(full.min, Pos2::new(rect.left(), full.bottom()));
     let row_h = (rect.height() / rows as f32).max(MIN_ROW_PX);
     let row = |k: usize| {
         Rect::from_min_size(
@@ -251,9 +323,18 @@ pub fn egm_stack(
         ..*style
     };
     let base_id = ui.scope_id().with("egm_stack");
-    for (k, (label, ring)) in surface.iter().enumerate() {
+    // the gutter: the page colour, the names, a hairline between names and traces
+    {
+        let painter = ui.painter_at(full);
+        painter.rect_filled(gutter_rect, 0.0, style.paper);
+        painter.line_segment(
+            [gutter_rect.right_top(), gutter_rect.right_bottom()],
+            Stroke::new(1.0, style.grid_major),
+        );
+    }
+    for (k, (_, ring)) in surface.iter().enumerate() {
         let trace = StripTrace {
-            label,
+            label: "",
             invert: false,
             head: ring.pushed(),
             marks: None,
@@ -269,7 +350,7 @@ pub fn egm_stack(
             recorder.bipolar(c)
         };
         let trace = StripTrace {
-            label: &channel.label,
+            label: "",
             invert: false,
             head: ring.pushed(),
             marks: None,
@@ -281,8 +362,24 @@ pub fn egm_stack(
         draw_strip(ui, base_id.with(k), rect_k, ring, &egm_style, &trace);
         ui.painter_at(rect).line_segment(
             [rect_k.left_bottom(), rect_k.right_bottom()],
-            Stroke::new(0.5, catheter_colour(channel.kind).gamma_multiply(0.5)),
+            Stroke::new(
+                0.5,
+                channel_name_colour(channel.kind, style.paper).gamma_multiply(0.5),
+            ),
         );
+    }
+    {
+        let painter = ui.painter_at(gutter_rect);
+        for (k, (name, colour)) in names.into_iter().enumerate() {
+            let r = row(k);
+            painter.text(
+                Pos2::new(gutter_rect.left() + 6.0, r.center().y),
+                egui::Align2::LEFT_CENTER,
+                name,
+                name_font.clone(),
+                colour,
+            );
+        }
     }
     let px_per_ms = state.sweep_mm_s * style.px_per_mm / 1000.0;
     let painter = ui.painter_at(rect);
@@ -480,16 +577,16 @@ pub fn catheter_panel(
     ui.heading(t!("ep-catheters"));
     for (i, c) in catheters.iter().enumerate() {
         ui.horizontal(|ui| {
-            ui.colored_label(catheter_colour(c.kind), c.kind.prefix());
+            // the name in the catheter's colour, darkened where the panel is light (yellow on white)
+            let bg = ui.visuals().panel_fill;
+            ui.colored_label(channel_name_colour(c.kind, bg), c.kind.prefix());
             if c.kind == CatheterKind::Cs {
                 let mut depth = match c.site {
                     CatheterSite::CsDepth(d) => d,
                     _ => cs_length_mm,
                 };
-                let slider = egui::Slider::new(&mut depth, 0.0..=cs_length_mm.max(1.0))
-                    .text(t!("ep-cs-depth"))
-                    .fixed_decimals(0);
-                if ui.add(slider).changed() {
+                let slider = egui::Slider::new(&mut depth, 0.0..=cs_length_mm.max(1.0)).fixed_decimals(0);
+                if crate::controls::slider(ui, &t!("ep-cs-depth"), slider, crate::controls::MM).changed() {
                     commands.push(EpCommand::MoveCatheter {
                         catheter: i,
                         site: CatheterSite::CsDepth(depth),
@@ -526,8 +623,13 @@ pub fn catheter_panel(
     ui.small(t!("ep-catheter-hint"));
 }
 
-fn ms_slider(ui: &mut Ui, value: &mut f64, range: std::ops::RangeInclusive<f64>, label: String) {
-    ui.add(egui::Slider::new(value, range).text(label).fixed_decimals(0));
+fn ms_slider(ui: &mut Ui, value: &mut f64, range: std::ops::RangeInclusive<f64>, label: &str) {
+    crate::controls::slider(
+        ui,
+        label,
+        egui::Slider::new(value, range).fixed_decimals(0),
+        crate::controls::MS,
+    );
 }
 
 /// Programmed stimulation: which pair, which protocol, and what came of it.
@@ -557,24 +659,34 @@ pub fn pes_panel(
             }
         });
     match state.kind {
-        ProtocolKind::Continuous => ms_slider(ui, &mut state.cycle_ms, 150.0..=1000.0, t!("ep-cycle")),
+        ProtocolKind::Continuous => ms_slider(ui, &mut state.cycle_ms, 150.0..=1000.0, &t!("ep-cycle")),
         ProtocolKind::Train => {
-            ms_slider(ui, &mut state.cycle_ms, 200.0..=1000.0, t!("ep-s1-cycle"));
-            ui.add(egui::Slider::new(&mut state.s1_count, 1..=20).text(t!("ep-s1-count")));
+            ms_slider(ui, &mut state.cycle_ms, 200.0..=1000.0, &t!("ep-s1-cycle"));
+            crate::controls::slider(
+                ui,
+                &t!("ep-s1-count"),
+                egui::Slider::new(&mut state.s1_count, 1..=20),
+                "",
+            );
             ui.checkbox(&mut state.use_s2, t!("ep-use-s2"));
             if state.use_s2 {
-                ms_slider(ui, &mut state.s2_ms, 150.0..=600.0, t!("ep-s2"));
+                ms_slider(ui, &mut state.s2_ms, 150.0..=600.0, &t!("ep-s2"));
                 ui.checkbox(&mut state.use_s3, t!("ep-use-s3"));
                 if state.use_s3 {
-                    ms_slider(ui, &mut state.s3_ms, 150.0..=600.0, t!("ep-s3"));
+                    ms_slider(ui, &mut state.s3_ms, 150.0..=600.0, &t!("ep-s3"));
                 }
             }
         }
         ProtocolKind::Decremental => {
-            ms_slider(ui, &mut state.cycle_ms, 200.0..=1000.0, t!("ep-ramp-start"));
-            ms_slider(ui, &mut state.ramp_end_ms, 150.0..=1000.0, t!("ep-ramp-end"));
-            ms_slider(ui, &mut state.ramp_step_ms, 5.0..=50.0, t!("ep-ramp-step"));
-            ui.add(egui::Slider::new(&mut state.s1_count, 1..=20).text(t!("ep-ramp-beats")));
+            ms_slider(ui, &mut state.cycle_ms, 200.0..=1000.0, &t!("ep-ramp-start"));
+            ms_slider(ui, &mut state.ramp_end_ms, 150.0..=1000.0, &t!("ep-ramp-end"));
+            ms_slider(ui, &mut state.ramp_step_ms, 5.0..=50.0, &t!("ep-ramp-step"));
+            crate::controls::slider(
+                ui,
+                &t!("ep-ramp-beats"),
+                egui::Slider::new(&mut state.s1_count, 1..=20),
+                "",
+            );
         }
         ProtocolKind::Erp => {
             egui::ComboBox::new("ep_erp_target", t!("ep-erp-target"))
@@ -590,18 +702,28 @@ pub fn pes_panel(
                         ui.selectable_value(&mut state.erp_target, target, erp_target_label(target));
                     }
                 });
-            ms_slider(ui, &mut state.cycle_ms, 300.0..=1000.0, t!("ep-s1-cycle"));
-            ui.add(egui::Slider::new(&mut state.s1_count, 2..=12).text(t!("ep-s1-count")));
-            ms_slider(ui, &mut state.s2_ms, 200.0..=600.0, t!("ep-s2-start"));
+            ms_slider(ui, &mut state.cycle_ms, 300.0..=1000.0, &t!("ep-s1-cycle"));
+            crate::controls::slider(
+                ui,
+                &t!("ep-s1-count"),
+                egui::Slider::new(&mut state.s1_count, 2..=12),
+                "",
+            );
+            ms_slider(ui, &mut state.s2_ms, 200.0..=600.0, &t!("ep-s2-start"));
         }
         ProtocolKind::Entrainment => {
             ms_slider(
                 ui,
                 &mut state.entrain_offset_ms,
                 10.0..=60.0,
-                t!("ep-entrain-offset"),
+                &t!("ep-entrain-offset"),
             );
-            ui.add(egui::Slider::new(&mut state.entrain_count, 3..=30).text(t!("ep-entrain-count")));
+            crate::controls::slider(
+                ui,
+                &t!("ep-entrain-count"),
+                egui::Slider::new(&mut state.entrain_count, 3..=30),
+                "",
+            );
         }
     }
     // the ERP search reads the timing engine's capture decision, which Tier 2 leaves to the tissue
@@ -739,8 +861,18 @@ pub fn ablation_panel(
             }
         });
     }
-    ui.add(egui::Slider::new(&mut state.power_w, 5.0..=50.0).text(t!("ep-power")));
-    ui.add(egui::Slider::new(&mut state.rf_tau_s, 1.0..=15.0).text(t!("ep-rf-tau")));
+    crate::controls::slider(
+        ui,
+        &t!("ep-power"),
+        egui::Slider::new(&mut state.power_w, 5.0..=50.0),
+        crate::controls::W,
+    );
+    crate::controls::slider(
+        ui,
+        &t!("ep-rf-tau"),
+        egui::Slider::new(&mut state.rf_tau_s, 1.0..=15.0),
+        crate::controls::S,
+    );
     let on = readout.is_some();
     let label = if on { t!("ep-rf-off") } else { t!("ep-rf-on") };
     let button = egui::Button::new(label).fill(if on {

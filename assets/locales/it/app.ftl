@@ -12,12 +12,24 @@ tab-rhythm-quiz = Quiz sul ritmo
 tab-tutorials = Tutorial
 tab-help = Guida
 
+## Gruppi di pagine della barra superiore (nav.rs)
+nav-group-explore = Esplora
+nav-group-practise = Esercitati
+nav-group-learn = Impara
+nav-shortcut = Scorciatoia: tasto { $key }
+
 ## Barra degli strumenti
 app-av-block = Blocco AV
-app-sa-rate = Frequenza SA bpm
-app-mobitz = Mobitz II n
-app-axis-shift = spostamento asse °
+app-sa-rate = Frequenza SA
+app-mobitz = Mobitz II: salta un battito ogni n
+app-axis-shift = Spostamento asse
 app-qrs-width = Ampiezza QRS
+app-mobitz-short = Mobitz II
+app-mobitz-off = no
+app-adjust = Regola
+app-adjust-count = Regola · { $count }
+app-adjust-hint = Frequenza sinusale, blocco AV, asse e ampiezza del QRS. Segnalato quando un valore differisce da quello del ritmo.
+app-adjust-changed = Modificato rispetto a questo ritmo: { $what }
 app-pacemaker = Pacemaker
 app-therapy = Terapia
 app-frontal-axis = Asse QRS frontale
@@ -37,7 +49,7 @@ app-axis-extreme = I e aVF entrambe negative: asse estremo (nord-ovest).
 ## Quiz sull'asse
 app-quiz-new = Nuova domanda
 app-quiz-check = Verifica risposta
-app-quiz-score = Punteggio { $correct }/{ $asked }
+app-quiz-score = Punteggio: { $correct } corrette su { $asked }
 app-quiz-intro = Premi Nuova domanda, leggi le sei derivazioni degli arti, poi clicca sul cerchio l'asse.
 app-quiz-click = Clicca sul cerchio il punto in cui pensi punti l'asse QRS.
 app-quiz-answer = Risposta { $answer }°, hai scelto { $chosen }° (errore di { $off }°)
@@ -181,15 +193,15 @@ part-torso = Torace
 heart-ablated = Ablazione di { $radius } mm attorno a { $region }
 heart-stimulus = Stimolo: { $region } a { $time } ms
 heart-ablation-cleared = Lesioni da ablazione rimosse
-heart-tier1 = Attivazione 3D (Livello 1)
-heart-tier1-hint = Disattivata: solo striscia ECG (Livello 0); il cuore è disegnato senza mappa di colori.
+heart-tier1 = Attivazione 3D
+heart-tier1-hint = Disattivata: solo striscia ECG; il cuore è disegnato senza mappa di colori.
 heart-reset-window = Ripristina finestra
 heart-colour-blind = Adatta al daltonismo
 heart-wavefront = Contorno del fronte d'onda
 heart-click = Clicca sul cuore
 heart-stimulate = Stimola
 heart-ablate = Ablazione
-heart-lesion-radius = raggio della lesione mm
+heart-lesion-radius = Raggio della lesione
 heart-shift-click = Maiusc+clic per ablare.
 heart-clear-ablation = Cancella ablazioni
 heart-territory = Territorio: { $territory }
@@ -218,10 +230,10 @@ tut-self-study-hint = Pagine in ordine; rispondi a ogni verifica prima di proseg
 tut-tutor = Docente
 tut-tutor-hint = Navigazione libera per presentare a un gruppo; le verifiche sono facoltative.
 tut-none = Nessun tutorial installato (assets/tutorials).
-tut-completed = completato
+tut-completed = Completato
 tut-pages = { $count } pagine
 tut-start = Inizia { $title }
-tut-resume = Riprendi da pagina { $page }
+tut-resume = Continua { $title } da pagina { $page }
 tut-close = Chiudi tutorial
 tut-page-of = Pagina { $page } di { $total }
 tut-contents = Indice
@@ -260,7 +272,7 @@ vec-arrow = Freccia
 vec-loop = Loop (ultimo battito)
 vec-see-through = Cuore trasparente
 vec-see-through-hint = Rende il cuore traslucido, così si vede il vettore al suo interno.
-vec-scale = mm per mV
+vec-scale = Scala
 
 ## Scheda elettrodi (electrode_tab.rs)
 el-save = Salva posizione
@@ -282,7 +294,7 @@ scenario-custom = Personalizzato (cursori)
 scenario-rhythm = Ritmo:
 scenario-restart = Riavvia
 scenario-restart-hint = Ricarica lo scenario da t = 0.
-scenario-about = Info
+scenario-about = Info su questo ritmo
 rq-next = Domanda successiva
 rq-question = Qual è il ritmo?
 rq-answer = Risposta:
@@ -290,10 +302,10 @@ el-save-hint = Scrive uno scenario con questi elettrodi in { $file }
 
 ## Preset di rientro (app/reentry.rs)
 reentry-picker = Preset di rientro…
-reentry-tier1 = Livello 1
-reentry-tier2 = Livello 2 · { $count } singolarità di fase · quiete { $quiet } s
+reentry-tier1 = Modello rapido
+reentry-tier2 = Modello tissutale · { $count } singolarità di fase · quiete { $quiet } s
 reentry-speed = { $tier } · { $speed }× tempo reale
-reentry-speed-hint = Il livello 2 non funziona in tempo reale su tutte le macchine; la simulazione procede alla massima velocità possibile.
+reentry-speed-hint = Il modello tissutale non funziona in tempo reale su tutte le macchine; la simulazione procede alla massima velocità possibile.
 reentry-stop = Ferma
 
 ## Avvertenza medica al primo avvio e Informazioni (requisito N-09; il testo segue docs/book/src/user/disclaimer.md)
@@ -369,3 +381,11 @@ axis-torso-heading = Derivazioni degli arti sul torso
 axis-arrow-tooltip = Asse QRS { $deg } — trascina per ruotarlo
 axis-guess-tooltip = La tua risposta { $deg } — trascina per cambiarla
 readout-heading = Misure
+interval-calipers-use-disabled = Posiziona prima i calibri
+interval-check-disabled = Inserisci prima una misura
+interval-value-hint = Clicca per scrivere un valore o trascina per regolarlo
+tut-progress = { $done } di { $total } pagine
+tut-start-short = Inizia
+tut-continue = Continua
+tut-start-again = Ricomincia
+tut-start-again-hint = Ricomincia { $title } dalla pagina 1

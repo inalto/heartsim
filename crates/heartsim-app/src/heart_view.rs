@@ -760,7 +760,12 @@ impl HeartView {
                 ui.radio_value(&mut self.tool, ClickTool::Stimulate, t!("heart-stimulate"));
                 ui.radio_value(&mut self.tool, ClickTool::Ablate, t!("heart-ablate"));
             });
-            ui.add(egui::Slider::new(&mut self.ablate_radius_mm, 2.0..=15.0).text(t!("heart-lesion-radius")));
+            heartsim_ui::controls::slider(
+                ui,
+                &t!("heart-lesion-radius"),
+                egui::Slider::new(&mut self.ablate_radius_mm, 2.0..=15.0),
+                heartsim_ui::controls::MM,
+            );
             ui.horizontal(|ui| {
                 ui.label(t!("heart-shift-click"));
                 if ui.button(t!("heart-clear-ablation")).clicked() {
@@ -802,6 +807,7 @@ impl HeartView {
             return;
         };
         let scene = &mut res.scene;
+        let camera_basis = scene.camera.basis();
         self.sync_scene(scene, &rs.queue, dt);
         if let Some(id) = self.lead_set {
             if self.overlay_glyphs.is_empty() {
@@ -857,6 +863,7 @@ impl HeartView {
             }
         }
         drop(renderer);
+        heartsim_ui::orientation_gizmo(ui, rect, camera_basis, heartsim_ui::GizmoCorner::TopRight);
         if let Some(info) = self.hover.clone() {
             response.on_hover_ui_at_pointer(|ui| {
                 ui.strong(heartsim_ui::labels::region_name(info.region));

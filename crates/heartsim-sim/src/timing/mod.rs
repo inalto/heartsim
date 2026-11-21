@@ -40,7 +40,7 @@ pub use params::{
     AccessoryPathway, AtrialDriver, AtrialDriverKind, AvParams, AvPathway, BundleEdge, DriverStart,
     EscapeParams, Focus, FocusMode, FocusRegion, HisPurkinjeParams, LeadParams, LeadSite, PMT_DETECT_CYCLES,
     PacerChannel, PacerConfig, PacerMode, PacerPreset, Side, SinusParams, TimingParams, VentricularDriver,
-    VentricularDriverKind,
+    VentricularDriverKind, inspiration_depth, respiration_angle_rad, respiratory_phase,
 };
 
 use crate::defib::{
@@ -378,6 +378,15 @@ impl TimingEngine {
         };
         e.reset();
         e
+    }
+
+    /// Respiratory phase at `t`, `0.0..1.0` (inspiration in the first half, peak at 0.25): the clock
+    /// the sinus node's respiratory modulation uses, from `params.sinus.respiration_rate_bpm`. A pure
+    /// function of simulation time; it runs even with `respiration_depth = 0` (see
+    /// [`respiratory_phase`]).
+    #[must_use]
+    pub fn respiratory_phase(&self, t: Millis) -> f64 {
+        respiratory_phase(self.params.sinus.respiration_rate_bpm, t.0)
     }
 
     /// Ladder-diagram samples produced since the last call (see [`ladder`]).

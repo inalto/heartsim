@@ -9,7 +9,7 @@ Print at 100 % ("actual size"). "Fit to page" scales the grid. The PDF page is l
 printer uses in the export window.
 
 **The strip on screen is not 25 mm/s against a ruler.**
-Screens differ in pixel density. Adjust the *pt/mm* calibration next to the strip until ten small squares measure 1 cm.
+Screens differ in pixel density. Adjust the *Screen scale* (in pt/mm) in the strip's *Display* popup until ten small squares measure 1 cm.
 
 **The heart is a grey sphere, or the window does not open.**
 heartsim could not load the heart model or find a GPU. Reinstall from the release page; on Linux without a GPU install Mesa's

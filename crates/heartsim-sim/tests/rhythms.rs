@@ -129,6 +129,33 @@ fn sinus_arrhythmia_follows_respiration() {
     assert!(corr < -0.8, "RR vs respiration correlation {corr}");
 }
 
+/// B24: the respiratory phase the heart sounds read is the clock of the sinus arrhythmia (the
+/// shortest cycles fall in inspiration, phase 0–0.5), and it keeps running without the arrhythmia.
+#[test]
+fn the_respiratory_phase_is_the_sinus_arrhythmia_clock() {
+    use heartsim_sim::timing::{inspiration_depth, respiratory_phase};
+    let mut p = TimingParams::default();
+    p.sinus.respiration_depth = 0.1;
+    p.sinus.respiration_rate_bpm = 12.0;
+    let engine = TimingEngine::new(p.clone());
+    let pt = p_times(&run(p, SECONDS));
+    let rr = intervals(&pt);
+    let (shortest, _) = rr.iter().enumerate().min_by(|a, b| a.1.total_cmp(b.1)).unwrap();
+    let phase = engine.respiratory_phase(Millis(pt[shortest]));
+    assert!(phase < 0.5, "shortest cycle at phase {phase}, not in inspiration");
+    // one breath every 5 s at 12 /min; peak inspiration a quarter of the way in
+    assert!((respiratory_phase(12.0, 1250.0) - 0.25).abs() < 1e-12);
+    assert!((inspiration_depth(0.25) - 1.0).abs() < 1e-12);
+    assert!(inspiration_depth(0.75).abs() < 1e-12);
+    let mut still = TimingParams::default();
+    still.sinus.respiration_depth = 0.0;
+    let e = TimingEngine::new(still);
+    assert!(
+        (e.respiratory_phase(Millis(2500.0)) - 0.5).abs() < 1e-12,
+        "the patient still breathes"
+    );
+}
+
 #[test]
 fn pac_every_fifth_beat_resets_sinus() {
     let mut p = TimingParams::default();

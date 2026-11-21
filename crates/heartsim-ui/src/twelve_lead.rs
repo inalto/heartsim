@@ -123,6 +123,29 @@ pub fn layout_cells_ordered(
     }
 }
 
+/// Whether cell `index` of `count` on a page of `layout` carries the wave letters and the PR / RR
+/// read-outs. They crowd a page of twelve small strips, so the clinical grid keeps them on its
+/// rhythm strip (the last cell) only. The one-column and two-column layouts draw them in every
+/// cell, where the painter drops the ones that would touch their neighbour.
+#[must_use]
+pub fn cell_is_annotated(layout: TwelveLeadLayout, index: usize, count: usize) -> bool {
+    layout != TwelveLeadLayout::Clinical || index + 1 == count
+}
+
+/// Fewest screen points per beat at which the PR / RR read-outs go into the cells of a one- or
+/// two-column page: the "RR 832" label is about 40 points wide and should take well under half of
+/// the span it measures, or twelve rows of them read as noise. At the usual 25 mm/s and 3 pt/mm a
+/// beat is 60 to 75 points, so they stay off until the paper is sped up or the rate is slow.
+pub const MIN_BEAT_PX_FOR_INTERVALS: f32 = 110.0;
+
+/// Whether the interval read-outs fit the cells of a page: `rr_ms` is the measured RR interval
+/// (when unknown they are left to the painter, which drops the ones that overlap) and `px_per_s`
+/// the paper speed in points per second.
+#[must_use]
+pub fn intervals_fit_cells(rr_ms: Option<f64>, px_per_s: f32) -> bool {
+    rr_ms.is_none_or(|rr| (rr * f64::from(px_per_s) / 1000.0) as f32 >= MIN_BEAT_PX_FOR_INTERVALS)
+}
+
 /// One strip of a 12-lead page in screen space.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PageCell {
@@ -201,6 +224,30 @@ mod tests {
             }
             assert!(cells.iter().all(|(_, c, r, s)| c + s <= cols && *r < rows));
         }
+    }
+
+    #[test]
+    fn the_clinical_grid_annotates_its_rhythm_strip_only() {
+        let (_, _, cells) = layout_cells(TwelveLeadLayout::Clinical);
+        let n = cells.len();
+        let annotated: Vec<usize> = (0..n)
+            .filter(|&i| cell_is_annotated(TwelveLeadLayout::Clinical, i, n))
+            .collect();
+        assert_eq!(annotated, [n - 1]);
+        assert_eq!(cells[n - 1].3, 4, "and that is the full-width strip");
+        assert!(cell_is_annotated(TwelveLeadLayout::TwoColumn, 0, 12));
+    }
+
+    #[test]
+    fn interval_read_outs_wait_for_enough_room_per_beat() {
+        let px_per_s = 25.0 * 3.0;
+        assert!(!intervals_fit_cells(Some(800.0), px_per_s), "60 pt per beat");
+        assert!(
+            intervals_fit_cells(Some(800.0), 50.0 * 3.0),
+            "120 pt per beat at 50 mm/s"
+        );
+        assert!(intervals_fit_cells(Some(1600.0), px_per_s), "slow rate: 120 pt");
+        assert!(intervals_fit_cells(None, px_per_s));
     }
 
     #[test]
