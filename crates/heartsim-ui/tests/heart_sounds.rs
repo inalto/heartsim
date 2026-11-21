@@ -210,3 +210,172 @@ fn the_display_popup_switches_the_heart_sounds_on() {
     let _ = h.get_by_label("Toni cardiaci");
     i18n::set_language("en");
 }
+
+// --- B25: the audio controls of the strip ---------------------------------------------------------
+
+#[test]
+fn the_play_switch_is_in_the_display_popup_only_with_audio() {
+    use heartsim_ui::HeartSoundStatus;
+    i18n::set_language("en");
+    let rings = signal(3.0).rings;
+    let harness = |play: Option<bool>| {
+        let mut view = EcgView::new();
+        view.play_heart_sounds = play;
+        Harness::builder()
+            .with_size(egui::vec2(1300.0, 700.0))
+            .build_ui_state(
+                |ui, m: &mut Model| {
+                    m.view.update(&m.rings);
+                    m.view.controls(ui, &m.rings, None);
+                },
+                Model {
+                    view,
+                    rings: rings.clone(),
+                },
+            )
+    };
+    // a build without audio output (the web build): no switch
+    let mut h = harness(None);
+    h.run();
+    h.get_by_label("Display").click();
+    h.run();
+    let _ = h.get_by_label("Heart sounds");
+    assert!(h.query_by_label("Play heart sounds").is_none());
+    // with audio: the switch, which also shows the lane
+    let mut h = harness(Some(false));
+    h.run();
+    h.get_by_label("Display").click();
+    h.run();
+    h.get_by_label("Play heart sounds").click();
+    h.run();
+    assert_eq!(h.state().view.play_heart_sounds, Some(true));
+    assert!(
+        h.state().view.show_heart_sounds,
+        "switching the sound on shows the lane"
+    );
+    // hiding the lane leaves the sound on
+    h.get_by_label("Heart sounds").click();
+    h.run();
+    assert!(!h.state().view.show_heart_sounds);
+    assert_eq!(h.state().view.play_heart_sounds, Some(true));
+    // the status under the switch: no device, and why the sound stops above 1×
+    h.state_mut().view.heart_sound_status = HeartSoundStatus::NoDevice;
+    h.run();
+    let _ = h.get_by_label("No sound device could be opened, so the heart sounds stay silent.");
+    h.state_mut().view.heart_sound_status = HeartSoundStatus::MutedFast;
+    h.run();
+    let _ = h.get_by_label_contains("Muted above 1× speed");
+}
+
+#[test]
+fn the_display_delay_moves_the_head_without_counting_as_a_scrub() {
+    let s = signal(4.0);
+    let mut view = EcgView::new();
+    let pushed = s.rings[0].pushed();
+    assert_eq!(view.head(&s.rings), pushed);
+    view.set_display_delay_ms(100.0);
+    assert_eq!(view.head(&s.rings), pushed - 50, "100 ms at 500 Hz");
+    assert!(view.scrub_offset_ms().abs() < f64::EPSILON, "not a scrub");
+    assert!(
+        (view.view_offset_ms() - 100.0).abs() < 1e-9,
+        "the 3-D view follows"
+    );
+    // the lane is drawn with the same head, at the PCG rate
+    let lane = PcgLane {
+        ring: &s.pcg,
+        marks: &s.marks,
+    };
+    view.show_heart_sounds = true;
+    let ctx = egui::Context::default();
+    let mut win = None;
+    let _ = frame(&ctx, |ui| {
+        win = Some(view.strip_with_sounds(ui, STRIP, &s.rings, Lead::II, Some(lane)));
+    });
+    assert_eq!(win.unwrap().head, pushed - 50);
+}
+
+#[test]
+fn the_lane_button_plays_from_the_cursor_or_between_the_calipers() {
+    use heartsim_ui::LaneRequest;
+    struct LaneModel {
+        view: EcgView,
+        rings: Vec<LeadRing>,
+        pcg: LeadRing,
+        request: Option<LaneRequest>,
+    }
+    i18n::set_language("en");
+    let s = signal(12.0);
+    let mut view = EcgView::new();
+    view.show_heart_sounds = true;
+    view.play_heart_sounds = Some(true);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1400.0, 400.0))
+        .build_ui_state(
+            |ui, m: &mut LaneModel| {
+                let lane = PcgLane {
+                    ring: &m.pcg,
+                    marks: &[],
+                };
+                m.view
+                    .strip_with_sounds(ui, STRIP, &m.rings, Lead::II, Some(lane));
+                if let Some(r) = m.view.take_lane_request() {
+                    m.request = Some(r);
+                }
+            },
+            LaneModel {
+                view,
+                rings: s.rings,
+                pcg: s.pcg,
+                request: None,
+            },
+        );
+    h.run();
+    assert!(h.query_by_label("Play").is_none(), "only while paused");
+    h.state_mut().view.toggle_pause();
+    h.run();
+    // at the newest sample: the strip on screen is played
+    h.get_by_label("Play").click();
+    h.run();
+    let newest = h.state().pcg.pushed();
+    match h.state_mut().request.take() {
+        Some(LaneRequest::Play { start, end }) => {
+            assert_eq!(end, newest);
+            assert!(end - start > 4 * 4000, "several seconds: {}", end - start);
+        }
+        other => panic!("{other:?}"),
+    }
+    // scrubbed back 2 s: from the cursor to the newest sample
+    h.state_mut().view.playback.set_scrub_ms(2000.0, 5000.0);
+    h.run();
+    h.get_by_label("Play").click();
+    h.run();
+    assert_eq!(
+        h.state_mut().request.take(),
+        Some(LaneRequest::Play {
+            start: newest - 8000,
+            end: newest
+        })
+    );
+    // a caliper pair: its span
+    h.state_mut()
+        .view
+        .strip_calipers_mut()
+        .add_pair(12_000.0, 12_800.0);
+    h.run();
+    h.get_by_label("Play").click();
+    h.run();
+    match h.state_mut().request.take() {
+        Some(LaneRequest::Play { start, end }) => {
+            let ms = (end - start) as f64 / 4.0;
+            assert!((ms - 800.0).abs() < 2.0, "the caliper span: {ms} ms");
+        }
+        other => panic!("{other:?}"),
+    }
+    // while a slice plays the button stops it, and a playhead line is drawn
+    h.state_mut().view.slice_playing = true;
+    h.state_mut().view.playhead = Some(newest - 4000);
+    h.run();
+    h.get_by_label("Stop").click();
+    h.run();
+    assert_eq!(h.state_mut().request.take(), Some(LaneRequest::Stop));
+}

@@ -82,8 +82,37 @@ dragged in either lane), so you can measure from the QRS to S1 or from the end o
   S1 but no S2.
 
 The labels come from the model's own schedule, not from finding peaks in the trace. The trace is a **model**, built from the
-timing of the simulated beats and published timing rules; it is not a recording and it is silent. Murmurs, S3, S4, clicks and
-listening sites are not modelled yet. An imported recording has no heart-sound lane.
+timing of the simulated beats and published timing rules; it is not a recording. Murmurs, S3, S4, clicks and listening sites
+are not modelled yet. An imported recording has no heart-sound lane.
+
+**Listening to the heart sounds.** Desktop builds made with the `audio` feature can play the lane through the sound card (the
+browser version is silent for now). Tick *Play heart sounds* under *Heart sounds* in the *Display* popup, or in the *Heart
+sounds* section of the Settings window; it is **off by default**, and switching it on also shows the lane (hiding the lane
+afterwards leaves the sound on). What you hear is the trace you see, sample for sample, so a 30 ms split of S2 is heard as a
+30 ms split.
+
+* **Headphones.** Most of S1 and S2 lies below 150 Hz, where laptop speakers reproduce very little. With speakers you may hear
+  only a faint click; with headphones you hear the low "lub-dub".
+* **The views run a little behind.** Every sound card plays a little late, so while the sound is on the strip, the 12-lead
+  page, the heart-sound lane and the 3-D heart are drawn about 0.1 s behind the simulation (40 ms of queue plus the *audio
+  offset*), so that S1 is heard when the trace shows it. The strip eases into and out of this delay over 0.3 s; it is not a
+  scrub, and calipers and measurements work as usual.
+* **Slow motion.** Below 1× the sounds are re-timed: each sound keeps its own pitch and length and only the gaps between
+  them stretch. At 0.25× a 40 ms A2–P2 split is heard as 160 ms, which is the easiest way to hear a split. The lane keeps
+  drawing the true signal.
+* **Above 1×** the heart sounds are muted, because S1 and S2 would run into each other; the monitor beep still sounds. The
+  *Display* popup says so.
+* **Pause.** Pausing fades the sound out. While paused, the *Play* button at the top right of the heart-sound lane plays the
+  trace from the scrub cursor to the newest sample (the whole strip on screen when you have not scrubbed), or the span
+  between the first pair of calipers when one is placed; a line moves across the strip and the lane with the sound. *Stop*,
+  or *Run*, ends it.
+* **Audio offset and the sync check.** The program cannot measure how late your sound card plays, so the Settings window has
+  an *Audio offset* slider (0–300 ms, default 60 ms). Press *Check sync*: a click sounds once a second while a dot lights up
+  beside the button. Move the slider until the click and the light come together; Bluetooth headphones may need 150 ms or
+  more. *Stop the sync check* (or closing the window) ends it.
+* The sound never affects the simulation: with the sound on or off, the same rhythm gives the same trace. Without a sound
+  device the program runs as usual and says "No sound device could be opened".
+* The sounds are a **model** computed from the simulated beats, not a recording of a patient.
 
 **Pause and scrub.** Press *Pause*, then drag the *Scrub back* slider or the strip itself (away from any caliper): the heart, the vector arrow and the
 read-out all follow the cursor, up to 60 s back. *Run* continues from where the simulation stopped; time never jumps.

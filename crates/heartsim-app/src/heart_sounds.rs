@@ -1,10 +1,13 @@
 //! The live phonocardiogram (brief B24): a [`PcgSynth`] fed the same engine events as the ECG
 //! synthesiser, sampled into a 4 kHz ring in step with the strip rings, plus the S1/S2 labels as ring
 //! indices. Silent: nothing here touches an audio device, and nothing flows back into the engine.
+//!
+//! For listening (B25) it also counts its resets (so the player knows when to re-anchor) and, while
+//! heart-sound audio is on, feeds a [`WallTimeSynth`] the same events for slow motion.
 
 use heartsim_core::Millis;
 use heartsim_ecg::pcg::PCG_PERIOD_MS;
-use heartsim_ecg::{LeadRing, PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel};
+use heartsim_ecg::{LeadRing, PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, WallTimeSynth};
 use heartsim_sim::Event;
 use heartsim_ui::PcgLane;
 
@@ -22,6 +25,10 @@ pub struct HeartSounds {
     last_t_ms: Option<f64>,
     seed: u64,
     respiration_rate_bpm: f64,
+    /// Incremented by every [`HeartSounds::reset`]: a new engine, whose time starts again.
+    generation: u64,
+    /// The slow-motion synthesiser, fed only while heart-sound audio is on.
+    wall: Option<WallTimeSynth>,
 }
 
 impl HeartSounds {
@@ -36,6 +43,8 @@ impl HeartSounds {
             last_t_ms: None,
             seed: 0,
             respiration_rate_bpm,
+            generation: 0,
+            wall: None,
         }
     }
 
@@ -49,11 +58,44 @@ impl HeartSounds {
         self.ring.clear();
         self.marks.clear();
         self.last_t_ms = None;
+        self.generation += 1;
+        if self.wall.is_some() {
+            self.wall = Some(self.new_wall());
+        }
+    }
+
+    fn new_wall(&self) -> WallTimeSynth {
+        WallTimeSynth::new(PcgParams::default(), self.seed, self.respiration_rate_bpm)
+    }
+
+    /// How many times the synthesiser has started over for a new engine (scenario loaded,
+    /// restarted, EP lab or re-entry started, or the clock went back).
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Feed (or stop feeding) the slow-motion synthesiser. Switching it on starts a fresh one with
+    /// this engine's seed and breathing rate; it hears the events from then on.
+    pub fn set_wall_active(&mut self, active: bool) {
+        match (active, self.wall.is_some()) {
+            (true, false) => self.wall = Some(self.new_wall()),
+            (false, true) => self.wall = None,
+            _ => {}
+        }
+    }
+
+    /// The slow-motion synthesiser, while active.
+    pub fn wall_mut(&mut self) -> Option<&mut WallTimeSynth> {
+        self.wall.as_mut()
     }
 
     /// Feed one step's engine events.
     pub fn on_events(&mut self, events: &[Event]) {
         self.synth.on_events(events);
+        if let Some(w) = &mut self.wall {
+            w.on_events(events);
+        }
     }
 
     /// Push the [`PCG_PER_ECG_SAMPLE`] samples that end at `now`, the time of the strip sample just

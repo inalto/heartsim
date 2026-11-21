@@ -48,7 +48,7 @@ pub use ischaemia_panel::{
 };
 pub use orientation::{GizmoCorner, orientation_gizmo};
 pub use pacer_panel::{PaceMark, PaceMarks, PacerPanelResponse, PacerPanelState, lead_glyphs, pacer_panel};
-pub use pcg_lane::PcgLane;
+pub use pcg_lane::{HeartSoundStatus, LaneRequest, PcgLane};
 pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
 pub use theme::Palette;
 pub use timeline_editor::TimelineEditor;

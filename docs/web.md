@@ -38,9 +38,11 @@ works from a sub-path such as `https://<user>.github.io/heartsim/` and from any 
 | Screenshot tour (`HEARTSIM_SCREENSHOT_DIR`) | inert | no environment |
 | `--version`, logging to the terminal | none; panics and `log` output go to the browser console | |
 
-Audio: the desktop monitor beep (`audio` feature, `kira`) is not compiled for the web, and nothing in the web build depends on
-`kira`. The heart-sound trace under the strip (brief B24) is drawn on the web as on the desktop; it is silent on both, being the
-waveform the later audio phases will play. Web sound, when it comes, should use Web Audio started from a user gesture.
+Audio: the desktop monitor beep and the heart-sound audio (brief B25; `audio` feature, `kira` and `rtrb`) are not compiled
+for the web, and nothing in the web build depends on them. The heart-sound trace under the strip (brief B24) is drawn on the web
+as on the desktop, but on the web it is still **silent**: the *Play heart sounds* switch is absent there. The player logic and the
+resampler (`heartsim-app/src/heart_sound_player.rs`, `sound_out.rs`) compile for wasm32 and are device-independent; web sound
+(phase 3) should hand the same chunks to Web Audio, with the context started from the learner's click on the switch.
 
 Persistence: eframe's `persistence` feature stores the Rhythm Quiz score, the tutorial progress and the Settings window's choices
 (language, high contrast, reduced motion) in `localStorage`.

@@ -17,6 +17,7 @@ with a textbook open** before relying on them in class.
 | Windows and macOS | The installers are built and the test suite passes on GitHub's Windows and macOS runners, which have no display either. The first person to open the Windows build (0.7.0) saw a blue sphere and an empty rhythm list: no installer up to 0.7.0 shipped the `assets/` tree, and the smoke tests only ran `--version`. Fixed in 0.7.2 (the packages carry the assets, `heartsim --assets-dir` is checked after every install, and the app says so when they are missing); the rest of the window has still not been used by a person on either system. | Same as above, on each system. The installers are **unsigned**: Windows SmartScreen and macOS Gatekeeper warn before they run. |
 | The browser version | It compiles, the size budget holds and an automated smoke test loads the page in headless Chromium. Nobody has used it in a real browser with WebGPU or WebGL2; the browser table in `docs/web.md` is empty. | Open [the web app](app/) in Chrome, Edge, Firefox and Safari; fill in the table in `docs/web.md` (browser, GPU API, frame rate). |
 | The monitor beep | The audio path is compiled on the CI runners and in the release builds, but no sound has been heard anywhere: the build server has no sound device or ALSA headers, so the beep was only type-checked there. The AppImage does not carry `libasound`: it needs the host's `libasound2`, which the release smoke test now installs (the 0.6.0 build failed once without it). | Turn the beep on in Settings on each system and listen. |
+| The heart sounds (B25) | Never heard. The build server has no sound device and no ALSA headers, so the `audio` build (kira stream, shared device) could not even be compiled there: its kira code was compiled and unit-tested against kira's mock backend only, and the CI's `--features audio` clippy job is its first real compile. Everything else (the player, the resampler, the fades, the limiter, the drift correction, the display delay) is tested with a fake sink. The real output latency, the default 60 ms offset and the sync check have not been tried on any machine. | On Linux, Windows and macOS: switch the heart sounds on, run *Check sync* in Settings, and note the offset at which click and flash coincide. |
 | Printed and exported ECGs | PDF, PNG, CSV and WFDB exports are checked by tests that read them back, not by a person looking at a printout or opening the WFDB record in another program. | Print a PDF at 25 mm/s and measure the grid; open the WFDB record in WFDB tools or PhysioNet's LightWAVE. |
 | The validation bridge | **No solver has been run** on the openCARP exports. The element node order, the `carputils` calls in `run.py` and the `im_param` syntax were taken from documentation. | Run the exported case in openCARP and compare with `heartsim-cli validation-report` (see `docs/validation-bridge.md`). |
 | The re-tuned anatomy in the 3-D view | The 0.6.0 pack (heart tilted as measured, atria and veins at anatomical levels, narrower torso) was checked by the automated tests and the screenshot tour only; nobody has looked at the chambers, vessels and torso layers from every angle. The default view is now a right anterior oblique so the long axis lies in the screen; the straight-on AP preset looks down the long axis and shows the left ventricle as a round outline in front of the atria, which is correct but easy to misread. | Open the Simulator, turn each layer on and rotate the heart; report anything that looks misplaced. |
@@ -146,11 +147,20 @@ interface.
 
 * The display filters are causal, so the drawn trace lags the unfiltered one by a few milliseconds.
 * The monitor beep is up to one frame late and is rate-limited to one tone per 180 ms of simulated time.
-* The heart-sound trace is silent and models S1 and S2 only. Several of its numbers were seen only in extracts of the papers
+* The heart-sound trace models S1 and S2 only. Several of its numbers were seen only in extracts of the papers
   (the QS2 intercept, the 40 ms QRS-to-S1 figure, the chirp frequencies of A2 and P2), and the S1 loudness curve, the
   interventricular delays and the shapes of M1 and T1 are design choices; each is marked in `PcgParams`. The timing has not yet
   been checked against a recording with simultaneous ECG and PCG. A2 lands 20–35 ms before the drawn T end at 50–100 bpm.
   The S1 and S2 labels of a beat appear about 0.15 s after its QRS, once a second paced front can no longer change it.
+* Heart-sound audio (desktop, `audio` feature): kira reports no output latency, so the views are delayed by the 40 ms queue
+  plus a user offset that has to be set by ear (*Check sync*); a wrong offset leaves sound and picture apart by the
+  difference. The 3-D heart is drawn in the past from its 25 Hz colour-map history, so while the sound plays the wavefront is
+  interpolated between frames 40 ms apart (activation-time and APD maps step at those frames) instead of being the live
+  engine state. In the EP lab and the re-entry presets the 3-D heart is not recorded in that history and stays live, about
+  0.1 s ahead of the sound; the strip and the lane are delayed there as elsewhere. When those Tier-2 engines cannot keep up
+  with real time, fewer samples arrive than the sound card plays and the heart sounds break up. The Axis Trainer, the Axis
+  Quiz and the Electrodes page draw their leads live (not delayed). Above 1× the heart sounds are muted; while paused only
+  the lane's *Play* button sounds; slices always play at 1×. The browser version has no heart-sound audio yet (phase 3).
 
 ### Browser version
 

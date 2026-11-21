@@ -53,6 +53,8 @@ crc32fast = "1.5.3"
 
 # --- audio -------------------------------------------------------------------
 kira = { version = "0.12.6", default-features = false, features = ["cpal"] }
+# the heart-sound stream's lock-free queue (B25); kira already depends on it
+rtrb = "0.4.1"
 
 # --- web (heartsim-web, wasm32 only) --------------------------------------------
 # wasm-bindgen is pinned exactly: the `wasm-bindgen` CLI that trunk runs must be the same version as this

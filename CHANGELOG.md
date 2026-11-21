@@ -4,6 +4,26 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Heart sounds, phase 2 (desktop audio, `audio` feature): *Play heart sounds* in the strip's *Display* popup and in a new
+  *Heart sounds* section of the Settings window (off by default, remembered, with volume and an *Audio offset* of 0–300 ms,
+  default 60 ms). The phonocardiogram the lane draws is played through the sound card, sample for sample, about 40 ms behind
+  the simulation; while it plays, the strip, the 12-lead page, the heart-sound lane and the 3-D heart are drawn that delay plus
+  the offset behind (eased over 0.3 s, not shown as a scrub), so S1 is heard when the trace shows it. Below 1× the sounds are
+  re-synthesised in wall time (each sound keeps its pitch, the intervals stretch); above 1× they are muted (the beep is not);
+  pausing fades them out. While paused, *Play* in the heart-sound lane plays from the scrub cursor, or between the first
+  caliper pair, with a moving playhead. *Check sync* in Settings plays a click once a second beside a flashing dot to set the
+  offset by ear. The beep and the heart sounds share one audio device, opened only when either is switched on.
+- `heartsim_ecg::pcg::WallTimeSynth`: the PCG components re-timed for slow-motion listening; at 1× it equals `PcgSynth`
+  sample for sample.
+- `heartsim-app`: `sound_out` (the `PcmSink` trait, a fake sink, a Kaiser-windowed sinc resampler from 4 kHz to the device
+  rate, the audio-thread stream with priming, fades, drift correction and a soft limiter) and `heart_sound_player` (the
+  per-frame player and the display delay), both pure and tested without a sound card; `audio_out` gains the shared
+  `AudioOutput` and the heart-sound stream (a custom kira sound fed by an `rtrb` queue).
+
+### Changed
+- The heart-sound lane's hover text no longer says "silent".
+
 ## [0.16.0] — 2026-11-21
 Fifteenth tagged release: grouped navigation and compact controls, per-screen design fixes, and a silent heart-sound
 lane (S1, S2) drawn from the same engine events as the ECG.

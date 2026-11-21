@@ -1,4 +1,4 @@
-use crate::settings::{ThemeMode, settings_window_with_audio};
+use crate::settings::{HeartSoundInfo, ThemeMode, settings_window_full};
 use eframe::egui;
 use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead, Millis, SimClock};
 use heartsim_ecg::{GaussianSynth, LeadRing, estimate_frontal_axis};
@@ -20,6 +20,7 @@ use crate::vector_overlay::VectorOverlay;
 #[cfg(feature = "export")]
 mod exports;
 mod keys;
+mod listening;
 mod scenario_control;
 mod tour;
 mod tutorials;
@@ -101,6 +102,9 @@ pub struct HeartSimApp {
     settings_open: bool,
     /// QRS-synchronous monitor beep: fed the ventricular events, never read by the simulation.
     beep: crate::monitor_beep::MonitorBeep,
+    /// Plays the phonocardiogram (B25): reads the PCG ring, writes to the sound card, never read by
+    /// the simulation.
+    sound_player: crate::heart_sound_player::HeartSoundPlayer,
     /// The About window (version and medical disclaimer, N-09).
     about_open: bool,
     /// The once-per-start GitHub release check and its notice; `None` when switched off in Settings or during
@@ -291,6 +295,8 @@ impl HeartSimApp {
             ecg: {
                 let mut ecg = EcgView::new();
                 ecg.show_heart_sounds = settings.heart_sounds;
+                ecg.play_heart_sounds =
+                    crate::heart_sound_player::AUDIO_BUILD.then_some(settings.heart_sound_audio);
                 ecg
             },
             history: SnapshotRing::standard(),
@@ -325,6 +331,7 @@ impl HeartSimApp {
             settings,
             settings_open: false,
             beep: crate::monitor_beep::MonitorBeep::new(),
+            sound_player: crate::heart_sound_player::HeartSoundPlayer::new(),
             about_open: false,
             #[cfg(feature = "update-check")]
             update_check,
@@ -427,13 +434,19 @@ impl HeartSimApp {
         vec![v; self.vertex_count]
     }
 
-    /// Viewport scalars: live (recorded into the history), or the snapshot at the scrub cursor.
+    /// Viewport scalars: live (recorded into the history), or the snapshot at the scrub cursor (or
+    /// as far back as the heart sounds are heard).
     fn view_scalars(&mut self) -> Vec<f32> {
         let now = self.engine.now();
-        if self.ecg.scrub_offset_ms() > 0.0
-            && let Some(s) = self.history.at(Millis(now.0 - self.ecg.scrub_offset_ms()))
+        let back = self.heart_view_offset_ms();
+        if back > 0.0
+            && let Some(s) = self.history.at(Millis(now.0 - back))
         {
-            return s.clone();
+            let s = s.clone();
+            // keep recording while the delay draws from the history
+            let live = self.activation_scalars();
+            self.history.record(now, || live);
+            return s;
         }
         let s = self.activation_scalars();
         self.history.record(now, || s.clone());
@@ -928,11 +941,34 @@ impl eframe::App for HeartSimApp {
             self.keyboard_shortcuts(&ctx);
         }
         let beep_available = self.beep.available();
-        if self.settings_open
-            && settings_window_with_audio(&ctx, &mut self.settings_open, &mut self.settings, beep_available)
-        {
-            self.settings.apply(&ctx);
+        self.heart_sound_popup_to_settings();
+        let mut settings_changed = false;
+        if self.settings_open {
+            let info = HeartSoundInfo {
+                available: self.sound_player.available(),
+                calibrating: self.sound_player.calibrating(),
+                flash: self.sound_player.sync_flash(),
+            };
+            let response = settings_window_full(
+                &ctx,
+                &mut self.settings_open,
+                &mut self.settings,
+                beep_available,
+                crate::heart_sound_player::AUDIO_BUILD.then_some(&info),
+            );
+            if response.changed {
+                self.settings.apply(&ctx);
+                settings_changed = true;
+            }
+            if let Some(on) = response.calibrate {
+                self.sound_player.set_calibrating(on);
+            }
         }
+        if !self.settings_open && self.sound_player.calibrating() {
+            // closing the window ends the sync check
+            self.sound_player.set_calibrating(false);
+        }
+        self.heart_sound_settings_to_popup(settings_changed);
         // no beep while an imported recording is under review: its beats are not the engine's
         #[cfg(feature = "export")]
         let beep_muted = self.exports.review.is_some();
@@ -963,6 +999,7 @@ impl eframe::App for HeartSimApp {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
         }
         self.beep.flush(self.engine.now().0);
+        self.heart_sound_frame(f64::from(dt));
         // the Display popup's heart-sound switch is remembered with the preferences
         self.settings.heart_sounds = self.ecg.show_heart_sounds;
         self.ecg.update(&self.rings);

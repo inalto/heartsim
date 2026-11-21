@@ -60,7 +60,7 @@ pub use forward::{
 };
 pub use leadvec::LeadVectors;
 pub use misplacement::{DetectorConfig, Finding, detect_misplacement};
-pub use pcg::{PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, SoundMark};
+pub use pcg::{PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, SoundMark, WallTimeSynth};
 pub use placement::{
     Cable, DipoleSolver, Exercise, ExtraLead, Limb, Placement, Preset, Snapped, Tier0Field, TorsoSurface,
 };

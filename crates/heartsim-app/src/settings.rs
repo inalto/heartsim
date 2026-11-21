@@ -48,6 +48,14 @@ pub struct Settings {
     pub adjust_open: bool,
     /// The heart-sound lane under the strip (B24, the Display popup's "Heart sounds"). Off by default.
     pub heart_sounds: bool,
+    /// Play the heart sounds through the sound card (B25, desktop builds with the `audio` feature).
+    /// Off by default, like the beep; switching it on also shows the lane.
+    pub heart_sound_audio: bool,
+    /// Linear loudness of the heart sounds, `0.0..=1.0`.
+    pub heart_sound_volume: f32,
+    /// The sound card's own latency, ms (`0..=300`): the views are drawn this much plus the queue
+    /// behind the simulation while sound plays. Set by ear with the sync check.
+    pub audio_offset_ms: f32,
 }
 
 /// The colour scheme preference, stored by name.
@@ -94,6 +102,9 @@ impl Default for Settings {
             torso_image_opacity: DEFAULT_TORSO_IMAGE_OPACITY,
             adjust_open: false,
             heart_sounds: false,
+            heart_sound_audio: false,
+            heart_sound_volume: crate::sound_out::DEFAULT_HEART_SOUND_VOLUME,
+            audio_offset_ms: crate::sound_out::DEFAULT_AUDIO_OFFSET_MS,
         }
     }
 }
@@ -177,6 +188,114 @@ pub fn settings_window(ctx: &egui::Context, open: &mut bool, settings: &mut Sett
     settings_window_with_audio(ctx, open, settings, None)
 }
 
+/// What the Settings window shows about the heart-sound audio (B25).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HeartSoundInfo {
+    /// `None` until the device has been asked for, then whether it could be opened.
+    pub available: Option<bool>,
+    /// The sync check is running.
+    pub calibrating: bool,
+    /// The sync check's marker is lit this frame.
+    pub flash: bool,
+}
+
+/// What the Settings window reports back.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SettingsResponse {
+    /// A setting changed this frame (re-apply the language and the theme).
+    pub changed: bool,
+    /// The learner started (`Some(true)`) or stopped the sync check.
+    pub calibrate: Option<bool>,
+}
+
+/// The Settings window with the heart-sound section: `heart_sounds` is `None` in builds without
+/// audio output (the web build), and the section is then absent.
+pub fn settings_window_full(
+    ctx: &egui::Context,
+    open: &mut bool,
+    settings: &mut Settings,
+    beep_available: Option<bool>,
+    heart_sounds: Option<&HeartSoundInfo>,
+) -> SettingsResponse {
+    let mut calibrate = None;
+    let changed = settings_window_inner(ctx, open, settings, beep_available, |ui, settings| {
+        let Some(info) = heart_sounds else { return false };
+        let (changed, cal) = heart_sound_section(ui, settings, *info);
+        calibrate = cal;
+        changed
+    });
+    SettingsResponse { changed, calibrate }
+}
+
+/// The Heart sounds card: the switch, the volume, the audio offset with its explanation and the
+/// sync check, the "no sound device" notice and the headphone hint. Returns whether a setting
+/// changed and a sync-check request.
+fn heart_sound_section(
+    ui: &mut egui::Ui,
+    settings: &mut Settings,
+    info: HeartSoundInfo,
+) -> (bool, Option<bool>) {
+    let mut changed = false;
+    let mut calibrate = None;
+    cards::card(ui, |ui| {
+        ui.strong(t!("settings-hs-heading"));
+        let switch = ui.checkbox(&mut settings.heart_sound_audio, t!("settings-hs-play"));
+        if switch.changed() {
+            changed = true;
+            if settings.heart_sound_audio {
+                settings.heart_sounds = true;
+            } else if info.calibrating {
+                calibrate = Some(false);
+            }
+        }
+        ui.add_enabled_ui(settings.heart_sound_audio, |ui| {
+            let volume = egui::Slider::new(&mut settings.heart_sound_volume, 0.0..=1.0)
+                .text(t!("settings-hs-volume"))
+                .custom_formatter(|v, _| format!("{:.0} %", v * 100.0))
+                .custom_parser(parse_percent);
+            changed |= ui.add(volume).changed();
+            let offset = egui::Slider::new(
+                &mut settings.audio_offset_ms,
+                crate::sound_out::AUDIO_OFFSET_RANGE_MS,
+            )
+            .text(t!("settings-hs-offset"))
+            .suffix(heartsim_ui::controls::MS)
+            .max_decimals(0);
+            changed |= ui.add(offset).changed();
+            ui.weak(t!("settings-hs-offset-hint"));
+            ui.horizontal(|ui| {
+                let label = if info.calibrating {
+                    t!("settings-hs-sync-stop")
+                } else {
+                    t!("settings-hs-sync")
+                };
+                if ui.button(label).clicked() {
+                    calibrate = Some(!info.calibrating);
+                }
+                // the marker: lit while the click should be heard
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
+                let colour = ui.visuals().text_color();
+                if info.calibrating && info.flash {
+                    ui.painter().circle_filled(rect.center(), 7.0, colour);
+                } else {
+                    ui.painter().circle_stroke(
+                        rect.center(),
+                        7.0,
+                        Stroke::new(1.0, colour.gamma_multiply(0.5)),
+                    );
+                }
+            });
+            ui.weak(t!("settings-hs-sync-hint"));
+        });
+        if settings.heart_sound_audio && info.available == Some(false) {
+            ui.weak(t!("settings-hs-unavailable"));
+        }
+        ui.weak(t!("settings-hs-headphones"));
+        ui.weak(t!("settings-hs-model"));
+    });
+    (changed, calibrate)
+}
+
 /// [`settings_window`] that also knows whether the audio output could be opened
 /// ([`crate::monitor_beep::MonitorBeep::available`]): with `Some(false)` the monitor-beep section says that
 /// no sound device was found. The monitor-beep controls exist only in builds with the `audio` feature.
@@ -185,6 +304,16 @@ pub fn settings_window_with_audio(
     open: &mut bool,
     settings: &mut Settings,
     beep_available: Option<bool>,
+) -> bool {
+    settings_window_inner(ctx, open, settings, beep_available, |_, _| false)
+}
+
+fn settings_window_inner(
+    ctx: &egui::Context,
+    open: &mut bool,
+    settings: &mut Settings,
+    beep_available: Option<bool>,
+    mut extra: impl FnMut(&mut egui::Ui, &mut Settings) -> bool,
 ) -> bool {
     let _ = beep_available; // read only by the `audio` section below
     let mut changed = false;
@@ -202,7 +331,7 @@ pub fn settings_window_with_audio(
                             .find(|l| l.code == code)
                             .map_or_else(|| code.clone(), |l| l.name.to_string()),
                     };
-                    egui::ComboBox::from_id_salt("settings_language")
+                    let combo = egui::ComboBox::from_id_salt("settings_language")
                         .selected_text(selected)
                         .show_ui(ui, |ui| {
                             changed |= ui
@@ -222,6 +351,11 @@ pub fn settings_window_with_audio(
                                     .changed();
                             }
                         });
+                    // the visible label sits beside the box: give it its accessible name too
+                    let name = t!("settings-language");
+                    combo
+                        .response
+                        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &name));
                 });
                 changed |= ui
                     .checkbox(&mut settings.high_contrast, t!("settings-high-contrast"))
@@ -253,6 +387,7 @@ pub fn settings_window_with_audio(
                     ui.weak(t!("settings-beep-unavailable"));
                 }
             });
+            changed |= extra(ui, settings);
             #[cfg(feature = "update-check")]
             cards::card(ui, |ui| {
                 changed |= ui
@@ -283,6 +418,9 @@ mod tests {
             torso_image_opacity: 0.4,
             adjust_open: true,
             heart_sounds: true,
+            heart_sound_audio: true,
+            heart_sound_volume: 0.3,
+            audio_offset_ms: 120.0,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -313,6 +451,21 @@ mod tests {
         assert!(!old.heart_sounds);
         let on: Settings = ron::from_str("(heart_sounds: true)").expect("settings load");
         assert!(on.heart_sounds);
+    }
+
+    #[test]
+    fn heart_sound_audio_is_off_with_designed_defaults_also_for_older_settings() {
+        let d = Settings::default();
+        assert!(!d.heart_sound_audio);
+        assert!((d.heart_sound_volume - crate::sound_out::DEFAULT_HEART_SOUND_VOLUME).abs() < f32::EPSILON);
+        assert!((d.audio_offset_ms - 60.0).abs() < f32::EPSILON);
+        // a settings file from 0.16 (lane switch, no audio fields) loads with the defaults
+        let old: Settings = ron::from_str("(language: None, heart_sounds: true, monitor_beep: true)")
+            .expect("old settings load");
+        assert!(old.heart_sounds && old.monitor_beep);
+        assert!(!old.heart_sound_audio);
+        assert!((old.heart_sound_volume - crate::sound_out::DEFAULT_HEART_SOUND_VOLUME).abs() < f32::EPSILON);
+        assert!((old.audio_offset_ms - crate::sound_out::DEFAULT_AUDIO_OFFSET_MS).abs() < f32::EPSILON);
     }
 
     #[test]

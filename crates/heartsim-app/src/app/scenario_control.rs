@@ -68,10 +68,11 @@ impl HeartSimApp {
         }
     }
 
-    /// While the strip is scrubbed, show the heart as it was at the cursor; live otherwise.
+    /// While the strip is scrubbed, show the heart as it was at the cursor; while the heart sounds
+    /// play, as it was when what is heard now happened (B25); live otherwise.
     pub(super) fn sync_scrub(&mut self) {
+        let back = self.heart_view_offset_ms();
         let Some(h) = &mut self.heart else { return };
-        let back = self.ecg.scrub_offset_ms();
         let cells = (back > 0.0)
             .then(|| Millis(self.engine.now().0 - back))
             .and_then(|t| self.heart_history.at(t, h.mode));

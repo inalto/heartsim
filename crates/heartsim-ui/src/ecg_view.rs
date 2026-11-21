@@ -3,7 +3,9 @@
 
 use crate::annotations::{EcgAnnotations, interval_readout};
 use crate::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
-use crate::pcg_lane::{PcgLane, draw_caliper_lines, draw_pcg_lane, lane_height};
+use crate::pcg_lane::{
+    HeartSoundStatus, LaneRequest, PcgLane, draw_caliper_lines, draw_pcg_lane, draw_playhead, lane_height,
+};
 use crate::strip::{GAINS_MM_MV, SPEEDS_MM_S, StripStyle, StripTrace, StripWindow, SweepMode, draw_strip};
 use crate::t;
 use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, cell_is_annotated, intervals_fit_cells, page_cells};
@@ -46,6 +48,21 @@ pub struct EcgView {
     /// Draw the heart-sound lane (B24) under the strip and under the 12-lead page, where the caller
     /// has a phonocardiogram. Off by default.
     pub show_heart_sounds: bool,
+    /// The Display popup's "Play heart sounds" switch (B25). `None` in builds without audio output
+    /// (the web build): the switch is absent.
+    pub play_heart_sounds: Option<bool>,
+    /// What the heart-sound audio is doing, worded under the switch.
+    pub heart_sound_status: HeartSoundStatus,
+    /// While a slice of the PCG ring plays: the ring index heard now, drawn as a line across the
+    /// strip and the lane.
+    pub playhead: Option<u64>,
+    /// A slice is playing: the lane's button offers Stop.
+    pub slice_playing: bool,
+    /// How far behind the newest sample the views are drawn while sound plays, ms (B25). Not a
+    /// scrub: the scrub slider and [`Self::scrub_offset_ms`] do not include it.
+    display_delay_ms: f64,
+    /// The lane's Play / Stop button was clicked this frame.
+    lane_request: Option<LaneRequest>,
     /// Bandwidth filter and artefacts applied to what the painters draw (F-15). The analyser, the
     /// calipers' reading of wave positions and the default exports keep using the raw rings.
     display: DisplayStage,
@@ -73,6 +90,12 @@ impl Default for EcgView {
             show_waves: true,
             show_intervals: true,
             show_heart_sounds: false,
+            play_heart_sounds: None,
+            heart_sound_status: HeartSoundStatus::Off,
+            playhead: None,
+            slice_playing: false,
+            display_delay_ms: 0.0,
+            lane_request: None,
             display: DisplayStage::default(),
             analyzer: Analyzer::default(),
             annotations: None,
@@ -93,6 +116,11 @@ fn fs_of(rings: &[LeadRing]) -> f32 {
 
 fn pushed_of(rings: &[LeadRing]) -> u64 {
     rings.first().map_or(0, LeadRing::pushed)
+}
+
+/// PCG samples per strip sample for `rings` (8 for the 500 Hz strip and the 4 kHz PCG).
+fn pcg_factor(rings: &[LeadRing]) -> u64 {
+    ((heartsim_ecg::PCG_RATE_HZ / fs_of(rings).max(1.0)).round() as u64).max(1)
 }
 
 impl EcgView {
@@ -119,16 +147,48 @@ impl EcgView {
         self.playback.scrub_ms()
     }
 
+    /// Draw everything `ms` behind the newest sample (the heart-sound player's display delay, B25),
+    /// on top of any scrub. Calipers sit in screen coordinates and are unaffected.
+    pub fn set_display_delay_ms(&mut self, ms: f64) {
+        self.display_delay_ms = if ms.is_finite() { ms.max(0.0) } else { 0.0 };
+    }
+
+    /// The display delay in force, ms.
+    #[must_use]
+    pub fn display_delay_ms(&self) -> f64 {
+        self.display_delay_ms
+    }
+
+    /// How far behind the engine the views are drawn, ms: the scrub plus the display delay. The 3-D
+    /// view shows the state at `now − view_offset_ms()`.
+    #[must_use]
+    pub fn view_offset_ms(&self) -> f64 {
+        self.playback.scrub_ms() + self.display_delay_ms
+    }
+
+    fn delay_samples(&self, fs: f32) -> u64 {
+        (self.display_delay_ms * f64::from(fs) / 1000.0).round() as u64
+    }
+
     /// Time of the newest sample on screen, ms since the first sample.
     #[must_use]
     pub fn cursor_time_ms(&self, rings: &[LeadRing]) -> f64 {
-        self.playback.cursor_time_ms(pushed_of(rings), fs_of(rings))
+        let fs = fs_of(rings);
+        self.head(rings).saturating_sub(1) as f64 * 1000.0 / f64::from(fs)
     }
 
     /// Absolute index one past the newest sample on screen.
     #[must_use]
     pub fn head(&self, rings: &[LeadRing]) -> u64 {
-        self.playback.head(pushed_of(rings), fs_of(rings))
+        let fs = fs_of(rings);
+        self.playback
+            .head(pushed_of(rings), fs)
+            .saturating_sub(self.delay_samples(fs))
+    }
+
+    /// The Play / Stop request of the heart-sound lane's button this frame, if any.
+    pub fn take_lane_request(&mut self) -> Option<LaneRequest> {
+        self.lane_request.take()
     }
 
     /// Latest measurements, if the analyser has run.
@@ -310,6 +370,24 @@ impl EcgView {
         ui.checkbox(&mut self.show_intervals, t!("ecg-intervals"));
         ui.checkbox(&mut self.show_heart_sounds, t!("ecg-heart-sounds"))
             .on_hover_text(t!("ecg-heart-sounds-hint"));
+        if let Some(play) = &mut self.play_heart_sounds {
+            let status = self.heart_sound_status;
+            let mut shown = false;
+            ui.indent("play_heart_sounds", |ui| {
+                // switching the sound on shows the lane; hiding the lane leaves the sound on
+                shown = ui
+                    .checkbox(play, t!("ecg-play-heart-sounds"))
+                    .on_hover_text(t!("ecg-play-heart-sounds-hint"))
+                    .changed()
+                    && *play;
+                if *play && let Some(note) = status.note() {
+                    ui.weak(note);
+                }
+            });
+            if shown {
+                self.show_heart_sounds = true;
+            }
+        }
         crate::controls::slider(
             ui,
             &t!("ecg-px-per-mm"),
@@ -439,6 +517,10 @@ impl EcgView {
             None => (rect, None),
         };
         let win = self.ecg_strip(ui, rect, rings, lead);
+        let factor = pcg_factor(rings);
+        if let Some(p) = self.playhead {
+            draw_playhead(ui, &win, p, factor, &self.style);
+        }
         if let (Some((lane, factor)), Some(lane_rect)) = (lane, lane_rect) {
             let id = ui.scope_id().with("ecg_view_sounds");
             let lane_win = win.rescaled(lane_rect, factor);
@@ -452,8 +534,66 @@ impl EcgView {
                 &mut self.playback,
             );
             draw_caliper_lines(ui, &lane_win, &self.strip_calipers, &self.style);
+            if let Some(p) = self.playhead {
+                draw_playhead(ui, &lane_win, p, 1, &self.style);
+            }
+            let calipers = self.strip_calipers.clone();
+            self.lane_button(ui, &lane_win, &lane, &calipers);
         }
         win
+    }
+
+    /// The heart-sound lane's Play / Stop button (B25), at its top right while paused with the
+    /// sound switched on: Play plays the PCG ring from the scrub cursor to the newest sample (the
+    /// strip on screen when the cursor is at the newest sample), or the span between the first
+    /// caliper pair when one is placed; Stop ends it.
+    fn lane_button(
+        &mut self,
+        ui: &mut Ui,
+        lane_win: &StripWindow,
+        lane: &PcgLane<'_>,
+        calipers: &CaliperSet,
+    ) {
+        let available = self.heart_sound_status != HeartSoundStatus::NoDevice;
+        if self.play_heart_sounds != Some(true) || !self.playback.is_paused() || !available {
+            return;
+        }
+        let label = if self.slice_playing {
+            t!("ecg-sound-stop")
+        } else {
+            t!("ecg-sound-play")
+        };
+        let size = egui::vec2(64.0, 18.0);
+        let at = Rect::from_min_size(lane_win.rect.right_top() + egui::vec2(-size.x - 4.0, 2.0), size);
+        let hint = t!("ecg-sound-play-hint");
+        let clicked = ui
+            .put(at, egui::Button::new(egui::RichText::new(label).small()))
+            .on_hover_text(hint)
+            .clicked();
+        if !clicked {
+            return;
+        }
+        if self.slice_playing {
+            self.lane_request = Some(LaneRequest::Stop);
+            return;
+        }
+        let span = calipers.pairs.first().and_then(|c| {
+            let a = lane_win.sample_at_x(lane_win.x_from_left_ms(c.a_ms.min(c.b_ms)))?;
+            let b = lane_win.sample_at_x(lane_win.x_from_left_ms(c.a_ms.max(c.b_ms)))?;
+            Some((a, b + 1))
+        });
+        let (start, end) = span.unwrap_or_else(|| {
+            let newest = lane.ring.pushed();
+            let cursor = lane_win.head.min(newest);
+            if cursor < newest {
+                (cursor, newest)
+            } else {
+                (cursor.saturating_sub(lane_win.visible_samples), cursor)
+            }
+        });
+        if end > start {
+            self.lane_request = Some(LaneRequest::Play { start, end });
+        }
     }
 
     fn ecg_strip(&mut self, ui: &mut Ui, rect: Rect, rings: &[LeadRing], lead: Lead) -> StripWindow {
@@ -520,6 +660,14 @@ impl EcgView {
         };
         strip_interact(ui, id, &lane_win, lane.ring, calipers, &mut self.playback);
         draw_caliper_lines(ui, &lane_win, calipers, &self.style);
+        let calipers = calipers.clone();
+        if let Some(p) = self.playhead {
+            draw_playhead(ui, &lane_win, p, 1, &self.style);
+            if let Some(w) = wins.last().filter(|w| spans(w)) {
+                draw_playhead(ui, w, p, factor, &self.style);
+            }
+        }
+        self.lane_button(ui, &lane_win, &lane, &calipers);
         wins
     }
 

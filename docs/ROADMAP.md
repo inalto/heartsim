@@ -15,6 +15,7 @@ mechanical, well-specified tasks). Parallel groups can run concurrently in separ
 | **M6 Web build** | WASM build with Tier 0/1 (WebGPU, WebGL2 fallback) deployed via GitHub Pages. | B21 |
 | **M7 EP lab (P2)** | Catheters, EGMs, PES, ablation. | B22 |
 | **M8 Validation bridge (P2)** | openCARP/VTK export + import; Niederer-style comparison report. | B23 |
+| **M9 Heart sounds (audio)** | The phonocardiogram drawn under the ECG and heard, in five phases: (1) silent PCG trace with S1/S2 from engine events (B24, done 0.16.0); (2) desktop audio with a fixed display delay, slow-motion re-synthesis and play-from-cursor (B25); (3) web audio through Web Audio, gesture-started, latency-compensated; (4) S3, S4, clicks, snaps and murmurs, the `auscultation:` scenario section, listening sites, bell and diaphragm, valve highlights; (5) teaching: auscultation tutorial, quiz, repetition trainer, small-speaker mode, reference recordings, WAV export. | B24, B25 |
 
 ## Dependency graph of briefs
 ```

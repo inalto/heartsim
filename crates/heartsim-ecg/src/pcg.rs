@@ -15,6 +15,8 @@
 //! 3. [`PcgSynth`] renders each closure as a closed-form falling-frequency chirp at
 //!    [`PCG_RATE_HZ`], with a small amplitude jitter that is a pure function of the scenario seed and
 //!    the beat's time.
+//! 4. [`WallTimeSynth`] (brief B25) renders the same components in wall time for listening in slow
+//!    motion: the intervals between the sounds stretch with the speed, each sound keeps its pitch.
 //!
 //! Every number lives in [`PcgParams`], whose field documentation names the source or says
 //! **designed**. "Unverified" marks values the research could only read in search extracts of the
@@ -867,37 +869,20 @@ impl PcgSynth {
     /// same respiratory clock as the sinus arrhythmia.
     #[must_use]
     pub fn new(params: PcgParams, seed: u64, respiration_rate_bpm: f64) -> Self {
-        let atoms = [
-            Atom::new(params.m1),
-            Atom::new(params.t1),
-            Atom::new(params.a2),
-            Atom::new(params.p2),
-        ];
-        let mut s = Self {
+        let atoms = atoms_of(&params);
+        let scale = reference_scale(&params, &atoms);
+        Self {
             assembler: BeatAssembler::new(&params),
             params,
             seed,
             respiration_rate_bpm,
             atoms,
-            scale: 1.0,
+            scale,
             active: Vec::new(),
             marks: Vec::new(),
             beats: Vec::new(),
             keep_beats: false,
-        };
-        // reference S1: M1 at gain 1 and T1 at the normal gap, sampled on the output grid
-        let gap = s.params.m1_t1_ms;
-        let t1 = s.params.t1_gain;
-        let len = s.params.m1.duration_ms.max(gap + s.params.t1.duration_ms);
-        let n = (len / PCG_PERIOD_MS).ceil() as usize;
-        let peak = (0..n)
-            .map(|k| {
-                let tau = k as f64 * PCG_PERIOD_MS;
-                (s.atoms[0].value(tau) + t1 * s.atoms[1].value(tau - gap)).abs()
-            })
-            .fold(0.0, f64::max);
-        s.scale = if peak > 0.0 { 1.0 / peak } else { 0.0 };
-        s
+        }
     }
 
     /// The model's parameters.
@@ -938,17 +923,13 @@ impl PcgSynth {
                 self.beats.pop();
             }
         }
-        let phase = respiratory_phase(self.respiration_rate_bpm, q);
-        let c = schedule(beat, &self.params, phase);
-        let mut rng = ShockRng::new(self.seed ^ q.to_bits());
-        let j = self.params.amplitude_jitter;
-        for (atom, comp) in [c.m1, c.t1, c.a2, c.p2].into_iter().enumerate() {
-            let jitter = 1.0 + j * (2.0 * rng.next_f64() - 1.0);
-            if let Some(comp) = comp {
+        let (c, atoms) = scheduled_atoms(beat, &self.params, self.seed, self.respiration_rate_bpm);
+        for (atom, slot) in atoms.into_iter().enumerate() {
+            if let Some((onset_ms, gain)) = slot {
                 self.active.push(Active {
                     atom,
-                    onset_ms: comp.onset.0,
-                    gain: comp.gain * jitter,
+                    onset_ms,
+                    gain,
                     beat_ms: q,
                 });
             }
@@ -993,6 +974,324 @@ impl PcgSynth {
     #[must_use]
     pub fn active_count(&self) -> usize {
         self.active.len()
+    }
+}
+
+/// The four atoms of a parameter set, in the order M1, T1, A2, P2.
+fn atoms_of(params: &PcgParams) -> [Atom; 4] {
+    [
+        Atom::new(params.m1),
+        Atom::new(params.t1),
+        Atom::new(params.a2),
+        Atom::new(params.p2),
+    ]
+}
+
+/// Output scale such that a gain-1 S1 (M1 and T1 at the normal gap, sampled on the output grid)
+/// peaks at 1.
+fn reference_scale(params: &PcgParams, atoms: &[Atom; 4]) -> f64 {
+    let gap = params.m1_t1_ms;
+    let t1 = params.t1_gain;
+    let len = params.m1.duration_ms.max(gap + params.t1.duration_ms);
+    let n = (len / PCG_PERIOD_MS).ceil() as usize;
+    let peak = (0..n)
+        .map(|k| {
+            let tau = k as f64 * PCG_PERIOD_MS;
+            (atoms[0].value(tau) + t1 * atoms[1].value(tau - gap)).abs()
+        })
+        .fold(0.0, f64::max);
+    if peak > 0.0 { 1.0 / peak } else { 0.0 }
+}
+
+/// The schedule of `beat` and, per atom (M1, T1, A2, P2), its onset (simulation ms) and its gain
+/// with the seeded jitter applied. One jitter draw per slot, used or not, so that every
+/// synthesiser built on it gives the same amplitudes for the same scenario seed and beat time.
+fn scheduled_atoms(
+    beat: &Beat,
+    params: &PcgParams,
+    seed: u64,
+    respiration_rate_bpm: f64,
+) -> (Components, [Option<(f64, f64)>; 4]) {
+    let q = beat.qrs_onset.0;
+    let phase = respiratory_phase(respiration_rate_bpm, q);
+    let c = schedule(beat, params, phase);
+    let mut rng = ShockRng::new(seed ^ q.to_bits());
+    let j = params.amplitude_jitter;
+    let mut out = [None; 4];
+    for (slot, comp) in out.iter_mut().zip([c.m1, c.t1, c.a2, c.p2]) {
+        let jitter = 1.0 + j * (2.0 * rng.next_f64() - 1.0);
+        *slot = comp.map(|comp| (comp.onset.0, comp.gain * jitter));
+    }
+    (c, out)
+}
+
+// --- slow-motion listening (brief B25) -------------------------------------------------------------
+
+/// Which valve closure a component is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ComponentKind {
+    M1,
+    T1,
+    A2,
+    P2,
+}
+
+impl ComponentKind {
+    /// In the order of [`Components`] and of the synthesisers' atoms.
+    pub const ALL: [ComponentKind; 4] = [
+        ComponentKind::M1,
+        ComponentKind::T1,
+        ComponentKind::A2,
+        ComponentKind::P2,
+    ];
+
+    /// The atom parameters of this component in `params`.
+    #[must_use]
+    pub fn atom(self, params: &PcgParams) -> AtomParams {
+        match self {
+            ComponentKind::M1 => params.m1,
+            ComponentKind::T1 => params.t1,
+            ComponentKind::A2 => params.a2,
+            ComponentKind::P2 => params.p2,
+        }
+    }
+}
+
+/// A component as the wall-time synthesiser started it: its simulation onset and where that
+/// landed in wall time.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WallStart {
+    pub kind: ComponentKind,
+    /// Onset in simulation time, ms (from [`schedule`]).
+    pub sim_ms: f64,
+    /// Onset in the synthesiser's wall time, ms.
+    pub wall_ms: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct WallComponent {
+    atom: usize,
+    onset_sim_ms: f64,
+    gain: f64,
+    beat_ms: f64,
+    /// Fixed when the component starts: later speed changes no longer move it.
+    wall_onset_ms: Option<f64>,
+}
+
+/// The phonocardiogram re-timed for listening in slow motion (brief B25).
+///
+/// Fed the same events as [`PcgSynth`], it schedules the same components ([`schedule`], the same
+/// seeded jitter, the same handling of [`Beat::replaces_previous`]), but renders them in *wall*
+/// time: a component whose onset is at simulation time `s` starts at wall time
+/// `anchor_wall + (s − anchor_sim) / speed`, and then plays its atom at its natural frequency and
+/// duration. Slowing the simulation down therefore stretches the intervals between the sounds (an
+/// A2–P2 split of 40 ms at 0.25× is heard as 160 ms) while each sound keeps its pitch: no
+/// resampling, no vocoder. A speed change moves the anchor to the sample being rendered, so it
+/// takes effect for the components that have not started yet.
+///
+/// At speed 1 with the initial anchor (0, 0) the output equals [`PcgSynth::sample`] on the same
+/// grid sample for sample: the mapping is the identity and the arithmetic is the same. The drawn
+/// trace keeps showing the true signal; only the sound is re-timed.
+///
+/// Wall sample `k` is at `k · PCG_PERIOD_MS`; output is in the units of [`PcgSynth`]. Pure: no
+/// clock is read, the caller says how far simulation time has advanced.
+#[derive(Debug, Clone)]
+pub struct WallTimeSynth {
+    params: PcgParams,
+    seed: u64,
+    respiration_rate_bpm: f64,
+    assembler: BeatAssembler,
+    atoms: [Atom; 4],
+    scale: f64,
+    components: Vec<WallComponent>,
+    anchor_sim_ms: f64,
+    anchor_wall_ms: f64,
+    speed: f64,
+    /// Wall samples rendered (or skipped) so far.
+    rendered: u64,
+    starts: Option<Vec<WallStart>>,
+}
+
+impl WallTimeSynth {
+    /// A synthesiser like [`PcgSynth::new`], at speed 1 with simulation and wall time both at 0.
+    #[must_use]
+    pub fn new(params: PcgParams, seed: u64, respiration_rate_bpm: f64) -> Self {
+        let atoms = atoms_of(&params);
+        let scale = reference_scale(&params, &atoms);
+        Self {
+            assembler: BeatAssembler::new(&params),
+            params,
+            seed,
+            respiration_rate_bpm,
+            atoms,
+            scale,
+            components: Vec::new(),
+            anchor_sim_ms: 0.0,
+            anchor_wall_ms: 0.0,
+            speed: 1.0,
+            rendered: 0,
+            starts: None,
+        }
+    }
+
+    /// Feed timing-engine events (in engine order), as [`PcgSynth::on_events`].
+    pub fn on_events(&mut self, events: &[Event]) {
+        for ev in events {
+            if let Some(beat) = self.assembler.push(ev) {
+                self.on_beat(&beat);
+            }
+        }
+    }
+
+    fn on_beat(&mut self, beat: &Beat) {
+        let q = beat.qrs_onset.0;
+        if beat.replaces_previous {
+            self.components.retain(|c| c.beat_ms.to_bits() != q.to_bits());
+        }
+        let (_, atoms) = scheduled_atoms(beat, &self.params, self.seed, self.respiration_rate_bpm);
+        for (atom, slot) in atoms.into_iter().enumerate() {
+            if let Some((onset_sim_ms, gain)) = slot {
+                self.components.push(WallComponent {
+                    atom,
+                    onset_sim_ms,
+                    gain,
+                    beat_ms: q,
+                    wall_onset_ms: None,
+                });
+            }
+        }
+    }
+
+    /// Simulation speed the mapping uses (wall ms per simulation ms is `1 / speed`).
+    #[must_use]
+    pub fn speed(&self) -> f64 {
+        self.speed
+    }
+
+    /// Change the speed (clamped to at least 0.001) from the sample being rendered on: the anchor
+    /// moves there, so the components already started keep their wall onsets and the others are
+    /// placed with the new speed. Setting the same speed changes nothing.
+    pub fn set_speed(&mut self, speed: f64) {
+        let speed = speed.max(1e-3);
+        if speed.to_bits() == self.speed.to_bits() {
+            return;
+        }
+        let w = self.wall_now_ms();
+        self.anchor_sim_ms = self.sim_at_wall(w);
+        self.anchor_wall_ms = w;
+        self.speed = speed;
+    }
+
+    /// Wall time of the last sample rendered, ms.
+    #[must_use]
+    pub fn wall_now_ms(&self) -> f64 {
+        self.rendered as f64 * PCG_PERIOD_MS
+    }
+
+    /// Simulation time that wall time `wall_ms` stands for under the current mapping, ms.
+    #[must_use]
+    pub fn sim_at_wall(&self, wall_ms: f64) -> f64 {
+        self.anchor_sim_ms + (wall_ms - self.anchor_wall_ms) * self.speed
+    }
+
+    /// Wall time at which simulation time `sim_ms` is rendered under the current mapping, ms.
+    #[must_use]
+    pub fn wall_at_sim(&self, sim_ms: f64) -> f64 {
+        self.anchor_wall_ms + (sim_ms - self.anchor_sim_ms) / self.speed
+    }
+
+    /// Append the wall samples up to the one that stands for simulation time `sim_ms` (the engine's
+    /// clock after this frame's steps) to `out`. Every component it can contain is known by then: a
+    /// sound never starts before the event that schedules it.
+    pub fn render_until_sim(&mut self, sim_ms: f64, out: &mut Vec<f32>) {
+        let end = self.wall_at_sim(sim_ms);
+        while (self.rendered + 1) as f64 * PCG_PERIOD_MS <= end {
+            self.rendered += 1;
+            let w = self.rendered as f64 * PCG_PERIOD_MS;
+            out.push(self.sample_at(w));
+        }
+    }
+
+    fn sample_at(&mut self, w: f64) -> f32 {
+        let (anchor_wall, anchor_sim, speed) = (self.anchor_wall_ms, self.anchor_sim_ms, self.speed);
+        let atoms = &self.atoms;
+        let starts = &mut self.starts;
+        let mut v = 0.0;
+        self.components.retain_mut(|c| {
+            let onset = c
+                .wall_onset_ms
+                .unwrap_or_else(|| anchor_wall + (c.onset_sim_ms - anchor_sim) / speed);
+            let tau = w - onset;
+            let atom = &atoms[c.atom];
+            if tau >= atom.p.duration_ms {
+                return false;
+            }
+            if tau >= 0.0 && c.wall_onset_ms.is_none() {
+                c.wall_onset_ms = Some(onset);
+                if let Some(log) = starts {
+                    log.push(WallStart {
+                        kind: ComponentKind::ALL[c.atom],
+                        sim_ms: c.onset_sim_ms,
+                        wall_ms: onset,
+                    });
+                }
+            }
+            v += c.gain * atom.value(tau);
+            true
+        });
+        (v * self.scale) as f32
+    }
+
+    /// Keep up with the simulation without producing sound (live 1× playback from the ring, or
+    /// heart sounds muted above 1×): the mapping becomes speed 1 from the current sample and wall
+    /// time advances to `sim_ms`, starting and retiring components as rendering would. A later
+    /// switch to slow motion then continues the sounds in progress at their natural rate.
+    pub fn follow(&mut self, sim_ms: f64) {
+        self.set_speed(1.0);
+        let end = self.wall_at_sim(sim_ms);
+        if (self.rendered + 1) as f64 * PCG_PERIOD_MS > end {
+            return;
+        }
+        self.rendered = (end / PCG_PERIOD_MS).floor().max(0.0) as u64;
+        let w = self.wall_now_ms();
+        let (anchor_wall, anchor_sim, speed) = (self.anchor_wall_ms, self.anchor_sim_ms, self.speed);
+        let atoms = &self.atoms;
+        let starts = &mut self.starts;
+        self.components.retain_mut(|c| {
+            let onset = c
+                .wall_onset_ms
+                .unwrap_or_else(|| anchor_wall + (c.onset_sim_ms - anchor_sim) / speed);
+            if w - onset >= atoms[c.atom].p.duration_ms {
+                return false;
+            }
+            if w >= onset && c.wall_onset_ms.is_none() {
+                c.wall_onset_ms = Some(onset);
+                if let Some(log) = starts {
+                    log.push(WallStart {
+                        kind: ComponentKind::ALL[c.atom],
+                        sim_ms: c.onset_sim_ms,
+                        wall_ms: onset,
+                    });
+                }
+            }
+            true
+        });
+    }
+
+    /// Record every component start for [`WallTimeSynth::take_starts`] (tests).
+    pub fn record_starts(&mut self, on: bool) {
+        self.starts = on.then(Vec::new);
+    }
+
+    /// The starts recorded since the last call.
+    pub fn take_starts(&mut self) -> Vec<WallStart> {
+        self.starts.as_mut().map(std::mem::take).unwrap_or_default()
+    }
+
+    /// Components scheduled and not yet finished.
+    #[must_use]
+    pub fn active_count(&self) -> usize {
+        self.components.len()
     }
 }
 

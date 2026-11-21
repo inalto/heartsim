@@ -11,6 +11,58 @@ use crate::t;
 use egui::{Align2, Color32, FontId, Id, Mesh, Pos2, Rect, Stroke, Ui, Vec2};
 use heartsim_ecg::{LeadRing, SoundLabel};
 
+/// What the heart-sound audio is doing (B25), as the Display popup and the Settings window report
+/// it. The app's player decides; the interface only words it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HeartSoundStatus {
+    /// The "Play heart sounds" switch is off.
+    #[default]
+    Off,
+    /// Live at 1×: the ring as drawn, a constant delay behind the engine.
+    Playing,
+    /// Below 1×: re-timed for wall time, each sound at its own pitch.
+    SlowMotion,
+    /// Above 1×: muted (the monitor beep still sounds).
+    MutedFast,
+    /// An imported recording is in the strip: its beats are not the engine's.
+    MutedReview,
+    /// The simulation is paused.
+    Paused,
+    /// A slice of the ring is playing while paused.
+    PlayingSlice,
+    /// The sync check is running.
+    Calibrating,
+    /// No audio device could be opened (or this build has none).
+    NoDevice,
+}
+
+impl HeartSoundStatus {
+    /// A short note on why nothing (or something unusual) is heard, if any.
+    #[must_use]
+    pub fn note(self) -> Option<String> {
+        match self {
+            HeartSoundStatus::SlowMotion => Some(t!("ecg-sound-slow")),
+            HeartSoundStatus::MutedFast => Some(t!("ecg-sound-muted-fast")),
+            HeartSoundStatus::MutedReview => Some(t!("ecg-sound-muted-review")),
+            HeartSoundStatus::Paused => Some(t!("ecg-sound-paused")),
+            HeartSoundStatus::Calibrating => Some(t!("ecg-sound-calibrating")),
+            HeartSoundStatus::NoDevice => Some(t!("ecg-sound-no-device")),
+            HeartSoundStatus::Off | HeartSoundStatus::Playing | HeartSoundStatus::PlayingSlice => None,
+        }
+    }
+}
+
+/// What the learner asked the heart-sound lane's button for, in PCG ring indices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneRequest {
+    /// Play ring samples `start..end` once.
+    Play {
+        start: u64,
+        end: u64,
+    },
+    Stop,
+}
+
 /// What the lane draws: the PCG ring and the labels as `(absolute sample index of the ring, label)`.
 #[derive(Debug, Clone, Copy)]
 pub struct PcgLane<'a> {
@@ -173,6 +225,19 @@ fn merge_close(items: &[(f32, SoundLabel)], min_gap_px: f32) -> Vec<(f32, String
         }
     }
     out
+}
+
+/// The playhead of a slice being played: a vertical line at PCG ring index `pcg_index` in `win`
+/// (a lane window, or a strip window when `factor` PCG samples make one strip sample).
+pub fn draw_playhead(ui: &Ui, win: &StripWindow, pcg_index: u64, factor: u64, style: &StripStyle) {
+    let Some(x) = win.x_of_sample(pcg_index / factor.max(1)) else {
+        return;
+    };
+    let r = win.rect;
+    ui.painter_at(r).line_segment(
+        [Pos2::new(x, r.top()), Pos2::new(x, r.bottom())],
+        Stroke::new(2.0, style.marker),
+    );
 }
 
 /// Caliper lines and bands of `calipers` carried down into the lane, without a second read-out
