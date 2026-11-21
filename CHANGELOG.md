@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-11-21
+Fifteenth tagged release: grouped navigation and compact controls, per-screen design fixes, and a silent heart-sound
+lane (S1, S2) drawn from the same engine events as the ECG.
+
 ### Added
 - Heart sounds, phase 1 (silent): *Heart sounds* in the strip's *Display* popup (off by default, remembered) draws a
   phonocardiogram lane under the Simulator strip and under the 12-lead page, on the strip's time axis, with scrub, sweep, pause
