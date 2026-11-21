@@ -95,6 +95,11 @@ try {
     .then(() => true, () => false);
   const a1 = await audio();
   check(running, `sound runs after one click (${a1.state}, ${a1.sampleRate} Hz, latency ${a1.latencyMs?.toFixed(0)} ms)`);
+  // the queue is judged in steady state: on a slow runner the first chunk can be scheduled a few frames
+  // after the context reports "running"
+  await page
+    .waitForFunction(() => window.heartsimStatus.audio?.queuedMs >= 50, null, { timeout: 10_000 })
+    .catch(() => {});
   const queued = [];
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(250);
