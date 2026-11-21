@@ -21,6 +21,7 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   named shots.
 
 ### Changed
+- The wavefront outline on the 3-D heart is off when the app starts; tick "Wavefront outline" to show it.
 - Top bar: the eleven pages are tabs in three groups (Explore, Practise, Learn) with the open page marked and its
   number-key shortcut in the hover text. On a window too narrow for eleven tabs the bar shows three group menus;
   on a phone-narrow window it keeps the page name and the hamburger menu. The bar stays one line high. The hamburger

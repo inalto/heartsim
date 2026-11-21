@@ -359,7 +359,7 @@ impl HeartView {
             windows: ColourMode::ALL.map(ColourMode::default_window),
             lut_style: LutStyle::Classic,
             luts_dirty: true,
-            wavefront: true,
+            wavefront: false,
             panel,
             tool: ClickTool::Stimulate,
             ablate_radius_mm: 6.0,
