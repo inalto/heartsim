@@ -35,6 +35,24 @@ ejection against a regurgitant systolic murmur, a split S2 against S2 with an op
 against a split S1. **Switch** (or the **S** key) goes to the other sound **at the same point of the cardiac cycle**, so the
 difference is heard where it is.
 
+## Real recordings
+
+Beside six of the findings (S1 and S2, the innocent murmur, the mid-systolic click, aortic stenosis, pulmonary stenosis and
+the ventricular septal defect) the trainer offers a **Real recording** button: a real patient's sound, played in a loop. It is
+a recording and not the heartsim model, and the page says so. The sources give no ECG and no labels, so none is drawn; the
+site, chest piece, breathing, half speed and the trace do not apply to it. Plays of a recording are **not** counted as
+listens, because the counter measures repetition of the model's finding. A recording can only be heard: without a sound
+output the button is off and says why. The credit and licence stay on the page while a recording is selected.
+
+Credits (all clips converted to 4 kHz mono, and trimmed where noted, by the heartsim authors; details in `ASSETS-LICENSES.md`):
+
+* Normal heart sounds: James Heilman, MD, Wikimedia Commons (`HROgg.ogg`), CC0 1.0.
+* Innocent Still's murmur (two recordings), mitral valve prolapse with clicks, aortic stenosis, pulmonary stenosis and
+  ventricular septal defect, all from children: Kudriavtsev V, Polyshchuk V, Roy D (2007), "Heart energy signature
+  spectrogram for cardiovascular diagnosis", *BioMedical Engineering OnLine* 6:16, doi:10.1186/1475-925X-6-16, licensed
+  [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Recorded at the Department of Pediatric Cardiology, IWK Center,
+  Dalhousie University. Paediatric hearts beat faster than an adult's, so the timing differs from the model.
+
 ## Auscultation Quiz
 
 ![Auscultation quiz](../images/auscultation-quiz.png)

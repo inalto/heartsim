@@ -19,6 +19,7 @@ use heartsim_ecg::{ChestPiece, ClipOptions, ListeningChoice, ListeningSite};
 use heartsim_ui::{ClipTrace, StripStyle, cards, clip_view, t};
 
 use crate::heart_sound_player::HeartSoundPlayer;
+use crate::reference_clips::{ReferenceClip, ReferenceLibrary};
 use crate::scenarios::ScenarioLibrary;
 use crate::sound_clips::{ClipCache, ClipEntry, sound_available};
 
@@ -164,6 +165,13 @@ pub struct SoundTrainer {
     pub breath_hold: Option<BreathPhase>,
     /// Small-speaker mode (the Settings value, set by the app).
     pub small_speaker: bool,
+    /// The real recordings on offer (set by the app; empty when the assets hold none).
+    pub references: ReferenceLibrary,
+    /// The real recording selected, as an index into [`ReferenceLibrary::for_finding`] of the
+    /// selected finding; `None` plays the synthesised finding. Recordings are not counted as
+    /// listens: the counter is the evidence-based repetition of the model's finding, and a recording
+    /// is a different stimulus (decided conservatively, brief B28 Part C).
+    pub real: Option<usize>,
     /// A clip is set to play.
     pub playing: bool,
     counts: BTreeMap<String, u64>,
@@ -185,6 +193,8 @@ impl Default for SoundTrainer {
             listening: ListeningChoice::default(),
             breath_hold: None,
             small_speaker: false,
+            references: ReferenceLibrary::default(),
+            real: None,
             playing: false,
             counts: BTreeMap::new(),
             loops_counted: 0,
@@ -273,8 +283,51 @@ impl SoundTrainer {
         self.stop(player);
         self.selection = selection;
         self.member = 0;
+        self.real = None;
         self.listening = self.default_listening();
         self.error = None;
+    }
+
+    /// The real recordings that belong beside the selected finding (none for a contrast pair).
+    #[must_use]
+    pub fn recordings(&self) -> Vec<&ReferenceClip> {
+        match self.selection {
+            Selection::Finding(i) => self.references.for_finding(FINDINGS[i].id),
+            Selection::Pair(_) => Vec::new(),
+        }
+    }
+
+    /// The real recording that plays now, if one is selected.
+    #[must_use]
+    pub fn selected_recording(&self) -> Option<&ReferenceClip> {
+        let k = self.real?;
+        self.recordings().get(k).copied()
+    }
+
+    /// Select the real recording `k` of the finding (or go back to the model with `None`); a
+    /// playing clip is replaced by the new one.
+    pub fn select_recording(&mut self, k: Option<usize>, player: &mut HeartSoundPlayer) {
+        if self.real == k {
+            return;
+        }
+        let was_playing = self.playing;
+        self.stop(player);
+        self.real = k.filter(|k| *k < self.recordings().len());
+        if was_playing || self.real.is_some() {
+            self.play_recording(player);
+        }
+    }
+
+    /// Loop the selected recording from its start. Not counted (see [`Self::real`]).
+    fn play_recording(&mut self, player: &mut HeartSoundPlayer) {
+        if let Some(c) = self.selected_recording() {
+            let samples = Rc::clone(&c.samples);
+            player.play_clip(samples, 0, true);
+            self.playing = true;
+            self.loops_counted = 0;
+            self.counting = None;
+            self.error = None;
+        }
     }
 
     /// The clip of the current selection and options.
@@ -288,6 +341,10 @@ impl SoundTrainer {
 
     /// Start looping the current clip from its beginning.
     pub fn play(&mut self, library: &ScenarioLibrary, player: &mut HeartSoundPlayer) {
+        if self.selected_recording().is_some() {
+            self.play_recording(player);
+            return;
+        }
         self.play_from(library, player, None);
     }
 
@@ -362,7 +419,7 @@ impl SoundTrainer {
         old_options: ClipOptions,
         old_half: bool,
     ) {
-        if !self.playing {
+        if !self.playing || self.real.is_some() {
             return;
         }
         let id = self.scenario_id();
@@ -511,9 +568,12 @@ impl SoundTrainer {
                 total = self.total().to_string()
             ));
             ui.separator();
-            ui.checkbox(&mut self.half_speed, t!("st-half-speed"))
-                .on_hover_text(t!("st-half-speed-hint"));
-            ui.add_enabled_ui(sound, |ui| {
+            let model = self.real.is_none();
+            ui.add_enabled_ui(model, |ui| {
+                ui.checkbox(&mut self.half_speed, t!("st-half-speed"))
+                    .on_hover_text(t!("st-half-speed-hint"));
+            });
+            ui.add_enabled_ui(sound && model, |ui| {
                 ui.checkbox(&mut self.show_trace, t!("st-show-trace"))
                     .on_disabled_hover_text(t!("st-trace-no-sound"));
             });
@@ -521,6 +581,7 @@ impl SoundTrainer {
         if !sound {
             ui.weak(t!("st-trace-no-sound"));
         }
+        self.recording_row_ui(ui, player, sound);
         if let Selection::Pair(i) = self.selection {
             let mut switch = false;
             ui.horizontal_wrapped(|ui| {
@@ -544,49 +605,51 @@ impl SoundTrainer {
                 self.switch_member(library, player);
             }
         }
-        ui.horizontal_wrapped(|ui| {
-            ui.label(t!("ecg-listening-site"));
-            let combo = egui::ComboBox::from_id_salt("st_site")
-                .selected_text(heartsim_ui::auscultation_chest::site_name(self.listening.site))
-                .show_ui(ui, |ui| {
-                    for site in ListeningSite::ALL {
-                        ui.selectable_value(
-                            &mut self.listening.site,
-                            site,
-                            heartsim_ui::auscultation_chest::site_name(site),
+        ui.add_enabled_ui(self.real.is_none(), |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(t!("ecg-listening-site"));
+                let combo = egui::ComboBox::from_id_salt("st_site")
+                    .selected_text(heartsim_ui::auscultation_chest::site_name(self.listening.site))
+                    .show_ui(ui, |ui| {
+                        for site in ListeningSite::ALL {
+                            ui.selectable_value(
+                                &mut self.listening.site,
+                                site,
+                                heartsim_ui::auscultation_chest::site_name(site),
+                            );
+                        }
+                    });
+                let name = t!("ecg-listening-site");
+                combo
+                    .response
+                    .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &name));
+                ui.add_enabled_ui(!self.listening.is_overview(), |ui| {
+                    for chest in ChestPiece::ALL {
+                        ui.radio_value(
+                            &mut self.listening.chest,
+                            chest,
+                            heartsim_ui::pcg_lane::chest_name(chest),
                         );
                     }
                 });
-            let name = t!("ecg-listening-site");
-            combo
-                .response
-                .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, &name));
-            ui.add_enabled_ui(!self.listening.is_overview(), |ui| {
-                for chest in ChestPiece::ALL {
-                    ui.radio_value(
-                        &mut self.listening.chest,
-                        chest,
-                        heartsim_ui::pcg_lane::chest_name(chest),
-                    );
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label(t!("ecg-breathing"))
+                    .on_hover_text(t!("ecg-breathing-hint"));
+                for (value, label) in [
+                    (None, t!("ecg-breathing-free")),
+                    (
+                        Some(BreathPhase::EndExpiration),
+                        t!("ecg-breathing-hold-expiration"),
+                    ),
+                    (
+                        Some(BreathPhase::PeakInspiration),
+                        t!("ecg-breathing-hold-inspiration"),
+                    ),
+                ] {
+                    ui.radio_value(&mut self.breath_hold, value, label);
                 }
             });
-        });
-        ui.horizontal_wrapped(|ui| {
-            ui.label(t!("ecg-breathing"))
-                .on_hover_text(t!("ecg-breathing-hint"));
-            for (value, label) in [
-                (None, t!("ecg-breathing-free")),
-                (
-                    Some(BreathPhase::EndExpiration),
-                    t!("ecg-breathing-hold-expiration"),
-                ),
-                (
-                    Some(BreathPhase::PeakInspiration),
-                    t!("ecg-breathing-hold-inspiration"),
-                ),
-            ] {
-                ui.radio_value(&mut self.breath_hold, value, label);
-            }
         });
         if self.options() != old_options || self.half_speed != old_half {
             self.options_changed(library, player, old_options, old_half);
@@ -595,18 +658,25 @@ impl SoundTrainer {
             cards::result_box(ui, false, e.clone());
         }
         #[cfg(feature = "export")]
-        if ui
-            .button(t!("st-save-wav"))
-            .on_hover_text(t!("st-save-wav-hint"))
-            .clicked()
+        if self.real.is_none()
+            && ui
+                .button(t!("st-save-wav"))
+                .on_hover_text(t!("st-save-wav-hint"))
+                .clicked()
             && let Ok(e) = self.entry(library)
         {
             request = Some(TrainerRequest::SaveWav(e));
         }
-        ui.weak(t!("st-model-note"));
+        ui.weak(if self.real.is_some() {
+            t!("st-real-note")
+        } else {
+            t!("st-model-note")
+        });
         ui.separator();
         let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-        if self.show_trace || !sound {
+        if let Some(c) = self.selected_recording() {
+            Self::recording_card_ui(ui, c);
+        } else if self.show_trace || !sound {
             match self.entry(library) {
                 Ok(e) => {
                     let playhead = self
@@ -639,6 +709,61 @@ impl SoundTrainer {
             ui.label(t!("st-trace-hidden"));
         }
         request
+    }
+
+    /// The buttons of the real recordings beside the finding, and why they are off without sound.
+    fn recording_row_ui(&mut self, ui: &mut egui::Ui, player: &mut HeartSoundPlayer, sound: bool) {
+        let n = self.recordings().len();
+        if n == 0 {
+            return;
+        }
+        let mut pick = None;
+        ui.horizontal_wrapped(|ui| {
+            for k in 0..n {
+                let on = self.real == Some(k);
+                let label = if n == 1 {
+                    t!("st-real")
+                } else {
+                    format!("{} {}", t!("st-real"), k + 1)
+                };
+                if ui
+                    .add_enabled(sound, egui::Button::new(label).selected(on))
+                    .on_hover_text(t!("st-real-hint"))
+                    .on_disabled_hover_text(t!("st-real-no-sound"))
+                    .clicked()
+                {
+                    pick = Some(if on { None } else { Some(k) });
+                }
+            }
+            if !sound {
+                ui.weak(t!("st-real-no-sound"));
+            }
+        });
+        if let Some(k) = pick {
+            self.select_recording(k, player);
+        }
+    }
+
+    /// What replaces the trace while a real recording plays: that it is a recording and not the
+    /// model, what it contains, and the source, licence and credit the licence requires.
+    fn recording_card_ui(ui: &mut egui::Ui, c: &ReferenceClip) {
+        let m = &c.meta;
+        ui.heading(t!("st-real-heading", title = m.title.clone()));
+        ui.add(egui::Label::new(t!("st-real-no-trace")).wrap());
+        ui.add_space(4.0);
+        ui.add(egui::Label::new(t!("st-real-contains", condition = m.condition.clone())).wrap());
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new(t!("st-real-credit")).strong());
+        ui.add(egui::Label::new(m.attribution.clone()).wrap().selectable(true));
+        ui.add(
+            egui::Label::new(t!(
+                "st-real-licence",
+                licence = m.licence.clone(),
+                source = m.source.clone()
+            ))
+            .wrap()
+            .selectable(true),
+        );
     }
 
     /// The tag the lane shows when the sound played is altered (half speed, small speakers).

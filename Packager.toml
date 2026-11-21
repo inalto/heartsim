@@ -42,6 +42,7 @@ resources = [
     { src = "assets/scenarios", target = "assets/scenarios" },
     { src = "assets/tutorials", target = "assets/tutorials" },
     { src = "assets/cases", target = "assets/cases" },
+    { src = "assets/sounds/reference", target = "assets/sounds/reference" },
 ]
 
 # Windows and macOS associate by the last dot-separated extension only, so the compound `.heartsim.ron` suffix is

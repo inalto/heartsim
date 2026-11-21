@@ -21,6 +21,7 @@ pub mod heart_view;
 pub mod interval_drill;
 pub mod monitor_beep;
 pub mod nav;
+pub mod reference_clips;
 pub mod responsive;
 pub mod rhythm_quiz;
 pub mod scenario_file;

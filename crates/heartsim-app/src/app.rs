@@ -287,6 +287,10 @@ impl HeartSimApp {
             rhythm_quiz.restore_score(&score);
         }
         let mut sound_trainer = crate::sound_trainer::SoundTrainer::default();
+        sound_trainer.references = assets.map_or_else(
+            crate::reference_clips::ReferenceLibrary::load_default,
+            crate::reference_clips::ReferenceLibrary::from_bundle,
+        );
         if let Some(counts) = cc
             .storage
             .and_then(|s| s.get_string(crate::sound_trainer::LISTENS_KEY))

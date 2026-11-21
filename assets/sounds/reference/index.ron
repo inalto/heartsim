@@ -1,0 +1,102 @@
+// Reference recordings (brief B28 Part C). Each file: 16-bit mono PCM WAV at 4 kHz, retrieved 2026-11-21.
+// Reproduce a file from its original (downloaded from the primary page named in `source`) with
+//   python3 -I docs/research/heart-sound-clips-convert.py ORIGINAL.ogg assets/sounds/reference/<file> START_S END_S
+// (needs GStreamer: oggdemux, vorbisdec, audioresample, wavenc). The arguments per file are in the
+// `convert:` comment above each entry. The script decodes, downmixes to mono, resamples to 4 kHz,
+// cuts (END_S 0 keeps the whole clip), fades 5 ms at both ends and peak-normalises to -6 dBFS.
+(
+    format_version: 1,
+    clips: [
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py HROgg.ogg assets/sounds/reference/normal-heart-sounds.wav 1.2 4.75
+        (
+            file: "normal-heart-sounds.wav",
+            finding: "s1_s2",
+            title: "Normal heart sounds",
+            condition: "Normal heart sounds at about 70 BPM (source description), a trimmed stretch of four cycles",
+            author: "James Heilman, MD",
+            source: "https://commons.wikimedia.org/wiki/File:HROgg.ogg",
+            licence: "CC0 1.0",
+            attribution: "James Heilman, MD, \"Normal heart sounds\" (Wikimedia Commons, HROgg.ogg), CC0 1.0 public domain dedication; trimmed and converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "1f0e1641c4aa34d7eb1f6157b1ef4547bf182cef79f7a8892d8837b7ebed6b15",
+        ),
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S1.ogg assets/sounds/reference/innocent-stills-1.wav 0 0
+        (
+            file: "innocent-stills-1.wav",
+            finding: "murmur_innocent",
+            title: "Innocent Still's murmur (child), recording 1",
+            condition: "Innocent Still's murmur, recorded at the apex (source description)",
+            author: "Kudriavtsev V, Polyshchuk V, Roy D",
+            source: "https://commons.wikimedia.org/wiki/File:Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S1.ogg; doi:10.1186/1475-925X-6-16",
+            licence: "CC BY 2.0",
+            attribution: "Kudriavtsev V, Polyshchuk V, Roy D (2007), \"Heart energy signature spectrogram for cardiovascular diagnosis\", BioMedical Engineering OnLine 6:16, doi:10.1186/1475-925X-6-16, licensed CC BY 2.0 (https://creativecommons.org/licenses/by/2.0/); converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "d7b7100037f457db564dc6f1a9b7675b47efb63a6d29b2abd11ad4cbda26a303",
+        ),
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S2.ogg assets/sounds/reference/innocent-stills-2.wav 0 0
+        (
+            file: "innocent-stills-2.wav",
+            finding: "murmur_innocent",
+            title: "Innocent Still's murmur (child), recording 2",
+            condition: "Innocent Still's murmur, recorded at the left sternal border, 2nd space (source description)",
+            author: "Kudriavtsev V, Polyshchuk V, Roy D",
+            source: "https://commons.wikimedia.org/wiki/File:Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S2.ogg; doi:10.1186/1475-925X-6-16",
+            licence: "CC BY 2.0",
+            attribution: "Kudriavtsev V, Polyshchuk V, Roy D (2007), \"Heart energy signature spectrogram for cardiovascular diagnosis\", BioMedical Engineering OnLine 6:16, doi:10.1186/1475-925X-6-16, licensed CC BY 2.0 (https://creativecommons.org/licenses/by/2.0/); converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "23cbab1d7523b883c770e110306e2924db7d7c93fde92bd45cac1f72b1b18608",
+        ),
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S5.ogg assets/sounds/reference/mvp-clicks.wav 0 0
+        (
+            file: "mvp-clicks.wav",
+            finding: "midsystolic_click",
+            title: "Mitral valve prolapse with clicks (child)",
+            condition: "Mitral valve prolapse with 3 clicks (source description)",
+            author: "Kudriavtsev V, Polyshchuk V, Roy D",
+            source: "https://commons.wikimedia.org/wiki/File:Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S5.ogg; doi:10.1186/1475-925X-6-16",
+            licence: "CC BY 2.0",
+            attribution: "Kudriavtsev V, Polyshchuk V, Roy D (2007), \"Heart energy signature spectrogram for cardiovascular diagnosis\", BioMedical Engineering OnLine 6:16, doi:10.1186/1475-925X-6-16, licensed CC BY 2.0 (https://creativecommons.org/licenses/by/2.0/); converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "14a34446dcb91f62cb38f1958e27ab526982dd4f5d52966b5e2f8a85c1c1ce62",
+        ),
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S6.ogg assets/sounds/reference/aortic-stenosis.wav 0 0
+        (
+            file: "aortic-stenosis.wav",
+            finding: "murmur_as",
+            title: "Aortic stenosis (child)",
+            condition: "Aortic stenosis, paediatric patient (source description)",
+            author: "Kudriavtsev V, Polyshchuk V, Roy D",
+            source: "https://commons.wikimedia.org/wiki/File:Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S6.ogg; doi:10.1186/1475-925X-6-16",
+            licence: "CC BY 2.0",
+            attribution: "Kudriavtsev V, Polyshchuk V, Roy D (2007), \"Heart energy signature spectrogram for cardiovascular diagnosis\", BioMedical Engineering OnLine 6:16, doi:10.1186/1475-925X-6-16, licensed CC BY 2.0 (https://creativecommons.org/licenses/by/2.0/); converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "7fb3fc5f482c31edc85e34695d7c81d063299fa63ff1ad447a8269ad0f6f1f3f",
+        ),
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S7.ogg assets/sounds/reference/pulmonary-stenosis.wav 0 0
+        (
+            file: "pulmonary-stenosis.wav",
+            finding: "murmur_ps",
+            title: "Pulmonary stenosis (child)",
+            condition: "Pulmonary stenosis, paediatric patient (source description)",
+            author: "Kudriavtsev V, Polyshchuk V, Roy D",
+            source: "https://commons.wikimedia.org/wiki/File:Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S7.ogg; doi:10.1186/1475-925X-6-16",
+            licence: "CC BY 2.0",
+            attribution: "Kudriavtsev V, Polyshchuk V, Roy D (2007), \"Heart energy signature spectrogram for cardiovascular diagnosis\", BioMedical Engineering OnLine 6:16, doi:10.1186/1475-925X-6-16, licensed CC BY 2.0 (https://creativecommons.org/licenses/by/2.0/); converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "56f923b936aebd5d59a7594ddbaecd44941fc9fe505f2510416e26b2b110965a",
+        ),
+        // convert: python3 -I docs/research/heart-sound-clips-convert.py Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S9.ogg assets/sounds/reference/vsd.wav 0 0
+        (
+            file: "vsd.wav",
+            finding: "murmur_vsd",
+            title: "Ventricular septal defect (child)",
+            condition: "Ventricular septal defect, paediatric patient (source description)",
+            author: "Kudriavtsev V, Polyshchuk V, Roy D",
+            source: "https://commons.wikimedia.org/wiki/File:Heart-energy-signature-spectrogram-for-cardiovascular-diagnosis-1475-925X-6-16-S9.ogg; doi:10.1186/1475-925X-6-16",
+            licence: "CC BY 2.0",
+            attribution: "Kudriavtsev V, Polyshchuk V, Roy D (2007), \"Heart energy signature spectrogram for cardiovascular diagnosis\", BioMedical Engineering OnLine 6:16, doi:10.1186/1475-925X-6-16, licensed CC BY 2.0 (https://creativecommons.org/licenses/by/2.0/); converted to 4 kHz mono WAV by the heartsim authors.",
+            retrieved: "2026-11-21",
+            sha256: "37f4c3066129b784ecc07c9baa054ca757142c5dbfc8e6869697a16cc60aeb71",
+        ),
+    ],
+)

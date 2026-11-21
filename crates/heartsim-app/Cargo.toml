@@ -71,6 +71,8 @@ js-sys.workspace = true
 
 [dev-dependencies]
 egui_kittest.workspace = true
+# the checksums of the reference recordings are verified in tests
+sha2.workspace = true
 # egui's bundled fonts, so headless kittest harnesses can lay out text
 egui = { workspace = true, features = ["default_fonts"] }
 

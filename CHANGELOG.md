@@ -4,6 +4,14 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Real reference recordings in the Sound Trainer (brief B28, Part C): seven clips under `assets/sounds/reference/`
+  (16-bit mono 4 kHz WAV, with an RON index) from Wikimedia Commons (normal heart sounds, James Heilman, CC0 1.0) and
+  Kudriavtsev, Polyshchuk and Roy 2007 (innocent murmur x2, mitral valve prolapse, aortic stenosis, pulmonary stenosis,
+  ventricular septal defect; CC BY 2.0). A **Real recording** button beside the matching findings loops the clip, labels it as
+  a recording and shows its credit and licence; it has no ECG, no labels and is not counted as a listen; without sound output
+  it explains that a recording can only be heard. Bundled in the web archive and the installers; listed in `ASSETS-LICENSES.md`.
+
 ## [0.20.0] — 2026-11-21
 
 ### Added

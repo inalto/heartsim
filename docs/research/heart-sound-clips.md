@@ -1,8 +1,29 @@
 # Candidate real heart-sound clips for the reference library (brief B28, Part C, item 9)
 
-Status: **candidate list for the maintainer's approval. No audio has been downloaded or added to the
-repository.** Items 10 (conversion, `assets/sounds/reference/`, "Real recording" button) and 11
-(timing validation against SensSmartTech) wait for that approval.
+Status (2026-11-21): **the maintainer approved C1 and the Kudriavtsev clips S1, S2, S5, S6, S7, S9; these are shipped**
+(item 10, `assets/sounds/reference/`, `ASSETS-LICENSES.md`). Everything else on the list is not shipped. Item 11 (timing
+validation against SensSmartTech) is not done.
+
+| Candidate | Status |
+|---|---|
+| C1 `HROgg.ogg` (CC0 1.0) | **Shipped** as `normal-heart-sounds.wav` (four cycles, 3.61 s); licence re-read on the Commons page on the day of download |
+| K1, K2 (innocent Still's murmur) | **Shipped** as `innocent-stills-1.wav`, `innocent-stills-2.wav` (whole clips); CC BY 2.0 re-read on each Commons page |
+| K5 (mitral valve prolapse, clicks) | **Shipped** as `mvp-clicks.wav` |
+| K6 (aortic stenosis) | **Shipped** as `aortic-stenosis.wav` |
+| K7 (pulmonary stenosis) | **Shipped** as `pulmonary-stenosis.wav` |
+| K9 (ventricular septal defect) | **Shipped** as `vsd.wav` |
+| K3 (simulated S2 split), K8 (tetralogy) | Not approved; not downloaded (K3 is synthetic, K8 has no matching finding) |
+| C2, C3, C4, C5 | Not approved; not downloaded |
+| J1-J4 (JUST regurgitation, CC BY 4.0) | Not approved; not downloaded; the aortic, mitral and tricuspid regurgitation findings stay model-only |
+| P1, P2 (SensSmartTech) | Not approved; not downloaded; no clip with an ECG ships |
+
+The conversion is `docs/research/heart-sound-clips-convert.py` (GStreamer decode, mono, 4 kHz, cut at quiet points, 5 ms
+fades, peak at -6 dBFS); the exact arguments per file are in `assets/sounds/reference/index.ron`. The originals have
+full-scale peaks, so the -6 dBFS normalisation lowers them by about 6 dB. The clips were cut and checked by waveform
+(envelope and cut-point energy), not by ear. The Kudriavtsev clips are whole and some begin or end close to a sound, so the loop
+joint is a 5 ms fade rather than a cut in silence.
+
+The original candidate text follows, as read on 2026-11-21 before approval.
 
 Every licence below was read on the primary page on **2026-11-21** (Wikimedia Commons file pages and
 the Commons API's `extmetadata`, the PMC article page, the Mendeley Data record, the PhysioNet project

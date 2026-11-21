@@ -34,7 +34,13 @@ pub struct BudgetArgs {
 
 /// Directories of `assets/` that ship to the browser. `drugs.ron` is compiled into the simulation
 /// crate; `icon.svg` and `generated/` are packaging inputs.
-const INCLUDED: [&str; 4] = ["anatomy/default", "scenarios", "tutorials", "cases"];
+const INCLUDED: [&str; 5] = [
+    "anatomy/default",
+    "scenarios",
+    "tutorials",
+    "cases",
+    "sounds/reference",
+];
 
 /// All files below `dir` as `(path relative to root with '/', absolute path)`, sorted.
 fn walk(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Result<()> {
@@ -164,6 +170,8 @@ mod tests {
             "scenarios/sinus_normal.ron",
             "tutorials/01_basics/tutorial.ron",
             "scenarios/reentry/af_persistent.ron",
+            "sounds/reference/index.ron",
+            "sounds/reference/normal-heart-sounds.wav",
         ] {
             assert!(names.iter().any(|n| n == must), "{must} missing from {names:?}");
         }

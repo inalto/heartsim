@@ -31,6 +31,8 @@ enum Extra {
     SoundTrainer,
     /// The Sound Trainer on a contrast pair (B28).
     TrainerPair,
+    /// The Sound Trainer with a real recording selected (a stand-in output, no saved setting touched).
+    TrainerRecording,
     /// An auscultation-quiz question at the features step (B28).
     AuscultationQuiz,
     /// An auscultation-quiz question answered: the feedback step (B28).
@@ -79,7 +81,7 @@ const DEFAULT: Step = Step {
     listening: None,
 };
 
-const STEPS: [Step; 31] = [
+const STEPS: [Step; 32] = [
     Step {
         file: "simulator-sinus.png",
         ..DEFAULT
@@ -245,6 +247,14 @@ const STEPS: [Step; 31] = [
         run_s: 1.0,
         after_qrs_ms: 0.0,
         extra: Extra::SoundTrainer,
+        ..DEFAULT
+    },
+    Step {
+        file: "sound-trainer-recording.png",
+        tab: Tab::SoundTrainer,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::TrainerRecording,
         ..DEFAULT
     },
     Step {
@@ -508,6 +518,23 @@ impl HeartSimApp {
                         );
                         self.sound_trainer
                             .restore_counts("murmur_ms=37,s3=112,s4=96,s1_s2=240,murmur_as=58");
+                    }
+                    Extra::TrainerRecording => {
+                        // a stand-in output so the button is on without a device; no setting is saved
+                        self.sound_player.set_factory(
+                            || Ok(Box::new(crate::sound_out::FakeSink::new())),
+                            heartsim_ui::HeartSoundStatus::NoDevice,
+                        );
+                        let i = crate::sound_trainer::FINDINGS
+                            .iter()
+                            .position(|f| f.id == "murmur_as")
+                            .unwrap_or(0);
+                        self.sound_trainer.select(
+                            crate::sound_trainer::Selection::Finding(i),
+                            &mut self.sound_player,
+                        );
+                        self.sound_trainer
+                            .select_recording(Some(0), &mut self.sound_player);
                     }
                     Extra::TrainerPair => {
                         self.sound_trainer
