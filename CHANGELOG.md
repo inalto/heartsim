@@ -4,6 +4,10 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-11-21
+Seventeenth tagged release: the heart sounds also play in the browser build, after a click of the learner.
+Not yet listened to in a real browser; latency figures are unmeasured.
+
 ### Added
 - Heart sounds, phase 3 (browser, brief B26): the web build plays the heart sounds through Web Audio with the same player,
   samples and controls as the desktop (switch, volume, audio offset, sync check, slow motion, muting above 1×, pause, *Play*
