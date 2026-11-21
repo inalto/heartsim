@@ -25,16 +25,20 @@
 //!   sites), decided once for the QRS template and the splitting of the heart sounds.
 //! * [`pcg`] — the silent phonocardiogram (B24): beats, the electromechanical model of S1 and S2,
 //!   and their synthesis at 4 kHz from the same events as the ECG.
+//! * [`auscultation`] — the extra sounds and murmurs of a scenario's `auscultation` section (B27).
+//! * [`listening`] — listening sites, bell and diaphragm, and the valve highlights (B27 part B).
 
 pub mod activation;
 pub mod analysis;
 pub mod artefact;
+pub mod auscultation;
 pub mod axis_est;
 pub mod display;
 pub mod egm;
 pub mod filter;
 pub mod forward;
 pub mod leadvec;
+pub mod listening;
 pub mod misplacement;
 pub mod pcg;
 pub mod placement;
@@ -47,6 +51,7 @@ pub use analysis::{
     WaveKind, WaveMark,
 };
 pub use artefact::{ArtefactConfig, ArtefactGenerator, MainsFrequency};
+pub use auscultation::{MurmurClass, SoundGains};
 pub use axis_est::{estimate_frontal_axis, net_area_axis};
 pub use display::{DisplayConfig, DisplayStage};
 pub use egm::{
@@ -59,6 +64,7 @@ pub use forward::{
     WaveGains, WeightStats,
 };
 pub use leadvec::LeadVectors;
+pub use listening::{ChestPiece, Listening, ListeningChoice, ListeningSite, SiteTable, Valve, valve_glow_at};
 pub use misplacement::{DetectorConfig, Finding, detect_misplacement};
 pub use pcg::{PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, SoundMark, WallTimeSynth};
 pub use placement::{

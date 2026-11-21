@@ -4,10 +4,17 @@
 //!
 //! For listening (B25) it also counts its resets (so the player knows when to re-anchor) and, while
 //! heart-sound audio is on, feeds a [`WallTimeSynth`] the same events for slow motion.
+//!
+//! Both synthesisers hear the selected listening site and chest piece (B27 part B), so the lane and
+//! the sound agree; the trace's schedule is kept for a ring's length so the 3-D heart's valve
+//! highlights ([`HeartSounds::valve_glow_at`]) come from the sounds that are heard.
 
-use heartsim_core::Millis;
+use heartsim_core::{Auscultation, Millis};
 use heartsim_ecg::pcg::PCG_PERIOD_MS;
-use heartsim_ecg::{LeadRing, PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, WallTimeSynth};
+use heartsim_ecg::{
+    LeadRing, Listening, ListeningChoice, PCG_RATE_HZ, PcgParams, PcgSynth, SiteTable, SoundLabel,
+    WallTimeSynth,
+};
 use heartsim_sim::Event;
 use heartsim_ui::PcgLane;
 
@@ -25,10 +32,17 @@ pub struct HeartSounds {
     last_t_ms: Option<f64>,
     seed: u64,
     respiration_rate_bpm: f64,
+    /// The running scenario's `auscultation` section (brief B27): extra sounds and murmurs.
+    auscultation: Auscultation,
     /// Incremented by every [`HeartSounds::reset`]: a new engine, whose time starts again.
     generation: u64,
     /// The slow-motion synthesiser, fed only while heart-sound audio is on.
     wall: Option<WallTimeSynth>,
+    /// The listening site and chest piece both synthesisers apply, and what they resolve to.
+    choice: ListeningChoice,
+    listening: Listening,
+    /// How long the schedule is kept for the valve highlights, ms (the ring's length).
+    history_ms: f64,
 }
 
 impl HeartSounds {
@@ -36,25 +50,36 @@ impl HeartSounds {
     #[must_use]
     pub fn new(seconds: f32) -> Self {
         let respiration_rate_bpm = heartsim_sim::timing::SinusParams::default().respiration_rate_bpm;
+        let mut synth = PcgSynth::new(PcgParams::default(), 0, respiration_rate_bpm);
+        synth.keep_beats(true);
         Self {
-            synth: PcgSynth::new(PcgParams::default(), 0, respiration_rate_bpm),
+            synth,
             ring: LeadRing::new((PCG_RATE_HZ * seconds) as usize, PCG_RATE_HZ),
             marks: Vec::new(),
             last_t_ms: None,
             seed: 0,
             respiration_rate_bpm,
+            auscultation: Auscultation::default(),
             generation: 0,
             wall: None,
+            choice: ListeningChoice::default(),
+            listening: Listening::overview(),
+            history_ms: f64::from(seconds) * 1000.0,
         }
     }
 
     /// Start over for a new engine (a rhythm loaded, the EP lab or a re-entry preset started): a
-    /// fresh synthesiser with the scenario's seed and breathing rate, the ring and labels cleared.
-    /// The ring keeps counting, as the strip rings do, so the two stay in step.
-    pub fn reset(&mut self, seed: u64, respiration_rate_bpm: f64) {
+    /// fresh synthesiser with the scenario's seed, breathing rate and `auscultation` section (empty
+    /// for the EP lab and the re-entry presets), the ring and labels cleared. The ring keeps
+    /// counting, as the strip rings do, so the two stay in step.
+    pub fn reset(&mut self, seed: u64, respiration_rate_bpm: f64, auscultation: &Auscultation) {
         self.seed = seed;
         self.respiration_rate_bpm = respiration_rate_bpm;
-        self.synth = PcgSynth::new(PcgParams::default(), seed, respiration_rate_bpm);
+        self.auscultation.clone_from(auscultation);
+        self.synth = PcgSynth::new(PcgParams::default(), seed, respiration_rate_bpm)
+            .with_auscultation(&self.auscultation);
+        self.synth.keep_beats(true);
+        self.synth.set_listening(&self.listening);
         self.ring.clear();
         self.marks.clear();
         self.last_t_ms = None;
@@ -65,7 +90,50 @@ impl HeartSounds {
     }
 
     fn new_wall(&self) -> WallTimeSynth {
-        WallTimeSynth::new(PcgParams::default(), self.seed, self.respiration_rate_bpm)
+        let mut wall = WallTimeSynth::new(PcgParams::default(), self.seed, self.respiration_rate_bpm)
+            .with_auscultation(&self.auscultation);
+        wall.set_listening(&self.listening);
+        wall
+    }
+
+    /// Listen at `choice` (B27 part B) from the next sample on, in the trace and in the slow-motion
+    /// synthesiser alike. The ring keeps what it already holds. Setting the same choice changes
+    /// nothing.
+    pub fn set_listening(&mut self, choice: ListeningChoice) {
+        if choice == self.choice {
+            return;
+        }
+        self.choice = choice;
+        self.listening = SiteTable::builtin().listening(choice);
+        self.synth.set_listening(&self.listening);
+        if let Some(w) = &mut self.wall {
+            w.set_listening(&self.listening);
+        }
+    }
+
+    /// Engine time of the newest sample in the ring, ms (`None` before the first).
+    #[must_use]
+    pub fn newest_ms(&self) -> Option<f64> {
+        self.last_t_ms
+    }
+
+    /// The listening site and chest piece in effect.
+    #[must_use]
+    pub fn listening(&self) -> ListeningChoice {
+        self.choice
+    }
+
+    /// Highlight level of each valve (`heartsim_ecg::Valve::ALL` order, `0..=1`) at simulation time
+    /// `t_ms`, from the schedule the trace and the sound are synthesised from: a flash at every
+    /// closure, a glow over each valve murmur. The caller passes the time the views are drawn at
+    /// (the engine's minus the display delay and the scrub).
+    #[must_use]
+    pub fn valve_glow_at(&self, t_ms: f64) -> [f32; 4] {
+        heartsim_ecg::valve_glow_at(
+            self.synth.scheduled_sounds(),
+            self.synth.scheduled_murmurs(),
+            t_ms,
+        )
     }
 
     /// How many times the synthesiser has started over for a new engine (scenario loaded,
@@ -104,13 +172,18 @@ impl HeartSounds {
         if self.last_t_ms.is_some_and(|t| now.0 < t) {
             // the engine's clock went back without a reset (a new engine): start over
             let (seed, rate) = (self.seed, self.respiration_rate_bpm);
-            self.reset(seed, rate);
+            let auscultation = std::mem::take(&mut self.auscultation);
+            self.reset(seed, rate, &auscultation);
         }
         for i in (0..PCG_PER_ECG_SAMPLE).rev() {
             let t = now.0 - i as f64 * PCG_PERIOD_MS;
             self.ring.push(self.synth.sample(Millis(t)));
         }
         self.last_t_ms = Some(now.0);
+        if self.ring.pushed().is_multiple_of(PCG_RATE_HZ as u64) {
+            // once a second of PCG: the schedule older than the ring is of no use to the views
+            self.synth.forget_before(now.0 - self.history_ms);
+        }
         let newest = self.ring.pushed() - 1;
         for m in self.synth.take_settled_marks(now) {
             let offset = ((m.at.0 - now.0) / PCG_PERIOD_MS).round() as i64;
@@ -137,6 +210,14 @@ impl HeartSounds {
             marks: &self.marks,
         }
     }
+}
+
+/// The simulation time the valve highlights are drawn for: the newest heart-sound sample's time
+/// minus the views' offset (the display delay the sound is heard with, plus the scrub), so a ring
+/// flashes when its closure is heard and drawn on the lane.
+#[must_use]
+pub fn valve_display_time_ms(newest_ms: f64, view_offset_ms: f64) -> f64 {
+    newest_ms - view_offset_ms.max(0.0)
 }
 
 #[cfg(test)]

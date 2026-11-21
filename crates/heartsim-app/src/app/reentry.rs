@@ -227,7 +227,11 @@ impl HeartSimApp {
         self.engine = engine.timing().clone();
         self.sample_accumulator = 0.0;
         self.rings.iter_mut().for_each(heartsim_ecg::LeadRing::clear);
-        self.sounds.reset(0, preset.timing.sinus.respiration_rate_bpm);
+        self.sounds.reset(
+            0,
+            preset.timing.sinus.respiration_rate_bpm,
+            &heartsim_core::Auscultation::default(),
+        );
         self.last_v_activation = Millis(-1000.0);
         self.scenario = None;
         self.timeline = Timeline::default();

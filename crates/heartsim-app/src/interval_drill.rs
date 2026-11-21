@@ -200,12 +200,14 @@ impl IntervalDrill {
         self.calipers.reset();
         self.entry_ms = 0.0;
         self.failed = false;
-        if library.is_empty() {
+        // never an auscultation case: its strip is ordinary sinus rhythm (one rule for every pool)
+        let pool = library.ecg_quiz_pool();
+        if pool.is_empty() {
             self.failed = true;
             return;
         }
         for _ in 0..MAX_TRIES {
-            let scenario = below(&mut self.rng, library.len());
+            let scenario = pool[below(&mut self.rng, pool.len())];
             let interval = Interval::ALL[below(&mut self.rng, Interval::ALL.len())];
             let entry = &library.entries[scenario];
             let Ok(rings) = record_strip(entry) else { continue };
@@ -528,6 +530,22 @@ mod tests {
             .unwrap();
         assert!(!g.correct);
         assert_eq!((drill.asked, drill.correct, drill.streak), (2, 1, 0));
+    }
+
+    #[test]
+    fn auscultation_cases_are_never_drawn() {
+        let lib = library();
+        for seed in 1..=20u64 {
+            let mut drill = IntervalDrill::new(seed);
+            drill.next_question(&lib);
+            if let Some(q) = &drill.question {
+                assert!(
+                    lib.in_ecg_quiz_pool(q.scenario),
+                    "seed {seed}: {}",
+                    lib.entries[q.scenario].scenario.id
+                );
+            }
+        }
     }
 
     #[test]

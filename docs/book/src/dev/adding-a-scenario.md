@@ -76,5 +76,11 @@ Sections that are optional in every file, so older files load unchanged and `for
   the Q waves of a healed infarct; both are a silent core on the 3-D heart.
 * In `expected`, `rhythm: Some(AtrialFlutter)` requires the analyser to name the rhythm, and `hr_bpm` may be left out for a rhythm with
   no countable beats.
+* `auscultation: (s3: true, s4: true, rub: true, fixed_split: true, lesions: [(AorticStenosis, Severe)])` adds heart sounds and
+  murmurs (brief B27; lesion kinds and severities are listed in `heartsim_core::scenario`). It never changes the ECG. A scenario
+  with a non-empty section is an auscultation case: it is listed under *Heart sounds and murmurs* and kept out of the ECG
+  quizzes, unless `ecg_diagnostic: true` says the ECG is the lesson (pericarditis with its rub). Its `expected` block can state
+  `extra_sounds: Some([S4])`, `murmurs: Some([MidSystolic])` and `s2_split: Some(Single)`; the tests in
+  `crates/heartsim-ecg/tests/auscultation.rs` check them against the schedule.
 
 The wave shapes can be overridden like any other: `WaveOverride(template: VfWave, wave: "VF", amplitude_mv: Some(0.08))`.

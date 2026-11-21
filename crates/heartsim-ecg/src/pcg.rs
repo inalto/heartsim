@@ -26,8 +26,14 @@
 //! same samples on every platform (transcendentals through [`Deterministic`]).
 
 use crate::activation::{BranchBlocks, Ventricle};
+use crate::auscultation::{
+    AuscultationParams, BeatContext, Murmur, SoundGains, ValveChanges, atrial_sounds, beat_murmurs,
+    snap_interval_ms, valve_changes,
+};
+use crate::listening::{ChestWeight, Listening};
 use heartsim_core::Millis;
 use heartsim_core::math::Deterministic;
+use heartsim_core::{Auscultation, LesionKind};
 use heartsim_sim::defib::ShockRng;
 use heartsim_sim::timing::{inspiration_depth, respiratory_phase};
 use heartsim_sim::{Circuit, Event, EventKind, Origin};
@@ -174,6 +180,11 @@ pub struct PcgParams {
     /// envelope time constants are designed.
     pub a2: AtomParams,
     pub p2: AtomParams,
+
+    // --- extra sounds and murmurs (brief B27) --------------------------------------------------------
+    /// S3, S4, clicks, the snap, the murmurs and the rub; used only by scenarios with an
+    /// `auscultation` section.
+    pub auscultation: AuscultationParams,
 }
 
 /// One valve-closure atom: a chirp whose instantaneous frequency falls as `f(τ) = a + b / √τ` from
@@ -258,6 +269,7 @@ impl Default for PcgParams {
                 rise_ms: 5.0,
                 decay_ms: 18.0,
             },
+            auscultation: AuscultationParams::default(),
         }
     }
 }
@@ -561,13 +573,25 @@ pub struct Component {
 }
 
 /// The heart sounds of one beat. Missing components are silent (no organised beat, or no
-/// ejection).
+/// ejection). The valve closures are always scheduled; the extra sounds (brief B27) only when the
+/// scenario's `auscultation` section asks for them. S4 is not here: it follows the atrial
+/// activation, not the beat.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct Components {
     pub m1: Option<Component>,
     pub t1: Option<Component>,
     pub a2: Option<Component>,
     pub p2: Option<Component>,
+    /// Third heart sound, A2 + [`AuscultationParams::a2_s3_ms`].
+    pub s3: Option<Component>,
+    /// Opening snap of mitral stenosis.
+    pub opening_snap: Option<Component>,
+    /// Aortic ejection click.
+    pub aortic_click: Option<Component>,
+    /// Pulmonary ejection click.
+    pub pulmonary_click: Option<Component>,
+    /// Mid-systolic click of mitral valve prolapse.
+    pub mid_systolic_click: Option<Component>,
 }
 
 impl Components {
@@ -686,6 +710,7 @@ pub fn schedule(beat: &Beat, p: &PcgParams, resp_phase: f64) -> Components {
         }),
         a2: None,
         p2: None,
+        ..Components::default()
     };
     let too_early =
         beat.origin == BeatOrigin::Ventricular && beat.rr_ms.is_some_and(|rr| rr < p.min_ejecting_rr_ms);
@@ -711,15 +736,102 @@ pub fn schedule(beat: &Beat, p: &PcgParams, resp_phase: f64) -> Components {
     c
 }
 
+/// [`schedule`] with a scenario's `auscultation` section (brief B27): an empty section returns
+/// exactly [`schedule`]'s components. Otherwise, on top of them:
+///
+/// * mitral stenosis makes M1 louder; aortic stenosis makes A2 softer and later (single S2 when
+///   severe); pulmonary stenosis makes P2 softer and later; `fixed_split` replaces the respiratory
+///   split by [`AuscultationParams::fixed_split_ms`];
+/// * S3 after A2 of an ejecting beat, the ejection clicks of mild and moderate aortic and pulmonary
+///   stenosis (a severe, rigid valve has none: designed), the prolapse click in mid-systole and the
+///   snap of mitral stenosis after A2.
+#[must_use]
+pub fn schedule_with(beat: &Beat, p: &PcgParams, resp_phase: f64, model: &Auscultation) -> Components {
+    let c = schedule(beat, p, resp_phase);
+    if model.is_empty() {
+        return c;
+    }
+    let v = valve_changes(model, &p.auscultation);
+    apply_auscultation(c, beat, p, model, &v)
+}
+
+fn apply_auscultation(
+    mut c: Components,
+    beat: &Beat,
+    p: &PcgParams,
+    model: &Auscultation,
+    v: &ValveChanges,
+) -> Components {
+    let ap = &p.auscultation;
+    let q = beat.qrs_onset.0 - p.qrs_onset_lead_ms;
+    if let (Some(f), Some(m1)) = (v.s1_factor, c.m1.as_mut()) {
+        m1.gain *= f;
+    }
+    if model.fixed_split
+        && let (Some(a2), Some(p2)) = (c.a2, c.p2.as_mut())
+    {
+        let (lv, rv) = beat.ventricle_delays_ms();
+        p2.onset = Millis(a2.onset.0 + ap.fixed_split_ms + rv - lv);
+    }
+    if let Some(p2) = c.p2.as_mut() {
+        if let Some(f) = v.p2_factor {
+            p2.gain *= f;
+        }
+        p2.onset = Millis(p2.onset.0 + v.p2_delay_ms);
+    }
+    if let Some(a2) = c.a2.as_mut() {
+        if let Some(f) = v.a2_factor {
+            a2.gain *= f;
+        }
+        a2.onset = Millis(a2.onset.0 + v.a2_delay_ms);
+    }
+    let (Some(m1), Some(a2)) = (c.m1, c.a2) else {
+        return c;
+    };
+    let at = |t: f64, gain: f64| {
+        Some(Component {
+            onset: Millis(t),
+            gain,
+        })
+    };
+    if model.s3 {
+        c.s3 = at(a2.onset.0 + ap.a2_s3_ms, ap.s3_gain);
+    }
+    let mobile = |s: heartsim_core::Severity| s != heartsim_core::Severity::Severe;
+    if model.lesion(LesionKind::AorticStenosis).is_some_and(mobile) {
+        c.aortic_click = at(q + ap.q_aortic_click_ms, ap.click_gain);
+    }
+    if model.lesion(LesionKind::PulmonaryStenosis).is_some_and(mobile) {
+        c.pulmonary_click = at(q + ap.q_pulmonary_click_ms, ap.click_gain);
+    }
+    if model.lesion(LesionKind::MitralValveProlapse).is_some() {
+        let t = m1.onset.0 + ap.mid_click_fraction * (a2.onset.0 - m1.onset.0);
+        c.mid_systolic_click = at(t, ap.mid_click_gain);
+    }
+    if let Some(s) = model.lesion(LesionKind::MitralStenosis) {
+        c.opening_snap = at(a2.onset.0 + snap_interval_ms(s, ap), ap.snap_gain);
+    }
+    c
+}
+
 // --- synthesis ---------------------------------------------------------------------------------------
 
-/// The label drawn over a heart sound on the trace.
+/// The label drawn over a heart sound on the trace. Discrete sounds only: a murmur is seen as its
+/// envelope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SoundLabel {
     S1,
     S2,
     A2,
     P2,
+    S3,
+    S4,
+    /// Opening snap.
+    OpeningSnap,
+    /// Aortic or pulmonary ejection click.
+    EjectionClick,
+    /// Mid-systolic click of mitral valve prolapse.
+    Click,
 }
 
 impl SoundLabel {
@@ -731,8 +843,22 @@ impl SoundLabel {
             SoundLabel::S2 => "S2",
             SoundLabel::A2 => "A2",
             SoundLabel::P2 => "P2",
+            SoundLabel::S3 => "S3",
+            SoundLabel::S4 => "S4",
+            SoundLabel::OpeningSnap => "OS",
+            SoundLabel::EjectionClick => "EC",
+            SoundLabel::Click => "C",
         }
     }
+
+    /// The extra sounds of brief B27 (drawn on the lane's lower row with A2 and P2).
+    pub const EXTRA: [SoundLabel; 5] = [
+        SoundLabel::S3,
+        SoundLabel::S4,
+        SoundLabel::OpeningSnap,
+        SoundLabel::EjectionClick,
+        SoundLabel::Click,
+    ];
 }
 
 /// A label at the onset of a scheduled component (from the schedule, not from peak picking).
@@ -747,7 +873,8 @@ pub struct SoundMark {
 pub const LABEL_SPLIT_MS: f64 = 20.0;
 
 /// The labels of one beat's components: S1 at M1, S2 at the first of A2/P2, and A2, P2 at their
-/// own onsets when the split exceeds [`LABEL_SPLIT_MS`].
+/// own onsets when the split exceeds [`LABEL_SPLIT_MS`]; then S3, the clicks and the snap when
+/// scheduled.
 #[must_use]
 pub fn labels(c: &Components) -> Vec<SoundMark> {
     let mut out = Vec::with_capacity(4);
@@ -774,6 +901,20 @@ pub fn labels(c: &Components) -> Vec<SoundMark> {
             at: p2.onset,
             label: SoundLabel::P2,
         });
+    }
+    for (comp, label) in [
+        (c.aortic_click, SoundLabel::EjectionClick),
+        (c.pulmonary_click, SoundLabel::EjectionClick),
+        (c.mid_systolic_click, SoundLabel::Click),
+        (c.opening_snap, SoundLabel::OpeningSnap),
+        (c.s3, SoundLabel::S3),
+    ] {
+        if let Some(comp) = comp {
+            out.push(SoundMark {
+                at: comp.onset,
+                label,
+            });
+        }
     }
     out
 }
@@ -832,6 +973,43 @@ impl Atom {
         let phase = std::f64::consts::TAU * (self.a * tau + 2.0 * self.b * tau.sqrt()) / 1000.0;
         self.envelope(tau) * self.env_norm * phase.sin_d()
     }
+
+    /// Instantaneous frequency `a + b / √τ` at `tau` ms, Hz; `f_start_hz` before 1 ms, where the
+    /// square-root law starts (it is unbounded at 0).
+    fn frequency_hz(&self, tau: f64) -> f64 {
+        if tau < 1.0 {
+            self.p.f_start_hz
+        } else {
+            self.a + self.b / tau.sqrt()
+        }
+    }
+
+    /// [`Atom::value`] weighted by a chest piece at the instantaneous frequency (brief B27 part B):
+    /// still closed-form, no filter state.
+    fn value_weighted(&self, tau: f64, chest: &ChestWeight) -> f64 {
+        let v = self.value(tau);
+        if v == 0.0 {
+            return 0.0;
+        }
+        v * chest.weight(self.frequency_hz(tau))
+    }
+
+    /// The atom's value at `tau` with or without a chest piece (`None`: exactly [`Atom::value`]).
+    fn value_with(&self, tau: f64, chest: Option<&ChestWeight>) -> f64 {
+        match chest {
+            None => self.value(tau),
+            Some(w) => self.value_weighted(tau, w),
+        }
+    }
+}
+
+/// A murmur's sum of sinusoids `tau_ms` after its start, with or without a chest piece (`None`:
+/// exactly [`Murmur::noise`]).
+fn murmur_noise(m: &Murmur, tau_ms: f64, chest: Option<&ChestWeight>) -> f64 {
+    match chest {
+        None => m.noise(tau_ms),
+        Some(w) => m.noise_weighted(tau_ms, |hz| w.weight(hz)),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -839,8 +1017,222 @@ struct Active {
     atom: usize,
     onset_ms: f64,
     gain: f64,
-    /// QRS onset of the beat it belongs to (for a biventricular revision).
+    /// QRS onset of the beat it belongs to (for a biventricular revision), or the atrial activation
+    /// of an S4.
     beat_ms: f64,
+    /// Scheduled from an atrial activation (S4).
+    atrial: bool,
+}
+
+/// A discrete sound as scheduled (kept with [`PcgSynth::keep_beats`] for tests and recordings).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ScheduledSound {
+    pub kind: ComponentKind,
+    pub onset_ms: f64,
+    /// Gain with the seeded jitter.
+    pub gain: f64,
+    /// QRS onset (engine time) of its beat, or the atrial activation of an S4.
+    pub key_ms: f64,
+}
+
+/// One discrete sound handed to a synthesiser by the [`Scheduler`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct AtomStart {
+    atom: usize,
+    onset_ms: f64,
+    gain: f64,
+    key_ms: f64,
+    atrial: bool,
+}
+
+/// What one event changes for a synthesiser.
+#[derive(Debug, Clone, Default)]
+struct Update {
+    /// The beat (and its components) for a ventricular activation.
+    beat: Option<(Beat, Components)>,
+    atoms: Vec<AtomStart>,
+    murmurs: Vec<Murmur>,
+    /// Labels with their key time (the beat's QRS, or the atrial activation of an S4).
+    marks: Vec<(f64, SoundMark)>,
+    /// A new ventricular event at this time: murmurs still sounding fade out from the cut time
+    /// (`.1`), and atrial sounds that would start after `.0` are cancelled.
+    cut: Option<(f64, f64)>,
+}
+
+/// The state both synthesisers share: the beat assembler, the scenario's auscultation section and
+/// what the extra sounds need to remember (the running mean RR, the last beat's A2). Fed the same
+/// events, two schedulers give the same updates.
+#[derive(Debug, Clone)]
+struct Scheduler {
+    params: PcgParams,
+    seed: u64,
+    respiration_rate_bpm: f64,
+    assembler: BeatAssembler,
+    model: Auscultation,
+    valve: ValveChanges,
+    /// Running mean RR before the current beat, ms.
+    rr_mean_ms: Option<f64>,
+    /// The last beat: its engine time, its A2 onset if it ejected, whether it was organised.
+    last_beat: Option<(f64, Option<f64>, bool)>,
+}
+
+/// Salt of the jitter draws of the atrial sounds, so they never share a stream with a beat's.
+const ATRIAL_JITTER_SALT: u64 = 0x5851_F42D_4C95_7F2D;
+
+impl Scheduler {
+    fn new(params: PcgParams, seed: u64, respiration_rate_bpm: f64) -> Self {
+        Self {
+            assembler: BeatAssembler::new(&params),
+            valve: ValveChanges::default(),
+            params,
+            seed,
+            respiration_rate_bpm,
+            model: Auscultation::default(),
+            rr_mean_ms: None,
+            last_beat: None,
+        }
+    }
+
+    fn set_model(&mut self, model: Auscultation) {
+        self.valve = valve_changes(&model, &self.params.auscultation);
+        self.model = model;
+    }
+
+    fn push(&mut self, ev: &Event) -> Option<Update> {
+        let atrial = if self.model.is_empty() {
+            None
+        } else {
+            self.atrial_update(ev)
+        };
+        let beat = self.assembler.push(ev);
+        match beat {
+            Some(beat) => Some(self.beat_update(&beat)),
+            None => atrial,
+        }
+    }
+
+    /// The sounds of an organised atrial activation (S4, presystolic accentuation, atrial rub).
+    fn atrial_update(&self, ev: &Event) -> Option<Update> {
+        let organised = ev.region.is_atrial()
+            && ev.kind != EventKind::Blocked
+            && !matches!(ev.origin, Origin::Circuit(c) if !c.is_ventricular());
+        if !organised {
+            return None;
+        }
+        let t = ev.at.0;
+        let in_diastole = match self.last_beat {
+            None => true,
+            Some((key, a2, organised)) => {
+                organised && t >= a2.unwrap_or(key + self.params.min_ejecting_rr_ms)
+            }
+        };
+        let (s4, murmurs) = atrial_sounds(t, in_diastole, &self.model, &self.params.auscultation, self.seed);
+        let mut u = Update {
+            murmurs,
+            ..Update::default()
+        };
+        if let Some((onset, gain)) = s4 {
+            let mut rng = ShockRng::new(self.seed ^ t.to_bits() ^ ATRIAL_JITTER_SALT);
+            let jitter = 1.0 + self.params.amplitude_jitter * (2.0 * rng.next_f64() - 1.0);
+            u.atoms.push(AtomStart {
+                atom: ComponentKind::S4 as usize,
+                onset_ms: onset,
+                gain: gain * jitter,
+                key_ms: t,
+                atrial: true,
+            });
+            u.marks.push((
+                t,
+                SoundMark {
+                    at: Millis(onset),
+                    label: SoundLabel::S4,
+                },
+            ));
+        }
+        (!u.atoms.is_empty() || !u.murmurs.is_empty()).then_some(u)
+    }
+
+    /// The schedule of a beat and, per atom, its onset (simulation ms) and its gain with the seeded
+    /// jitter. One jitter draw per valve-closure slot, used or not, then one per extra slot, so that
+    /// every synthesiser built on it gives the same amplitudes for the same scenario seed and beat
+    /// time, and a scenario without an `auscultation` section the amplitudes of brief B24.
+    fn beat_update(&mut self, beat: &Beat) -> Update {
+        let p = &self.params;
+        let q = beat.qrs_onset.0;
+        let phase = respiratory_phase(self.respiration_rate_bpm, q);
+        let empty = self.model.is_empty();
+        let c = if empty {
+            schedule(beat, p, phase)
+        } else {
+            apply_auscultation(schedule(beat, p, phase), beat, p, &self.model, &self.valve)
+        };
+        let mut rng = ShockRng::new(self.seed ^ q.to_bits());
+        let j = p.amplitude_jitter;
+        let mut atoms = Vec::with_capacity(4);
+        let mut slots = |rng: &mut ShockRng, list: &[(ComponentKind, Option<Component>)]| {
+            for (kind, comp) in list {
+                let jitter = 1.0 + j * (2.0 * rng.next_f64() - 1.0);
+                if let Some(comp) = comp {
+                    atoms.push(AtomStart {
+                        atom: *kind as usize,
+                        onset_ms: comp.onset.0,
+                        gain: comp.gain * jitter,
+                        key_ms: q,
+                        atrial: false,
+                    });
+                }
+            }
+        };
+        slots(
+            &mut rng,
+            &[
+                (ComponentKind::M1, c.m1),
+                (ComponentKind::T1, c.t1),
+                (ComponentKind::A2, c.a2),
+                (ComponentKind::P2, c.p2),
+            ],
+        );
+        let mut u = Update::default();
+        if !empty {
+            slots(
+                &mut rng,
+                &[
+                    (ComponentKind::S3, c.s3),
+                    (ComponentKind::OpeningSnap, c.opening_snap),
+                    (ComponentKind::AorticClick, c.aortic_click),
+                    (ComponentKind::PulmonaryClick, c.pulmonary_click),
+                    (ComponentKind::MidSystolicClick, c.mid_systolic_click),
+                ],
+            );
+            if !beat.replaces_previous {
+                u.cut = Some((q, c.m1.map_or(q, |m| m.onset.0.max(q))));
+            }
+            let rr = beat.rr_ms.filter(|rr| *rr > 0.0);
+            let cycle_ratio = match (rr, self.rr_mean_ms) {
+                (Some(rr), Some(mean)) if mean > 0.0 => rr / mean,
+                _ => 1.0,
+            };
+            let ctx = BeatContext {
+                q_ms: q - p.qrs_onset_lead_ms,
+                key_ms: q,
+                cycle_ratio,
+                expected_cycle_ms: rr.unwrap_or(60_000.0 / p.first_beat_bpm),
+                inspiration: inspiration_depth(phase),
+            };
+            u.murmurs = beat_murmurs(&c, &self.model, &p.auscultation, &ctx, self.seed);
+            if !beat.replaces_previous
+                && let Some(rr) = rr
+            {
+                let w = p.auscultation.rr_mean_weight;
+                self.rr_mean_ms = Some(self.rr_mean_ms.map_or(rr, |m| m + w * (rr - m)));
+            }
+            self.last_beat = Some((q, c.a2.map(|a| a.onset.0), beat.organised));
+        }
+        u.atoms = atoms;
+        u.marks = labels(&c).into_iter().map(|m| (q, m)).collect();
+        u.beat = Some((*beat, c));
+        u
+    }
 }
 
 /// Event-driven phonocardiogram synthesiser, the counterpart of `GaussianSynth`: feed it the
@@ -848,18 +1240,21 @@ struct Active {
 /// The output is in arbitrary units with a normal S1 (gain 1) peaking at 1.0.
 #[derive(Debug, Clone)]
 pub struct PcgSynth {
-    params: PcgParams,
-    seed: u64,
-    respiration_rate_bpm: f64,
-    assembler: BeatAssembler,
-    /// M1, T1, A2, P2.
-    atoms: [Atom; 4],
+    sched: Scheduler,
+    /// M1, T1, A2, P2, then the extra sounds, in [`ComponentKind::ALL`] order.
+    atoms: [Atom; ComponentKind::ALL.len()],
     /// Output scale: a gain-1 S1 (M1 + T1 at the normal gap) peaks at 1.
     scale: f64,
     active: Vec<Active>,
+    murmurs: Vec<Murmur>,
+    gains: SoundGains,
+    /// The chest piece of the listening site (brief B27 part B); `None` at the overview.
+    chest: Option<ChestWeight>,
     /// Labels with the QRS onset of their beat, until the beat can no longer be revised.
     marks: Vec<(f64, SoundMark)>,
     beats: Vec<(Beat, Components)>,
+    sound_log: Vec<ScheduledSound>,
+    murmur_log: Vec<Murmur>,
     keep_beats: bool,
 }
 
@@ -872,23 +1267,57 @@ impl PcgSynth {
         let atoms = atoms_of(&params);
         let scale = reference_scale(&params, &atoms);
         Self {
-            assembler: BeatAssembler::new(&params),
-            params,
-            seed,
-            respiration_rate_bpm,
+            sched: Scheduler::new(params, seed, respiration_rate_bpm),
             atoms,
             scale,
             active: Vec::new(),
+            murmurs: Vec::new(),
+            gains: SoundGains::default(),
+            chest: None,
             marks: Vec::new(),
             beats: Vec::new(),
+            sound_log: Vec::new(),
+            murmur_log: Vec::new(),
             keep_beats: false,
         }
+    }
+
+    /// The same synthesiser with a scenario's `auscultation` section (brief B27). An empty section
+    /// changes nothing.
+    #[must_use]
+    pub fn with_auscultation(mut self, model: &Auscultation) -> Self {
+        self.sched.set_model(model.clone());
+        self
+    }
+
+    /// Per-class gains applied when sampling (all 1: the overview mix, bit-identical output).
+    pub fn set_gains(&mut self, gains: SoundGains) {
+        self.gains = gains;
+    }
+
+    /// A listening site and chest piece (brief B27 part B), from the next sample on: its gains and
+    /// its weight curve. [`Listening::overview`] gives the output of brief B24 and part A bit for
+    /// bit. Nothing is re-scheduled.
+    pub fn set_listening(&mut self, listening: &Listening) {
+        self.gains.clone_from(&listening.gains);
+        self.chest = listening.chest;
+    }
+
+    /// Drop the beats, sounds and murmurs kept with [`PcgSynth::keep_beats`] that are over before
+    /// `t_ms` (a live run keeps only what the 3-D view can still draw). A murmur still sounding, or
+    /// not yet cut, stays.
+    pub fn forget_before(&mut self, t_ms: f64) {
+        self.beats
+            .retain(|(b, _)| b.qrs_onset.0 + 2.0 * self.sched.params.same_beat_ms >= t_ms);
+        self.sound_log
+            .retain(|s| s.onset_ms + crate::listening::VALVE_FLASH_MS >= t_ms);
+        self.murmur_log.retain(|m| m.stop_ms() >= t_ms);
     }
 
     /// The model's parameters.
     #[must_use]
     pub fn params(&self) -> &PcgParams {
-        &self.params
+        &self.sched.params
     }
 
     /// Keep every beat and its schedule for [`PcgSynth::beats`] (tests and offline recordings).
@@ -902,47 +1331,95 @@ impl PcgSynth {
         &self.beats
     }
 
+    /// Every discrete sound scheduled so far, S4 included (only with [`PcgSynth::keep_beats`]).
+    #[must_use]
+    pub fn scheduled_sounds(&self) -> &[ScheduledSound] {
+        &self.sound_log
+    }
+
+    /// Every murmur scheduled so far, with its cut once known (only with [`PcgSynth::keep_beats`]).
+    #[must_use]
+    pub fn scheduled_murmurs(&self) -> &[Murmur] {
+        &self.murmur_log
+    }
+
     /// Feed timing-engine events (in engine order).
     pub fn on_events(&mut self, events: &[Event]) {
         for ev in events {
-            if let Some(beat) = self.assembler.push(ev) {
-                self.on_beat(&beat);
+            if let Some(u) = self.sched.push(ev) {
+                self.apply(u);
             }
         }
     }
 
-    fn on_beat(&mut self, beat: &Beat) {
-        let q = beat.qrs_onset.0;
-        if beat.replaces_previous {
-            self.active.retain(|a| a.beat_ms.to_bits() != q.to_bits());
-            self.marks.retain(|(b, _)| b.to_bits() != q.to_bits());
-            if self.keep_beats
-                && let Some(last) = self.beats.last()
-                && last.0.qrs_onset.0.to_bits() == q.to_bits()
-            {
-                self.beats.pop();
+    fn apply(&mut self, u: Update) {
+        if let Some((beat, _)) = &u.beat
+            && beat.replaces_previous
+        {
+            let q = beat.qrs_onset.0;
+            let same = |k: f64| k.to_bits() == q.to_bits();
+            self.active.retain(|a| a.atrial || !same(a.beat_ms));
+            self.murmurs.retain(|m| m.atrial || !same(m.key_ms));
+            self.marks.retain(|(b, _)| !same(*b));
+            if self.keep_beats {
+                if let Some(last) = self.beats.last()
+                    && same(last.0.qrs_onset.0)
+                {
+                    self.beats.pop();
+                }
+                self.sound_log
+                    .retain(|s| !same(s.key_ms) || s.kind == ComponentKind::S4);
+                self.murmur_log.retain(|m| m.atrial || !same(m.key_ms));
             }
         }
-        let (c, atoms) = scheduled_atoms(beat, &self.params, self.seed, self.respiration_rate_bpm);
-        for (atom, slot) in atoms.into_iter().enumerate() {
-            if let Some((onset_ms, gain)) = slot {
-                self.active.push(Active {
-                    atom,
-                    onset_ms,
-                    gain,
-                    beat_ms: q,
-                });
+        if let Some((event_ms, cut_ms)) = u.cut {
+            let late = |onset: f64, atrial: bool| atrial && onset > event_ms;
+            self.active.retain(|a| !late(a.onset_ms, a.atrial));
+            self.murmurs.retain(|m| !late(m.start_ms, m.atrial));
+            self.marks
+                .retain(|(_, m)| !(m.label == SoundLabel::S4 && m.at.0 > event_ms));
+            for m in &mut self.murmurs {
+                m.cut(cut_ms);
+            }
+            if self.keep_beats {
+                self.sound_log
+                    .retain(|s| !(s.kind == ComponentKind::S4 && s.onset_ms > event_ms));
+                self.murmur_log.retain(|m| !late(m.start_ms, m.atrial));
+                for m in &mut self.murmur_log {
+                    m.cut(cut_ms);
+                }
             }
         }
-        self.marks.extend(labels(&c).into_iter().map(|m| (q, m)));
+        for a in &u.atoms {
+            self.active.push(Active {
+                atom: a.atom,
+                onset_ms: a.onset_ms,
+                gain: a.gain,
+                beat_ms: a.key_ms,
+                atrial: a.atrial,
+            });
+        }
+        self.marks.extend(u.marks);
         if self.keep_beats {
-            self.beats.push((*beat, c));
+            self.sound_log.extend(u.atoms.iter().map(|a| ScheduledSound {
+                kind: ComponentKind::ALL[a.atom],
+                onset_ms: a.onset_ms,
+                gain: a.gain,
+                key_ms: a.key_ms,
+            }));
+            self.murmur_log.extend(u.murmurs.iter().cloned());
+            if let Some(b) = u.beat {
+                self.beats.push(b);
+            }
         }
+        self.murmurs.extend(u.murmurs);
     }
 
     /// The trace at time `t`. Components that have ended are dropped, so read at increasing times.
     pub fn sample(&mut self, t: Millis) -> f32 {
         let atoms = &self.atoms;
+        let gains = &self.gains;
+        let chest = self.chest.as_ref();
         let mut v = 0.0;
         self.active.retain(|a| {
             let tau = t.0 - a.onset_ms;
@@ -950,17 +1427,33 @@ impl PcgSynth {
             if tau >= atom.p.duration_ms {
                 return false;
             }
-            v += a.gain * atom.value(tau);
+            v += a.gain * gains.components[a.atom] * atom.value_with(tau, chest);
             true
         });
-        (v * self.scale) as f32
+        let mut out = v * self.scale;
+        if !self.murmurs.is_empty() {
+            let mut m_sum = 0.0;
+            self.murmurs.retain(|m| {
+                if m.finished_at(t.0) {
+                    return false;
+                }
+                let level = m.level_at(t.0);
+                if level != 0.0 {
+                    m_sum +=
+                        gains.murmurs[m.class.index()] * level * murmur_noise(m, t.0 - m.start_ms, chest);
+                }
+                true
+            });
+            out += m_sum;
+        }
+        out as f32
     }
 
     /// Labels of the beats that started at least [`PcgParams::same_beat_ms`] before `now` (a later
     /// front can no longer change them), in schedule order; they are handed out once. Labels lie in
     /// the future of their beat's QRS, so a caller drawing at `now` misses none.
     pub fn take_settled_marks(&mut self, now: Millis) -> Vec<SoundMark> {
-        let settle = self.params.same_beat_ms;
+        let settle = self.sched.params.same_beat_ms;
         let n = self.marks.iter().take_while(|(b, _)| b + settle <= now.0).count();
         self.marks.drain(..n).map(|(_, m)| m).collect()
     }
@@ -970,26 +1463,21 @@ impl PcgSynth {
         self.marks.drain(..).map(|(_, m)| m).collect()
     }
 
-    /// Components scheduled and not yet finished.
+    /// Components and murmurs scheduled and not yet finished.
     #[must_use]
     pub fn active_count(&self) -> usize {
-        self.active.len()
+        self.active.len() + self.murmurs.len()
     }
 }
 
-/// The four atoms of a parameter set, in the order M1, T1, A2, P2.
-fn atoms_of(params: &PcgParams) -> [Atom; 4] {
-    [
-        Atom::new(params.m1),
-        Atom::new(params.t1),
-        Atom::new(params.a2),
-        Atom::new(params.p2),
-    ]
+/// The atoms of a parameter set, in [`ComponentKind::ALL`] order.
+fn atoms_of(params: &PcgParams) -> [Atom; ComponentKind::ALL.len()] {
+    ComponentKind::ALL.map(|k| Atom::new(k.atom(params)))
 }
 
 /// Output scale such that a gain-1 S1 (M1 and T1 at the normal gap, sampled on the output grid)
 /// peaks at 1.
-fn reference_scale(params: &PcgParams, atoms: &[Atom; 4]) -> f64 {
+fn reference_scale(params: &PcgParams, atoms: &[Atom]) -> f64 {
     let gap = params.m1_t1_ms;
     let t1 = params.t1_gain;
     let len = params.m1.duration_ms.max(gap + params.t1.duration_ms);
@@ -1003,56 +1491,53 @@ fn reference_scale(params: &PcgParams, atoms: &[Atom; 4]) -> f64 {
     if peak > 0.0 { 1.0 / peak } else { 0.0 }
 }
 
-/// The schedule of `beat` and, per atom (M1, T1, A2, P2), its onset (simulation ms) and its gain
-/// with the seeded jitter applied. One jitter draw per slot, used or not, so that every
-/// synthesiser built on it gives the same amplitudes for the same scenario seed and beat time.
-fn scheduled_atoms(
-    beat: &Beat,
-    params: &PcgParams,
-    seed: u64,
-    respiration_rate_bpm: f64,
-) -> (Components, [Option<(f64, f64)>; 4]) {
-    let q = beat.qrs_onset.0;
-    let phase = respiratory_phase(respiration_rate_bpm, q);
-    let c = schedule(beat, params, phase);
-    let mut rng = ShockRng::new(seed ^ q.to_bits());
-    let j = params.amplitude_jitter;
-    let mut out = [None; 4];
-    for (slot, comp) in out.iter_mut().zip([c.m1, c.t1, c.a2, c.p2]) {
-        let jitter = 1.0 + j * (2.0 * rng.next_f64() - 1.0);
-        *slot = comp.map(|comp| (comp.onset.0, comp.gain * jitter));
-    }
-    (c, out)
-}
-
 // --- slow-motion listening (brief B25) -------------------------------------------------------------
 
-/// Which valve closure a component is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Which discrete heart sound a component is: the valve closures of brief B24, then the extra
+/// sounds of brief B27.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ComponentKind {
     M1,
     T1,
     A2,
     P2,
+    S3,
+    S4,
+    OpeningSnap,
+    AorticClick,
+    PulmonaryClick,
+    MidSystolicClick,
 }
 
 impl ComponentKind {
-    /// In the order of [`Components`] and of the synthesisers' atoms.
-    pub const ALL: [ComponentKind; 4] = [
+    /// In the order of [`Components`] (S4 inserted after S3) and of the synthesisers' atoms.
+    pub const ALL: [ComponentKind; 10] = [
         ComponentKind::M1,
         ComponentKind::T1,
         ComponentKind::A2,
         ComponentKind::P2,
+        ComponentKind::S3,
+        ComponentKind::S4,
+        ComponentKind::OpeningSnap,
+        ComponentKind::AorticClick,
+        ComponentKind::PulmonaryClick,
+        ComponentKind::MidSystolicClick,
     ];
 
     /// The atom parameters of this component in `params`.
     #[must_use]
     pub fn atom(self, params: &PcgParams) -> AtomParams {
+        let a = &params.auscultation;
         match self {
             ComponentKind::M1 => params.m1,
             ComponentKind::T1 => params.t1,
             ComponentKind::A2 => params.a2,
             ComponentKind::P2 => params.p2,
+            ComponentKind::S3 => a.s3,
+            ComponentKind::S4 => a.s4,
+            ComponentKind::OpeningSnap => a.snap,
+            ComponentKind::AorticClick | ComponentKind::PulmonaryClick => a.click,
+            ComponentKind::MidSystolicClick => a.mid_click,
         }
     }
 }
@@ -1074,7 +1559,16 @@ struct WallComponent {
     onset_sim_ms: f64,
     gain: f64,
     beat_ms: f64,
+    atrial: bool,
     /// Fixed when the component starts: later speed changes no longer move it.
+    wall_onset_ms: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct WallMurmur {
+    m: Murmur,
+    /// Wall time of the murmur's start, fixed when it starts: its partials run from there at their
+    /// own frequencies while its envelope follows simulation time.
     wall_onset_ms: Option<f64>,
 }
 
@@ -1089,6 +1583,10 @@ struct WallComponent {
 /// resampling, no vocoder. A speed change moves the anchor to the sample being rendered, so it
 /// takes effect for the components that have not started yet.
 ///
+/// A murmur (brief B27) keeps its band too: its partials run in wall time from its wall start,
+/// while its envelope is read at the simulation time the wall sample stands for, so in slow motion
+/// it stretches with the interval it fills.
+///
 /// At speed 1 with the initial anchor (0, 0) the output equals [`PcgSynth::sample`] on the same
 /// grid sample for sample: the mapping is the identity and the arithmetic is the same. The drawn
 /// trace keeps showing the true signal; only the sound is re-timed.
@@ -1097,13 +1595,13 @@ struct WallComponent {
 /// clock is read, the caller says how far simulation time has advanced.
 #[derive(Debug, Clone)]
 pub struct WallTimeSynth {
-    params: PcgParams,
-    seed: u64,
-    respiration_rate_bpm: f64,
-    assembler: BeatAssembler,
-    atoms: [Atom; 4],
+    sched: Scheduler,
+    atoms: [Atom; ComponentKind::ALL.len()],
     scale: f64,
     components: Vec<WallComponent>,
+    murmurs: Vec<WallMurmur>,
+    gains: SoundGains,
+    chest: Option<ChestWeight>,
     anchor_sim_ms: f64,
     anchor_wall_ms: f64,
     speed: f64,
@@ -1119,13 +1617,13 @@ impl WallTimeSynth {
         let atoms = atoms_of(&params);
         let scale = reference_scale(&params, &atoms);
         Self {
-            assembler: BeatAssembler::new(&params),
-            params,
-            seed,
-            respiration_rate_bpm,
+            sched: Scheduler::new(params, seed, respiration_rate_bpm),
             atoms,
             scale,
             components: Vec::new(),
+            murmurs: Vec::new(),
+            gains: SoundGains::default(),
+            chest: None,
             anchor_sim_ms: 0.0,
             anchor_wall_ms: 0.0,
             speed: 1.0,
@@ -1134,32 +1632,67 @@ impl WallTimeSynth {
         }
     }
 
+    /// The same synthesiser with a scenario's `auscultation` section, as
+    /// [`PcgSynth::with_auscultation`].
+    #[must_use]
+    pub fn with_auscultation(mut self, model: &Auscultation) -> Self {
+        self.sched.set_model(model.clone());
+        self
+    }
+
+    /// Per-class gains, as [`PcgSynth::set_gains`].
+    pub fn set_gains(&mut self, gains: SoundGains) {
+        self.gains = gains;
+    }
+
+    /// A listening site and chest piece, as [`PcgSynth::set_listening`].
+    pub fn set_listening(&mut self, listening: &Listening) {
+        self.gains.clone_from(&listening.gains);
+        self.chest = listening.chest;
+    }
+
     /// Feed timing-engine events (in engine order), as [`PcgSynth::on_events`].
     pub fn on_events(&mut self, events: &[Event]) {
         for ev in events {
-            if let Some(beat) = self.assembler.push(ev) {
-                self.on_beat(&beat);
+            if let Some(u) = self.sched.push(ev) {
+                self.apply(u);
             }
         }
     }
 
-    fn on_beat(&mut self, beat: &Beat) {
-        let q = beat.qrs_onset.0;
-        if beat.replaces_previous {
-            self.components.retain(|c| c.beat_ms.to_bits() != q.to_bits());
+    fn apply(&mut self, u: Update) {
+        if let Some((beat, _)) = &u.beat
+            && beat.replaces_previous
+        {
+            let q = beat.qrs_onset.0;
+            let same = |k: f64| k.to_bits() == q.to_bits();
+            self.components.retain(|c| c.atrial || !same(c.beat_ms));
+            self.murmurs.retain(|w| w.m.atrial || !same(w.m.key_ms));
         }
-        let (_, atoms) = scheduled_atoms(beat, &self.params, self.seed, self.respiration_rate_bpm);
-        for (atom, slot) in atoms.into_iter().enumerate() {
-            if let Some((onset_sim_ms, gain)) = slot {
-                self.components.push(WallComponent {
-                    atom,
-                    onset_sim_ms,
-                    gain,
-                    beat_ms: q,
-                    wall_onset_ms: None,
-                });
+        if let Some((event_ms, cut_ms)) = u.cut {
+            // only what has not started can be cancelled: its onset lies after the event
+            self.components
+                .retain(|c| !(c.atrial && c.wall_onset_ms.is_none() && c.onset_sim_ms > event_ms));
+            self.murmurs
+                .retain(|w| !(w.m.atrial && w.wall_onset_ms.is_none() && w.m.start_ms > event_ms));
+            for w in &mut self.murmurs {
+                w.m.cut(cut_ms);
             }
         }
+        for a in u.atoms {
+            self.components.push(WallComponent {
+                atom: a.atom,
+                onset_sim_ms: a.onset_ms,
+                gain: a.gain,
+                beat_ms: a.key_ms,
+                atrial: a.atrial,
+                wall_onset_ms: None,
+            });
+        }
+        self.murmurs.extend(u.murmurs.into_iter().map(|m| WallMurmur {
+            m,
+            wall_onset_ms: None,
+        }));
     }
 
     /// Simulation speed the mapping uses (wall ms per simulation ms is `1 / speed`).
@@ -1215,6 +1748,8 @@ impl WallTimeSynth {
     fn sample_at(&mut self, w: f64) -> f32 {
         let (anchor_wall, anchor_sim, speed) = (self.anchor_wall_ms, self.anchor_sim_ms, self.speed);
         let atoms = &self.atoms;
+        let gains = &self.gains;
+        let chest = self.chest.as_ref();
         let starts = &mut self.starts;
         let mut v = 0.0;
         self.components.retain_mut(|c| {
@@ -1236,10 +1771,32 @@ impl WallTimeSynth {
                     });
                 }
             }
-            v += c.gain * atom.value(tau);
+            v += c.gain * gains.components[c.atom] * atom.value_with(tau, chest);
             true
         });
-        (v * self.scale) as f32
+        let mut out = v * self.scale;
+        if !self.murmurs.is_empty() {
+            let s = anchor_sim + (w - anchor_wall) * speed;
+            let mut m_sum = 0.0;
+            self.murmurs.retain_mut(|wm| {
+                if wm.m.finished_at(s) {
+                    return false;
+                }
+                if wm.wall_onset_ms.is_none() && s >= wm.m.start_ms {
+                    wm.wall_onset_ms = Some(anchor_wall + (wm.m.start_ms - anchor_sim) / speed);
+                }
+                let level = wm.m.level_at(s);
+                if level != 0.0
+                    && let Some(onset) = wm.wall_onset_ms
+                {
+                    m_sum +=
+                        gains.murmurs[wm.m.class.index()] * level * murmur_noise(&wm.m, w - onset, chest);
+                }
+                true
+            });
+            out += m_sum;
+        }
+        out as f32
     }
 
     /// Keep up with the simulation without producing sound (live 1× playback from the ring, or
@@ -1276,6 +1833,16 @@ impl WallTimeSynth {
             }
             true
         });
+        let s = anchor_sim + (w - anchor_wall) * speed;
+        self.murmurs.retain_mut(|wm| {
+            if wm.m.finished_at(s) {
+                return false;
+            }
+            if wm.wall_onset_ms.is_none() && s >= wm.m.start_ms {
+                wm.wall_onset_ms = Some(anchor_wall + (wm.m.start_ms - anchor_sim) / speed);
+            }
+            true
+        });
     }
 
     /// Record every component start for [`WallTimeSynth::take_starts`] (tests).
@@ -1288,10 +1855,10 @@ impl WallTimeSynth {
         self.starts.as_mut().map(std::mem::take).unwrap_or_default()
     }
 
-    /// Components scheduled and not yet finished.
+    /// Components and murmurs scheduled and not yet finished.
     #[must_use]
     pub fn active_count(&self) -> usize {
-        self.components.len()
+        self.components.len() + self.murmurs.len()
     }
 }
 
@@ -1321,12 +1888,14 @@ mod tests {
             onset_ms: 0.0,
             gain: 1.0,
             beat_ms: 0.0,
+            atrial: false,
         });
         s.active.push(Active {
             atom: 1,
             onset_ms: 25.0,
             gain: 0.6,
             beat_ms: 0.0,
+            atrial: false,
         });
         let peak = (0..600)
             .map(|k| s.sample(Millis(f64::from(k) * PCG_PERIOD_MS)).abs())

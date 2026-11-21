@@ -8,7 +8,7 @@
 //! no randomness, no I/O.
 
 use crate::analysis::{Analysis, Analyzer};
-use crate::pcg::{PCG_PERIOD_MS, PCG_RATE_HZ, PcgParams, PcgSynth};
+use crate::pcg::{PCG_PERIOD_MS, PCG_RATE_HZ, PcgParams, PcgSynth, WallTimeSynth};
 use crate::synth::{FRIDERICIA_EXPONENT, GaussianSynth, MorphologyOverrides, SynthModulation, UnknownWave};
 use heartsim_core::scenario::{ExpectedFindings, ScenarioError};
 use heartsim_core::{LEAD_COUNT, Lead, Millis, Scenario};
@@ -106,8 +106,8 @@ impl Tier0Scenario {
         Ok(s)
     }
 
-    /// The heart-sound synthesiser for this scenario: default model, the scenario's seed and the
-    /// breathing rate of its sinus node.
+    /// The heart-sound synthesiser for this scenario: default model, the scenario's seed, the
+    /// breathing rate of its sinus node and its `auscultation` section (brief B27).
     #[must_use]
     pub fn pcg_synth(&self) -> PcgSynth {
         PcgSynth::new(
@@ -115,6 +115,18 @@ impl Tier0Scenario {
             self.scenario.seed,
             self.timing.sinus.respiration_rate_bpm,
         )
+        .with_auscultation(&self.scenario.auscultation)
+    }
+
+    /// The slow-motion synthesiser for this scenario, fed the same model as [`Self::pcg_synth`].
+    #[must_use]
+    pub fn wall_synth(&self) -> WallTimeSynth {
+        WallTimeSynth::new(
+            PcgParams::default(),
+            self.scenario.seed,
+            self.timing.sinus.respiration_rate_bpm,
+        )
+        .with_auscultation(&self.scenario.auscultation)
     }
 
     /// Run the scenario for `seconds`, applying its timeline.

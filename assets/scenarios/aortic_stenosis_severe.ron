@@ -1,0 +1,33 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "aortic_stenosis_severe",
+    title: "Aortic stenosis, severe (late-peaking murmur, single S2)",
+    description: "Sinus rhythm at 70 bpm with a severely narrowed, calcified aortic valve: a loud late-peaking ejection murmur, a soft single S2 and an S4.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("As aortic stenosis worsens the ejection murmur lasts longer and peaks later in systole, A2 becomes soft and late, and S2 is heard as a single sound (or splits paradoxically). A rigid calcified valve no longer gives an ejection click. The hypertrophied ventricle adds an S4.\nOn the lane compare with the mild preset: the diamond is longer and its peak moves towards S2, the A2 component is small, and there are no separate A2/P2 labels.\nThe murmur is louder after a long cycle. In critical stenosis with a failing ventricle it can become softer, which this model does not show. Slow carotid upstroke and other pulse signs are not modelled.\nDifferential: hypertrophic obstructive cardiomyopathy, mitral regurgitation, mild aortic stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["aortic_stenosis_mild", "mitral_regurgitation", "pulmonary_stenosis"],
+    references: [
+        "MSD Manual Professional Version: Aortic stenosis, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Felner JM. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 23, the second heart sound (NCBI Bookshelf NBK341).",
+        "Alpert. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 26 (NCBI Bookshelf NBK345).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([S4]),
+        murmurs: Some([MidSystolic]),
+        s2_split: Some(Single),
+    )),
+    auscultation: (s4: true, lesions: [(AorticStenosis, Severe)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+    ),
+)

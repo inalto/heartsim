@@ -1,6 +1,7 @@
 //! The heart-sound lane under the strip (brief B24): the phonocardiogram drawn as a filled envelope
 //! on the strip's own time axis, with `S1` / `S2` labels (and `A2` `P2` when S2 is split by more than
-//! 20 ms) placed from the model's schedule, not found by peak picking.
+//! 20 ms, and the extra sounds of brief B27) placed from the model's schedule, not found by peak
+//! picking. A murmur shows as its envelope, without a label.
 //!
 //! The lane's window is the strip's window rescaled to the PCG rate ([`StripWindow::rescaled`]), so
 //! scrolling, sweeping, pausing and scrubbing move both by the same sample-exact mapping, and a
@@ -9,7 +10,7 @@
 use crate::strip::{StripStyle, StripWindow, SweepMode, grid_shape, labels_that_fit};
 use crate::t;
 use egui::{Align2, Color32, FontId, Id, Mesh, Pos2, Rect, Stroke, Ui, Vec2};
-use heartsim_ecg::{LeadRing, SoundLabel};
+use heartsim_ecg::{ChestPiece, LeadRing, ListeningChoice, SoundLabel};
 
 /// What the heart-sound audio is doing (B25), as the Display popup and the Settings window report
 /// it. The app's player decides; the interface only words it.
@@ -102,10 +103,41 @@ pub fn lane_height(total: f32) -> f32 {
 /// Fraction of the lane's half-height that a PCG value of 1 (a normal S1) reaches.
 const FULL_SCALE: f32 = 0.8;
 
+/// The chest piece's name ("Bell").
+#[must_use]
+pub fn chest_name(chest: ChestPiece) -> String {
+    match chest {
+        ChestPiece::Diaphragm => t!("ecg-chest-diaphragm"),
+        ChestPiece::Bell => t!("ecg-chest-bell"),
+    }
+}
+
+/// The lane's title: "Heart sounds (model)" for the overview, else with the site and the chest
+/// piece the trace and the sound are heard at ("Heart sounds (model) · Mitral (apex) · Bell").
+#[must_use]
+pub fn lane_title(listening: ListeningChoice) -> String {
+    if listening.is_overview() {
+        t!("ecg-heart-sounds-lane")
+    } else {
+        t!(
+            "ecg-heart-sounds-lane-at",
+            site = crate::auscultation_chest::site_short_name(listening.site),
+            chest = chest_name(listening.chest)
+        )
+    }
+}
+
 /// Paint the lane into `rect` with the PCG window `win` (the strip's window rescaled to the PCG
-/// rate, laid on `rect`). Returns nothing: interaction goes through the caller, which owns the
-/// calipers.
-pub fn draw_pcg_lane(ui: &Ui, id: Id, win: &StripWindow, lane: &PcgLane<'_>, style: &StripStyle) {
+/// rate, laid on `rect`), titled `title` ([`lane_title`]). Returns nothing: interaction goes through
+/// the caller, which owns the calipers.
+pub fn draw_pcg_lane(
+    ui: &Ui,
+    id: Id,
+    win: &StripWindow,
+    lane: &PcgLane<'_>,
+    style: &StripStyle,
+    title: &str,
+) {
     let rect = win.rect;
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, style.paper);
@@ -155,16 +187,18 @@ pub fn draw_pcg_lane(ui: &Ui, id: Id, win: &StripWindow, lane: &PcgLane<'_>, sty
     let title = painter.text(
         rect.left_top() + Vec2::new(6.0, 2.0),
         Align2::LEFT_TOP,
-        t!("ecg-heart-sounds-lane"),
+        title,
         FontId::proportional(11.0),
         style.trace,
     );
     draw_labels(&painter, win, lane, style.marker, title.right());
 }
 
-/// `S1` and `S2` along the top of the lane (right of the title, which ends at `title_right`), `A2`
-/// and `P2` along the bottom (joined into one label when too close to stand apart), each row thinned
-/// with [`labels_that_fit`] so that labels never overlap.
+/// `S1` and `S2` along the top of the lane (right of the title, which ends at `title_right`), `A2`,
+/// `P2` and the extra sounds of brief B27 (`S3`, `S4`, `OS`, `EC`, `C`) along the bottom (two
+/// different labels joined into one when too close to stand apart, e.g. `S4·S3` of a summation
+/// gallop), each row thinned with [`labels_that_fit`] so that labels never overlap. Murmurs carry no
+/// label: they are seen as their envelope.
 fn draw_labels(
     painter: &egui::Painter,
     win: &StripWindow,
@@ -176,13 +210,13 @@ fn draw_labels(
     let rect = win.rect;
     for (row, y, align, left) in [
         (
-            &[SoundLabel::S1, SoundLabel::S2][..],
+            &UPPER_ROW[..],
             rect.top() + 2.0,
             Align2::CENTER_TOP,
             title_right + 2.0,
         ),
         (
-            &[SoundLabel::A2, SoundLabel::P2][..],
+            &LOWER_ROW[..],
             rect.bottom() - 2.0,
             Align2::CENTER_BOTTOM,
             rect.left(),
@@ -205,6 +239,19 @@ fn draw_labels(
         }
     }
 }
+
+/// The labels drawn along the top of the lane.
+const UPPER_ROW: [SoundLabel; 2] = [SoundLabel::S1, SoundLabel::S2];
+/// The labels drawn along the bottom: the S2 components and the extra sounds.
+const LOWER_ROW: [SoundLabel; 7] = [
+    SoundLabel::A2,
+    SoundLabel::P2,
+    SoundLabel::S3,
+    SoundLabel::S4,
+    SoundLabel::OpeningSnap,
+    SoundLabel::EjectionClick,
+    SoundLabel::Click,
+];
 
 /// Width allowed for one two-character sound label at the lane's font size.
 const LABEL_WIDTH_PX: f32 = 14.0;
@@ -287,6 +334,32 @@ mod tests {
         // a pair is joined once, the next beat's pair separately
         let two = merge_close(&[(100.0, A2), (108.0, P2), (300.0, A2), (309.0, P2)], 16.0);
         assert_eq!(two.len(), 2);
+    }
+
+    #[test]
+    fn every_label_has_one_row_and_fits_the_label_width() {
+        let all = [
+            SoundLabel::S1,
+            SoundLabel::S2,
+            SoundLabel::A2,
+            SoundLabel::P2,
+            SoundLabel::S3,
+            SoundLabel::S4,
+            SoundLabel::OpeningSnap,
+            SoundLabel::EjectionClick,
+            SoundLabel::Click,
+        ];
+        for l in all {
+            let rows = usize::from(UPPER_ROW.contains(&l)) + usize::from(LOWER_ROW.contains(&l));
+            assert_eq!(rows, 1, "{l:?}");
+            assert!(l.text().chars().count() <= 2, "{l:?}");
+        }
+        assert!(SoundLabel::EXTRA.iter().all(|l| LOWER_ROW.contains(l)));
+        // a summation gallop: S4 and S3 close together are one label, in their order
+        assert_eq!(
+            merge_close(&[(100.0, SoundLabel::S4), (106.0, SoundLabel::S3)], 16.0)[0].1,
+            "S4\u{b7}S3"
+        );
     }
 
     #[test]

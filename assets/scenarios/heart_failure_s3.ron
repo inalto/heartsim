@@ -1,0 +1,33 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "heart_failure_s3",
+    title: "Heart failure with a third heart sound (S3 gallop)",
+    description: "Sinus rhythm at 92 bpm in a dilated, failing left ventricle: a low third sound follows S2 in early diastole.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("An S3 is a low-pitched sound about 120 to 200 ms after A2, at the end of rapid ventricular filling, when blood entering a dilated, stiff ventricle is checked abruptly. It does not need an atrial contraction, so it persists in atrial fibrillation. In an adult it points to systolic heart failure or volume overload; in children, young adults and pregnancy it can be normal.\nOn the lane: S1, S2, then a small slow wave labelled S3 in early diastole. Listen with the bell at the apex in the left lateral position.\nIn a breathless patient an S3 makes heart failure much more likely, but its absence does not exclude it. The ECG here is plain sinus rhythm: the ECG is not diagnostic of heart failure.\nDifferential: split S2, opening snap of mitral stenosis (higher pitched and earlier), S4 (before S1).\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["lvh_s4", "summation_gallop", "mitral_stenosis_sinus"],
+    references: [
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 1. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Williams. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 25 (NCBI Bookshelf NBK344).",
+        "Wang CS et al. Does this dyspneic patient in the emergency department have congestive heart failure? JAMA 2005;294:1944-1956.",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([S3]),
+        murmurs: Some([]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (s3: true),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 92.0),
+    ),
+)

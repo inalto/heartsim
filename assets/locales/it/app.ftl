@@ -90,7 +90,7 @@ settings-title = Impostazioni
 settings-language = Lingua
 settings-language-system = Predefinita del sistema
 settings-high-contrast = Tema ad alto contrasto
-settings-reduced-motion = Movimento ridotto (niente rotazione automatica né lampeggio della scarica)
+settings-reduced-motion = Movimento ridotto (niente rotazione automatica, lampeggio della scarica o delle valvole)
 settings-torso-opacity = Immagine del torso nel pannello dell'asse
 settings-torso-opacity-hint = Opacità del torso frontale dietro le derivazioni degli arti; 0 % mostra invece il disegno del contorno.
 settings-beep = Segnale acustico del monitor (sincrono con il QRS, disattivato di default)
@@ -308,6 +308,7 @@ scenario-rhythm = Ritmo:
 scenario-restart = Riavvia
 scenario-restart-hint = Ricarica lo scenario da t = 0.
 scenario-about = Info su questo ritmo
+scenario-group-sounds = Toni e soffi cardiaci
 rq-next = Domanda successiva
 rq-question = Qual è il ritmo?
 rq-answer = Risposta:

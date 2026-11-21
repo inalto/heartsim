@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "lvh_s4",
+    title: "Left-ventricular hypertrophy with a fourth heart sound (S4 gallop)",
+    description: "Sinus rhythm at 72 bpm with a stiff, hypertrophied left ventricle: a low fourth sound just before S1, from the atrial contraction.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("An S4 is produced when the atrium contracts into a ventricle that does not relax well (hypertrophy from hypertension or aortic stenosis, ischaemia). It sits just before S1, about 70 ms after the P wave, and is low pitched (20 to 30 Hz), best with the bell at the apex.\nIt needs an effective atrial contraction: there is no S4 in atrial fibrillation, and in complete heart block it follows the P waves, not the QRS. An S4 is almost always abnormal.\nThe ECG here is plain sinus rhythm: the model does not draw hypertrophy voltage.\nDifferential: split S1, ejection click (after S1), S3 (after S2).\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["heart_failure_s3", "summation_gallop", "aortic_stenosis_mild"],
+    references: [
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 1. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Williams. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 25 (NCBI Bookshelf NBK344).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([S4]),
+        murmurs: Some([]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (s4: true),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+    ),
+)

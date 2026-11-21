@@ -21,6 +21,7 @@ The library that ships with heartsim covers:
 | Ischaemia and infarction | STEMI by territory, subendocardial ischaemia, pericarditis, evolved anterior, inferior and lateral infarcts with Q waves and T inversion, an old infarct, the stages in compressed time |
 | Escape and slow ventricular rhythms | junctional rhythm, idioventricular rhythm, AIVR |
 | Pacing | AAI, VVI, DDD, biventricular pacing, loss of capture, undersensing, T-wave oversensing, pacemaker-mediated tachycardia |
+| Heart sounds and murmurs (own heading in the list) | S3 in heart failure, S4 in hypertrophy, summation gallop, aortic stenosis mild and severe, aortic and mitral regurgitation, mitral stenosis in sinus rhythm and in AF, mitral valve prolapse, tricuspid regurgitation, pulmonary stenosis, ventricular and atrial septal defect, innocent murmur: see [Extra heart sounds and murmurs](heart-sounds-murmurs.md) |
 
 Every scenario carries teaching notes with its literature sources and the rhythms it is most often confused with; the
 [rhythm quiz](quizzes.md) uses those as wrong answers.

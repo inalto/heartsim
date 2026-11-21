@@ -8,7 +8,7 @@ Scenario(
     tier: Template,
     anatomy: "default",
     seed: 42,
-    notes: Some("Inflammation of the outer layer of both ventricles produces an injury current that is not limited to one coronary territory: the ST segment is raised in most leads (typically concave upward) and lowered in aVR. In pericarditis the PR segment is also depressed in many leads; this preset does not draw it.\nPointers away from STEMI: elevation in many leads that do not fit one artery, no reciprocal depression except in aVR (and sometimes V1), a concave shape, and sharp pleuritic chest pain that eases on sitting forward. If in doubt treat as an acute coronary syndrome until it is excluded.\nDiagnosis needs two of: pericarditic chest pain, a rub, the typical ECG changes, a new or worsening pericardial effusion.\nDifferential: STEMI, early repolarisation, myocarditis, Brugada pattern."),
+    notes: Some("Inflammation of the outer layer of both ventricles produces an injury current that is not limited to one coronary territory: the ST segment is raised in most leads (typically concave upward) and lowered in aVR. In pericarditis the PR segment is also depressed in many leads; this preset does not draw it.\nPointers away from STEMI: elevation in many leads that do not fit one artery, no reciprocal depression except in aVR (and sometimes V1), a concave shape, and sharp pleuritic chest pain that eases on sitting forward. If in doubt treat as an acute coronary syndrome until it is excluded.\nDiagnosis needs two of: pericarditic chest pain, a rub, the typical ECG changes, a new or worsening pericardial effusion.\nDifferential: STEMI, early repolarisation, myocarditis, Brugada pattern.\nWith the heart sounds on, this preset plays a pericardial friction rub: three short scratchy sounds per cycle, in atrial systole, ventricular systole and early diastole (the atrial one disappears without an atrial contraction). The rub is a synthesised model, not a recording."),
     confused_with: ["stemi_anterior", "stemi_inferior", "early repolarisation", "myocarditis"],
     references: [
         "Adler Y et al. 2015 ESC Guidelines for the diagnosis and management of pericardial diseases. Eur Heart J 2015;36:2921-2964.",
@@ -20,7 +20,9 @@ Scenario(
         pr_ms: Some((120.0, 200.0)),
         qrs_ms: None,
         axis_deg: None,
+        extra_sounds: Some([FrictionRub]),
     )),
+    auscultation: (rub: true, ecg_diagnostic: true),
     timeline: [
         TimedAction(at: 0.0, action: Stenosis(branch: "pericardium", severity: 1.0)),
     ],

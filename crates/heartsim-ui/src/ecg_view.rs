@@ -4,7 +4,8 @@
 use crate::annotations::{EcgAnnotations, interval_readout};
 use crate::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
 use crate::pcg_lane::{
-    HeartSoundStatus, LaneRequest, PcgLane, draw_caliper_lines, draw_pcg_lane, draw_playhead, lane_height,
+    HeartSoundStatus, LaneRequest, PcgLane, chest_name, draw_caliper_lines, draw_pcg_lane, draw_playhead,
+    lane_height, lane_title,
 };
 use crate::strip::{GAINS_MM_MV, SPEEDS_MM_S, StripStyle, StripTrace, StripWindow, SweepMode, draw_strip};
 use crate::t;
@@ -12,7 +13,10 @@ use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, cell_is_annotated, interva
 use egui::{Rect, Ui};
 use heartsim_core::Lead;
 use heartsim_ecg::artefact::INTENSITY_RANGE;
-use heartsim_ecg::{Analysis, Analyzer, DisplayConfig, DisplayStage, FilterMode, LeadRing, MainsFrequency};
+use heartsim_ecg::{
+    Analysis, Analyzer, ChestPiece, DisplayConfig, DisplayStage, FilterMode, LeadRing, ListeningChoice,
+    ListeningSite, MainsFrequency,
+};
 
 /// Which annotations a strip may carry (before the Display toggles are applied).
 #[derive(Debug, Clone, Copy)]
@@ -58,6 +62,11 @@ pub struct EcgView {
     pub playhead: Option<u64>,
     /// A slice is playing: the lane's button offers Stop.
     pub slice_playing: bool,
+    /// Where on the chest and with which chest piece the lane and the sound are heard (B27 part B):
+    /// chosen in the Display popup, named in the lane's title. The overview by default.
+    pub listening: ListeningChoice,
+    /// Opacity of the torso picture behind the chest's site markers (the Settings value).
+    pub chest_image_opacity: f32,
     /// How far behind the newest sample the views are drawn while sound plays, ms (B25). Not a
     /// scrub: the scrub slider and [`Self::scrub_offset_ms`] do not include it.
     display_delay_ms: f64,
@@ -94,6 +103,8 @@ impl Default for EcgView {
             heart_sound_status: HeartSoundStatus::Off,
             playhead: None,
             slice_playing: false,
+            listening: ListeningChoice::default(),
+            chest_image_opacity: 0.7,
             display_delay_ms: 0.0,
             lane_request: None,
             display: DisplayStage::default(),
@@ -388,6 +399,7 @@ impl EcgView {
                 self.show_heart_sounds = true;
             }
         }
+        ui.indent("listening_site", |ui| self.listening_controls(ui));
         crate::controls::slider(
             ui,
             &t!("ecg-px-per-mm"),
@@ -425,6 +437,42 @@ impl EcgView {
             );
         }
         self.display.set_config(cfg);
+    }
+
+    /// The listening site (the overview and the five sites, as radio buttons beside the chest with
+    /// its clickable markers) and the chest piece, which the overview does not use (B27 part B).
+    pub fn listening_controls(&mut self, ui: &mut Ui) {
+        ui.label(t!("ecg-listening-site"))
+            .on_hover_text(t!("ecg-listening-site-hint"));
+        ui.horizontal_top(|ui| {
+            ui.vertical(|ui| {
+                for site in ListeningSite::ALL {
+                    ui.radio_value(
+                        &mut self.listening.site,
+                        site,
+                        crate::auscultation_chest::site_name(site),
+                    );
+                }
+            });
+            let opacity = self.chest_image_opacity;
+            crate::auscultation_chest::auscultation_chest(
+                ui,
+                egui::vec2(118.0, 130.0),
+                &mut self.listening.site,
+                opacity,
+            );
+        });
+        ui.add_enabled_ui(!self.listening.is_overview(), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(t!("ecg-chest-piece"));
+                for chest in ChestPiece::ALL {
+                    ui.radio_value(&mut self.listening.chest, chest, chest_name(chest));
+                }
+            })
+            .response
+            .on_hover_text(t!("ecg-chest-piece-hint"))
+            .on_disabled_hover_text(t!("ecg-chest-piece-overview-hint"));
+        });
     }
 
     /// Opens the Display popup on the next frame (the documentation tour's shots).
@@ -524,7 +572,7 @@ impl EcgView {
         if let (Some((lane, factor)), Some(lane_rect)) = (lane, lane_rect) {
             let id = ui.scope_id().with("ecg_view_sounds");
             let lane_win = win.rescaled(lane_rect, factor);
-            draw_pcg_lane(ui, id, &lane_win, &lane, &self.style);
+            draw_pcg_lane(ui, id, &lane_win, &lane, &self.style, &lane_title(self.listening));
             strip_interact(
                 ui,
                 id,
@@ -667,7 +715,7 @@ impl EcgView {
         let probe = StripWindow::new(lane_rect, &self.style, fs_of(rings), head);
         let lane_win = probe.rescaled(lane_rect, factor);
         let id = ui.scope_id().with("ecg_view_page_sounds");
-        draw_pcg_lane(ui, id, &lane_win, &lane, &self.style);
+        draw_pcg_lane(ui, id, &lane_win, &lane, &self.style, &lane_title(self.listening));
         let spans = |w: &StripWindow| {
             (w.rect.left() - lane_rect.left()).abs() < 0.5 && (w.rect.right() - lane_rect.right()).abs() < 0.5
         };

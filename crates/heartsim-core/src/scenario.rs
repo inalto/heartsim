@@ -124,6 +124,133 @@ pub enum RhythmKind {
     PolymorphicVentricularTachycardia,
 }
 
+/// A valve or shunt lesion of the `auscultation` section (brief B27). Each one adds its murmur and
+/// changes the valve sounds the way the cited texts describe (`docs/research/heart-sounds.md`); the
+/// ECG is not touched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LesionKind {
+    /// Crescendo–decrescendo ejection murmur peaking later with severity; soft, single A2 when severe.
+    AorticStenosis,
+    /// High-pitched decrescendo diastolic murmur from A2.
+    AorticRegurgitation,
+    /// Plateau (holosystolic) murmur from S1 through A2, little change with the cycle length.
+    MitralRegurgitation,
+    /// Loud S1, opening snap, low mid-diastolic rumble with presystolic accentuation in sinus rhythm.
+    MitralStenosis,
+    /// Mid-systolic click followed by a late systolic murmur to A2.
+    MitralValveProlapse,
+    /// Plateau murmur from S1 to P2, louder in inspiration.
+    TricuspidRegurgitation,
+    /// Ejection murmur of the right side; P2 soft and late.
+    PulmonaryStenosis,
+    /// Plateau, high-pitched, holosystolic murmur.
+    VentricularSeptalDefect,
+    /// Soft pulmonary flow (ejection) murmur; the fixed split is the scenario's `fixed_split`.
+    AtrialSeptalDefect,
+    /// Innocent (Still's) murmur: short, early-to-mid systolic, low and musical; S2 normal.
+    InnocentMurmur,
+}
+
+/// How severe a lesion is: sets the murmur's gain and, where the sources describe it, its shape
+/// (later peak of aortic stenosis, longer rumble and earlier snap of mitral stenosis).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, Default)]
+pub enum Severity {
+    Mild,
+    #[default]
+    Moderate,
+    Severe,
+}
+
+/// The optional `auscultation` section of a scenario (brief B27): what is wrong with the valves or
+/// the ventricles. Every field defaults to "normal", so a file without the section, or with an
+/// empty one, sounds exactly as the rhythm alone makes it (the heart sounds of brief B24). It never
+/// changes the ECG.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent findings of the scenario file, each a plain yes/no in the RON text"
+)]
+pub struct Auscultation {
+    /// Third heart sound after every beat that ejected (heart failure).
+    pub s3: bool,
+    /// Fourth heart sound after every organised atrial activation that falls in ventricular
+    /// diastole (never in atrial fibrillation or with silent atria).
+    pub s4: bool,
+    /// Pericardial friction rub: up to three scratchy components per cycle.
+    pub rub: bool,
+    /// Wide S2 split that hardly changes with respiration (atrial septal defect).
+    pub fixed_split: bool,
+    /// Valve and shunt lesions, each with its severity.
+    pub lesions: Vec<(LesionKind, Severity)>,
+    /// The ECG itself is the lesson and the sounds accompany it (pericarditis with its rub, an
+    /// infarction with an S4): the scenario stays in the rhythm list and in the ECG quizzes. Without
+    /// it a scenario with a non-empty section is an auscultation case, whose ordinary ECG would be a
+    /// wrong quiz question ([`Scenario::is_auscultation_case`]).
+    pub ecg_diagnostic: bool,
+}
+
+impl Auscultation {
+    /// No extra sound and no lesion: the heart sounds are the rhythm's alone.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        !self.s3 && !self.s4 && !self.rub && !self.fixed_split && self.lesions.is_empty()
+    }
+
+    /// The severity of `kind` if the section lists it (the first entry when listed twice).
+    #[must_use]
+    pub fn lesion(&self, kind: LesionKind) -> Option<Severity> {
+        self.lesions.iter().find(|(k, _)| *k == kind).map(|(_, s)| *s)
+    }
+}
+
+/// An extra heart sound a scenario must produce (`ExpectedFindings::extra_sounds`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum ExtraSound {
+    S3,
+    S4,
+    /// Aortic or pulmonary ejection click.
+    EjectionClick,
+    /// The mid-systolic click of mitral valve prolapse.
+    MidSystolicClick,
+    OpeningSnap,
+    FrictionRub,
+}
+
+/// Where in the cycle a murmur lies (`ExpectedFindings::murmurs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum MurmurTiming {
+    /// Crescendo–decrescendo between S1 and S2, with a gap after S1 (ejection murmurs).
+    MidSystolic,
+    /// Short and early-to-mid systolic (the innocent murmur).
+    EarlySystolic,
+    /// A plateau from S1 to or through S2.
+    Holosystolic,
+    /// From a mid-systolic click to S2.
+    LateSystolic,
+    /// Decrescendo from S2.
+    EarlyDiastolic,
+    /// After the opening snap, in mid-diastole.
+    MidDiastolic,
+    /// A crescendo into S1 after the atrial contraction.
+    Presystolic,
+}
+
+/// How S2 splits over the respiratory cycle (`ExpectedFindings::s2_split`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SplitMode {
+    /// Narrow in expiration, wider in inspiration, A2 first.
+    Physiological,
+    /// Wide in both phases and wider in inspiration (late P2).
+    Wide,
+    /// Wide and changing by less than 20 ms with respiration.
+    Fixed,
+    /// P2 before A2 in expiration, narrowing in inspiration.
+    Paradoxical,
+    /// Within 20 ms in both phases: heard as one sound.
+    Single,
+}
+
 /// What the B4 analyser must measure on the scenario's ECG once the rhythm has settled — the
 /// textbook diagnostic criteria of the rhythm, so a regression in an engine, the synthesiser or
 /// the analyser shows up as a scenario that no longer "looks like" its diagnosis.
@@ -146,6 +273,15 @@ pub struct ExpectedFindings {
     /// The name the analyser must give the rhythm (`None` = not a criterion).
     #[serde(default)]
     pub rhythm: Option<RhythmKind>,
+    /// Extra heart sounds the phonocardiogram must contain (brief B27; `None` = not a criterion).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_sounds: Option<Vec<ExtraSound>>,
+    /// The timing class of every murmur the phonocardiogram must contain (`Some(vec![])`: none).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub murmurs: Option<Vec<MurmurTiming>>,
+    /// How S2 splits over the respiratory cycle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub s2_split: Option<SplitMode>,
 }
 
 fn no_rate() -> Range {
@@ -221,6 +357,10 @@ pub struct Scenario {
     /// Textbook measurement ranges the rhythm must satisfy (golden tests, quiz answers).
     #[serde(default)]
     pub expected: Option<ExpectedFindings>,
+    /// Extra heart sounds and valve lesions (brief B27). Left out of a file, and of a written file
+    /// when empty, so the rhythm presets keep their text.
+    #[serde(default, skip_serializing_if = "Auscultation::is_empty")]
+    pub auscultation: Auscultation,
 }
 
 fn default_anatomy() -> String {
@@ -247,7 +387,17 @@ impl Scenario {
             confused_with: Vec::new(),
             references: Vec::new(),
             expected: None,
+            auscultation: Auscultation::default(),
         }
+    }
+
+    /// An auscultation case: a non-empty `auscultation` section whose ECG is not itself the
+    /// diagnosis ([`Auscultation::ecg_diagnostic`]). Its strip is ordinary (sinus rhythm in the valve
+    /// scenarios), so it is never drawn by the ECG quizzes and drills, and the scenario picker lists
+    /// it under its own heading. The one predicate every pool uses.
+    #[must_use]
+    pub fn is_auscultation_case(&self) -> bool {
+        !self.auscultation.is_empty() && !self.auscultation.ecg_diagnostic
     }
 
     /// The citations of the teaching text: the `references` field plus the `- ` lines of a
@@ -365,6 +515,47 @@ mod tests {
         s.notes = Some("Teaching text.\n\nSources:\n- A et al. 2001.\n- B 2002.".into());
         s.references = vec!["C 2003.".into()];
         assert_eq!(s.citations(), ["C 2003.", "A et al. 2001.", "B 2002."]);
+    }
+
+    #[test]
+    fn the_auscultation_section_is_optional_and_reads_lesions() {
+        let base = r#"Scenario(format_version: 1, id: "x", title: "X", description: "d", tier: Template"#;
+        let none = Scenario::from_ron(&format!("{base})")).unwrap();
+        assert!(none.auscultation.is_empty());
+        assert!(!none.is_auscultation_case());
+        let empty = Scenario::from_ron(&format!("{base}, auscultation: ())")).unwrap();
+        assert_eq!(empty, none);
+        let text = format!(
+            "{base}, auscultation: (s4: true, lesions: [(AorticStenosis, Severe), (MitralRegurgitation, Mild)]),
+             expected: Some(ExpectedFindings(hr_bpm: (60.0, 80.0), extra_sounds: Some([S4]),
+               murmurs: Some([MidSystolic, Holosystolic]), s2_split: Some(Single))))"
+        );
+        let s = Scenario::from_ron(&text).unwrap();
+        assert!(s.auscultation.s4 && !s.auscultation.s3);
+        assert_eq!(
+            s.auscultation.lesion(LesionKind::AorticStenosis),
+            Some(Severity::Severe)
+        );
+        assert_eq!(s.auscultation.lesion(LesionKind::MitralStenosis), None);
+        assert!(s.is_auscultation_case());
+        let e = s.expected.clone().unwrap();
+        assert_eq!(e.s2_split, Some(SplitMode::Single));
+        assert_eq!(e.murmurs.unwrap().len(), 2);
+        let back = Scenario::from_ron(&s.to_ron().unwrap()).unwrap();
+        assert_eq!(back, s);
+        // the ECG is the lesson: the sounds ride along, the scenario stays an ECG case
+        let diag = Scenario::from_ron(&format!(
+            "{base}, auscultation: (rub: true, ecg_diagnostic: true))"
+        ))
+        .unwrap();
+        assert!(!diag.auscultation.is_empty() && !diag.is_auscultation_case());
+        // an empty section is not written back
+        assert!(
+            !Scenario::sinus_normal()
+                .to_ron()
+                .unwrap()
+                .contains("auscultation")
+        );
     }
 
     #[test]

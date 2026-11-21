@@ -9,6 +9,7 @@
 - [Installing heartsim](user/install.md)
 - [A tour of the window](user/ui-tour.md)
 - [Rhythm scenarios](user/scenarios.md)
+- [Extra heart sounds and murmurs](user/heart-sounds-murmurs.md)
 - [Re-entry presets: AF, flutter, VT, VF](user/reentry.md)
 - [The EP lab](user/ep-lab.md)
 - [Tutorials](user/tutorials.md)

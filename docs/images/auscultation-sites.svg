@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 440" width="360" height="440" font-family="sans-serif">
+  <title>The five auscultation sites on the front of the chest</title>
+  <!-- Drawn for heartsim (brief B27); schematic, not to scale. Licence: as the documentation. -->
+  <rect width="360" height="440" fill="#ffffff"/>
+  <!-- thorax outline -->
+  <path d="M70 40 Q180 10 290 40 L310 140 Q320 250 290 340 L70 340 Q40 250 50 140 Z"
+        fill="#dbe9f6" stroke="#5a7896" stroke-width="2"/>
+  <!-- clavicles -->
+  <path d="M90 52 Q140 66 170 60" fill="none" stroke="#5a7896" stroke-width="3"/>
+  <path d="M190 60 Q220 66 270 52" fill="none" stroke="#5a7896" stroke-width="3"/>
+  <!-- sternum -->
+  <rect x="166" y="62" width="28" height="190" rx="10" fill="#c3d6ea" stroke="#5a7896" stroke-width="1.5"/>
+  <!-- intercostal spaces (dashed) -->
+  <g stroke="#8aa3bb" stroke-width="1" stroke-dasharray="4 4" fill="none">
+    <path d="M80 96 Q180 112 280 96"/>
+    <path d="M78 136 Q180 152 282 136"/>
+    <path d="M76 176 Q180 192 284 176"/>
+    <path d="M76 216 Q180 232 284 216"/>
+  </g>
+  <g font-size="10" fill="#5a7896">
+    <text x="300" y="100">2nd</text>
+    <text x="300" y="140">3rd</text>
+    <text x="300" y="180">4th</text>
+    <text x="300" y="220">5th</text>
+  </g>
+  <!-- mid-clavicular line -->
+  <line x1="246" y1="60" x2="246" y2="300" stroke="#8aa3bb" stroke-width="1" stroke-dasharray="2 5"/>
+  <text x="246" y="318" font-size="10" fill="#5a7896" text-anchor="middle">left mid-clavicular line</text>
+  <!-- the sites -->
+  <g font-size="13" font-weight="bold" text-anchor="middle">
+    <circle cx="152" cy="106" r="12" fill="#ffffff" stroke="#1f5f99" stroke-width="2.5"/>
+    <text x="152" y="111" fill="#1f5f99">A</text>
+    <circle cx="208" cy="106" r="12" fill="#ffffff" stroke="#1f5f99" stroke-width="2.5"/>
+    <text x="208" y="111" fill="#1f5f99">P</text>
+    <circle cx="208" cy="146" r="12" fill="#ffffff" stroke="#1f5f99" stroke-width="2.5"/>
+    <text x="208" y="151" fill="#1f5f99">E</text>
+    <circle cx="208" cy="186" r="12" fill="#ffffff" stroke="#1f5f99" stroke-width="2.5"/>
+    <text x="208" y="191" fill="#1f5f99">T</text>
+    <circle cx="246" cy="226" r="12" fill="#1f5f99" stroke="#1f5f99" stroke-width="2.5"/>
+    <text x="246" y="231" fill="#ffffff">M</text>
+  </g>
+  <!-- legend -->
+  <g font-size="11" fill="#22384d">
+    <text x="20" y="358">A  aortic area: 2nd intercostal space, right sternal border</text>
+    <text x="20" y="374">P  pulmonic area: 2nd intercostal space, left sternal border</text>
+    <text x="20" y="390">E  Erb's point: 3rd intercostal space, left sternal border</text>
+    <text x="20" y="406">T  tricuspid area: lower left sternal border</text>
+    <text x="20" y="422">M  mitral area: the apex, 5th space, mid-clavicular line</text>
+  </g>
+  <text x="20" y="24" font-size="11" fill="#22384d">patient's right</text>
+  <text x="340" y="24" font-size="11" fill="#22384d" text-anchor="end">patient's left</text>
+</svg>

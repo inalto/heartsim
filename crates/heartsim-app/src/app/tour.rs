@@ -12,6 +12,7 @@
 
 use super::{HeartSimApp, Tab, TwelveLeadLayout};
 use eframe::egui;
+use heartsim_ecg::{ChestPiece, ListeningChoice, ListeningSite};
 use heartsim_sim::Engine as _;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -43,6 +44,8 @@ struct Step {
     /// Dial this frontal QRS axis (the axis trainer's shot).
     axis_deg: Option<f64>,
     extra: Extra,
+    /// Listen at this site with this chest piece (B27 part B); `None` is the overview.
+    listening: Option<ListeningChoice>,
 }
 
 const DEFAULT: Step = Step {
@@ -55,9 +58,10 @@ const DEFAULT: Step = Step {
     layout: TwelveLeadLayout::Stacked,
     axis_deg: None,
     extra: Extra::None,
+    listening: None,
 };
 
-const STEPS: [Step; 17] = [
+const STEPS: [Step; 21] = [
     Step {
         file: "simulator-sinus.png",
         ..DEFAULT
@@ -177,6 +181,43 @@ const STEPS: [Step; 17] = [
         scenario: EP_TOUR_PROCEDURE,
         run_s: 7.0,
         after_qrs_ms: 0.0,
+        ..DEFAULT
+    },
+    // brief B27: a systolic and a diastolic murmur in the heart-sound lane (`sounds` in
+    // HEARTSIM_SCREENSHOT_OPEN shows it)
+    Step {
+        file: "simulator-aortic-stenosis.png",
+        scenario: "aortic_stenosis_severe",
+        after_qrs_ms: 60.0,
+        ..DEFAULT
+    },
+    Step {
+        file: "simulator-mitral-stenosis.png",
+        scenario: "mitral_stenosis_sinus",
+        after_qrs_ms: 60.0,
+        ..DEFAULT
+    },
+    // brief B27 part B: a site and a chest piece named in the lane's title (with `display` in
+    // HEARTSIM_SCREENSHOT_OPEN, the site control and the chest markers), the mitral ring flashing
+    // with M1 and the stenotic aortic valve glowing through its murmur
+    Step {
+        file: "simulator-mitral-stenosis-apex-bell.png",
+        scenario: "mitral_stenosis_sinus",
+        after_qrs_ms: 60.0,
+        listening: Some(ListeningChoice {
+            site: ListeningSite::Mitral,
+            chest: ChestPiece::Bell,
+        }),
+        ..DEFAULT
+    },
+    Step {
+        file: "simulator-aortic-stenosis-aortic-area.png",
+        scenario: "aortic_stenosis_severe",
+        after_qrs_ms: 220.0,
+        listening: Some(ListeningChoice {
+            site: ListeningSite::Aortic,
+            chest: ChestPiece::Diaphragm,
+        }),
         ..DEFAULT
     },
 ];
@@ -306,6 +347,7 @@ impl HeartSimApp {
                 if tour.sounds {
                     self.ecg.show_heart_sounds = true;
                 }
+                self.ecg.listening = step.listening.unwrap_or_default();
                 self.vector.arrow = step.vector;
                 self.vector.show_loop = step.vector;
                 // the EP lab makes the heart see-through itself, for its catheters

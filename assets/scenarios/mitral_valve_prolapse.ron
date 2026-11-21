@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "mitral_valve_prolapse",
+    title: "Mitral valve prolapse (mid-systolic click, late murmur)",
+    description: "Sinus rhythm at 72 bpm with a prolapsing mitral leaflet: a crisp click in mid-systole followed by a short murmur up to S2.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A floppy mitral leaflet billows back into the left atrium part-way through systole. The sudden tensing of the chordae gives a crisp mid-systolic click; if the valve then leaks, a late systolic murmur follows from the click to A2.\nOn the lane: S1, a sharp spike labelled C in mid-systole, then a band of noise up to S2.\nIn patients the click moves with the size of the ventricle (earlier on standing or with Valsalva, later on squatting); manoeuvres are not modelled here.\nDifferential: ejection click (much closer to S1), split S1, mitral regurgitation, a late S2 split.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["mitral_regurgitation", "aortic_stenosis_mild", "innocent_murmur"],
+    references: [
+        "MSD Manual Professional Version: Mitral valve prolapse, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 2: clicks, opening snap and more. Indian J Cardiovasc Dis Women (ijcdw.org).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([MidSystolicClick]),
+        murmurs: Some([LateSystolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(MitralValveProlapse, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+    ),
+)

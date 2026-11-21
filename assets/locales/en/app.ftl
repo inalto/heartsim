@@ -89,7 +89,7 @@ settings-title = Settings
 settings-language = Language
 settings-language-system = System default
 settings-high-contrast = High-contrast theme
-settings-reduced-motion = Reduced motion (no automatic rotation or shock flash)
+settings-reduced-motion = Reduced motion (no automatic rotation, shock flash or valve flashes)
 settings-torso-opacity = Torso picture in the axis panel
 settings-torso-opacity-hint = Opacity of the frontal torso behind the limb leads; 0 % shows the outline drawing instead.
 settings-beep = Monitor beep (QRS-synchronous, off by default)
@@ -307,6 +307,7 @@ scenario-rhythm = Rhythm:
 scenario-restart = Restart
 scenario-restart-hint = Reload the scenario from t = 0.
 scenario-about = About this rhythm
+scenario-group-sounds = Heart sounds and murmurs
 rq-next = Next question
 rq-question = What is the rhythm?
 rq-answer = Answer:

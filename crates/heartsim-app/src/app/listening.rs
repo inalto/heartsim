@@ -87,6 +87,36 @@ impl HeartSimApp {
         self.ecg.slice_playing = self.sound_player.slice_playing();
     }
 
+    /// The listening site and chest piece (B27 part B): the Display popup's choice becomes the
+    /// setting and what both synthesisers hear, so the lane, its title and the sound agree. Then the
+    /// valve highlights of the 3-D heart, from the same schedule at the time the strip and the sound
+    /// are at (the engine's minus the display delay and the scrub); none with reduced motion.
+    pub(super) fn listening_frame(&mut self) {
+        let choice = self.ecg.listening;
+        self.settings.listening_site = choice.site;
+        self.settings.chest_piece = choice.chest;
+        self.ecg.chest_image_opacity = self.settings.torso_image_opacity;
+        self.sounds.set_listening(choice);
+        let glow = match self.sounds.newest_ms() {
+            Some(now) if !self.settings.reduced_motion && self.heart_sounds_live() => self
+                .sounds
+                .valve_glow_at(crate::heart_sounds::valve_display_time_ms(
+                    now,
+                    self.ecg.view_offset_ms(),
+                )),
+            _ => [0.0; 4],
+        };
+        if let Some(h) = &mut self.heart {
+            h.set_valve_glow(glow);
+        }
+    }
+
+    /// The listening site and chest piece now in effect (tests, the web build).
+    #[must_use]
+    pub fn listening(&self) -> heartsim_ecg::ListeningChoice {
+        self.sounds.listening()
+    }
+
     /// How far behind the engine the 3-D view is drawn, ms: the scrub, plus the heart-sound display
     /// delay where the colour-map history is recorded (the Tier-0 simulator; the EP lab and the
     /// re-entry presets keep their 3-D heart live).

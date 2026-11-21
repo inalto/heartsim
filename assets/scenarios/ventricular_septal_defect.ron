@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "ventricular_septal_defect",
+    title: "Ventricular septal defect (harsh holosystolic murmur)",
+    description: "Sinus rhythm at 90 bpm with a small ventricular septal defect: a loud, high-pitched plateau murmur from S1 to S2 at the lower left sternal border.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Blood shunts from the high-pressure left ventricle to the right through the defect for the whole of systole, so the murmur is holosystolic; a small, restrictive defect is often the loudest (with a thrill), louder at the lower left sternal border than at the apex.\nOn the lane: a dense band of high-frequency noise from S1 up to S2.\nLarge defects with pulmonary hypertension have a softer murmur, an apical diastolic flow rumble and a loud P2; this preset shows a small defect.\nDifferential: mitral regurgitation, tricuspid regurgitation, aortic stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["mitral_regurgitation", "tricuspid_regurgitation", "innocent_murmur"],
+    references: [
+        "MSD Manual Professional Version: Ventricular septal defect, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Alpert. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 26 (NCBI Bookshelf NBK345).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([]),
+        murmurs: Some([Holosystolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(VentricularSeptalDefect, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 90.0),
+    ),
+)

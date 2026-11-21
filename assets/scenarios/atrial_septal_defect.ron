@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "atrial_septal_defect",
+    title: "Atrial septal defect (fixed split S2)",
+    description: "Sinus rhythm at 80 bpm with an atrial septal defect: S2 is widely split and the split does not change with breathing; a soft flow murmur at the upper left sternal border.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("A left-to-right shunt at atrial level keeps the right ventricle volume-loaded and couples the two atria, so P2 is late in every beat and respiration no longer moves it: a wide, fixed split of S2 (it changes by less than about 20 ms). The extra flow across the normal pulmonary valve gives a soft mid-systolic ejection murmur.\nOn the lane: A2 and P2 always labelled apart by the same distance, in inspiration and in expiration. Compare with the normal preset, whose split opens on inspiration and closes on expiration.\nIn patients the ECG often shows an rSR' pattern in V1 and right axis deviation; this preset keeps a plain sinus ECG.\nDifferential: right bundle branch block (wide split that still moves), pulmonary stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["pulmonary_stenosis", "rbbb", "innocent_murmur"],
+    references: [
+        "MSD Manual Professional Version: Atrial septal defect, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Felner JM. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 23, the second heart sound (NCBI Bookshelf NBK341).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([]),
+        murmurs: Some([MidSystolic]),
+        s2_split: Some(Fixed),
+    )),
+    auscultation: (fixed_split: true, lesions: [(AtrialSeptalDefect, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+    ),
+)

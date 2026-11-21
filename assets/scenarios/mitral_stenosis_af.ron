@@ -1,0 +1,35 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "mitral_stenosis_af",
+    title: "Mitral stenosis in atrial fibrillation (no presystolic accent)",
+    description: "Atrial fibrillation at about 90 bpm with a severely narrowed mitral valve: a loud S1, an early opening snap and a rumble through diastole that no longer swells before S1.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Long-standing mitral stenosis enlarges the left atrium and often leads to atrial fibrillation. Without an atrial contraction there is no presystolic accentuation and no S4; the rumble simply runs on as long as diastole lasts, so it is longer in the long cycles and short in the short ones.\nHere the stenosis is severe: the snap comes soon after A2 and the rumble lasts until the next S1.\nOn the lane, compare the last part of each diastole with the sinus-rhythm preset.\nDifferential: mitral stenosis in sinus rhythm, an S3 gallop in atrial fibrillation.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["mitral_stenosis_sinus", "atrial_fibrillation", "heart_failure_s3"],
+    references: [
+        "MSD Manual Professional Version: Mitral stenosis, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 2: clicks, opening snap and more. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Crawley. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 27 (NCBI Bookshelf NBK346).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (70.0, 130.0),
+        pr_ms: None,
+        qrs_ms: Some((60.0, 120.0)),
+        axis_deg: None,
+        rhythm: Some(AtrialFibrillation),
+        extra_sounds: Some([OpeningSnap]),
+        murmurs: Some([MidDiastolic]),
+    )),
+    auscultation: (lesions: [(MitralStenosis, Severe)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+        av: AvParams(concealment_fraction: 0.6, fast: AvPathway(min_ms: 80.0, recovery_amplitude_ms: 100.0, recovery_tau_ms: 100.0, erp_ms: 240.0, blocked: false)),
+        atrial_driver: Some(AtrialDriver(kind: Fibrillation, cycle_ms: 170.0, cycle_jitter: 0.4)),
+    ),
+)

@@ -176,13 +176,38 @@ fn torso_texture(ctx: &Context) -> Option<TextureHandle> {
     decoded
 }
 
-/// Draws the figure in a box of `size`. The small disc is the heart's electrical centre, the
-/// centroid of Einthoven's triangle. `image_opacity` (`0.0..=1.0`) is that of the torso picture
-/// behind the figure; at `0.0` the sampled outline of the procedural torso is drawn in its place.
-pub fn torso_schematic(ui: &mut Ui, size: Vec2, image_opacity: f32) -> Response {
+/// How a torso drawing maps heart-frame millimetres `[x, y]` onto its box: the millimetre point
+/// drawn at the box centre and the points per millimetre (frontal view, +x to the viewer's right as
+/// the patient's left, +y up).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TorsoFrame {
+    centre: Pos2,
+    origin_mm: [f32; 2],
+    scale: f32,
+}
+
+impl TorsoFrame {
+    /// The screen point of a heart-frame point.
+    pub(crate) fn to_screen(self, x_mm: f32, y_mm: f32) -> Pos2 {
+        Pos2::new(
+            self.centre.x + (x_mm - self.origin_mm[0]) * self.scale,
+            self.centre.y - (y_mm - self.origin_mm[1]) * self.scale,
+        )
+    }
+}
+
+/// Paint the torso into `rect`: the frontal picture at `image_opacity` (`0.0..=1.0`), or at zero
+/// opacity the sampled outline of the procedural torso. `view_mm` is the heart-frame region
+/// `(centre, half extents)` to fit into the box; `None` fits the whole picture (or nine tenths of
+/// the torso's height without it), as the Einthoven figure does. Returns the mapping used.
+pub(crate) fn paint_torso(
+    ui: &Ui,
+    painter: &Painter,
+    rect: Rect,
+    image_opacity: f32,
+    view_mm: Option<([f32; 2], [f32; 2])>,
+) -> TorsoFrame {
     let p = Palette::of(ui);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
-    let painter = ui.painter_at(rect);
     let s = silhouette();
     let c = TORSO_CENTRE_MM;
     let h = TORSO_HALF_EXTENTS_MM;
@@ -198,23 +223,26 @@ pub fn torso_schematic(ui: &mut Ui, size: Vec2, image_opacity: f32) -> Response 
     });
     // the millimetre point placed at the centre of the box and the points per millimetre: the
     // whole picture fits the box; without it the torso fills nine tenths of the box's height
-    let (origin_mm, scale) = match aspect {
-        Some(aspect) => (
+    let (origin_mm, scale) = match (view_mm, aspect) {
+        (Some((centre, half)), _) => (
+            centre,
+            (rect.height() / (2.0 * half[1])).min(rect.width() / (2.0 * half[0])),
+        ),
+        (None, Some(aspect)) => (
             image_mm(0.5, 0.5, aspect),
             (rect.height() / IMAGE_HEIGHT_MM).min(rect.width() / (IMAGE_HEIGHT_MM * aspect)) * 0.98,
         ),
-        None => (
+        (None, None) => (
             [c.x, c.y],
             (rect.height() * 0.9 / (2.0 * h.y)).min(rect.width() * 0.55 / (2.0 * h.x)),
         ),
     };
-    let centre = rect.center();
-    let to_screen = |x_mm: f32, y_mm: f32| {
-        Pos2::new(
-            centre.x + (x_mm - origin_mm[0]) * scale,
-            centre.y - (y_mm - origin_mm[1]) * scale,
-        )
+    let frame = TorsoFrame {
+        centre: rect.center(),
+        origin_mm,
+        scale,
     };
+    let to_screen = |x_mm: f32, y_mm: f32| frame.to_screen(x_mm, y_mm);
 
     // the torso
     if let (Some(tex), Some(aspect)) = (&texture, aspect) {
@@ -234,6 +262,18 @@ pub fn torso_schematic(ui: &mut Ui, size: Vec2, image_opacity: f32) -> Response 
             Stroke::new(1.0, p.card_stroke),
         ));
     }
+    frame
+}
+
+/// Draws the figure in a box of `size`. The small disc is the heart's electrical centre, the
+/// centroid of Einthoven's triangle. `image_opacity` (`0.0..=1.0`) is that of the torso picture
+/// behind the figure; at `0.0` the sampled outline of the procedural torso is drawn in its place.
+pub fn torso_schematic(ui: &mut Ui, size: Vec2, image_opacity: f32) -> Response {
+    let p = Palette::of(ui);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let painter = ui.painter_at(rect);
+    let frame = paint_torso(ui, &painter, rect, image_opacity, None);
+    let to_screen = |x_mm: f32, y_mm: f32| frame.to_screen(x_mm, y_mm);
 
     // Einthoven's triangle: leads I, II and III are its sides, the augmented leads run from its
     // centroid to the electrodes

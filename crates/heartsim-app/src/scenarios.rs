@@ -106,6 +106,25 @@ impl ScenarioLibrary {
     pub fn index_of(&self, id: &str) -> Option<usize> {
         self.entries.iter().position(|e| e.scenario.id == id)
     }
+
+    /// Whether entry `i` may be drawn by the ECG quizzes and drills (the Rhythm Quiz and the
+    /// Interval Drill): every scenario except the auscultation cases of brief B27
+    /// ([`heartsim_core::Scenario::is_auscultation_case`]), whose ordinary sinus strip would be a
+    /// wrong question. The one rule every pool uses.
+    #[must_use]
+    pub fn in_ecg_quiz_pool(&self, i: usize) -> bool {
+        self.entries
+            .get(i)
+            .is_some_and(|e| !e.scenario.is_auscultation_case())
+    }
+
+    /// The indices the ECG quizzes and drills draw from, in library order.
+    #[must_use]
+    pub fn ecg_quiz_pool(&self) -> Vec<usize> {
+        (0..self.entries.len())
+            .filter(|&i| self.in_ecg_quiz_pool(i))
+            .collect()
+    }
 }
 
 /// The timeline of the running scenario: actions are handed out once, in time order, when the
@@ -140,6 +159,19 @@ impl Timeline {
     }
 }
 
+/// The picker's groups in display order: the rhythms (no heading), then the auscultation cases
+/// under their own heading when there are any. Each group keeps the library's title order.
+#[must_use]
+pub fn picker_groups(library: &ScenarioLibrary) -> Vec<(Option<String>, Vec<usize>)> {
+    let (rhythms, sounds): (Vec<usize>, Vec<usize>) =
+        (0..library.len()).partition(|&i| library.in_ecg_quiz_pool(i));
+    let mut out = vec![(None, rhythms)];
+    if !sounds.is_empty() {
+        out.push((Some(t!("scenario-group-sounds")), sounds));
+    }
+    out
+}
+
 /// Scenario combo box. Returns the index the user picked (also when re-picking the current
 /// one, which restarts it).
 pub fn scenario_picker(
@@ -156,13 +188,20 @@ pub fn scenario_picker(
         .selected_text(title)
         .width(230.0)
         .show_ui(ui, |ui| {
-            for (i, s) in library.entries.iter().enumerate() {
-                if ui
-                    .selectable_label(current == Some(i), &s.scenario.title)
-                    .on_hover_text(&s.scenario.description)
-                    .clicked()
-                {
-                    picked = Some(i);
+            for (heading, group) in picker_groups(library) {
+                if let Some(heading) = heading {
+                    ui.separator();
+                    ui.weak(heading);
+                }
+                for i in group {
+                    let s = &library.entries[i];
+                    if ui
+                        .selectable_label(current == Some(i), &s.scenario.title)
+                        .on_hover_text(&s.scenario.description)
+                        .clicked()
+                    {
+                        picked = Some(i);
+                    }
                 }
             }
         });
@@ -221,6 +260,39 @@ mod tests {
         );
         assert!(lib.index_of("sinus_normal").is_some());
         assert!(lib.index_of("nope").is_none());
+    }
+
+    #[test]
+    fn auscultation_cases_are_kept_out_of_the_ecg_pool_and_grouped_in_the_picker() {
+        let lib = library();
+        let pool = lib.ecg_quiz_pool();
+        let cases: Vec<&str> = lib
+            .entries
+            .iter()
+            .filter(|e| e.scenario.is_auscultation_case())
+            .map(|e| e.scenario.id.as_str())
+            .collect();
+        assert!(cases.len() >= 15, "{cases:?}");
+        for id in [
+            "aortic_stenosis_severe",
+            "mitral_stenosis_af",
+            "heart_failure_s3",
+            "innocent_murmur",
+        ] {
+            let i = lib.index_of(id).unwrap();
+            assert!(!lib.in_ecg_quiz_pool(i) && !pool.contains(&i), "{id}");
+        }
+        // the ECG is the lesson: sounds ride along, the scenario stays in the pool
+        for id in ["pericarditis", "stemi_anterior", "sinus_normal"] {
+            assert!(pool.contains(&lib.index_of(id).unwrap()), "{id}");
+        }
+        assert_eq!(pool.len() + cases.len(), lib.len());
+        assert!(!lib.in_ecg_quiz_pool(lib.len()), "out of range");
+        let groups = picker_groups(&lib);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].1, pool);
+        assert!(groups[0].0.is_none() && groups[1].0.is_some());
+        assert_eq!(groups[1].1.len(), cases.len());
     }
 
     #[test]

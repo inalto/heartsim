@@ -1,0 +1,33 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "summation_gallop",
+    title: "Summation gallop (S3 and S4 at a fast rate)",
+    description: "Sinus tachycardia at 140 bpm in a failing ventricle with both an S3 and an S4: diastole is so short that the two gallop sounds fall together into one loud mid-diastolic sound.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("With both gallops present and a fast rate, diastole shortens and the P wave moves into early diastole, until the early-diastolic S3 and the atrial S4 overlap; their sum can be louder than either sound alone. Slowing the heart separates them again.\nOn the lane: in each short diastole the S3 and S4 labels meet (shown as S3/S4 together) over one low wave. Play it at a slow speed: the two sounds are still two events in the model, scheduled from A2 and from the P wave.\nDifferential: a mid-diastolic rumble, a single S3 or S4 at a slower rate.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["heart_failure_s3", "lvh_s4", "sinus_tachy_130"],
+    references: [
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 1. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Williams. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 25 (NCBI Bookshelf NBK344).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (125.0, 155.0),
+        pr_ms: None,
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([S3, S4]),
+        murmurs: Some([]),
+    )),
+    auscultation: (s3: true, s4: true),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 140.0),
+        // sympathetic drive shortens AV conduction in sinus tachycardia (designed: PR about 130 ms)
+        av: AvParams(fast: AvPathway(min_ms: 55.0, recovery_amplitude_ms: 60.0, recovery_tau_ms: 80.0, erp_ms: 100.0, blocked: false)),
+    ),
+)

@@ -4,6 +4,37 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Heart sounds, phase 4 part A (gallops and murmurs, brief B27): an optional `auscultation` section in the scenario files
+  (`s3`, `s4`, `rub`, `fixed_split`, `lesions: [(kind, severity)]`; no format bump, files without it sound exactly as
+  before). New sounds in the phonocardiogram, scheduled from the same engine events as the ECG: S3, S4 (from the P waves:
+  never in atrial fibrillation, in complete block it follows the P waves), the summation gallop, aortic and pulmonary
+  ejection clicks, the mid-systolic click of prolapse, the opening snap, a three-part pericardial rub, and murmurs for aortic
+  and pulmonary stenosis, aortic, mitral and tricuspid regurgitation, mitral stenosis (with presystolic accentuation in sinus
+  rhythm only), mitral valve prolapse, ventricular and atrial septal defect (fixed split) and the innocent murmur. Ejection
+  murmurs grow after a long cycle, mitral regurgitation does not; tricuspid regurgitation grows on inspiration. The lane labels
+  `S3`, `S4`, `OS`, `EC` and `C`; murmurs show as their envelope. Murmurs are seeded sums of sinusoids, so the sound stays
+  deterministic and random-access, and keeps its pitch in slow motion. All spectral values are designed: the sounds are a
+  model, not recordings.
+- 15 heart-sound scenarios with an ordinary ECG (S3 in heart failure, S4 in hypertrophy, summation gallop, aortic stenosis
+  mild and severe, aortic and mitral regurgitation, mitral stenosis in sinus rhythm and in AF, prolapse, tricuspid
+  regurgitation, pulmonary stenosis, VSD, ASD, innocent murmur), under their own heading in the rhythm list and never drawn by
+  the Rhythm Quiz or the Interval Drill. Acute pericarditis now plays a friction rub and the anterior STEMI an S4.
+  `ExpectedFindings` gains `extra_sounds`, `murmurs` and `s2_split`.
+- Heart sounds, phase 4 part B (listening sites, brief B27): a *Listening site* control in the *Display* popup with the
+  overview (the default, today's mix bit for bit) and the aortic, pulmonic, Erb's point, tricuspid and mitral (apex) areas,
+  also as clickable markers on a chest drawing placed from the electrode editor's intercostal landmarks; *bell* or
+  *diaphragm* at a site. A site scales each heart sound and murmur by a gain from `assets/auscultation_sites.ron` (designed,
+  following only the textbook statements: S1 loudest at the apex, A2 dominant at the aortic area, P2 at the pulmonic area,
+  each murmur loudest over its valve, aortic regurgitation at Erb's point); the chest pieces weight every murmur partial and
+  the instantaneous frequency of every discrete sound (no filter state: still deterministic and random-access). The bell
+  brings out S3, S4 and the mitral rumble, the diaphragm suppresses them. The lane, its title (*Heart sounds (model) · Apex
+  · Bell*) and the sound always follow the site; the choice is remembered with the settings.
+- Valve highlights: with the *Valve planes* layer visible, each valve disc of the 3-D heart flashes at its closure (M1, T1,
+  A2, P2) and a stenotic or regurgitant valve glows for the length of its murmur, from the same schedule as the sound and
+  with the same display delay. *Reduced motion* turns them off.
+- User guide: *Extra heart sounds and murmurs*, with the listening sites, the bell and the diaphragm and a chest figure.
+
 ## [0.18.0] — 2026-11-21
 Seventeenth tagged release: the heart sounds also play in the browser build, after a click of the learner.
 Not yet listened to in a real browser; latency figures are unmeasured.

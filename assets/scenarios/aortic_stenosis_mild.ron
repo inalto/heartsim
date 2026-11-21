@@ -1,0 +1,33 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "aortic_stenosis_mild",
+    title: "Aortic stenosis, mild (ejection murmur with click)",
+    description: "Sinus rhythm at 72 bpm with a mildly narrowed, still mobile aortic valve: an ejection click after S1, then a short crescendo-decrescendo murmur that peaks early in systole; S2 is normal.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Blood forced through a narrowed aortic valve gives a harsh crescendo-decrescendo (diamond) murmur that starts after a short silent gap following S1, when ejection begins, and ends before A2. A mobile, often bicuspid valve also gives an early ejection click about 120 to 140 ms after the QRS onset.\nIn mild stenosis the murmur peaks early and A2 is preserved, so S2 still splits normally on inspiration: a normally split S2 argues against severe stenosis.\nThe murmur grows louder after a long pause (the beat after an extrasystole, long cycles in atrial fibrillation), unlike mitral regurgitation.\nDifferential: innocent flow murmur, mitral regurgitation, pulmonary stenosis, severe aortic stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["aortic_stenosis_severe", "innocent_murmur", "mitral_regurgitation"],
+    references: [
+        "MSD Manual Professional Version: Aortic stenosis, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 2: clicks, opening snap and more. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Alpert. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 26 (NCBI Bookshelf NBK345).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([EjectionClick]),
+        murmurs: Some([MidSystolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(AorticStenosis, Mild)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 72.0),
+    ),
+)

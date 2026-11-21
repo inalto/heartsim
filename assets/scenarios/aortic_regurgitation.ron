@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "aortic_regurgitation",
+    title: "Aortic regurgitation (early diastolic decrescendo)",
+    description: "Sinus rhythm at 70 bpm with a leaking aortic valve: a soft, high-pitched blowing murmur starts right after A2 and fades through diastole.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Blood flowing back from the aorta into the left ventricle once the aortic valve has closed gives a high-pitched, blowing decrescendo murmur that begins soon after A2. It is easy to miss: listen with the diaphragm at the left sternal border, the patient sitting up, leaning forward, breath held in expiration.\nOn the lane: a thin band of noise that starts at S2 and tapers away before the next S1.\nThe model does not show the wide pulse pressure, the collapsing pulse or the Austin Flint rumble.\nDifferential: pulmonary regurgitation, mitral stenosis (a low rumble after an opening snap).\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["mitral_stenosis_sinus", "aortic_stenosis_mild", "ventricular_septal_defect"],
+    references: [
+        "MSD Manual Professional Version: Aortic regurgitation, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Crawley. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 27 (NCBI Bookshelf NBK346).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([]),
+        murmurs: Some([EarlyDiastolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(AorticRegurgitation, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 70.0),
+    ),
+)

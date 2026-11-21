@@ -1,0 +1,103 @@
+// Listening sites and chest pieces of the heart-sound model (brief B27, part B).
+//
+// EVERY VALUE IN THIS FILE IS DESIGNED. No source gives decibel levels of a heart sound or a murmur
+// at each auscultation area, nor a transfer curve of a stethoscope that a model could copy. The
+// values only put into numbers the qualitative statements of the clinical texts the brief names:
+//
+// * S1 is loudest at the apex (mitral area); T1 at the lower left sternal border;
+// * A2 is dominant at the aortic area (2nd right intercostal space) and heard everywhere;
+// * P2 is heard at the pulmonic area (2nd left intercostal space) and is soft at the apex;
+// * S3, S4, the opening snap and the mitral rumble are apical (left-sided) sounds;
+// * each murmur is loudest over its valve: aortic stenosis at the aortic area, pulmonary
+//   stenosis and the flow murmur of an atrial septal defect at the pulmonic area, mitral
+//   regurgitation, prolapse and the mitral-stenosis rumble at the apex, tricuspid regurgitation
+//   and the ventricular septal defect at the lower left sternal border;
+// * aortic regurgitation is heard best at Erb's point (3rd left intercostal space);
+// * the innocent (Still's) murmur between the lower left sternal border and the apex; the
+//   pericardial rub along the left sternal border.
+//
+// The "overview" choice of the app is not in this file: it is every gain 1 without a chest piece,
+// the signal of brief B24 and part A, bit for bit.
+//
+// `components` are the discrete sounds (pcg::ComponentKind), `murmurs` the murmur classes
+// (auscultation::MurmurClass). A gain multiplies the sound as scheduled. Every site lists every
+// key; the loader refuses a file that does not.
+//
+// `bell` and `diaphragm` are the two chest pieces, as weights by frequency applied to every
+// partial of a murmur and to the instantaneous frequency of every discrete sound (no time-domain
+// filter). With x = f / corner, bell: gain / (1 + x^2), a low emphasis that keeps S3, S4 and the
+// rumble and softens S2, the clicks and the high murmurs; diaphragm: gain * x^2 / (1 + x^2), a
+// high emphasis that suppresses the lowest sounds (S3, S4, the rumble). The magnitudes of a
+// second-order low- and high-pass: designed, not a measured stethoscope response.
+(
+    format_version: 1,
+    sites: {
+        Aortic: (
+            components: {
+                M1: 0.6, T1: 0.4, A2: 1.3, P2: 0.35,
+                S3: 0.3, S4: 0.3, OpeningSnap: 0.5,
+                AorticClick: 1.2, PulmonaryClick: 0.5, MidSystolicClick: 0.5,
+            },
+            murmurs: {
+                AorticStenosis: 1.4, PulmonaryStenosis: 0.6, MitralRegurgitation: 0.4,
+                TricuspidRegurgitation: 0.3, VentricularSeptalDefect: 0.6, ProlapseLateSystolic: 0.4,
+                AorticRegurgitation: 0.9, MitralRumble: 0.15, MitralPresystolic: 0.15,
+                AtrialSeptalFlow: 0.5, InnocentMurmur: 0.6, FrictionRub: 0.7,
+            },
+        ),
+        Pulmonic: (
+            components: {
+                M1: 0.6, T1: 0.5, A2: 1.0, P2: 1.4,
+                S3: 0.3, S4: 0.3, OpeningSnap: 0.5,
+                AorticClick: 0.8, PulmonaryClick: 1.3, MidSystolicClick: 0.5,
+            },
+            murmurs: {
+                AorticStenosis: 0.9, PulmonaryStenosis: 1.4, MitralRegurgitation: 0.4,
+                TricuspidRegurgitation: 0.4, VentricularSeptalDefect: 0.7, ProlapseLateSystolic: 0.4,
+                AorticRegurgitation: 0.8, MitralRumble: 0.15, MitralPresystolic: 0.15,
+                AtrialSeptalFlow: 1.4, InnocentMurmur: 0.8, FrictionRub: 0.8,
+            },
+        ),
+        Erb: (
+            components: {
+                M1: 0.8, T1: 0.7, A2: 1.0, P2: 0.9,
+                S3: 0.5, S4: 0.5, OpeningSnap: 0.9,
+                AorticClick: 0.9, PulmonaryClick: 0.9, MidSystolicClick: 0.8,
+            },
+            murmurs: {
+                AorticStenosis: 1.0, PulmonaryStenosis: 0.9, MitralRegurgitation: 0.6,
+                TricuspidRegurgitation: 0.6, VentricularSeptalDefect: 1.0, ProlapseLateSystolic: 0.6,
+                AorticRegurgitation: 1.4, MitralRumble: 0.3, MitralPresystolic: 0.3,
+                AtrialSeptalFlow: 0.9, InnocentMurmur: 1.0, FrictionRub: 1.3,
+            },
+        ),
+        Tricuspid: (
+            components: {
+                M1: 0.9, T1: 1.3, A2: 0.7, P2: 0.6,
+                S3: 0.7, S4: 0.7, OpeningSnap: 1.0,
+                AorticClick: 0.6, PulmonaryClick: 0.6, MidSystolicClick: 0.8,
+            },
+            murmurs: {
+                AorticStenosis: 0.6, PulmonaryStenosis: 0.6, MitralRegurgitation: 0.6,
+                TricuspidRegurgitation: 1.4, VentricularSeptalDefect: 1.4, ProlapseLateSystolic: 0.6,
+                AorticRegurgitation: 1.0, MitralRumble: 0.4, MitralPresystolic: 0.4,
+                AtrialSeptalFlow: 0.6, InnocentMurmur: 1.2, FrictionRub: 1.1,
+            },
+        ),
+        Mitral: (
+            components: {
+                M1: 1.4, T1: 0.8, A2: 0.6, P2: 0.3,
+                S3: 1.3, S4: 1.3, OpeningSnap: 1.0,
+                AorticClick: 0.9, PulmonaryClick: 0.4, MidSystolicClick: 1.3,
+            },
+            murmurs: {
+                AorticStenosis: 0.7, PulmonaryStenosis: 0.3, MitralRegurgitation: 1.4,
+                TricuspidRegurgitation: 0.5, VentricularSeptalDefect: 0.7, ProlapseLateSystolic: 1.4,
+                AorticRegurgitation: 0.6, MitralRumble: 1.4, MitralPresystolic: 1.4,
+                AtrialSeptalFlow: 0.3, InnocentMurmur: 1.0, FrictionRub: 0.8,
+            },
+        ),
+    },
+    bell: (corner_hz: 80.0, gain: 1.0),
+    diaphragm: (corner_hz: 150.0, gain: 2.0),
+)

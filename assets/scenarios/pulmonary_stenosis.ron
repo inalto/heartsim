@@ -1,0 +1,33 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "pulmonary_stenosis",
+    title: "Pulmonary stenosis (ejection click, late P2)",
+    description: "Sinus rhythm at 80 bpm with a narrowed pulmonary valve: an early ejection click, a crescendo-decrescendo murmur at the upper left sternal border and a wide split S2 with a soft, late P2.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Right-ventricular outflow obstruction gives an ejection murmur like aortic stenosis but on the right side: it starts after an early pulmonary ejection click (about 90 to 110 ms after the QRS onset), and as the stenosis worsens the murmur lengthens and P2 becomes softer and later, so S2 splits widely (but still moves with respiration).\nOn the lane: EC soon after S1, the diamond-shaped murmur, then A2 and P2 labelled apart.\nDifferential: atrial septal defect (fixed split), innocent pulmonary flow murmur, aortic stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["atrial_septal_defect", "aortic_stenosis_mild", "innocent_murmur"],
+    references: [
+        "MSD Manual Professional Version: Pulmonic stenosis, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 2: clicks, opening snap and more. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Felner JM. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 23, the second heart sound (NCBI Bookshelf NBK341).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([EjectionClick]),
+        murmurs: Some([MidSystolic]),
+        s2_split: Some(Wide),
+    )),
+    auscultation: (lesions: [(PulmonaryStenosis, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+    ),
+)

@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "innocent_murmur",
+    title: "Innocent (Still's) murmur",
+    description: "Sinus rhythm at 95 bpm in a healthy child: a short, soft, low-pitched musical murmur in early to mid systole, with a normal S2.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("Still's murmur is the commonest innocent murmur of childhood: short, early to mid systolic, low to medium pitched and musical or vibratory, heard between the lower left sternal border and the apex, with a normal S1 and a normally split S2 and no click.\nOn the lane: a small, narrow band after S1 that is gone well before S2. Compare its length and shape with aortic stenosis and ventricular septal defect.\nThe ECG is the adult template at a child's rate; it is not a paediatric ECG.\nDifferential: aortic stenosis, ventricular septal defect, pulmonary flow murmur.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["aortic_stenosis_mild", "ventricular_septal_defect", "pulmonary_stenosis"],
+    references: [
+        "Penn Medicine, Pediatrics in Practice: Innocent murmurs, med.upenn.edu/pedsinpractice.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Alpert. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 26 (NCBI Bookshelf NBK345).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([]),
+        murmurs: Some([EarlySystolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(InnocentMurmur, Mild)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 95.0),
+    ),
+)

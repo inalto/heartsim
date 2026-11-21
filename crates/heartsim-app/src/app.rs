@@ -295,6 +295,8 @@ impl HeartSimApp {
             ecg: {
                 let mut ecg = EcgView::new();
                 ecg.show_heart_sounds = settings.heart_sounds;
+                ecg.listening = settings.listening();
+                ecg.chest_image_opacity = settings.torso_image_opacity;
                 ecg.play_heart_sounds =
                     crate::heart_sound_player::AUDIO_BUILD.then_some(settings.heart_sound_audio);
                 // (a factory registered later by the embedding crate, B26, sets it each frame)
@@ -999,6 +1001,7 @@ impl eframe::App for HeartSimApp {
         self.heart_sound_frame(f64::from(dt));
         // the Display popup's heart-sound switch is remembered with the preferences
         self.settings.heart_sounds = self.ecg.show_heart_sounds;
+        self.listening_frame();
         self.ecg.update(&self.rings);
         // the editor counts live samples; a recording under review must not reach it
         #[cfg(feature = "export")]

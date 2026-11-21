@@ -1,0 +1,33 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "mitral_stenosis_sinus",
+    title: "Mitral stenosis in sinus rhythm (snap, rumble, presystolic accent)",
+    description: "Sinus rhythm at 75 bpm with a narrowed mitral valve: a loud S1, an opening snap after S2, then a low diastolic rumble that swells again just before S1.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("In mitral stenosis the left atrial pressure is high: the valve snaps open early after A2 (the opening snap, high pitched and brief), blood rumbles through the narrow orifice in mid-diastole, and the atrial contraction pushes a last burst through just before S1 (presystolic accentuation). S1 is loud because the leaflets are still wide open when the ventricle contracts.\nThe tighter the stenosis, the earlier the snap (an A2 to snap interval under about 70 ms suggests severe stenosis) and the longer the rumble. Listen with the bell at the apex in the left lateral position.\nThe presystolic part needs the atrial contraction: compare with the atrial fibrillation preset.\nThe ECG here is plain sinus rhythm; the model does not draw left atrial enlargement.\nDifferential: S3 (lower, later, no rumble), split S2, aortic regurgitation (Austin Flint), tricuspid stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["mitral_stenosis_af", "heart_failure_s3", "aortic_regurgitation"],
+    references: [
+        "MSD Manual Professional Version: Mitral stenosis, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Nemani L, Pechetty S. Additional heart sounds, part 2: clicks, opening snap and more. Indian J Cardiovasc Dis Women (ijcdw.org).",
+        "Crawley. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 27 (NCBI Bookshelf NBK346).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([OpeningSnap]),
+        murmurs: Some([MidDiastolic, Presystolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(MitralStenosis, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 75.0),
+    ),
+)

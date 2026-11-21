@@ -8,7 +8,7 @@ Scenario(
     tier: Template,
     anatomy: "default",
     seed: 42,
-    notes: Some("An occluded proximal left anterior descending artery (LAD) injures the anterior wall, septum and apex: the injury current raises the ST segment in the chest leads V1 to V4, spreading to V5-V6, I and aVL when the occlusion is proximal to the first diagonal branch. Reciprocal ST depression in the inferior leads (here III and aVF) is a mirror image and suggests a proximal occlusion.\nSTEMI criteria (Fourth Universal Definition): new ST elevation at the J point in two contiguous leads of at least 0.1 mV, except V2-V3, where at least 0.2 mV in men aged 40 or over, 0.25 mV in men under 40 and 0.15 mV in women are required. The diagnosis is made on the ECG and the history; reperfusion should not wait for the troponin result.\nThis is the acute stage: the ST vector is a shift of the whole ST segment, and hyperacute T waves are not drawn. Q waves and T inversion come later: see mi_anterior_evolved and mi_evolution_stages.\nDifferential: early repolarisation (benign, concave, no reciprocal change), pericarditis (diffuse, no territory), left ventricular aneurysm, LBBB, Takotsubo cardiomyopathy."),
+    notes: Some("An occluded proximal left anterior descending artery (LAD) injures the anterior wall, septum and apex: the injury current raises the ST segment in the chest leads V1 to V4, spreading to V5-V6, I and aVL when the occlusion is proximal to the first diagonal branch. Reciprocal ST depression in the inferior leads (here III and aVF) is a mirror image and suggests a proximal occlusion.\nSTEMI criteria (Fourth Universal Definition): new ST elevation at the J point in two contiguous leads of at least 0.1 mV, except V2-V3, where at least 0.2 mV in men aged 40 or over, 0.25 mV in men under 40 and 0.15 mV in women are required. The diagnosis is made on the ECG and the history; reperfusion should not wait for the troponin result.\nThis is the acute stage: the ST vector is a shift of the whole ST segment, and hyperacute T waves are not drawn. Q waves and T inversion come later: see mi_anterior_evolved and mi_evolution_stages.\nDifferential: early repolarisation (benign, concave, no reciprocal change), pericarditis (diffuse, no territory), left ventricular aneurysm, LBBB, Takotsubo cardiomyopathy.\nWith the heart sounds on, this preset adds a fourth heart sound just before S1: the ischaemic ventricle relaxes poorly and the atrial contraction meets a stiff chamber (an S4 is common in acute ischaemia). The sound is a synthesised model, not a recording."),
     confused_with: ["stemi_lateral", "pericarditis", "lbbb", "mi_anterior_evolved", "early repolarisation", "Takotsubo cardiomyopathy"],
     references: [
         "Thygesen K et al. Fourth universal definition of myocardial infarction (2018). Circulation 2018;138:e618-e651.",
@@ -21,7 +21,9 @@ Scenario(
         pr_ms: Some((120.0, 200.0)),
         qrs_ms: None,
         axis_deg: None,
+        extra_sounds: Some([S4]),
     )),
+    auscultation: (s4: true, ecg_diagnostic: true),
     timeline: [
         TimedAction(at: 0.0, action: Stenosis(branch: "LAD", severity: 0.9)),
     ],

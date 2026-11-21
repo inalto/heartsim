@@ -30,7 +30,11 @@ impl Sim {
 
     fn with(params: TimingParams) -> Self {
         let mut sounds = HeartSounds::new(60.0);
-        sounds.reset(7, params.sinus.respiration_rate_bpm);
+        sounds.reset(
+            7,
+            params.sinus.respiration_rate_bpm,
+            &heartsim_core::Auscultation::default(),
+        );
         Self {
             engine: TimingEngine::new(params),
             sounds,
@@ -225,7 +229,8 @@ fn pause_clears_and_pushes_nothing_resume_and_reload_re_anchor() {
     let clears = fake.log().clears;
     let mut sim2 = Sim::new();
     sim2.sounds = sim.sounds; // the app keeps its ring and resets it
-    sim2.sounds.reset(3, 12.0);
+    sim2.sounds
+        .reset(3, 12.0, &heartsim_core::Auscultation::default());
     sim2.step(16);
     let inp = input(&sim2, 16.0);
     player.frame(&mut sim2.sounds, &inp);
@@ -551,4 +556,42 @@ fn the_loudest_s1_of_complete_av_block_stays_within_full_scale() {
         // the headroom keeps even the loudest beat below the knee: the limiter changes nothing
         assert!(HEADROOM_GAIN * loudest <= LIMITER_KNEE, "{stem}: {loudest}");
     }
+}
+
+/// Brief B27: with the loudest lesion the B25 limiter is not driven beyond its knee on a normal
+/// beat (every beat of these presets is a normal one), and the output stays within full scale.
+#[test]
+fn the_new_sounds_and_murmurs_stay_below_the_limiter_knee() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios");
+    let mut checked = 0;
+    let mut loudest = (String::new(), 0.0f32);
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "ron") {
+            continue;
+        }
+        let s = Tier0Scenario::from_ron(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        if s.scenario.auscultation.is_empty() {
+            continue;
+        }
+        let rec = s.record(20.0).unwrap();
+        let peak = rec.pcg.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        let out = rec
+            .pcg
+            .iter()
+            .map(|v| soft_limit(HEADROOM_GAIN * *v).abs())
+            .fold(0.0f32, f32::max);
+        assert!(out <= 1.0, "{}: {out}", s.scenario.id);
+        assert!(
+            HEADROOM_GAIN * peak <= LIMITER_KNEE,
+            "{}: peak {peak} drives the limiter",
+            s.scenario.id
+        );
+        if peak > loudest.1 {
+            loudest = (s.scenario.id.clone(), peak);
+        }
+        checked += 1;
+    }
+    eprintln!("loudest: {loudest:?}");
+    assert!(checked >= 17, "{checked} scenarios with sounds");
 }

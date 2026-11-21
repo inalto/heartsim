@@ -35,7 +35,9 @@ from any other simulator.
 * **69 rhythm scenarios** as data files (`assets/scenarios/*.ron`): sinus variants, every grade of AV block, bundle-branch and
   fascicular blocks, ectopic beats and runs, atrial and junctional tachycardias, WPW and AVRT, flutter, AF and pre-excited AF,
   VT, torsades, VF, pacemaker rhythms and faults, ischaemia and infarction in every territory at every stage, pericarditis.
-  Each one carries an explanation, the rhythms it is confused with and references.
+  Each one carries an explanation, the rhythms it is confused with and references. **15 heart-sound scenarios** add gallops,
+  clicks, the opening snap and the classic murmurs (aortic and mitral stenosis and regurgitation, prolapse, tricuspid
+  regurgitation, pulmonary stenosis, septal defects, an innocent murmur) to an ordinary ECG.
 * **Physiology controls.** Sinus rate, AV block, Mobitz II ratio, axis shift, QRS width, speed; a pacemaker window (AAI, VVI,
   DDD, biventricular, capture and sensing faults); an ischaemia panel by coronary territory; a drug table; a defibrillator.
 * **Re-entry.** A persistent-AF preset on the detailed engine: shock it, ablate round the pulmonary veins, give drugs, and hand

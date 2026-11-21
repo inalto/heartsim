@@ -43,6 +43,95 @@ const WAVEFRONT_MV: f32 = -30.0;
 const DISPLAY_SMOOTHING_PASSES: usize = 4;
 /// Auto-rotate speed, radians per second of wall-clock time (one turn in ~20 s).
 const AUTO_ROTATE_RAD_S: f32 = 0.3;
+/// Colour (linear RGB) a valve ring takes at full highlight (B27 part B): a bright cyan that no
+/// tissue, vessel or colour map of the scene uses near the valve plane. Designed.
+const VALVE_HIGHLIGHT: [f32; 3] = [0.1, 0.75, 1.0];
+
+/// The four valve discs of a `Valve` mesh, each with its valve: the mesh's connected components
+/// (four, or `None`), told apart by their centres in the heart frame — the pulmonic the most
+/// anterior and cranial (largest `y + z`), then the tricuspid the furthest to the patient's right
+/// (smallest `x`), then the mitral the most posterior (smallest `z`), the aortic the one left.
+#[must_use]
+pub fn split_valves(
+    mesh: &heartsim_geometry::TriMesh,
+) -> Option<Vec<(heartsim_ecg::Valve, heartsim_geometry::TriMesh)>> {
+    use heartsim_ecg::Valve;
+    fn find(parent: &mut [usize], mut x: usize) -> usize {
+        while parent[x] != x {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+        }
+        x
+    }
+    let n = mesh.vertices.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    for tri in mesh.indices.as_chunks::<3>().0 {
+        let a = find(&mut parent, tri[0] as usize);
+        for &v in &tri[1..] {
+            let b = find(&mut parent, v as usize);
+            if a != b {
+                parent[b] = a;
+            }
+        }
+    }
+    let mut roots: Vec<usize> = Vec::new();
+    let mut component = vec![0usize; n];
+    for (v, slot) in component.iter_mut().enumerate() {
+        let r = find(&mut parent, v);
+        let k = roots.iter().position(|&x| x == r).unwrap_or_else(|| {
+            roots.push(r);
+            roots.len() - 1
+        });
+        if roots.len() > 4 {
+            return None;
+        }
+        *slot = k;
+    }
+    if roots.len() != 4 {
+        return None;
+    }
+    let mut parts: Vec<heartsim_geometry::TriMesh> = vec![heartsim_geometry::TriMesh::default(); 4];
+    let mut remap = vec![u32::MAX; n];
+    for (v, vert) in mesh.vertices.iter().enumerate() {
+        let part = &mut parts[component[v]];
+        remap[v] = part.vertices.len() as u32;
+        part.vertices.push(*vert);
+    }
+    for tri in mesh.indices.as_chunks::<3>().0 {
+        let part = &mut parts[component[tri[0] as usize]];
+        part.indices.extend(tri.iter().map(|&v| remap[v as usize]));
+    }
+    let centre = |m: &heartsim_geometry::TriMesh| {
+        let (lo, hi) = m.bounds();
+        (lo + hi) * 0.5
+    };
+    let mut left: Vec<(Vec3, heartsim_geometry::TriMesh)> =
+        parts.into_iter().map(|m| (centre(&m), m)).collect();
+    let mut take = |key: fn(Vec3) -> f32| {
+        let i = (0..left.len())
+            .min_by(|&a, &b| key(left[a].0).total_cmp(&key(left[b].0)))
+            .unwrap_or(0);
+        left.remove(i).1
+    };
+    let pulmonic = take(|c| -(c.y + c.z));
+    let tricuspid = take(|c| c.x);
+    let mitral = take(|c| c.z);
+    let aortic = take(|c| c.x);
+    Some(vec![
+        (Valve::Mitral, mitral),
+        (Valve::Tricuspid, tricuspid),
+        (Valve::Aortic, aortic),
+        (Valve::Pulmonic, pulmonic),
+    ])
+}
+
+/// A valve ring's colour at highlight `level` (`0..=1`): its flat colour moved towards
+/// [`VALVE_HIGHLIGHT`].
+#[must_use]
+pub fn valve_colour(base: [f32; 3], level: f32) -> [f32; 3] {
+    let k = level.clamp(0.0, 1.0);
+    std::array::from_fn(|i| base[i] + (VALVE_HIGHLIGHT[i] - base[i]) * k)
+}
 
 /// What the heart surface shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +244,10 @@ struct HeartLayer {
     /// Per-vertex scalars of the current colour mode.
     scalars: Vec<f32>,
     id: Option<LayerId>,
+    /// A valve mesh split into its four discs (B27 part B), each drawn as its own scene layer so it
+    /// can flash with its closure sound; empty for every other mesh (and a valve mesh that does
+    /// not split into four).
+    valves: Vec<(heartsim_ecg::Valve, heartsim_geometry::TriMesh, Option<LayerId>)>,
 }
 
 /// Anatomy, engine and display state of the 3-D heart.
@@ -206,6 +299,8 @@ pub struct HeartView {
     external: Option<heartsim_sim::CellState>,
     /// Clicks made while `external` is set, as actions for the engine that owns the heart.
     pending_actions: Vec<Action>,
+    /// Highlight of each valve ring this frame, `heartsim_ecg::Valve::ALL` order (B27 part B).
+    valve_glow: [f32; 4],
 }
 
 impl std::fmt::Debug for HeartView {
@@ -318,6 +413,15 @@ impl HeartView {
                 } else {
                     None
                 };
+                let valves = if m.kind == MeshKind::Valve {
+                    split_valves(&m.mesh)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(v, mesh)| (v, mesh, None))
+                        .collect()
+                } else {
+                    Vec::new()
+                };
                 HeartLayer {
                     name: m.name.clone(),
                     kind: Some(m.kind),
@@ -325,6 +429,7 @@ impl HeartView {
                     smoother: h.is_some().then(|| VertexSmoother::new(&m.mesh)),
                     hoods: h,
                     id: None,
+                    valves,
                 }
             })
             .collect();
@@ -335,6 +440,7 @@ impl HeartView {
             smoother: None,
             scalars: Vec::new(),
             id: None,
+            valves: Vec::new(),
         });
         let mut panel = AnatomyPanelState::new(layers.iter().map(|l| (l.name.clone(), 1.0)));
         // the torso: off until asked for, and translucent like the illustration when on
@@ -378,7 +484,28 @@ impl HeartView {
             scrub_cells: None,
             external: None,
             pending_actions: Vec::new(),
+            valve_glow: [0.0; 4],
         }
+    }
+
+    /// How bright each valve ring is drawn this frame (`heartsim_ecg::Valve::ALL` order, `0..=1`):
+    /// the app passes the highlights of the heart sounds at the time the views are drawn, or zeros
+    /// with reduced motion. Only the `valve_planes` layer shows it.
+    pub fn set_valve_glow(&mut self, glow: [f32; 4]) {
+        self.valve_glow = glow;
+    }
+
+    /// The valve discs found in the anatomy, with the centre of each (tests, the tour).
+    #[must_use]
+    pub fn valve_parts(&self) -> Vec<(heartsim_ecg::Valve, Vec3)> {
+        self.layers
+            .iter()
+            .flat_map(|l| l.valves.iter())
+            .map(|(v, m, _)| {
+                let (lo, hi) = m.bounds();
+                (*v, (lo + hi) * 0.5)
+            })
+            .collect()
     }
 
     /// The Tier-1 engine (read-only).
@@ -884,6 +1011,23 @@ impl HeartView {
     /// Add the pack's meshes to `scene` and keep the render state for picking.
     pub fn install(&mut self, rs: &egui_wgpu::RenderState, scene: &mut SceneRenderer) {
         for (l, toggle) in self.layers.iter_mut().zip(&self.panel.layers) {
+            if !l.valves.is_empty() {
+                // one scene layer per valve disc, labelled once, so each can flash on its own
+                for (i, (_, mesh, slot)) in l.valves.iter_mut().enumerate() {
+                    let mut desc = LayerDesc::new(pretty_name(&l.name), mesh);
+                    desc.base_color = base_colour(&l.name, l.kind);
+                    desc.alpha = toggle.alpha;
+                    let id = scene.add_layer(&rs.device, &desc);
+                    if let Some(layer) = scene.layer_mut(id) {
+                        layer.label = (i == 0).then(|| pretty_name(&l.name));
+                        layer.pickable = true;
+                        layer.clip = true;
+                        layer.visible = toggle.visible;
+                    }
+                    *slot = Some(id);
+                }
+                continue;
+            }
             let mesh = self
                 .pack_meshes
                 .iter()
@@ -924,6 +1068,15 @@ impl HeartView {
         }
         let (lo, hi) = self.window(self.mode);
         for (l, toggle) in self.layers.iter().zip(&self.panel.layers) {
+            for (valve, _, id) in &l.valves {
+                let Some(layer) = (*id).and_then(|id| scene.layer_mut(id)) else {
+                    continue;
+                };
+                layer.visible = toggle.visible;
+                layer.alpha = toggle.alpha;
+                layer.scalar_mode = ScalarMode::None;
+                layer.base_color = valve_colour(base_colour(&l.name, l.kind), self.valve_glow[valve.index()]);
+            }
             let Some(id) = l.id else { continue };
             let mapped = self.tier1 && l.hoods.is_some();
             if mapped {
@@ -1089,6 +1242,37 @@ mod tests {
         assert!(
             t <= 2.0,
             "the clicked cell fires first ({t} ms after the stimulus)"
+        );
+    }
+
+    /// B27 part B: the default pack's valve planes split into the four valves, each where the
+    /// anatomy puts it.
+    #[test]
+    fn the_valve_planes_split_into_four_valves_in_their_places() {
+        use heartsim_ecg::Valve;
+        let heart = HeartView::from_pack(pack(), &TimingParams::default());
+        let parts = heart.valve_parts();
+        assert_eq!(parts.len(), 4, "{parts:?}");
+        let at = |v: Valve| parts.iter().find(|(x, _)| *x == v).map(|(_, c)| *c).unwrap();
+        let (mi, tr, ao, pu) = (
+            at(Valve::Mitral),
+            at(Valve::Tricuspid),
+            at(Valve::Aortic),
+            at(Valve::Pulmonic),
+        );
+        assert!(tr.x < mi.x && tr.x < ao.x, "tricuspid on the right");
+        assert!(mi.z < ao.z && mi.z < tr.z, "mitral posterior");
+        assert!(pu.y > ao.y && pu.y > mi.y, "pulmonic highest");
+        assert!(pu.z > ao.z, "pulmonic anterior of the aortic");
+        // colour: base at rest, the highlight at full level
+        let base = base_colour("valve_planes", Some(MeshKind::Valve));
+        assert_eq!(valve_colour(base, 0.0), base);
+        let full = valve_colour(base, 1.0);
+        assert!(
+            full.iter()
+                .zip(VALVE_HIGHLIGHT)
+                .all(|(a, b)| (a - b).abs() < 1e-6),
+            "{full:?}"
         );
     }
 

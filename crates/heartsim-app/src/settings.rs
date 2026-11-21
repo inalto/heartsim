@@ -23,8 +23,9 @@ pub struct Settings {
     pub language: Option<String>,
     /// Black-and-white panels with heavy outlines, for low vision and projector use.
     pub high_contrast: bool,
-    /// Turns off the automatic rotation of the 3-D heart and the defibrillator's shock flash.
-    /// Those are the only animations the simulator adds on its own; the simulation itself is unchanged.
+    /// Turns off the automatic rotation of the 3-D heart, the defibrillator's shock flash and the
+    /// valve flashes of the heart sounds (B27). Those are the only animations the simulator adds on its
+    /// own; the simulation itself is unchanged.
     pub reduced_motion: bool,
     /// The first-run medical disclaimer (requirement N-09) has been acknowledged on this computer.
     /// Stored so the dialog appears once; the About window shows the same text at any time.
@@ -56,6 +57,11 @@ pub struct Settings {
     /// The sound card's own latency, ms (`0..=300`): the views are drawn this much plus the queue
     /// behind the simulation while sound plays. Set by ear with the sync check.
     pub audio_offset_ms: f32,
+    /// Where on the chest the heart sounds are heard (B27 part B, the Display popup's "Listening
+    /// site"): the overview, today's unweighted mix, by default.
+    pub listening_site: heartsim_ecg::ListeningSite,
+    /// Bell or diaphragm; not used at the overview.
+    pub chest_piece: heartsim_ecg::ChestPiece,
 }
 
 /// The colour scheme preference, stored by name.
@@ -105,6 +111,8 @@ impl Default for Settings {
             heart_sound_audio: false,
             heart_sound_volume: crate::sound_out::DEFAULT_HEART_SOUND_VOLUME,
             audio_offset_ms: crate::sound_out::DEFAULT_AUDIO_OFFSET_MS,
+            listening_site: heartsim_ecg::ListeningSite::Overview,
+            chest_piece: heartsim_ecg::ChestPiece::Diaphragm,
         }
     }
 }
@@ -123,6 +131,15 @@ impl Settings {
     #[must_use]
     pub fn to_storage_string(&self) -> String {
         ron::to_string(self).unwrap_or_default()
+    }
+
+    /// The listening site and chest piece as one choice.
+    #[must_use]
+    pub fn listening(&self) -> heartsim_ecg::ListeningChoice {
+        heartsim_ecg::ListeningChoice {
+            site: self.listening_site,
+            chest: self.chest_piece,
+        }
     }
 
     /// The language code the interface uses now: the chosen one, or the operating system's.
@@ -450,6 +467,8 @@ mod tests {
             heart_sound_audio: true,
             heart_sound_volume: 0.3,
             audio_offset_ms: 120.0,
+            listening_site: heartsim_ecg::ListeningSite::Tricuspid,
+            chest_piece: heartsim_ecg::ChestPiece::Bell,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);

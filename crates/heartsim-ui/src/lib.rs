@@ -3,6 +3,7 @@
 
 pub mod anatomy_panel;
 pub mod annotations;
+pub mod auscultation_chest;
 pub mod axis_dial;
 pub mod calipers;
 pub mod cards;
@@ -32,6 +33,7 @@ pub mod viewport;
 
 pub use anatomy_panel::{AnatomyPanelState, CameraCommand, LayerToggle, anatomy_panel};
 pub use annotations::{EcgAnnotations, interval_readout};
+pub use auscultation_chest::auscultation_chest;
 pub use axis_dial::{
     AxisDialResponse, AxisPanel, AxisPanelResponse, Polarity, axis_circle, axis_dial, axis_legend,
     axis_panel, lead_polarity, polarity_table,

@@ -1,0 +1,32 @@
+// Auscultation preset (brief B27): an ordinary ECG with the heart sounds of a valve, shunt or
+// ventricular disorder. Timing rules and their sources are in docs/research/heart-sounds.md; every
+// number of the sound model is documented in crates/heartsim-ecg/src/auscultation.rs.
+Scenario(
+    format_version: 1,
+    id: "tricuspid_regurgitation",
+    title: "Tricuspid regurgitation (holosystolic, louder on inspiration)",
+    description: "Sinus rhythm at 80 bpm with a leaking tricuspid valve: a plateau murmur through systole at the lower left sternal border that grows on inspiration.",
+    tier: Template,
+    anatomy: "default",
+    seed: 42,
+    notes: Some("The right-sided counterpart of mitral regurgitation: a holosystolic plateau murmur, best at the left lower sternal border. Inspiration increases venous return to the right heart, so the murmur becomes louder on inspiration (Carvallo's sign), which tells it apart from mitral regurgitation.\nOn the lane, watch the murmur band rise and fall with the breathing cycle (the same clock that widens the S2 split).\nThe large systolic v wave in the neck and the pulsatile liver are not modelled.\nDifferential: mitral regurgitation, ventricular septal defect.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
+    confused_with: ["mitral_regurgitation", "ventricular_septal_defect", "atrial_septal_defect"],
+    references: [
+        "MSD Manual Professional Version: Tricuspid regurgitation, msdmanuals.com.",
+        "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
+        "Alpert. In: Walker HK, Hall WD, Hurst JW, eds. Clinical Methods, 3rd ed. Butterworths 1990, ch. 26 (NCBI Bookshelf NBK345).",
+    ],
+    expected: Some(ExpectedFindings(
+        hr_bpm: (60.0, 100.0),
+        pr_ms: Some((120.0, 200.0)),
+        qrs_ms: Some((70.0, 110.0)),
+        axis_deg: Some((-30.0, 90.0)),
+        extra_sounds: Some([]),
+        murmurs: Some([Holosystolic]),
+        s2_split: Some(Physiological),
+    )),
+    auscultation: (lesions: [(TricuspidRegurgitation, Moderate)]),
+    timing: TimingParams(
+        sinus: SinusParams(rate_bpm: 80.0),
+    ),
+)

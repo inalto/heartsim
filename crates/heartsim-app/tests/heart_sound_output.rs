@@ -26,7 +26,11 @@ impl Sim {
     fn new() -> Self {
         let params = TimingParams::default();
         let mut sounds = HeartSounds::new(60.0);
-        sounds.reset(7, params.sinus.respiration_rate_bpm);
+        sounds.reset(
+            7,
+            params.sinus.respiration_rate_bpm,
+            &heartsim_core::Auscultation::default(),
+        );
         Self {
             engine: TimingEngine::new(params),
             sounds,

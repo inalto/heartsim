@@ -51,24 +51,28 @@ fn shuffle<T>(v: &mut [T], state: &mut u64) {
     }
 }
 
-/// Draw a question from `library`, avoiding `previous` as the answer when there is a choice.
+/// Draw a question from `library`, avoiding `previous` as the answer when there is a choice. The
+/// answer and every choice come from the ECG pool ([`ScenarioLibrary::ecg_quiz_pool`]): an
+/// auscultation case has an ordinary strip and is never asked or offered.
 #[must_use]
 pub fn make_question(library: &ScenarioLibrary, rng: &mut u64, previous: Option<usize>) -> Option<Question> {
-    let n = library.len();
+    let pool = library.ecg_quiz_pool();
+    let n = pool.len();
     if n < 2 {
         return None;
     }
-    let mut answer = below(rng, n);
-    if Some(answer) == previous {
-        answer = (answer + 1 + below(rng, n - 1)) % n;
+    let mut k = below(rng, n);
+    if Some(pool[k]) == previous {
+        k = (k + 1 + below(rng, n - 1)) % n;
     }
+    let answer = pool[k];
     let mut options = vec![answer];
     let mut differential: Vec<usize> = library.entries[answer]
         .scenario
         .confused_with
         .iter()
         .filter_map(|id| library.index_of(id))
-        .filter(|&i| i != answer)
+        .filter(|&i| i != answer && library.in_ecg_quiz_pool(i))
         .collect();
     shuffle(&mut differential, rng);
     for i in differential {
@@ -77,7 +81,7 @@ pub fn make_question(library: &ScenarioLibrary, rng: &mut u64, previous: Option<
         }
     }
     while options.len() < OPTIONS.min(n) {
-        let i = below(rng, n);
+        let i = pool[below(rng, n)];
         if !options.contains(&i) {
             options.push(i);
         }
@@ -416,7 +420,14 @@ mod tests {
             prev = Some(q.answer);
             answers.insert(q.answer);
         }
-        assert_eq!(answers.len(), lib.len(), "every rhythm gets asked");
+        assert_eq!(
+            answers.len(),
+            lib.ecg_quiz_pool().len(),
+            "every rhythm gets asked"
+        );
+        for i in answers {
+            assert!(!lib.entries[i].scenario.is_auscultation_case());
+        }
     }
 
     #[test]
@@ -443,6 +454,24 @@ mod tests {
                 .record(RECORD_S)
                 .unwrap_or_else(|e| panic!("{id}: {e}"));
             assert_eq!(rec.leads.len(), LEAD_COUNT);
+        }
+    }
+
+    #[test]
+    fn auscultation_cases_are_never_asked_or_offered() {
+        let lib = library();
+        let mut rng = 23;
+        let mut prev = None;
+        for _ in 0..3000 {
+            let q = make_question(&lib, &mut rng, prev).unwrap();
+            for &i in &q.options {
+                assert!(
+                    !lib.entries[i].scenario.is_auscultation_case(),
+                    "{} drawn",
+                    lib.entries[i].scenario.id
+                );
+            }
+            prev = Some(q.answer);
         }
     }
 
