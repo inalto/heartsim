@@ -8,6 +8,7 @@
 //! * [`scenario_file`] — the running scenario as a loadable RON file.
 //! * [`bundle`] — every export plus a README in one deterministic zip, and the file set itself.
 //! * [`import`] — reading a CSV, WFDB record or share bundle back for review.
+//! * [`wav`] — the heart-sound signal as a 16-bit mono WAV file at 44.1 kHz (B28).
 //!
 //! Exports carry no patient fields: the header names the scenario, paper speed, gain and date.
 //! Every writer is a pure function of its inputs (no clock, no randomness): the date is an input.
@@ -19,12 +20,14 @@ pub mod pdf;
 pub mod png;
 pub mod record;
 pub mod scenario_file;
+pub mod wav;
 pub mod wfdb;
 
 pub use bundle::{ExportFile, ExportOptions, Formats, export_files, write_files};
 pub use import::{Imported, import_bytes, import_path};
 pub use pdf::Paper;
 pub use record::{EXPORT_RATE_HZ, EcgRecord};
+pub use wav::{WavInfo, heart_sound_file, read_wav, wav_bytes};
 
 /// Printed on every export.
 pub const DISCLAIMER: &str =

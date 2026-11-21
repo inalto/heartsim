@@ -67,6 +67,21 @@ pub struct EcgView {
     pub listening: ListeningChoice,
     /// Opacity of the torso picture behind the chest's site markers (the Settings value).
     pub chest_image_opacity: f32,
+    /// What the lane says when the sound played differs from the trace drawn (B28: small-speaker
+    /// mode, slow motion): an "altered sound" tag at its bottom right. `None`: the sound is the trace.
+    pub sound_tag: Option<String>,
+    /// The breath-hold now in force in the engine (B28), shown by the Display popup's breathing
+    /// choice. The app sets it every frame from the engine.
+    pub breath_hold: Option<heartsim_core::BreathPhase>,
+    /// The learner picked another breathing choice this frame (`Some(None)`: breathe again).
+    #[allow(
+        clippy::option_option,
+        reason = "outer: a request was made; inner: the breath-hold or none"
+    )]
+    breath_request: Option<Option<heartsim_core::BreathPhase>>,
+    /// Show the breathing choice in the Display popup: set by the app where a timing engine runs (the
+    /// Tier-0 simulator, not the EP lab); off for a view without one.
+    pub breath_hold_available: bool,
     /// How far behind the newest sample the views are drawn while sound plays, ms (B25). Not a
     /// scrub: the scrub slider and [`Self::scrub_offset_ms`] do not include it.
     display_delay_ms: f64,
@@ -105,6 +120,10 @@ impl Default for EcgView {
             slice_playing: false,
             listening: ListeningChoice::default(),
             chest_image_opacity: 0.7,
+            sound_tag: None,
+            breath_hold: None,
+            breath_request: None,
+            breath_hold_available: false,
             display_delay_ms: 0.0,
             lane_request: None,
             display: DisplayStage::default(),
@@ -400,6 +419,9 @@ impl EcgView {
             }
         }
         ui.indent("listening_site", |ui| self.listening_controls(ui));
+        if self.breath_hold_available {
+            ui.indent("breath_hold", |ui| self.breathing_controls(ui));
+        }
         crate::controls::slider(
             ui,
             &t!("ecg-px-per-mm"),
@@ -473,6 +495,42 @@ impl EcgView {
             .on_hover_text(t!("ecg-chest-piece-hint"))
             .on_disabled_hover_text(t!("ecg-chest-piece-overview-hint"));
         });
+    }
+
+    /// The breathing choice (B28): breathe, or hold the breath at end-expiration or at peak
+    /// inspiration, so that a split can be listened to beat after beat. The app turns a change into
+    /// an `Action::BreathHold` for the engine ([`Self::take_breath_request`]).
+    pub fn breathing_controls(&mut self, ui: &mut Ui) {
+        use heartsim_core::BreathPhase;
+        ui.label(t!("ecg-breathing"))
+            .on_hover_text(t!("ecg-breathing-hint"));
+        let mut choice = self.breath_hold;
+        for (value, label) in [
+            (None, t!("ecg-breathing-free")),
+            (
+                Some(BreathPhase::EndExpiration),
+                t!("ecg-breathing-hold-expiration"),
+            ),
+            (
+                Some(BreathPhase::PeakInspiration),
+                t!("ecg-breathing-hold-inspiration"),
+            ),
+        ] {
+            ui.radio_value(&mut choice, value, label);
+        }
+        if choice != self.breath_hold {
+            self.breath_request = Some(choice);
+            self.breath_hold = choice;
+        }
+    }
+
+    /// The breathing choice the learner made this frame, if any (see [`Self::breathing_controls`]).
+    #[allow(
+        clippy::option_option,
+        reason = "outer: a request was made; inner: the breath-hold or none"
+    )]
+    pub fn take_breath_request(&mut self) -> Option<Option<heartsim_core::BreathPhase>> {
+        self.breath_request.take()
     }
 
     /// Opens the Display popup on the next frame (the documentation tour's shots).
@@ -573,6 +631,9 @@ impl EcgView {
             let id = ui.scope_id().with("ecg_view_sounds");
             let lane_win = win.rescaled(lane_rect, factor);
             draw_pcg_lane(ui, id, &lane_win, &lane, &self.style, &lane_title(self.listening));
+            if let Some(tag) = &self.sound_tag {
+                crate::clip_view::draw_altered_tag(ui, lane_rect, tag);
+            }
             strip_interact(
                 ui,
                 id,
@@ -716,6 +777,9 @@ impl EcgView {
         let lane_win = probe.rescaled(lane_rect, factor);
         let id = ui.scope_id().with("ecg_view_page_sounds");
         draw_pcg_lane(ui, id, &lane_win, &lane, &self.style, &lane_title(self.listening));
+        if let Some(tag) = &self.sound_tag {
+            crate::clip_view::draw_altered_tag(ui, lane_rect, tag);
+        }
         let spans = |w: &StripWindow| {
             (w.rect.left() - lane_rect.left()).abs() < 0.5 && (w.rect.right() - lane_rect.right()).abs() < 0.5
         };

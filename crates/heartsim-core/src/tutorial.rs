@@ -98,6 +98,40 @@ pub enum UiAction {
     SetQrsAxis(f64),
     /// Lead shown on the single-lead strip.
     SelectLead(Lead),
+    /// Switch the heart-sound audio on or off (B28), as the Display popup's "Play heart sounds" does;
+    /// on also shows the lane. Does nothing where there is no sound output (the page must then work
+    /// from the trace) and in `heartsim-cli run-tutorial`.
+    HeartSoundAudio(bool),
+    /// Show or hide the heart-sound lane under the strip.
+    HeartSoundLane(bool),
+    /// Listen at a site with a chest piece (B27 part B; the chest piece is ignored at the overview).
+    Listen {
+        site: StethoscopeSite,
+        chest: ChestPieceChoice,
+    },
+    /// Show the sound check on this page (B28): a low and a higher tone to play, and what to do when
+    /// the low one cannot be heard. Without sound output it is text only.
+    SoundCheck,
+}
+
+/// Where the stethoscope is, for [`UiAction::Listen`] (the listening sites of `heartsim_ecg`, named
+/// alike; this crate cannot name that type).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StethoscopeSite {
+    /// Every sound at its modelled level, no chest piece.
+    Overview,
+    Aortic,
+    Pulmonic,
+    Erb,
+    Tricuspid,
+    Mitral,
+}
+
+/// Bell or diaphragm, for [`UiAction::Listen`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChestPieceChoice {
+    Bell,
+    Diaphragm,
 }
 
 /// Panels a tutorial can bring forward (the application's tabs).
@@ -111,6 +145,10 @@ pub enum Panel {
     Electrodes,
     RhythmQuiz,
     Tutorials,
+    /// The Sound Trainer (B28).
+    SoundTrainer,
+    /// The auscultation quiz (B28).
+    AuscultationQuiz,
 }
 
 /// Standard radiological views of the heart.
@@ -406,6 +444,16 @@ mod tests {
                 Step::Ui(UiAction::StartReentry("af_persistent".into())),
                 Step::Ui(UiAction::SelectLead(Lead::II)),
                 Step::Sim(Action::SetGlobalSinusRate { bpm: 50.0 }),
+                Step::Ui(UiAction::HeartSoundAudio(true)),
+                Step::Ui(UiAction::HeartSoundLane(true)),
+                Step::Ui(UiAction::Listen {
+                    site: StethoscopeSite::Mitral,
+                    chest: ChestPieceChoice::Bell,
+                }),
+                Step::Ui(UiAction::SoundCheck),
+                Step::Sim(Action::BreathHold {
+                    phase: Some(crate::scenario::BreathPhase::PeakInspiration),
+                }),
             ],
             true,
         )]);

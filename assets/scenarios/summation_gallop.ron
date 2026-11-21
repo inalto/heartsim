@@ -10,7 +10,7 @@ Scenario(
     anatomy: "default",
     seed: 42,
     notes: Some("With both gallops present and a fast rate, diastole shortens and the P wave moves into early diastole, until the early-diastolic S3 and the atrial S4 overlap; their sum can be louder than either sound alone. Slowing the heart separates them again.\nOn the lane: in each short diastole the S3 and S4 labels meet (shown as S3/S4 together) over one low wave. Play it at a slow speed: the two sounds are still two events in the model, scheduled from A2 and from the P wave.\nDifferential: a mid-diastolic rumble, a single S3 or S4 at a slower rate.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
-    confused_with: ["heart_failure_s3", "lvh_s4", "sinus_tachy_130"],
+    confused_with: ["heart_failure_s3", "lvh_s4", "sinus_tachy_130", "mitral_stenosis_sinus"],
     references: [
         "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",
         "Nemani L, Pechetty S. Additional heart sounds, part 1. Indian J Cardiovasc Dis Women (ijcdw.org).",

@@ -58,6 +58,8 @@ impl TutorialHost for HeartSimApp {
                     Panel::Electrodes => Tab::Electrodes,
                     Panel::RhythmQuiz => Tab::RhythmQuiz,
                     Panel::Tutorials => Tab::Tutorials,
+                    Panel::SoundTrainer => Tab::SoundTrainer,
+                    Panel::AuscultationQuiz => Tab::AuscultationQuiz,
                 };
             }
             UiAction::Highlight(tool) => self.tutorials.highlight = Some(tool.clone()),
@@ -89,8 +91,26 @@ impl TutorialHost for HeartSimApp {
             }
             UiAction::SetQrsAxis(deg) => self.set_qrs_axis(*deg),
             UiAction::SelectLead(l) => self.selected_lead = *l,
-            // handled by the page runner
-            UiAction::WaitForEvent(_) => {}
+            // B28: where there is no sound output the switch only shows the lane, and the page
+            // works from the trace
+            UiAction::HeartSoundAudio(on) => {
+                if self.sound_player.has_output() {
+                    self.set_heart_sound_audio(*on);
+                } else if *on {
+                    self.settings.heart_sounds = true;
+                    self.ecg.show_heart_sounds = true;
+                }
+            }
+            UiAction::HeartSoundLane(on) => {
+                self.settings.heart_sounds = *on;
+                self.ecg.show_heart_sounds = *on;
+            }
+            UiAction::Listen { site, chest } => {
+                self.ecg.listening = crate::tutorial::listening_choice(*site, *chest);
+            }
+            // the sound check is drawn by the reader on the page that has it; waits are handled by
+            // the page runner
+            UiAction::SoundCheck | UiAction::WaitForEvent(_) => {}
         }
     }
 

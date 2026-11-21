@@ -1,4 +1,4 @@
-//! The top bar's page navigation: with room, all eleven pages are tabs; with less, three group
+//! The top bar's page navigation: with room, all thirteen pages are tabs; with less, three group
 //! menus; always one line high, and every page is reachable in at most two clicks.
 
 use egui_kittest::Harness;
@@ -16,7 +16,7 @@ struct Model {
 fn harness(width: f32) -> Harness<'static, Model> {
     i18n::set_language("en");
     Harness::builder()
-        .with_size(egui::vec2(width, 120.0))
+        .with_size(egui::vec2(width, 300.0))
         .build_ui_state(
             |ui, m: &mut Model| {
                 egui::MenuBar::new().ui(ui, |ui| {
@@ -35,7 +35,8 @@ fn harness(width: f32) -> Harness<'static, Model> {
 }
 
 #[test]
-fn at_1280_all_eleven_pages_are_tabs_and_a_click_switches_page() {
+fn at_1280_all_thirteen_pages_are_tabs_and_a_click_switches_page() {
+    assert_eq!(Tab::ALL.len(), 13);
     let mut h = harness(1280.0);
     h.run();
     assert!(matches!(
@@ -118,6 +119,8 @@ fn the_shortcuts_are_unchanged() {
             Some("8"),
             Some("9"),
             Some("0"),
+            None,
+            None,
             None
         ]
     );

@@ -996,6 +996,7 @@ impl<M: CellModel> Tier2Engine<M> {
             Action::Stenosis { .. } => Err(ActionError::Unsupported("Stenosis")),
             Action::Drug { .. } => Err(ActionError::Unsupported("Drug")),
             Action::MoveElectrode { .. } => Err(ActionError::Unsupported("MoveElectrode")),
+            Action::BreathHold { .. } => Err(ActionError::Unsupported("BreathHold")),
         };
         match (t, spatial) {
             (Ok(()), _) | (_, Ok(())) => Ok(()),

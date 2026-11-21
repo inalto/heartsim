@@ -1,0 +1,308 @@
+// heartsim tutorial: the heart sounds and what the rhythm does to them. Original text by the heartsim
+// authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+// The sounds are the model of briefs B24-B27; every clinical statement below carries its source in
+// the references list.
+Tutorial(
+    format_version: 1,
+    id: "11_heart_sounds",
+    title: "Heart sounds and the rhythm",
+    summary: "A sound check, then S1 and S2 against the QRS and the T wave, the split and breathing, what the PR interval, bundle-branch block, complete block and atrial fibrillation do to the sounds, and the gallops S3 and S4.",
+    references: [
+        "Felner JM. The first heart sound. In: Walker HK, Hall WD, Hurst JW (eds). Clinical Methods, 3rd ed. Butterworths 1990, ch. 22. ncbi.nlm.nih.gov/books/NBK333.",
+        "Felner JM. The second heart sound. In: Clinical Methods, 3rd ed. Butterworths 1990, ch. 23. ncbi.nlm.nih.gov/books/NBK341.",
+        "Williams ES. The fourth heart sound. In: Clinical Methods, 3rd ed. Butterworths 1990, ch. 25. ncbi.nlm.nih.gov/books/NBK344.",
+        "MSD Manual Professional Version: Cardiac auscultation. msdmanuals.com/professional/cardiovascular-disorders/approach-to-the-cardiac-patient/cardiac-auscultation.",
+        "Watsjold B, Ilgen J, Monteiro S et al. Do you hear what you see? Utilizing phonocardiography to enhance proficiency in cardiac auscultation. Perspect Med Educ 2021;10:148-154. doi:10.1007/s40037-020-00646-5.",
+        "Tavel ME. Cardiac auscultation: a glorious past - and it does have a future! Circulation 2006;113:1255-1259. doi:10.1161/CIRCULATIONAHA.105.591149.",
+    ],
+    pages: [
+        Page(
+            title: "Headphones and a sound check",
+            markdown: r#"
+Heart sounds are **low**: most of S1 and S2, and all of S3, S4 and the rumble of mitral stenosis,
+lie below about 200 Hz. Laptop and phone speakers reproduce little down there, so **use
+headphones**. Training modules that teach auscultation check this before they start (Watsjold et
+al. 2021 played a 200 Hz tone); so does this one.
+
+Play the two tones below. If you cannot hear the low one, your speakers are too small: put on
+headphones, and follow every page with the **heart-sound lane** under the strip, where each sound
+is drawn and labelled in time with the ECG. Everything in this tutorial can be done by eye.
+
+The sounds you will hear are a **model** computed from the simulated beats, not a recording.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SetSpeed(1.0)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Overview, chest: Diaphragm)),
+                Ui(SoundCheck),
+            ],
+            check: Some(Question(
+                prompt: "You cannot hear the 200 Hz tone. What should you do?",
+                choices: [
+                    "Use headphones, and follow the labelled heart-sound lane under the strip",
+                    "Turn the volume to the maximum and carry on with the laptop speakers",
+                    "Skip the tutorial: heart sounds cannot be learnt without sound",
+                    "Listen at a different site",
+                ],
+                answer: 0,
+                explanation: "Small speakers lose the low frequencies whatever the volume. Headphones bring them back; the lane shows every sound in time with the ECG, so the timing can be learnt by eye as well.",
+            )),
+        ),
+        Page(
+            title: "S1 with the QRS, S2 at the end of the T wave",
+            markdown: r#"
+The heart sounds are made by valves closing, and the valves close because the ventricles contract
+and relax, so each sound has its place against the ECG (Felner, ch. 22 and 23):
+
+* **S1** - closure of the mitral (M1) and tricuspid (T1) valves - starts just after the **QRS**,
+  as the ventricles begin to contract.
+* **S2** - closure of the aortic (A2) and pulmonary (P2) valves - falls near the **end of the T
+  wave**, as the ventricles relax.
+
+At normal rates systole (S1 to S2) is shorter than diastole (S2 to the next S1): the **shorter
+pause follows S1**. That is how to tell the two apart by ear. The sound is now on (where this
+computer has a sound output) and you are listening at the apex.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+                Ui(SelectLead(II)),
+            ],
+            check: Some(Question(
+                prompt: "Where does S2 fall on the ECG?",
+                choices: ["Near the end of the T wave", "Just after the QRS", "On the P wave", "In the middle of the PR interval"],
+                answer: 0,
+                explanation: "S2 falls near the end of the T wave, when the ventricles relax and the aortic and pulmonary valves close. Just after the QRS is S1.",
+            )),
+        ),
+        Page(
+            title: "The split of S2 follows the breath",
+            markdown: r#"
+At the **pulmonic area** (2nd intercostal space, left sternal border) S2 has two parts. In
+**inspiration** more blood returns to the right heart, the right ventricle empties later and **P2
+follows A2** by a few tens of milliseconds: the split is heard. In **expiration** the two close
+together and S2 sounds single (Felner, ch. 23).
+
+The patient is now **holding the breath at peak inspiration**, so every beat has the same, widest
+split. Look at the lane: the labels read **A2·P2**. Then open the **Display** popup, under **Breathing**, and choose
+**Hold at end-expiration**: the split closes. Choose **Breathing normally** to hear it come and go.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Pulmonic, chest: Diaphragm)),
+                Sim(BreathHold(phase: Some(PeakInspiration))),
+            ],
+            check: Some(Question(
+                prompt: "In a healthy heart, when is S2 split?",
+                choices: ["In inspiration", "In expiration", "Always, by the same amount", "Never"],
+                answer: 0,
+                explanation: "Inspiration delays P2: the split opens on breathing in and closes on breathing out. A split that does not move with the breath, or opens in expiration, is abnormal.",
+            )),
+        ),
+        Page(
+            title: "Slow motion: the same sounds, longer gaps",
+            markdown: r#"
+A split of 40 ms is short. Halving or quartering the speed is an aid expert reviewers recommend
+(Tavel 2006): in heartsim the **gaps between the sounds stretch** while **each sound keeps its
+pitch**. It is an **altered** sound, labelled so on the lane, and no study has shown that it
+improves learning, so come back to full speed once you can hear the split.
+
+The speed is now **0.25×** and right bundle-branch block is loaded: P2 comes late in both phases of
+the breath (a **wide split**). Listen at the pulmonic area, then set the speed back to 1.
+"#,
+            actions: [
+                Ui(LoadScenario("rbbb")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Pulmonic, chest: Diaphragm)),
+                Ui(SetSpeed(0.25)),
+            ],
+            check: Some(Question(
+                prompt: "What does slow motion change in heartsim?",
+                choices: [
+                    "The gaps between the sounds stretch; each sound keeps its pitch",
+                    "Every sound becomes lower in pitch",
+                    "Nothing: the sound is the same as at full speed",
+                    "It removes the murmurs",
+                ],
+                answer: 0,
+                explanation: "The slow-motion sound is re-timed, not pitch-shifted: a 40 ms split at 0.25× is heard as 160 ms. The trace on the lane always shows the true timing.",
+            )),
+        ),
+        Page(
+            title: "A long PR softens S1",
+            markdown: r#"
+The loudness of S1 depends on where the mitral leaflets are when the ventricle contracts. After a
+**short PR** they are still wide open and slam shut: **loud S1**. After a **long PR** they have
+drifted almost closed: **soft S1** (Felner, ch. 22).
+
+First-degree AV block is loaded (PR about 230 ms). Listen at the apex: S1 is now quieter than S2.
+On the lane the S1 envelope is smaller than the S2 envelope.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_1st")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "With a PR interval of 280 ms, S1 at the apex is:",
+                choices: ["Soft", "Loud", "Split widely", "Unchanged"],
+                answer: 0,
+                explanation: "A long PR leaves time for the leaflets to drift towards each other before the ventricle contracts, so they close from a short distance and S1 is soft.",
+            )),
+        ),
+        Page(
+            title: "Complete block: S1 changes from beat to beat",
+            markdown: r#"
+In **complete heart block** the atria and the ventricles beat independently. Each QRS finds the
+atrium at a different moment, so the PR changes from beat to beat and **S1 varies in loudness**,
+with an occasional very loud one when an atrial contraction falls just before the QRS (Felner,
+ch. 22; MSD Manual).
+
+Watch the P waves march through the slow escape rhythm and compare each S1 on the lane with the PR
+before it.
+"#,
+            actions: [
+                Ui(LoadScenario("avb_3rd_junctional")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Why does S1 vary in complete heart block?",
+                choices: [
+                    "The PR interval changes from beat to beat",
+                    "The bundle branches block in turn",
+                    "The patient breathes",
+                    "The valves are diseased",
+                ],
+                answer: 0,
+                explanation: "With the atria and ventricles dissociated, every beat has its own PR, and the PR sets the loudness of S1.",
+            )),
+        ),
+        Page(
+            title: "Left bundle-branch block reverses the split",
+            markdown: r#"
+**Left bundle-branch block** delays the left ventricle, so the aortic valve closes late: **A2
+follows P2**. Inspiration still delays P2, which now moves *towards* A2, so the split is heard in
+**expiration** and narrows on inspiration: a **paradoxical** (reversed) split (Felner, ch. 23).
+
+The patient is holding the breath at **end-expiration**, where the reversed split is widest. Open
+the **Display** popup, under **Breathing**, and switch to **peak inspiration**: the two sounds come together. The lane
+writes the components in the order heard, **P2·A2**.
+"#,
+            actions: [
+                Ui(LoadScenario("lbbb")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Pulmonic, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+                Sim(BreathHold(phase: Some(EndExpiration))),
+            ],
+            check: Some(Question(
+                prompt: "In LBBB, the S2 split is:",
+                choices: [
+                    "Widest in expiration and narrower in inspiration",
+                    "Widest in inspiration, like a normal split",
+                    "Fixed, the same in both phases",
+                    "Absent",
+                ],
+                answer: 0,
+                explanation: "With A2 late, P2 comes first. Inspiration delays P2 towards A2 and narrows the gap: the reverse of the normal pattern.",
+            )),
+        ),
+        Page(
+            title: "Atrial fibrillation: no S4, a changing S1",
+            markdown: r#"
+In **atrial fibrillation** the atria do not contract. Two things follow for the sounds: the RR
+interval is irregular, so **S1 changes in loudness** with the length of each cycle, and there is
+**never an S4**, because S4 needs an atrial contraction (Williams, ch. 25).
+
+Listen at the apex and compare the short and the long cycles on the strip.
+"#,
+            actions: [
+                Ui(LoadScenario("atrial_fibrillation")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Bell)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Which extra sound can never be heard in atrial fibrillation?",
+                choices: ["S4", "S3", "An ejection click", "An opening snap"],
+                answer: 0,
+                explanation: "S4 is the sound of a ventricle receiving the atrial kick. Fibrillating atria do not contract, so there is no S4.",
+            )),
+        ),
+        Page(
+            title: "S3: early in diastole",
+            markdown: r#"
+A **third heart sound** is a low, dull sound **early in diastole**, about 0.12 to 0.16 s after A2,
+as blood rushes into a ventricle that is full or failing (Felner, ch. 23; MSD Manual). It is low,
+so listen with the **bell**, lightly applied, at the apex. The rhythm "S1 - S2-S3" is the
+**ventricular gallop**.
+
+Heart failure with an S3 is loaded. On the lane, find the **S3** label after each S2.
+"#,
+            actions: [
+                Ui(LoadScenario("heart_failure_s3")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Bell)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Where is S3 heard in the cycle?",
+                choices: ["Early in diastole, after S2", "Just before S1", "In mid-systole", "With the QRS"],
+                answer: 0,
+                explanation: "S3 comes after S2, during rapid ventricular filling. A sound just before S1 would be an S4.",
+            )),
+        ),
+        Page(
+            title: "S4: just before S1",
+            markdown: r#"
+A **fourth heart sound** is a low sound **just before S1**, produced as the atrium contracts into a
+**stiff ventricle** (hypertrophy, hypertension, ischaemia; Williams, ch. 25). It follows the P wave,
+so on the strip it lies after the P and before the QRS. Bell, at the apex. The rhythm "S4-S1 - S2"
+is the **atrial gallop**. When the heart is fast, S3 and S4 can merge into one loud **summation
+gallop**.
+
+Left ventricular hypertrophy with an S4 is loaded. Then try the **Sound Trainer** (Practise), where
+every finding of this tutorial loops on its own with a listen counter: repetition is what builds
+the skill.
+"#,
+            actions: [
+                Ui(LoadScenario("lvh_s4")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Bell)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "On the strip, an S4 lies:",
+                choices: ["After the P wave, before the QRS", "After the T wave", "On the ST segment", "Before the P wave"],
+                answer: 0,
+                explanation: "S4 is the atrial contraction filling a stiff ventricle: after the P wave, just before the QRS and S1.",
+            )),
+        ),
+    ],
+)

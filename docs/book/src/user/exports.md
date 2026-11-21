@@ -38,6 +38,17 @@ connected.
 
 The **Window screenshot** button saves a PNG of the whole window, including the 3-D heart as currently shown.
 
+### Heart sounds as WAV
+
+The **Heart sounds (WAV)** button writes `heartsim_<scenario>_heart_sounds.wav`: the heart-sound signal of the same excerpt
+(the export length, ending at the strip cursor), as heard at the current listening site and chest piece. It is 16-bit mono
+PCM at 44.1 kHz, converted from the simulator's 4 kHz phonocardiogram with the same band-limited resampler the sound output
+uses, at the headroom the app plays it with (a normal S1 at half of full scale). The file's `INFO` chunk names the scenario
+(`INAM`), the site and the words "synthesised by heartsim (a model, not a recording)" (`ICMT`), the program (`ISFT`) and
+the date (`ICRD`); with small-speaker mode on, `ICMT` says that the sound is altered. The Sound Trainer's **Save WAV** writes
+one loop of the selected clip the same way. Any audio player or editor opens it. Like the other exports, WAV export is not
+in the web version.
+
 The same files come out of the command line, byte for byte, for the same scenario and length; see [Command line](cli.md).
 
 ## Reviewing a recording

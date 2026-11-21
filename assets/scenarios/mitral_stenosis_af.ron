@@ -10,7 +10,7 @@ Scenario(
     anatomy: "default",
     seed: 42,
     notes: Some("Long-standing mitral stenosis enlarges the left atrium and often leads to atrial fibrillation. Without an atrial contraction there is no presystolic accentuation and no S4; the rumble simply runs on as long as diastole lasts, so it is longer in the long cycles and short in the short ones.\nHere the stenosis is severe: the snap comes soon after A2 and the rumble lasts until the next S1.\nOn the lane, compare the last part of each diastole with the sinus-rhythm preset.\nDifferential: mitral stenosis in sinus rhythm, an S3 gallop in atrial fibrillation.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
-    confused_with: ["mitral_stenosis_sinus", "atrial_fibrillation", "heart_failure_s3"],
+    confused_with: ["mitral_stenosis_sinus", "atrial_fibrillation", "heart_failure_s3", "aortic_regurgitation"],
     references: [
         "MSD Manual Professional Version: Mitral stenosis, msdmanuals.com.",
         "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",

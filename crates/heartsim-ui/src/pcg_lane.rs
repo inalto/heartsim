@@ -31,6 +31,9 @@ pub enum HeartSoundStatus {
     Paused,
     /// A slice of the ring is playing while paused.
     PlayingSlice,
+    /// A clip of the Sound Trainer, the auscultation quiz or a tutorial's sound check is playing
+    /// (B28); the live sound waits.
+    PlayingClip,
     /// The sync check is running.
     Calibrating,
     /// No audio device could be opened (or this build has none).
@@ -54,6 +57,7 @@ impl HeartSoundStatus {
             HeartSoundStatus::NoDevice => Some(t!("ecg-sound-no-device")),
             HeartSoundStatus::WaitingForClick => Some(t!("ecg-sound-click-to-enable")),
             HeartSoundStatus::Unsupported => Some(t!("ecg-sound-unsupported")),
+            HeartSoundStatus::PlayingClip => Some(t!("ecg-sound-clip")),
             HeartSoundStatus::Off | HeartSoundStatus::Playing | HeartSoundStatus::PlayingSlice => None,
         }
     }

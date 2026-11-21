@@ -35,7 +35,7 @@ use heartsim_core::Millis;
 use heartsim_core::math::Deterministic;
 use heartsim_core::{Auscultation, LesionKind};
 use heartsim_sim::defib::ShockRng;
-use heartsim_sim::timing::{inspiration_depth, respiratory_phase};
+use heartsim_sim::timing::{RespiratoryClock, inspiration_depth};
 use heartsim_sim::{Circuit, Event, EventKind, Origin};
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +45,19 @@ use serde::{Deserialize, Serialize};
 pub const PCG_RATE_HZ: f32 = 4000.0;
 /// Sample period of the phonocardiogram, ms.
 pub const PCG_PERIOD_MS: f64 = 1000.0 / PCG_RATE_HZ as f64;
+
+/// Small-speaker mode (brief B28): every component's frequency is multiplied by this factor in the
+/// sound that is played, so S3, S4 and the mitral rumble (20–110 Hz in this model) move to 60–330 Hz,
+/// where laptop and phone speakers still reproduce something. **Designed**: one and a half octaves is
+/// enough to lift the lowest model sounds above the roughly 150–200 Hz at which small speakers fall
+/// away, and keeps the highest discrete sound (the mid-systolic click, 460 Hz) below
+/// [`SCALED_CEILING_HZ`]. No study shows a teaching effect (research note, "Repetition, a synchronised
+/// trace…"); the interface labels the sound as altered.
+pub const SMALL_SPEAKER_FACTOR: f64 = 3.0;
+/// Highest frequency a murmur partial may reach after scaling, Hz: partials that would land above it
+/// are left out, so nothing folds back from the 2 kHz Nyquist limit or falls into the resampler's
+/// transition band (above 1.6 kHz). Designed.
+pub const SCALED_CEILING_HZ: f64 = 1500.0;
 
 /// Every parameter of the heart-sound model. Each field says where its value comes from: a source
 /// (author, year, the value), or **designed** (a choice made for the model, within what the sources
@@ -1001,11 +1014,36 @@ impl Atom {
             Some(w) => self.value_weighted(tau, w),
         }
     }
+
+    /// [`Atom::value_with`] with every frequency multiplied by `factor` (small-speaker mode, B28):
+    /// the same envelope, the phase run `factor` times faster. The chest piece weighs the true
+    /// frequency, as the stethoscope hears it before the sound is shifted. `factor == 1` is
+    /// [`Atom::value_with`] itself.
+    fn value_scaled(&self, tau: f64, chest: Option<&ChestWeight>, factor: f64) -> f64 {
+        if factor.to_bits() == 1.0f64.to_bits() {
+            return self.value_with(tau, chest);
+        }
+        if !(0.0..self.p.duration_ms).contains(&tau) {
+            return 0.0;
+        }
+        let phase = std::f64::consts::TAU * factor * (self.a * tau + 2.0 * self.b * tau.sqrt()) / 1000.0;
+        let v = self.envelope(tau) * self.env_norm * phase.sin_d();
+        match chest {
+            None => v,
+            Some(w) => v * w.weight(self.frequency_hz(tau)),
+        }
+    }
 }
 
 /// A murmur's sum of sinusoids `tau_ms` after its start, with or without a chest piece (`None`:
-/// exactly [`Murmur::noise`]).
-fn murmur_noise(m: &Murmur, tau_ms: f64, chest: Option<&ChestWeight>) -> f64 {
+/// exactly [`Murmur::noise`]), every partial's frequency multiplied by `factor` (1: unchanged; see
+/// [`SMALL_SPEAKER_FACTOR`]).
+fn murmur_noise(m: &Murmur, tau_ms: f64, chest: Option<&ChestWeight>, factor: f64) -> f64 {
+    if factor.to_bits() != 1.0f64.to_bits() {
+        return m.noise_scaled(tau_ms, factor, SCALED_CEILING_HZ, |hz| {
+            chest.map_or(1.0, |w| w.weight(hz))
+        });
+    }
     match chest {
         None => m.noise(tau_ms),
         Some(w) => m.noise_weighted(tau_ms, |hz| w.weight(hz)),
@@ -1067,6 +1105,8 @@ struct Scheduler {
     params: PcgParams,
     seed: u64,
     respiration_rate_bpm: f64,
+    /// The engine's respiratory clock (B28 breath-holds); the plain function of time until set.
+    respiration: RespiratoryClock,
     assembler: BeatAssembler,
     model: Auscultation,
     valve: ValveChanges,
@@ -1087,6 +1127,7 @@ impl Scheduler {
             params,
             seed,
             respiration_rate_bpm,
+            respiration: RespiratoryClock::default(),
             model: Auscultation::default(),
             rr_mean_ms: None,
             last_beat: None,
@@ -1159,7 +1200,7 @@ impl Scheduler {
     fn beat_update(&mut self, beat: &Beat) -> Update {
         let p = &self.params;
         let q = beat.qrs_onset.0;
-        let phase = respiratory_phase(self.respiration_rate_bpm, q);
+        let phase = self.respiration.phase(self.respiration_rate_bpm, q);
         let empty = self.model.is_empty();
         let c = if empty {
             schedule(beat, p, phase)
@@ -1256,6 +1297,8 @@ pub struct PcgSynth {
     sound_log: Vec<ScheduledSound>,
     murmur_log: Vec<Murmur>,
     keep_beats: bool,
+    /// Frequency factor of small-speaker mode (B28); 1 for the trace.
+    frequency_factor: f64,
 }
 
 impl PcgSynth {
@@ -1279,7 +1322,26 @@ impl PcgSynth {
             sound_log: Vec::new(),
             murmur_log: Vec::new(),
             keep_beats: false,
+            frequency_factor: 1.0,
         }
+    }
+
+    /// Follow the engine's respiratory clock (`heartsim_sim::TimingEngine::respiration`, brief B28):
+    /// beats scheduled from now on take their S2 split from it, so a breath-hold freezes the split
+    /// with the sinus arrhythmia. A clock that was never held changes nothing.
+    pub fn set_respiration(&mut self, clock: RespiratoryClock) {
+        self.sched.respiration = clock;
+    }
+
+    /// Multiply every frequency by `factor` from the next sample on (small-speaker mode, brief B28,
+    /// [`SMALL_SPEAKER_FACTOR`]). Only for a synthesiser whose output is played, never for the one
+    /// the lane draws: the trace keeps the true signal. 1 is the unaltered output, bit for bit.
+    pub fn set_frequency_factor(&mut self, factor: f64) {
+        self.frequency_factor = if factor.is_finite() && factor > 0.0 {
+            factor
+        } else {
+            1.0
+        };
     }
 
     /// The same synthesiser with a scenario's `auscultation` section (brief B27). An empty section
@@ -1420,6 +1482,7 @@ impl PcgSynth {
         let atoms = &self.atoms;
         let gains = &self.gains;
         let chest = self.chest.as_ref();
+        let k = self.frequency_factor;
         let mut v = 0.0;
         self.active.retain(|a| {
             let tau = t.0 - a.onset_ms;
@@ -1427,7 +1490,7 @@ impl PcgSynth {
             if tau >= atom.p.duration_ms {
                 return false;
             }
-            v += a.gain * gains.components[a.atom] * atom.value_with(tau, chest);
+            v += a.gain * gains.components[a.atom] * atom.value_scaled(tau, chest, k);
             true
         });
         let mut out = v * self.scale;
@@ -1440,7 +1503,7 @@ impl PcgSynth {
                 let level = m.level_at(t.0);
                 if level != 0.0 {
                     m_sum +=
-                        gains.murmurs[m.class.index()] * level * murmur_noise(m, t.0 - m.start_ms, chest);
+                        gains.murmurs[m.class.index()] * level * murmur_noise(m, t.0 - m.start_ms, chest, k);
                 }
                 true
             });
@@ -1608,6 +1671,8 @@ pub struct WallTimeSynth {
     /// Wall samples rendered (or skipped) so far.
     rendered: u64,
     starts: Option<Vec<WallStart>>,
+    /// Frequency factor of small-speaker mode (B28).
+    frequency_factor: f64,
 }
 
 impl WallTimeSynth {
@@ -1629,7 +1694,23 @@ impl WallTimeSynth {
             speed: 1.0,
             rendered: 0,
             starts: None,
+            frequency_factor: 1.0,
         }
+    }
+
+    /// Follow the engine's respiratory clock, as [`PcgSynth::set_respiration`].
+    pub fn set_respiration(&mut self, clock: RespiratoryClock) {
+        self.sched.respiration = clock;
+    }
+
+    /// Multiply every frequency by `factor` (small-speaker mode), as
+    /// [`PcgSynth::set_frequency_factor`].
+    pub fn set_frequency_factor(&mut self, factor: f64) {
+        self.frequency_factor = if factor.is_finite() && factor > 0.0 {
+            factor
+        } else {
+            1.0
+        };
     }
 
     /// The same synthesiser with a scenario's `auscultation` section, as
@@ -1751,6 +1832,7 @@ impl WallTimeSynth {
         let gains = &self.gains;
         let chest = self.chest.as_ref();
         let starts = &mut self.starts;
+        let k = self.frequency_factor;
         let mut v = 0.0;
         self.components.retain_mut(|c| {
             let onset = c
@@ -1771,7 +1853,7 @@ impl WallTimeSynth {
                     });
                 }
             }
-            v += c.gain * gains.components[c.atom] * atom.value_with(tau, chest);
+            v += c.gain * gains.components[c.atom] * atom.value_scaled(tau, chest, k);
             true
         });
         let mut out = v * self.scale;
@@ -1790,7 +1872,7 @@ impl WallTimeSynth {
                     && let Some(onset) = wm.wall_onset_ms
                 {
                     m_sum +=
-                        gains.murmurs[wm.m.class.index()] * level * murmur_noise(&wm.m, w - onset, chest);
+                        gains.murmurs[wm.m.class.index()] * level * murmur_noise(&wm.m, w - onset, chest, k);
                 }
                 true
             });

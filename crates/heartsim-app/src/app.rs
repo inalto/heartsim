@@ -22,6 +22,7 @@ mod exports;
 mod keys;
 mod listening;
 mod scenario_control;
+mod teaching;
 mod tour;
 mod tutorials;
 mod vector_tab;
@@ -83,6 +84,10 @@ pub struct HeartSimApp {
     rhythm_quiz: RhythmQuiz,
     /// Interval drill (B8): measure PR, QRS or QT with calipers.
     interval_drill: crate::interval_drill::IntervalDrill,
+    /// Heart-sound findings to loop, with a listen counter (B28).
+    sound_trainer: crate::sound_trainer::SoundTrainer,
+    /// Features, then diagnosis, of a hidden auscultation case (B28).
+    auscultation_quiz: crate::auscultation_quiz::AuscultationQuiz,
     /// Documentation screenshot run (`HEARTSIM_SCREENSHOT_DIR`).
     tour: Option<tour::Tour>,
     /// Guided tutorials (B15) and the scenario timeline editor.
@@ -281,6 +286,20 @@ impl HeartSimApp {
         if let Some(score) = cc.storage.and_then(|s| s.get_string(RHYTHM_QUIZ_SCORE_KEY)) {
             rhythm_quiz.restore_score(&score);
         }
+        let mut sound_trainer = crate::sound_trainer::SoundTrainer::default();
+        if let Some(counts) = cc
+            .storage
+            .and_then(|s| s.get_string(crate::sound_trainer::LISTENS_KEY))
+        {
+            sound_trainer.restore_counts(&counts);
+        }
+        let mut auscultation_quiz = crate::auscultation_quiz::AuscultationQuiz::default();
+        if let Some(score) = cc
+            .storage
+            .and_then(|s| s.get_string(crate::auscultation_quiz::SCORE_KEY))
+        {
+            auscultation_quiz.restore_score(&score);
+        }
 
         Self {
             clock: SimClock::new(Millis(1.0)),
@@ -320,6 +339,8 @@ impl HeartSimApp {
             vector,
             rhythm_quiz,
             interval_drill: crate::interval_drill::IntervalDrill::default(),
+            sound_trainer,
+            auscultation_quiz,
             tour,
             tutorials: Self::load_tutorials(cc, assets),
             cases: assets.map_or_else(
@@ -400,6 +421,8 @@ impl HeartSimApp {
                 }
             }
             self.synth.on_events(&events);
+            // the heart sounds breathe with the engine (a breath-hold, B28)
+            self.sounds.set_respiration(self.engine.respiration());
             self.sounds.on_events(&events);
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, self.clock.dt, self.engine.now());
@@ -776,7 +799,7 @@ impl HeartSimApp {
     }
 
     /// The top bar: the product and its version on the left, then the pages as tabs in three groups
-    /// (Explore, Practise, Learn) or, when the window is too narrow for eleven tabs, as three group
+    /// (Explore, Practise, Learn) or, when the window is too narrow for thirteen tabs, as three group
     /// menus (see [`nav::page_bar`]); on a phone-narrow window only the name of the open page. On the
     /// right a button cycling the theme (system monitor, sun, moon) and a hamburger menu (painted
     /// three lines) with every page (the current one marked, with its number-key shortcut), the
@@ -911,6 +934,8 @@ impl HeartSimApp {
                 ui.label(t!("help-tab-ep-lab"));
                 ui.label(t!("help-tab-rhythm-quiz"));
                 ui.label(t!("help-tab-interval-drill"));
+                ui.label(t!("help-tab-sound-trainer"));
+                ui.label(t!("help-tab-auscultation-quiz"));
                 ui.separator();
                 ui.strong(t!("help-rhythms-heading"));
                 ui.label(t!("help-rhythms-text"));
@@ -1079,6 +1104,8 @@ impl eframe::App for HeartSimApp {
                 }
             }
             Tab::IntervalDrill => self.interval_drill.ui(ui, &self.library, &self.ecg.style),
+            Tab::SoundTrainer => self.sound_trainer_tab(ui),
+            Tab::AuscultationQuiz => self.auscultation_quiz_tab(ui),
             Tab::Tutorials => self.tutorials_tab(ui),
             Tab::EpLab => self.ep_lab_tab(ui),
             Tab::Help => Self::help_tab(ui),
@@ -1089,6 +1116,14 @@ impl eframe::App for HeartSimApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string(RHYTHM_QUIZ_SCORE_KEY, self.rhythm_quiz.score_string());
+        storage.set_string(
+            crate::sound_trainer::LISTENS_KEY,
+            self.sound_trainer.counts_string(),
+        );
+        storage.set_string(
+            crate::auscultation_quiz::SCORE_KEY,
+            self.auscultation_quiz.score_string(),
+        );
         #[cfg(not(feature = "native"))]
         storage.set_string(TUTORIAL_PROGRESS_KEY, self.tutorials.progress.to_text());
         storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());

@@ -21,6 +21,14 @@
 //! * A new engine (scenario load, restart, EP lab, re-entry) or a clock that goes back: clear and
 //!   re-anchor.
 //!
+//! * **A clip** (brief B28: the Sound Trainer, the auscultation quiz, the tutorial's sound check):
+//!   a finished buffer handed over with [`HeartSoundPlayer::play_clip`], looped or played once, with
+//!   a playhead and a count of the loops heard to the end. It takes over the sink whatever the
+//!   simulation does, and needs no "Play heart sounds" switch: pressing Play on those pages is the
+//!   request. Stopping it re-anchors the live stream.
+//! * In **small-speaker mode** the live and slice audio come from [`HeartSounds::audio_ring`], the
+//!   frequency-shifted copy; the lane keeps the true signal.
+//!
 //! The views follow through [`HeartSoundPlayer::display_delay_ms`]: the sink's own constant delay
 //! ([`PcmSink::latency_ms`]: [`QUEUE_TARGET_MS`] for kira, look-ahead plus the browser's reported
 //! latency on the web) plus the user's audio offset while sound is playing, zero otherwise, changed
@@ -28,6 +36,7 @@
 //! ([`SinkReadiness::WaitingForGesture`]) nothing is pushed and nothing is delayed.
 
 use std::fmt;
+use std::rc::Rc;
 
 use heartsim_ecg::PCG_RATE_HZ;
 pub use heartsim_ui::HeartSoundStatus;
@@ -138,6 +147,24 @@ enum Mode {
     Paused,
     Slice,
     Calibrate,
+    Clip,
+}
+
+/// A clip handed to the player (B28): the samples, whether it loops, and how far it has got.
+#[derive(Debug, Clone)]
+struct ClipPlay {
+    samples: Rc<[f32]>,
+    looping: bool,
+    /// Index of the next sample to push (wraps when looping).
+    next: usize,
+    /// Samples pushed since the clip (re)started.
+    pushed: u64,
+    /// Index the clip started at.
+    start: usize,
+    /// Samples heard so far (pushed minus queued minus the device's delay), monotone.
+    heard: u64,
+    /// The clip has been played to its end (non-looping) and the queue has drained.
+    done: bool,
 }
 
 /// A ring slice being played while paused.
@@ -185,6 +212,8 @@ pub struct HeartSoundPlayer {
     scratch: Vec<f32>,
     /// Ring ranges pushed in live mode, when recording (tests).
     ranges: Option<Vec<(u64, u64)>>,
+    /// The clip being played (B28), if any.
+    clip: Option<ClipPlay>,
 }
 
 impl fmt::Debug for HeartSoundPlayer {
@@ -275,7 +304,63 @@ impl HeartSoundPlayer {
             status: HeartSoundStatus::Off,
             scratch: Vec::new(),
             ranges: None,
+            clip: None,
         }
+    }
+
+    /// Play `samples` (PCG rate) from index `start`, looping or once (B28). Replaces a clip that is
+    /// playing: the sink is cleared and the new one starts from silence, so a contrast-pair switch
+    /// lands where the caller says. Ignored for an empty buffer.
+    pub fn play_clip(&mut self, samples: Rc<[f32]>, start: usize, looping: bool) {
+        if samples.is_empty() {
+            return;
+        }
+        let start = start % samples.len();
+        self.clip = Some(ClipPlay {
+            samples,
+            looping,
+            next: start,
+            pushed: 0,
+            start,
+            heard: 0,
+            done: false,
+        });
+        // a new clip always starts from silence
+        if self.mode == Mode::Clip {
+            self.clear_sink();
+            self.mode = Mode::Off;
+        }
+    }
+
+    /// Stop the clip that is playing (a stopped loop is not counted).
+    pub fn stop_clip(&mut self) {
+        self.clip = None;
+    }
+
+    /// A clip is set to play (it may still be waiting for the device).
+    #[must_use]
+    pub fn clip_active(&self) -> bool {
+        self.clip.is_some()
+    }
+
+    /// While a clip plays: the index being heard now.
+    #[must_use]
+    pub fn clip_playhead(&self) -> Option<usize> {
+        let c = self.clip.as_ref()?;
+        let len = c.samples.len() as u64;
+        let at = c.start as u64 + c.heard;
+        Some(if c.looping {
+            (at % len) as usize
+        } else {
+            at.min(len - 1) as usize
+        })
+    }
+
+    /// Loops of the clip heard to their end since it started (a full length of samples heard, from
+    /// wherever it started); 0 for a clip that does not loop until it has been heard once.
+    #[must_use]
+    pub fn clip_loops(&self) -> u64 {
+        self.clip.as_ref().map_or(0, |c| c.heard / c.samples.len() as u64)
     }
 
     /// `None` until the device has been asked for, then whether a sink is ready.
@@ -408,7 +493,7 @@ impl HeartSoundPlayer {
         let reanchor = self.generation != Some(sounds.generation()) || input.sim_now_ms < self.last_sim_ms;
         self.generation = Some(sounds.generation());
         self.last_sim_ms = input.sim_now_ms;
-        if !input.enabled && !self.calibrate {
+        if !input.enabled && !self.calibrate && self.clip.is_none() {
             if self.mode != Mode::Off {
                 self.clear_sink();
                 self.mode = Mode::Off;
@@ -473,6 +558,8 @@ impl HeartSoundPlayer {
         }
         let want = if self.calibrate {
             Mode::Calibrate
+        } else if self.clip.is_some() {
+            Mode::Clip
         } else if input.paused {
             if self.slice.is_some() {
                 Mode::Slice
@@ -545,7 +632,52 @@ impl HeartSoundPlayer {
                 self.status = HeartSoundStatus::Calibrating;
                 0.0
             }
+            Mode::Clip => {
+                self.clip_frame(input);
+                self.status = HeartSoundStatus::PlayingClip;
+                0.0
+            }
         }
+    }
+
+    fn clip_frame(&mut self, input: &PlayerInput) {
+        let q = self.queued_samples();
+        let Some(mut c) = self.clip.take() else { return };
+        let len = c.samples.len();
+        // keep about two targets queued, like a slice: a smooth playhead, a quick Stop
+        let want = (2 * Self::target_samples()).saturating_sub(q) as usize;
+        let mut buf = std::mem::take(&mut self.scratch);
+        buf.clear();
+        let mut at = c.next;
+        while buf.len() < want && (c.looping || at < len) {
+            let n = (want - buf.len()).min(len - at);
+            buf.extend_from_slice(&c.samples[at..at + n]);
+            at += n;
+            if at >= len && c.looping {
+                at = 0;
+            }
+        }
+        let took = self.push(&buf);
+        self.scratch = buf;
+        // only what the sink took counts; the rest is offered again next frame
+        c.next = if c.looping {
+            (c.next + took) % len
+        } else {
+            (c.next + took).min(len)
+        };
+        c.pushed += took as u64;
+        let q = self.queued_samples();
+        let offset = samples_for_ms(f64::from(input.offset_ms.max(0.0))) as u64 + self.beyond_queue_samples();
+        c.heard = c.heard.max(c.pushed.saturating_sub(q + offset));
+        if !c.looping && c.next >= len && q == 0 {
+            c.done = true;
+        }
+        if c.done {
+            // played once to the end: the clip is over, live playback takes the sink back
+            self.mode = Mode::Paused;
+            return;
+        }
+        self.clip = Some(c);
     }
 
     /// The sink's constant delay, ms (never below the queue target).
@@ -572,7 +704,7 @@ impl HeartSoundPlayer {
     }
 
     fn live(&mut self, sounds: &HeartSounds) {
-        let ring = sounds.ring();
+        let ring = sounds.audio_ring();
         let pushed = ring.pushed();
         if self.next > pushed || self.next < ring.oldest_index() {
             self.next = pushed;
@@ -637,7 +769,7 @@ impl HeartSoundPlayer {
             self.mode = Mode::Paused;
             return;
         }
-        let ring = sounds.ring();
+        let ring = sounds.audio_ring();
         // keep about two targets queued: the playhead stays smooth and Stop stays quick
         let want = (2 * Self::target_samples()).saturating_sub(q);
         let until = s.end.min(s.next + want);

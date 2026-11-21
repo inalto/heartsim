@@ -1344,6 +1344,7 @@ impl EikonalEngine {
             Action::AccessoryPathway { .. } => Err(ActionError::Unsupported("AccessoryPathway")),
             Action::Drug { .. } => Err(ActionError::Unsupported("Drug")),
             Action::MoveElectrode { .. } => Err(ActionError::Unsupported("MoveElectrode")),
+            Action::BreathHold { .. } => Err(ActionError::Unsupported("BreathHold")),
         }
     }
 

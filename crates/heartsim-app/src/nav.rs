@@ -1,6 +1,6 @@
 //! Page navigation: the pages, their three groups and the one-line page bar in the top bar.
 //!
-//! The bar adapts to the width it is given and never wraps: with room for all eleven pages they are
+//! The bar adapts to the width it is given and never wraps: with room for all thirteen pages they are
 //! tabs, grouped with a small caption (or just a separator when the captions would not fit); with
 //! less, three group buttons whose menus list the pages (the group of the open page shows its name);
 //! the phone-narrow layout is left to the caller (title and hamburger only).
@@ -9,7 +9,7 @@ use eframe::egui::{self, Color32, RichText, TextStyle, Ui};
 use heartsim_ui::t;
 
 /// The top-level pages, one tab each. The order of [`Tab::ALL`] is the order of the number-key
-/// shortcuts (1–9, 0), not of the bar.
+/// shortcuts (1–9, 0; the last three pages have none), not of the bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Simulator,
@@ -23,6 +23,10 @@ pub enum Tab {
     Tutorials,
     EpLab,
     Help,
+    /// Single heart-sound findings to loop, with a listen counter (B28).
+    SoundTrainer,
+    /// Features, then diagnosis, of a hidden auscultation case (B28).
+    AuscultationQuiz,
 }
 
 /// The three groups of pages in the bar: see, practise, learn.
@@ -51,7 +55,14 @@ impl Group {
                 Tab::Electrodes,
                 Tab::EpLab,
             ],
-            Group::Practise => &[Tab::AxisTrainer, Tab::Quiz, Tab::RhythmQuiz, Tab::IntervalDrill],
+            Group::Practise => &[
+                Tab::AxisTrainer,
+                Tab::Quiz,
+                Tab::RhythmQuiz,
+                Tab::IntervalDrill,
+                Tab::SoundTrainer,
+                Tab::AuscultationQuiz,
+            ],
             Group::Learn => &[Tab::Tutorials, Tab::Help],
         }
     }
@@ -69,7 +80,7 @@ impl Group {
 
 impl Tab {
     /// Every page in shortcut order (see [`Tab::shortcut`]).
-    pub const ALL: [Tab; 11] = [
+    pub const ALL: [Tab; 13] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -81,6 +92,8 @@ impl Tab {
         Tab::Tutorials,
         Tab::EpLab,
         Tab::Help,
+        Tab::SoundTrainer,
+        Tab::AuscultationQuiz,
     ];
 
     /// The page's name, as in the bar and the menus.
@@ -98,6 +111,8 @@ impl Tab {
             Tab::Tutorials => t!("tab-tutorials"),
             Tab::EpLab => t!("tab-ep-lab"),
             Tab::Help => t!("tab-help"),
+            Tab::SoundTrainer => t!("tab-sound-trainer"),
+            Tab::AuscultationQuiz => t!("tab-auscultation-quiz"),
         }
     }
 
@@ -110,7 +125,8 @@ impl Tab {
             .unwrap_or(Group::Explore)
     }
 
-    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh page (Help) has none.
+    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to thirteenth pages (Help,
+    /// the Sound Trainer and the auscultation quiz) have none.
     #[must_use]
     pub fn shortcut(self) -> Option<&'static str> {
         const LABELS: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
@@ -122,9 +138,9 @@ impl Tab {
 /// How the bar draws the pages for a given width.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BarStyle {
-    /// Eleven tabs with a caption before each group.
+    /// Every page a tab, with a caption before each group.
     TabsWithCaptions,
-    /// Eleven tabs, groups only separated.
+    /// Every page a tab, groups only separated.
     Tabs,
     /// Three group buttons with a menu each.
     GroupMenus,

@@ -7,6 +7,7 @@ pub mod auscultation_chest;
 pub mod axis_dial;
 pub mod calipers;
 pub mod cards;
+pub mod clip_view;
 pub mod colour_bar;
 pub mod controls;
 pub mod defib_panel;
@@ -39,6 +40,7 @@ pub use axis_dial::{
     axis_panel, lead_polarity, polarity_table,
 };
 pub use calipers::{Caliper, CaliperReading, CaliperSet, Playback};
+pub use clip_view::{ClipTrace, clip_view, draw_altered_tag};
 pub use colour_bar::{colour_bar, lut_colour};
 pub use defib_panel::{DefibPanelState, DefibResponse, DefibSound, defib_panel, describe_shock};
 pub use drug_tray::drug_tray;

@@ -8,14 +8,22 @@
 //! Both synthesisers hear the selected listening site and chest piece (B27 part B), so the lane and
 //! the sound agree; the trace's schedule is kept for a ring's length so the 3-D heart's valve
 //! highlights ([`HeartSounds::valve_glow_at`]) come from the sounds that are heard.
+//!
+//! Brief B28 adds two things. The synthesisers follow the engine's respiratory clock
+//! ([`HeartSounds::set_respiration`]), so a breath-hold freezes the split with the sinus arrhythmia.
+//! And in **small-speaker mode** ([`HeartSounds::set_small_speaker`]) a third synthesiser, fed the
+//! same events with every frequency multiplied by [`SMALL_SPEAKER_FACTOR`], fills a second ring
+//! with the same indices; the player reads that one ([`HeartSounds::audio_ring`]) while the lane keeps
+//! drawing the true signal.
 
 use heartsim_core::{Auscultation, Millis};
 use heartsim_ecg::pcg::PCG_PERIOD_MS;
 use heartsim_ecg::{
-    LeadRing, Listening, ListeningChoice, PCG_RATE_HZ, PcgParams, PcgSynth, SiteTable, SoundLabel,
-    WallTimeSynth,
+    LeadRing, Listening, ListeningChoice, PCG_RATE_HZ, PcgParams, PcgSynth, SMALL_SPEAKER_FACTOR, SiteTable,
+    SoundLabel, WallTimeSynth,
 };
 use heartsim_sim::Event;
+use heartsim_sim::timing::RespiratoryClock;
 use heartsim_ui::PcgLane;
 
 /// PCG samples per strip sample: the strip runs at 500 Hz, the PCG at [`PCG_RATE_HZ`].
@@ -43,6 +51,10 @@ pub struct HeartSounds {
     listening: Listening,
     /// How long the schedule is kept for the valve highlights, ms (the ring's length).
     history_ms: f64,
+    /// The engine's respiratory clock, handed to every synthesiser (B28 breath-hold).
+    respiration: RespiratoryClock,
+    /// Small-speaker mode (B28): the altered synthesiser and its ring, `None` when off.
+    altered: Option<(PcgSynth, LeadRing)>,
 }
 
 impl HeartSounds {
@@ -65,6 +77,8 @@ impl HeartSounds {
             choice: ListeningChoice::default(),
             listening: Listening::overview(),
             history_ms: f64::from(seconds) * 1000.0,
+            respiration: RespiratoryClock::default(),
+            altered: None,
         }
     }
 
@@ -84,8 +98,13 @@ impl HeartSounds {
         self.marks.clear();
         self.last_t_ms = None;
         self.generation += 1;
+        // a new engine breathes freely until it is told otherwise
+        self.respiration = RespiratoryClock::default();
         if self.wall.is_some() {
             self.wall = Some(self.new_wall());
+        }
+        if self.altered.is_some() {
+            self.altered = Some(self.new_altered());
         }
     }
 
@@ -93,7 +112,64 @@ impl HeartSounds {
         let mut wall = WallTimeSynth::new(PcgParams::default(), self.seed, self.respiration_rate_bpm)
             .with_auscultation(&self.auscultation);
         wall.set_listening(&self.listening);
+        wall.set_respiration(self.respiration);
+        if self.altered.is_some() {
+            wall.set_frequency_factor(SMALL_SPEAKER_FACTOR);
+        }
         wall
+    }
+
+    fn new_altered(&self) -> (PcgSynth, LeadRing) {
+        let mut synth = PcgSynth::new(PcgParams::default(), self.seed, self.respiration_rate_bpm)
+            .with_auscultation(&self.auscultation);
+        synth.set_listening(&self.listening);
+        synth.set_respiration(self.respiration);
+        synth.set_frequency_factor(SMALL_SPEAKER_FACTOR);
+        let ring = LeadRing::starting_at(self.ring.capacity(), PCG_RATE_HZ, self.ring.pushed());
+        (synth, ring)
+    }
+
+    /// Small-speaker mode on or off (B28): while on, the sound is synthesised with every frequency
+    /// multiplied by [`SMALL_SPEAKER_FACTOR`] into [`Self::audio_ring`]; the lane's ring is untouched.
+    /// Switching on starts the altered synthesiser fresh: it hears the events from then on.
+    pub fn set_small_speaker(&mut self, on: bool) {
+        if on == self.altered.is_some() {
+            return;
+        }
+        self.altered = on.then(|| self.new_altered());
+        let factor = if on { SMALL_SPEAKER_FACTOR } else { 1.0 };
+        if let Some(w) = &mut self.wall {
+            w.set_frequency_factor(factor);
+        }
+    }
+
+    /// Whether small-speaker mode is on.
+    #[must_use]
+    pub fn small_speaker(&self) -> bool {
+        self.altered.is_some()
+    }
+
+    /// The ring the sound is played from: the altered one in small-speaker mode, else the lane's.
+    /// Both carry the same absolute indices.
+    #[must_use]
+    pub fn audio_ring(&self) -> &LeadRing {
+        self.altered.as_ref().map_or(&self.ring, |(_, r)| r)
+    }
+
+    /// Follow the engine's respiratory clock (`TimingEngine::respiration`, B28) in every
+    /// synthesiser. Called after every engine step; an unchanged clock changes nothing.
+    pub fn set_respiration(&mut self, clock: RespiratoryClock) {
+        if clock == self.respiration {
+            return;
+        }
+        self.respiration = clock;
+        self.synth.set_respiration(clock);
+        if let Some(w) = &mut self.wall {
+            w.set_respiration(clock);
+        }
+        if let Some((a, _)) = &mut self.altered {
+            a.set_respiration(clock);
+        }
     }
 
     /// Listen at `choice` (B27 part B) from the next sample on, in the trace and in the slow-motion
@@ -108,6 +184,9 @@ impl HeartSounds {
         self.synth.set_listening(&self.listening);
         if let Some(w) = &mut self.wall {
             w.set_listening(&self.listening);
+        }
+        if let Some((a, _)) = &mut self.altered {
+            a.set_listening(&self.listening);
         }
     }
 
@@ -164,6 +243,9 @@ impl HeartSounds {
         if let Some(w) = &mut self.wall {
             w.on_events(events);
         }
+        if let Some((a, _)) = &mut self.altered {
+            a.on_events(events);
+        }
     }
 
     /// Push the [`PCG_PER_ECG_SAMPLE`] samples that end at `now`, the time of the strip sample just
@@ -178,6 +260,9 @@ impl HeartSounds {
         for i in (0..PCG_PER_ECG_SAMPLE).rev() {
             let t = now.0 - i as f64 * PCG_PERIOD_MS;
             self.ring.push(self.synth.sample(Millis(t)));
+            if let Some((a, ring)) = &mut self.altered {
+                ring.push(a.sample(Millis(t)));
+            }
         }
         self.last_t_ms = Some(now.0);
         if self.ring.pushed().is_multiple_of(PCG_RATE_HZ as u64) {
@@ -209,6 +294,28 @@ impl HeartSounds {
             ring: &self.ring,
             marks: &self.marks,
         }
+    }
+}
+
+/// The "altered sound" tag the lane shows while what is heard differs from the trace drawn (B28):
+/// small-speaker mode whenever the heart-sound audio is on (playing, paused, a slice), slow motion,
+/// or both; `None` when the sound is the trace or there is no sound.
+#[must_use]
+pub fn altered_sound_tag(status: heartsim_ui::HeartSoundStatus, small_speaker: bool) -> Option<String> {
+    use heartsim_ui::{HeartSoundStatus, t};
+    let silent = matches!(
+        status,
+        HeartSoundStatus::Off | HeartSoundStatus::NoDevice | HeartSoundStatus::Unsupported
+    );
+    match (status, small_speaker) {
+        (HeartSoundStatus::SlowMotion, true) => Some(format!(
+            "{} · {}",
+            t!("ecg-sound-altered-slow"),
+            t!("ecg-sound-altered-small")
+        )),
+        (HeartSoundStatus::SlowMotion, false) => Some(t!("ecg-sound-altered-slow")),
+        (_, true) if !silent => Some(t!("ecg-sound-altered-small")),
+        _ => None,
     }
 }
 

@@ -20,7 +20,7 @@ pub use lead::{ELECTRODE_COUNT, Electrode, ElectrodePotentials, LEAD_COUNT, Lead
 pub use params::{GlobalParams, Parameters, RegionParams};
 pub use region::Region;
 pub use scenario::{
-    Action, Auscultation, EngineTier, ExpectedFindings, ExtraSound, LesionKind, MurmurTiming, RhythmKind,
-    Scenario, Severity, SplitMode, StimSite, TimedAction,
+    Action, Auscultation, BreathPhase, EngineTier, ExpectedFindings, ExtraSound, LesionKind, MurmurTiming,
+    RhythmKind, Scenario, Severity, SplitMode, StimSite, TimedAction,
 };
 pub use time::{Millis, SimClock};

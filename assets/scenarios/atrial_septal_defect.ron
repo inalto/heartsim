@@ -10,7 +10,7 @@ Scenario(
     anatomy: "default",
     seed: 42,
     notes: Some("A left-to-right shunt at atrial level keeps the right ventricle volume-loaded and couples the two atria, so P2 is late in every beat and respiration no longer moves it: a wide, fixed split of S2 (it changes by less than about 20 ms). The extra flow across the normal pulmonary valve gives a soft mid-systolic ejection murmur.\nOn the lane: A2 and P2 always labelled apart by the same distance, in inspiration and in expiration. Compare with the normal preset, whose split opens on inspiration and closes on expiration.\nIn patients the ECG often shows an rSR' pattern in V1 and right axis deviation; this preset keeps a plain sinus ECG.\nDifferential: right bundle branch block (wide split that still moves), pulmonary stenosis.\nThe sounds are a synthesised model, not a recording: timing follows the cited sources, pitch and loudness are designed. The lane under the strip shows the trace; pick a slower speed to hear the intervals stretch."),
-    confused_with: ["pulmonary_stenosis", "rbbb", "innocent_murmur"],
+    confused_with: ["pulmonary_stenosis", "rbbb", "innocent_murmur", "aortic_stenosis_mild"],
     references: [
         "MSD Manual Professional Version: Atrial septal defect, msdmanuals.com.",
         "MSD Manual Professional Version: Cardiac auscultation (Approach to the cardiac patient), msdmanuals.com.",

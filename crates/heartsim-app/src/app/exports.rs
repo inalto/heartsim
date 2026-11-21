@@ -120,6 +120,18 @@ impl HeartSimApp {
                 self.request_window_screenshot(ui.ctx());
             }
         });
+        // B28: the heart-sound signal of the same excerpt, as heard at the listening site
+        ui.horizontal(|ui| {
+            let live = self.exports.review.is_none() && !self.sounds.ring().is_empty();
+            if ui
+                .add_enabled(live, egui::Button::new(t!("export-wav")))
+                .on_hover_text(t!("export-wav-hint"))
+                .on_disabled_hover_text(t!("export-live-hint"))
+                .clicked()
+            {
+                self.save_heart_sounds_wav();
+            }
+        });
         ui.separator();
         ui.strong(t!("import-heading"));
         ui.horizontal(|ui| {
@@ -201,6 +213,75 @@ impl HeartSimApp {
                 Err(e) => t!("export-failed", error = e.as_str()),
             },
         );
+    }
+
+    /// The scenario's id and title for an export header ("custom" for the slider settings).
+    fn export_names(&self) -> (String, String) {
+        self.scenario
+            .and_then(|i| self.library.entries.get(i))
+            .map_or_else(
+                || ("custom".to_owned(), "Custom (sliders)".to_owned()),
+                |s| (s.scenario.id.clone(), s.scenario.title.clone()),
+            )
+    }
+
+    /// Write `samples` (PCG rate) as a WAV file in the export folder and say so in the status line.
+    fn write_wav(&mut self, id: &str, title: &str, site: &str, samples: &[f32], note: Option<&str>) {
+        let info = heartsim_io::WavInfo {
+            title: title.to_owned(),
+            comment: heartsim_io::wav::wav_comment(id, site, note),
+            date: heartsim_io::today(),
+        };
+        let stem = heartsim_io::ExportInfo {
+            scenario_id: id.to_owned(),
+            scenario_title: title.to_owned(),
+            mm_per_s: self.ecg.style.mm_per_s,
+            mm_per_mv: self.ecg.style.mm_per_mv,
+            date: info.date.clone(),
+            paper: self.exports.paper,
+            trace_note: None,
+        }
+        .stem();
+        let file = heartsim_io::heart_sound_file(&stem, samples, heartsim_ecg::PCG_RATE_HZ, &info);
+        let dir = PathBuf::from(self.exports.dir.trim());
+        self.exports.status = Some(match write_files(&dir, &[file]) {
+            Ok(written) => ExportPanel::describe(&written),
+            Err(e) => t!("export-failed", error = e.to_string()),
+        });
+    }
+
+    /// The Export window's WAV button (B28): the last export length of the heart-sound ring up to
+    /// the strip cursor, as heard at the current site, small-speaker mode included when it is on.
+    fn save_heart_sounds_wav(&mut self) {
+        let head = self.ecg.head(&self.rings) * crate::heart_sounds::PCG_PER_ECG_SAMPLE as u64;
+        let n = (self.exports.window_s * f64::from(heartsim_ecg::PCG_RATE_HZ)) as u64;
+        let mut samples = Vec::new();
+        self.sounds
+            .audio_ring()
+            .range(head.saturating_sub(n), head, &mut samples);
+        let (id, title) = self.export_names();
+        let site = self.ecg.listening.site.id().to_owned();
+        let note = self
+            .sounds
+            .small_speaker()
+            .then_some("Small-speaker mode: frequencies multiplied, an altered sound.");
+        self.write_wav(&id, &title, &site, &samples, note);
+    }
+
+    /// The Sound Trainer's "Save WAV" (B28): one loop of the clip as it is played.
+    pub(super) fn save_clip_wav(&mut self, entry: &crate::sound_clips::ClipEntry) {
+        let clip = &entry.clip;
+        let title = self.library.index_of(&clip.scenario_id).map_or_else(
+            || clip.scenario_id.clone(),
+            |i| self.library.entries[i].scenario.title.clone(),
+        );
+        let site = clip.options.listening.site.id().to_owned();
+        let note = clip
+            .options
+            .small_speaker
+            .then_some("Small-speaker mode: frequencies multiplied, an altered sound.");
+        let samples = entry.samples(false);
+        self.write_wav(&clip.scenario_id.clone(), &title, &site, &samples, note);
     }
 
     fn request_window_screenshot(&mut self, ctx: &egui::Context) {

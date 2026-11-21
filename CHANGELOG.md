@@ -4,6 +4,36 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Heart sounds, phase 5: teaching (brief B28). **Sound Trainer** (Practise): 22 single findings (S1 and S2, the four splits,
+  soft and variable S1, S3, S4, summation gallop, clicks, opening snap, each murmur, rub) as loops cut at a quiet point of
+  diastole into whole cycles (irregular rhythms: 9 s with fades), with Play/Stop, a half-speed version (labelled as altered
+  sound), the trace shown or hidden, site and chest piece, breathing, and a listen counter per finding with your total, kept
+  between sessions. Four contrast pairs (innocent murmur / aortic stenosis; ejection / regurgitant murmur; split S2 / opening
+  snap / S3; S4 / split S1) switch with one key (S) at the same point of the cardiac cycle. **Auscultation Quiz** (Practise):
+  a hidden auscultation case loops with the trace and name hidden; tick the features you hear, then choose one of four
+  diagnoses; feedback shows the trace with its labels, the ECG, which features were right and the teaching text. Features and
+  diagnoses are scored separately and kept; slow motion only in the feedback step. Without a sound output both pages show the
+  trace and say why.
+- Tutorials `11_heart_sounds` (sound check with a 200 Hz and an 800 Hz tone, S1/S2 against the ECG, the split and breathing,
+  slow motion, long PR, complete block, LBBB, atrial fibrillation, S3, S4) and `12_murmurs` (systolic and diastolic murmurs,
+  aortic stenosis, the innocent murmur, aortic regurgitation, mitral stenosis, where to listen). New tutorial actions:
+  `HeartSoundAudio`, `HeartSoundLane`, `Listen(site, chest)`, `SoundCheck`, and the panels `SoundTrainer` and
+  `AuscultationQuiz`. `heartsim-cli run-tutorial` runs them headless (audio actions are no-ops there).
+- Breath-hold: a scenario-timeline action `BreathHold(phase: Some(EndExpiration | PeakInspiration))` (`None` breathes again)
+  and a Breathing choice in the Display popup. The respiratory clock of the timing engine freezes, so the sinus arrhythmia and
+  the S2 split stop following the breath; scenarios without the action are bit-identical.
+- Small-speaker mode (Settings → Heart sounds, off by default): every heart-sound frequency ×3 in what is played (designed),
+  so S3, S4 and the rumble reach laptop and phone speakers; the lane keeps the true trace and is tagged "altered sound".
+- WAV export of the heart sounds (Export window, and "Save WAV" in the Sound Trainer): 16-bit mono at 44.1 kHz through the
+  sound output's resampler, with the scenario, the listening site and "synthesised by heartsim" in the INFO chunk. Desktop only.
+- `docs/research/heart-sound-clips.md`: candidate real recordings (CC0, public domain, CC BY) with their licences as read on
+  the primary pages, for the maintainer's approval. No recording ships yet.
+
+### Changed
+- The band-limited resampler moved from the app to `heartsim_ecg::resample` (shared with the WAV export); the app re-exports it.
+- The navigation has thirteen pages; the new two have no number-key shortcut.
+
 ## [0.19.0] — 2026-11-21
 
 ### Added

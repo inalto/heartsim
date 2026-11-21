@@ -7,6 +7,7 @@ pub mod asset_dirs;
 pub mod assets;
 #[cfg(feature = "audio")]
 pub mod audio_out;
+pub mod auscultation_quiz;
 pub mod axis_quiz;
 pub mod case_ui;
 pub mod disclaimer;
@@ -26,7 +27,10 @@ pub mod scenario_file;
 pub mod scenarios;
 pub mod settings;
 pub mod snapshot_ring;
+pub mod sound_check;
+pub mod sound_clips;
 pub mod sound_out;
+pub mod sound_trainer;
 pub mod tutorial;
 pub mod tutorial_ui;
 pub mod update_check;

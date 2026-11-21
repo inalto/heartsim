@@ -27,6 +27,24 @@ enum Extra {
     AxisQuiz,
     /// Ask an interval-drill question.
     IntervalDrill,
+    /// The Sound Trainer with a finding selected and listens counted (B28).
+    SoundTrainer,
+    /// The Sound Trainer on a contrast pair (B28).
+    TrainerPair,
+    /// An auscultation-quiz question at the features step (B28).
+    AuscultationQuiz,
+    /// An auscultation-quiz question answered: the feedback step (B28).
+    AuscultationFeedback,
+    /// The heart-sound tutorial's sound-check page (B28).
+    SoundCheck,
+    /// A breath-hold at peak inspiration with the Display popup open (B28).
+    BreathHold,
+    /// Small-speaker mode on, with the Settings window (B28; a stand-in sink).
+    SmallSpeaker,
+    /// Small-speaker mode on, the lane with its "altered sound" tag (B28; a stand-in sink).
+    SmallSpeakerLane,
+    /// The Export window with the WAV button (B28).
+    ExportWindow,
 }
 
 /// One screenshot.
@@ -61,7 +79,7 @@ const DEFAULT: Step = Step {
     listening: None,
 };
 
-const STEPS: [Step; 21] = [
+const STEPS: [Step; 31] = [
     Step {
         file: "simulator-sinus.png",
         ..DEFAULT
@@ -220,6 +238,93 @@ const STEPS: [Step; 21] = [
         }),
         ..DEFAULT
     },
+    // brief B28: the teaching pages and tools
+    Step {
+        file: "sound-trainer.png",
+        tab: Tab::SoundTrainer,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::SoundTrainer,
+        ..DEFAULT
+    },
+    Step {
+        file: "sound-trainer-pair.png",
+        tab: Tab::SoundTrainer,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::TrainerPair,
+        ..DEFAULT
+    },
+    Step {
+        file: "auscultation-quiz.png",
+        tab: Tab::AuscultationQuiz,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::AuscultationQuiz,
+        ..DEFAULT
+    },
+    Step {
+        file: "auscultation-quiz-feedback.png",
+        tab: Tab::AuscultationQuiz,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::AuscultationFeedback,
+        ..DEFAULT
+    },
+    Step {
+        file: "tutorial-sound-check.png",
+        run_s: 3.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::SoundCheck,
+        ..DEFAULT
+    },
+    Step {
+        file: "simulator-breath-hold.png",
+        after_qrs_ms: 0.0,
+        extra: Extra::BreathHold,
+        listening: Some(ListeningChoice {
+            site: ListeningSite::Pulmonic,
+            chest: ChestPiece::Diaphragm,
+        }),
+        ..DEFAULT
+    },
+    Step {
+        file: "settings-small-speaker.png",
+        scenario: "heart_failure_s3",
+        after_qrs_ms: 0.0,
+        extra: Extra::SmallSpeaker,
+        listening: Some(ListeningChoice {
+            site: ListeningSite::Mitral,
+            chest: ChestPiece::Bell,
+        }),
+        ..DEFAULT
+    },
+    Step {
+        file: "simulator-small-speaker.png",
+        scenario: "heart_failure_s3",
+        after_qrs_ms: 0.0,
+        extra: Extra::SmallSpeakerLane,
+        listening: Some(ListeningChoice {
+            site: ListeningSite::Mitral,
+            chest: ChestPiece::Bell,
+        }),
+        ..DEFAULT
+    },
+    Step {
+        file: "export-window-wav.png",
+        after_qrs_ms: 0.0,
+        extra: Extra::ExportWindow,
+        ..DEFAULT
+    },
+    // the narrow layout: run with HEARTSIM_WINDOW_SIZE=900x700 to see the group menus
+    Step {
+        file: "nav-narrow-practise.png",
+        tab: Tab::SoundTrainer,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::SoundTrainer,
+        ..DEFAULT
+    },
 ];
 
 /// The tour's EP-lab shot: this procedure, with the tachycardia induced by a premature stimulus.
@@ -336,6 +441,17 @@ impl HeartSimApp {
                     self.load_scenario(i);
                 }
                 self.tab = step.tab;
+                // every shot starts from closed windows and a closed tutorial, and the B28 shots'
+                // stand-in sound settings do not outlive them (the tour's settings are stored)
+                self.tutorials.close();
+                if !matches!(step.extra, Extra::SmallSpeaker | Extra::SmallSpeakerLane) {
+                    self.settings.small_speaker = false;
+                }
+                self.settings_open = false;
+                #[cfg(feature = "export")]
+                {
+                    self.exports.open = false;
+                }
                 self.settings.adjust_open = tour.open_adjust;
                 if tour.changed {
                     self.engine.params.sinus.rate_bpm = 55.0;
@@ -381,6 +497,77 @@ impl HeartSimApp {
                         self.set_qrs_axis(target);
                     }
                     Extra::IntervalDrill => self.interval_drill.next_question(&self.library),
+                    Extra::SoundTrainer => {
+                        let i = crate::sound_trainer::FINDINGS
+                            .iter()
+                            .position(|f| f.id == "murmur_ms")
+                            .unwrap_or(0);
+                        self.sound_trainer.select(
+                            crate::sound_trainer::Selection::Finding(i),
+                            &mut self.sound_player,
+                        );
+                        self.sound_trainer
+                            .restore_counts("murmur_ms=37,s3=112,s4=96,s1_s2=240,murmur_as=58");
+                    }
+                    Extra::TrainerPair => {
+                        self.sound_trainer
+                            .select(crate::sound_trainer::Selection::Pair(2), &mut self.sound_player);
+                        self.sound_trainer.member = 1;
+                    }
+                    Extra::AuscultationQuiz | Extra::AuscultationFeedback => {
+                        self.auscultation_quiz
+                            .next_question(&self.library, &mut self.sound_player);
+                        if step.extra == Extra::AuscultationFeedback
+                            && let Some(e) = self.auscultation_quiz.expected(&self.library)
+                        {
+                            let mut given = e.features;
+                            // one feature missed, so the feedback shows a wrong mark too
+                            given.0[0] = !given.0[0];
+                            self.auscultation_quiz.given = given;
+                            self.auscultation_quiz.submit_features(&self.library);
+                            if let Some(q) = self.auscultation_quiz.question.clone() {
+                                self.auscultation_quiz.answer(q.answer);
+                            }
+                        }
+                    }
+                    Extra::SoundCheck => {
+                        // a stand-in output, so the page shows its tones (without one it is text)
+                        self.sound_player.set_factory(
+                            || Ok(Box::new(crate::sound_out::FakeSink::new())),
+                            heartsim_ui::HeartSoundStatus::NoDevice,
+                        );
+                        if let Some(i) = self
+                            .tutorials
+                            .library
+                            .tutorials
+                            .iter()
+                            .position(|t| t.id == "11_heart_sounds")
+                        {
+                            self.tutorials.open(i, 0);
+                        }
+                    }
+                    Extra::BreathHold => {
+                        self.ecg.show_heart_sounds = true;
+                        self.apply_therapy(&heartsim_core::Action::BreathHold {
+                            phase: Some(heartsim_core::BreathPhase::PeakInspiration),
+                        });
+                    }
+                    Extra::SmallSpeaker | Extra::SmallSpeakerLane => {
+                        // a stand-in output so the Settings card and the tag exist without a device
+                        self.sound_player.set_factory(
+                            || Ok(Box::new(crate::sound_out::FakeSink::new())),
+                            heartsim_ui::HeartSoundStatus::NoDevice,
+                        );
+                        self.settings.small_speaker = true;
+                        self.set_heart_sound_audio(true);
+                        self.settings_open = step.extra == Extra::SmallSpeaker;
+                    }
+                    Extra::ExportWindow => {
+                        #[cfg(feature = "export")]
+                        {
+                            self.exports.open = true;
+                        }
+                    }
                 }
                 tour.phase = Phase::Running;
             }
@@ -395,7 +582,7 @@ impl HeartSimApp {
                 }
             }
             Phase::Settle(n) => {
-                if tour.open_display {
+                if tour.open_display || step.extra == Extra::BreathHold {
                     self.ecg.request_display_popup();
                 }
                 tour.phase = if *n == 0 {

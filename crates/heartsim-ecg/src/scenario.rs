@@ -8,7 +8,8 @@
 //! no randomness, no I/O.
 
 use crate::analysis::{Analysis, Analyzer};
-use crate::pcg::{PCG_PERIOD_MS, PCG_RATE_HZ, PcgParams, PcgSynth, WallTimeSynth};
+use crate::listening::Listening;
+use crate::pcg::{PCG_PERIOD_MS, PCG_RATE_HZ, PcgParams, PcgSynth, SoundMark, WallTimeSynth};
 use crate::synth::{FRIDERICIA_EXPONENT, GaussianSynth, MorphologyOverrides, SynthModulation, UnknownWave};
 use heartsim_core::scenario::{ExpectedFindings, ScenarioError};
 use heartsim_core::{LEAD_COUNT, Lead, Millis, Scenario};
@@ -79,6 +80,9 @@ pub struct Recording {
     pub pcg: Vec<f32>,
     /// Sampling rate of [`Recording::pcg`], Hz ([`PCG_RATE_HZ`]).
     pub pcg_rate_hz: f32,
+    /// The labels of the heart sounds in [`Recording::pcg`] (S1, S2 or A2/P2, the extra sounds),
+    /// at the times the model scheduled them: the same labels the live lane draws.
+    pub pcg_marks: Vec<SoundMark>,
 }
 
 impl Tier0Scenario {
@@ -131,8 +135,31 @@ impl Tier0Scenario {
 
     /// Run the scenario for `seconds`, applying its timeline.
     pub fn record(&self, seconds: f64) -> Result<Recording, Tier0Error> {
+        self.record_at(seconds, None)
+    }
+
+    /// [`Self::record`] with the heart sounds heard at a listening site and chest piece (brief B27
+    /// part B; `None` and [`Listening::overview`] give the same trace as [`Self::record`]). The ECG
+    /// does not depend on it.
+    pub fn record_at(&self, seconds: f64, listening: Option<&Listening>) -> Result<Recording, Tier0Error> {
+        self.record_with(seconds, listening, 1.0)
+    }
+
+    /// [`Self::record_at`] with every heart-sound frequency multiplied by `frequency_factor` (the
+    /// small-speaker mode of brief B28, [`crate::SMALL_SPEAKER_FACTOR`]; 1 is [`Self::record_at`]).
+    /// For a sound to be played, never for a trace to be drawn.
+    pub fn record_with(
+        &self,
+        seconds: f64,
+        listening: Option<&Listening>,
+        frequency_factor: f64,
+    ) -> Result<Recording, Tier0Error> {
         let mut synth = self.synth().map_err(Tier0Error::Morphology)?;
         let mut pcg_synth = self.pcg_synth();
+        if let Some(l) = listening {
+            pcg_synth.set_listening(l);
+        }
+        pcg_synth.set_frequency_factor(frequency_factor);
         let per_step = (STEP_MS / PCG_PERIOD_MS).round() as usize;
         let mut eng = TimingEngine::new(self.timing.clone());
         eng.set_shock_seed(self.scenario.seed);
@@ -148,6 +175,8 @@ impl Tier0Scenario {
                 && a.at.0 <= eng.now().0
             {
                 eng.apply(&a.action, a.at).map_err(Tier0Error::Action)?;
+                // the heart sounds breathe with the engine (a breath-hold, B28)
+                pcg_synth.set_respiration(eng.respiration());
                 next += 1;
             }
             eng.step(Millis(STEP_MS));
@@ -171,6 +200,7 @@ impl Tier0Scenario {
             events,
             pcg,
             pcg_rate_hz: PCG_RATE_HZ,
+            pcg_marks: pcg_synth.take_all_marks(),
         })
     }
 

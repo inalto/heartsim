@@ -27,12 +27,15 @@
 //!   and their synthesis at 4 kHz from the same events as the ECG.
 //! * [`auscultation`] — the extra sounds and murmurs of a scenario's `auscultation` section (B27).
 //! * [`listening`] — listening sites, bell and diaphragm, and the valve highlights (B27 part B).
+//! * [`resample`] — band-limited conversion of the phonocardiogram to audio rates (B25).
+//! * [`clip`] — loopable heart-sound clips of a scenario for the teaching pages (B28).
 
 pub mod activation;
 pub mod analysis;
 pub mod artefact;
 pub mod auscultation;
 pub mod axis_est;
+pub mod clip;
 pub mod display;
 pub mod egm;
 pub mod filter;
@@ -42,6 +45,7 @@ pub mod listening;
 pub mod misplacement;
 pub mod pcg;
 pub mod placement;
+pub mod resample;
 pub mod ring;
 pub mod scenario;
 pub mod synth;
@@ -53,6 +57,7 @@ pub use analysis::{
 pub use artefact::{ArtefactConfig, ArtefactGenerator, MainsFrequency};
 pub use auscultation::{MurmurClass, SoundGains};
 pub use axis_est::{estimate_frontal_axis, net_area_axis};
+pub use clip::{ClipOptions, SoundClip};
 pub use display::{DisplayConfig, DisplayStage};
 pub use egm::{
     ConductionIntervals, Deflection, EGM_RATE_HZ, EgmChannel, EgmOptions, EgmRecorder, EgmSource,
@@ -66,7 +71,7 @@ pub use forward::{
 pub use leadvec::LeadVectors;
 pub use listening::{ChestPiece, Listening, ListeningChoice, ListeningSite, SiteTable, Valve, valve_glow_at};
 pub use misplacement::{DetectorConfig, Finding, detect_misplacement};
-pub use pcg::{PCG_RATE_HZ, PcgParams, PcgSynth, SoundLabel, SoundMark, WallTimeSynth};
+pub use pcg::{PCG_RATE_HZ, PcgParams, PcgSynth, SMALL_SPEAKER_FACTOR, SoundLabel, SoundMark, WallTimeSynth};
 pub use placement::{
     Cable, DipoleSolver, Exercise, ExtraLead, Limb, Placement, Preset, Snapped, Tier0Field, TorsoSurface,
 };

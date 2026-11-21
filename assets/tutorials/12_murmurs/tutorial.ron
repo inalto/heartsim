@@ -1,0 +1,196 @@
+// heartsim tutorial: murmurs and where to listen. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+// The murmurs are the model of brief B27; every clinical statement below carries its source in the
+// references list.
+Tutorial(
+    format_version: 1,
+    id: "12_murmurs",
+    title: "Murmurs and where to listen",
+    summary: "Systolic against diastolic murmurs, the ejection murmur of aortic stenosis against the innocent murmur and against a regurgitant one, aortic regurgitation, mitral stenosis with its snap and rumble, and the five listening sites.",
+    references: [
+        "Alpert JS. In: Walker HK, Hall WD, Hurst JW (eds). Clinical Methods, 3rd ed. Butterworths 1990, ch. 26. ncbi.nlm.nih.gov/books/NBK345.",
+        "Crawley IS. In: Clinical Methods, 3rd ed. Butterworths 1990, ch. 27. ncbi.nlm.nih.gov/books/NBK346.",
+        "Felner JM. The first heart sound. In: Clinical Methods, 3rd ed. Butterworths 1990, ch. 22. ncbi.nlm.nih.gov/books/NBK333.",
+        "MSD Manual Professional Version: Cardiac auscultation; Heart murmurs. msdmanuals.com/professional/cardiovascular-disorders/approach-to-the-cardiac-patient/cardiac-auscultation.",
+        "Finley JP, Caissie R, Nicol P, Hoyt B. International trends in the teaching of auscultation and the diagnostic reliability of murmurs. Med Educ 1998;32:409-414. doi:10.1046/j.1365-2923.1998.00210.x.",
+        "Barrett MJ, Lacey CS, Sekara AE, Linden EA, Gracely EJ. Mastering cardiac murmurs: the power of repetition. Chest 2004;126:470-475. doi:10.1378/chest.126.2.470.",
+    ],
+    pages: [
+        Page(
+            title: "Systolic or diastolic?",
+            markdown: r#"
+A **murmur** is the sound of turbulent flow. The first question about any murmur is **where it lies
+in the cycle**: between S1 and S2 it is **systolic**, between S2 and the next S1 it is
+**diastolic** (MSD Manual). Find S1 first (with the QRS, followed by the shorter pause), then place
+the murmur.
+
+Mitral regurgitation is loaded, at the apex. On the lane the murmur fills the space **between S1 and
+S2**. If you have no sound, read the lane: the murmur is the band between the labels.
+"#,
+            actions: [
+                Ui(LoadScenario("mitral_regurgitation")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "This murmur lies between S1 and S2. It is:",
+                choices: ["Systolic", "Diastolic", "Continuous", "Presystolic"],
+                answer: 0,
+                explanation: "Between S1 and S2 is systole. This one starts with S1 and stays level up to S2: a holosystolic, regurgitant murmur.",
+            )),
+        ),
+        Page(
+            title: "The ejection murmur of aortic stenosis",
+            markdown: r#"
+Blood forced through a narrow aortic valve makes an **ejection** murmur: it starts a little after
+S1, once the valve opens, **rises and falls** (crescendo-decrescendo, "diamond") and ends before
+A2. The more severe the stenosis, the **later the peak** and the **softer A2** (Alpert, ch. 26). It
+is loudest at the **aortic area**, the 2nd intercostal space at the right sternal border.
+
+Severe aortic stenosis is loaded, at the aortic area.
+"#,
+            actions: [
+                Ui(LoadScenario("aortic_stenosis_severe")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Aortic, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "The shape of an ejection murmur is:",
+                choices: [
+                    "Crescendo-decrescendo, with a gap after S1",
+                    "Level from S1 to S2",
+                    "Decrescendo from S2",
+                    "A low rumble in mid-diastole",
+                ],
+                answer: 0,
+                explanation: "Ejection starts once the valve opens, after S1, and the flow rises and falls: the diamond shape. A level murmur from S1 is regurgitant.",
+            )),
+        ),
+        Page(
+            title: "Innocent or not?",
+            markdown: r#"
+Learners call too many innocent murmurs abnormal (Finley et al. 1998). An **innocent murmur** is
+**short, soft** and often **musical**, lies in early to mid systole, and comes with a **normal S2**
+and nothing else: no click, no extra sound, nothing in diastole (MSD Manual).
+
+The innocent murmur of a healthy heart is loaded, at the lower left sternal border. Compare it with
+the previous page; the **Sound Trainer** has the two as a contrast pair you can switch between with
+one key.
+"#,
+            actions: [
+                Ui(LoadScenario("innocent_murmur")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Tricuspid, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Which finding goes with an innocent murmur?",
+                choices: [
+                    "A short, soft systolic murmur with a normal S2",
+                    "A diastolic murmur",
+                    "An ejection click and a single S2",
+                    "A murmur that lasts through S2",
+                ],
+                answer: 0,
+                explanation: "Innocent murmurs are short, soft and systolic, with normal heart sounds. Anything diastolic, a click, or an abnormal S2 points elsewhere.",
+            )),
+        ),
+        Page(
+            title: "A diastolic murmur from S2: aortic regurgitation",
+            markdown: r#"
+In **aortic regurgitation** blood leaks back from the aorta as soon as the valve closes, so the
+murmur **starts at A2** and **fades away** (decrescendo) through diastole. It is high-pitched and
+blowing, heard best along the left sternal border at **Erb's point** (3rd intercostal space) with
+the diaphragm (Crawley, ch. 27; MSD Manual).
+"#,
+            actions: [
+                Ui(LoadScenario("aortic_regurgitation")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Erb, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "The murmur of aortic regurgitation:",
+                choices: [
+                    "Starts at S2 and fades through diastole",
+                    "Starts after S1 and rises and falls",
+                    "Is a low rumble just before S1",
+                    "Lies only in late systole",
+                ],
+                answer: 0,
+                explanation: "Regurgitation begins the moment the aortic valve closes, at A2, and the backflow falls off through diastole: an early diastolic decrescendo.",
+            )),
+        ),
+        Page(
+            title: "Mitral stenosis: a snap and a rumble",
+            markdown: r#"
+A stiff mitral valve gives three findings: a **loud S1**, an **opening snap** shortly after S2 as
+the valve opens, and a **low rumble** in mid-diastole that grows louder again **just before S1** in
+sinus rhythm, when the atrium contracts (Felner, ch. 22; Crawley, ch. 27). The rumble is low, so
+use the **bell** at the apex.
+
+Mitral stenosis in sinus rhythm is loaded. On the lane, find **OS** after S2.
+"#,
+            actions: [
+                Ui(LoadScenario("mitral_stenosis_sinus")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Bell)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Which chest piece brings out the rumble of mitral stenosis?",
+                choices: ["The bell", "The diaphragm", "Either, it makes no difference", "Neither: it is only seen on the ECG"],
+                answer: 0,
+                explanation: "The rumble is a low-frequency sound, and the bell passes low frequencies; the diaphragm favours the high ones (the snap, S2, regurgitant murmurs).",
+            )),
+        ),
+        Page(
+            title: "Where to listen",
+            markdown: r#"
+Five sites cover the valves (Felner, ch. 22; Alpert, ch. 26):
+
+* **Aortic** - 2nd intercostal space, right sternal border: aortic stenosis.
+* **Pulmonic** - 2nd intercostal space, left sternal border: the S2 split, pulmonary stenosis.
+* **Erb's point** - 3rd intercostal space, left sternal border: aortic regurgitation.
+* **Tricuspid** - lower left sternal border: tricuspid regurgitation, ventricular septal defect.
+* **Mitral** - the apex: mitral regurgitation and stenosis, S3 and S4.
+
+Aortic stenosis is loaded and the stethoscope is at the **apex**. Open the **Display** popup, under **Listening site**,
+and move it to the aortic area: the murmur grows. The **Auscultation Quiz** (Practise) asks you to
+do the same with a hidden case, features first, diagnosis second; practise it often, since
+repetition is what works (Barrett et al. 2004).
+"#,
+            actions: [
+                Ui(LoadScenario("aortic_stenosis_severe")),
+                Ui(FocusPanel(Simulator)),
+                Ui(HeartSoundAudio(true)),
+                Ui(HeartSoundLane(true)),
+                Ui(Listen(site: Mitral, chest: Diaphragm)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Where is the murmur of aortic stenosis loudest?",
+                choices: [
+                    "2nd intercostal space, right sternal border",
+                    "The apex",
+                    "Lower left sternal border",
+                    "2nd intercostal space, left sternal border",
+                ],
+                answer: 0,
+                explanation: "The aortic area, at the 2nd right intercostal space, lies over the outflow the jet passes through.",
+            )),
+        ),
+    ],
+)

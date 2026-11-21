@@ -168,6 +168,100 @@ pub fn respiratory_phase(respiration_rate_bpm: f64, t_ms: f64) -> f64 {
     turns.rem_euclid(1.0)
 }
 
+/// Respiratory phase of [`heartsim_core::BreathPhase::PeakInspiration`]: the top of the sine that
+/// shortens the sinus cycle (see [`respiratory_phase`]).
+pub const PEAK_INSPIRATION_PHASE: f64 = 0.25;
+/// Respiratory phase of [`heartsim_core::BreathPhase::EndExpiration`]: the bottom of the same sine,
+/// where the lungs are at their resting volume after a breath out.
+pub const END_EXPIRATION_PHASE: f64 = 0.75;
+
+/// The respiratory clock with breath-holds (brief B28): the phase [`respiratory_phase`] gives,
+/// until an `Action::BreathHold` stops it at a phase; a release lets it run on from the held phase.
+///
+/// The timing engine owns one ([`crate::TimingEngine::respiration`]) and the heart-sound synthesiser
+/// reads a copy of it, so the sinus arrhythmia and the S2 split freeze and resume together. A clock
+/// that has never been held is [`respiratory_phase`] itself, bit for bit: scenarios without the
+/// action are unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct RespiratoryClock {
+    /// `None`: never held, the plain function of time.
+    state: Option<HeldState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct HeldState {
+    /// Simulation time from which `phase` holds (or from which the breath runs on), ms.
+    since_ms: f64,
+    /// Phase at `since_ms`, `0.0..1.0`.
+    phase: f64,
+    held: bool,
+}
+
+impl RespiratoryClock {
+    /// Phase at `t_ms` for a breathing rate of `rate_bpm` (see [`respiratory_phase`]). Times before
+    /// the latest hold or release read the current segment too: the synthesisers ask only about the
+    /// present beat.
+    #[must_use]
+    pub fn phase(&self, rate_bpm: f64, t_ms: f64) -> f64 {
+        match self.state {
+            None => respiratory_phase(rate_bpm, t_ms),
+            Some(HeldState {
+                phase, held: true, ..
+            }) => phase,
+            Some(HeldState {
+                since_ms,
+                phase,
+                held: false,
+            }) => (phase + (t_ms - since_ms) / 60_000.0 * rate_bpm).rem_euclid(1.0),
+        }
+    }
+
+    /// Respiratory angle at `t_ms`, radians: `2π · phase`, or [`respiration_angle_rad`] itself on a
+    /// clock that was never held (the sinus node's modulation, bit for bit as before).
+    #[must_use]
+    pub fn angle_rad(&self, rate_bpm: f64, t_ms: f64) -> f64 {
+        match self.state {
+            None => respiration_angle_rad(rate_bpm, t_ms),
+            Some(_) => self.phase(rate_bpm, t_ms) * std::f64::consts::TAU,
+        }
+    }
+
+    /// Hold at `phase` from `at_ms` on, or (`None`) breathe on from wherever the clock is at `at_ms`.
+    pub fn hold(&mut self, phase: Option<heartsim_core::BreathPhase>, rate_bpm: f64, at_ms: f64) {
+        let current = self.phase(rate_bpm, at_ms);
+        self.state = Some(match phase {
+            Some(p) => HeldState {
+                since_ms: at_ms,
+                phase: match p {
+                    heartsim_core::BreathPhase::EndExpiration => END_EXPIRATION_PHASE,
+                    heartsim_core::BreathPhase::PeakInspiration => PEAK_INSPIRATION_PHASE,
+                },
+                held: true,
+            },
+            None => HeldState {
+                since_ms: at_ms,
+                phase: current,
+                held: false,
+            },
+        });
+    }
+
+    /// The phase being held, if a breath-hold is on.
+    #[must_use]
+    pub fn held(&self) -> Option<heartsim_core::BreathPhase> {
+        match self.state {
+            Some(HeldState {
+                phase, held: true, ..
+            }) => Some(if phase < 0.5 {
+                heartsim_core::BreathPhase::PeakInspiration
+            } else {
+                heartsim_core::BreathPhase::EndExpiration
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// How far into inspiration the phase is, `0.0` (any time in expiration) to `1.0` (peak inspiration):
 /// `max(0, sin 2π·phase)`, the positive half of the same sine that shortens the sinus cycle.
 #[must_use]

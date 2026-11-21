@@ -261,3 +261,117 @@ fn edited_timeline_save_load_equality() {
         edited
     );
 }
+
+/// B28: the heart-sound tutorials are installed, and every page's actions are ones the app
+/// understands (rhythms that exist, highlights the controls know, speeds in range).
+#[test]
+fn the_heart_sound_tutorials_are_listed_and_every_action_is_understood() {
+    let library = TutorialLibrary::load_dir(&assets().join("tutorials")).unwrap();
+    let scenarios = ScenarioLibrary::load_dir(&assets().join("scenarios")).unwrap();
+    let ids: Vec<&str> = library.tutorials.iter().map(|t| t.id.as_str()).collect();
+    for id in ["11_heart_sounds", "12_murmurs"] {
+        assert!(ids.contains(&id), "{id} not listed: {ids:?}");
+    }
+    for t in &library.tutorials {
+        assert!(
+            t.content_problems().is_empty(),
+            "{}: {:?}",
+            t.id,
+            t.content_problems()
+        );
+        for (n, p) in t.pages.iter().enumerate() {
+            for step in &p.actions {
+                let heartsim_app::tutorial::Step::Ui(a) = step else {
+                    continue;
+                };
+                match a {
+                    UiAction::LoadScenario(id) => {
+                        assert!(
+                            scenarios.index_of(id).is_some(),
+                            "{} page {}: no rhythm {id}",
+                            t.id,
+                            n + 1
+                        );
+                    }
+                    UiAction::Highlight(tool) => {
+                        assert!(
+                            heartsim_ui::highlight::TOOLS.contains(&tool.as_str()),
+                            "{} page {}: {tool}",
+                            t.id,
+                            n + 1
+                        );
+                    }
+                    UiAction::SetSpeed(s) => assert!((0.05..=2.0).contains(s), "{} page {}", t.id, n + 1),
+                    _ => {}
+                }
+            }
+        }
+    }
+    let first = &library.tutorials[ids.iter().position(|i| *i == "11_heart_sounds").unwrap()];
+    assert!(
+        first.pages[0]
+            .actions
+            .contains(&heartsim_app::tutorial::Step::Ui(UiAction::SoundCheck)),
+        "the heart-sound tutorial opens with the sound check"
+    );
+}
+
+/// B28: the sound check plays its tones through the heart-sound sink (a fake one here) and is
+/// text only where there is no sound output.
+#[test]
+fn the_sound_check_plays_through_the_sink_and_degrades_to_text_without_one() {
+    use heartsim_app::heart_sound_player::{HeartSoundPlayer, PlayerInput};
+    use heartsim_app::heart_sounds::HeartSounds;
+    use heartsim_app::sound_check::Tone;
+    use heartsim_app::sound_out::FakeSink;
+
+    heartsim_ui::i18n::set_language("en");
+    let mut h = harness();
+    frames(&mut h);
+    let i = h
+        .state()
+        .tutorials
+        .library
+        .tutorials
+        .iter()
+        .position(|t| t.id == "11_heart_sounds")
+        .unwrap();
+    h.state_mut().tutorials.open(i, 0);
+    // without sound: the page says so and offers no tone
+    h.state_mut().tutorials.sound_available = false;
+    frames(&mut h);
+    let _ = h.get_by_label_contains("There is no sound output here");
+    assert!(h.query_by_label("Play the low tone (200 Hz)").is_none());
+    // with sound: the low tone is asked for and played through the sink
+    h.state_mut().tutorials.sound_available = true;
+    frames(&mut h);
+    h.get_by_label("Play the low tone (200 Hz)").click();
+    frames(&mut h);
+    let tone = h.state_mut().tutorials.take_tone_request();
+    assert_eq!(tone, Some(Tone::Low));
+    let sink = FakeSink::new();
+    let mut player = HeartSoundPlayer::with_sink(Box::new(sink.clone()));
+    let samples: std::rc::Rc<[f32]> = Tone::Low.samples().into();
+    player.play_clip(std::rc::Rc::clone(&samples), 0, false);
+    let mut sounds = HeartSounds::new(10.0);
+    let input = PlayerInput {
+        enabled: false,
+        volume: 1.0,
+        offset_ms: 0.0,
+        paused: false,
+        speed: 1.0,
+        sim_now_ms: 0.0,
+        dt_s: 1.0 / 60.0,
+        muted: false,
+    };
+    for _ in 0..200 {
+        player.frame(&mut sounds, &input);
+        sink.drain_ms(1000.0 / 60.0);
+    }
+    assert_eq!(sink.pushed(), samples.to_vec(), "the whole tone, once");
+    assert!(!player.clip_active(), "a tone plays once and ends");
+    // the learner says the low tone is not heard: the advice appears
+    h.get_by_label("I cannot hear the low tone").click();
+    frames(&mut h);
+    let _ = h.get_by_label("Your speakers are too small for heart sounds.");
+}

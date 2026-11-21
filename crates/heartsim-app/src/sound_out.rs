@@ -20,6 +20,9 @@ use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use heartsim_ecg::PCG_RATE_HZ;
+pub use heartsim_ecg::resample::{
+    KAISER_BETA, RESAMPLER_CUTOFF_HZ, RESAMPLER_PHASES, RESAMPLER_TAPS, Resampler, resample_block,
+};
 
 /// Audio the player keeps queued ahead of the sound card, ms. Designed: two to three 60 fps frames,
 /// so a frame that is late by one frame does not run the queue dry (research note, "Why
@@ -48,17 +51,6 @@ pub const DEFAULT_HEART_SOUND_VOLUME: f32 = 0.7;
 pub const HEADROOM_GAIN: f32 = 0.5;
 /// Output level from which the soft limiter bends the signal, full scale. Designed.
 pub const LIMITER_KNEE: f32 = 0.8;
-/// Passband edge of the resampling filter, Hz. Designed: heart sounds have little energy above
-/// 500 Hz (research note); 1.6 kHz leaves the filter room to reach its stopband before the PCG's
-/// 2 kHz Nyquist frequency, where the images begin.
-pub const RESAMPLER_CUTOFF_HZ: f64 = 1600.0;
-/// Taps of the resampling filter, input samples (4 ms at 4 kHz; delay half of it). Designed.
-pub const RESAMPLER_TAPS: usize = 16;
-/// Fractional positions tabulated in the polyphase table (linearly interpolated between). Designed.
-pub const RESAMPLER_PHASES: usize = 256;
-/// Kaiser window shape of the resampling filter. Designed: β = 6 gives about 60 dB of stopband
-/// attenuation (Kaiser's formula, `A ≈ β / 0.1102 + 8.7`).
-pub const KAISER_BETA: f64 = 6.0;
 /// Resampling-ratio change per unit of relative queue error (queue / target − 1). Designed.
 pub const DRIFT_GAIN: f64 = 0.01;
 /// Largest resampling-ratio change for drift, fraction. Designed: ±0.5 % is below the pitch
@@ -301,125 +293,6 @@ pub fn sync_click() -> Vec<f32> {
             (f64::from(CLICK_PEAK) * w * s) as f32
         })
         .collect()
-}
-
-/// Zeroth-order modified Bessel function of the first kind (the Kaiser window), by its series.
-fn bessel_i0(x: f64) -> f64 {
-    let (mut sum, mut term, mut k) = (1.0, 1.0, 1.0);
-    while term > 1e-12 * sum {
-        term *= (x / (2.0 * k)).powi(2);
-        sum += term;
-        k += 1.0;
-    }
-    sum
-}
-
-/// Half the tap count: the filter's centre.
-const HALF_TAPS: usize = RESAMPLER_TAPS / 2;
-
-/// Band-limited sample-rate conversion from the PCG rate to a device rate, for a stream: one output
-/// sample per [`Resampler::next`] call, pulling input samples as needed.
-///
-/// A Kaiser-windowed sinc low-pass at [`RESAMPLER_CUTOFF_HZ`] with [`RESAMPLER_TAPS`] taps,
-/// tabulated at [`RESAMPLER_PHASES`] fractional positions (each normalised to unit DC gain) and
-/// interpolated between them. The table is built once on creation; `next` allocates nothing and
-/// takes no lock, so it can run on the audio thread. The output lags the newest input by
-/// `HALF_TAPS + 1 − frac` input samples ([`Resampler::input_time`]).
-#[derive(Debug, Clone)]
-pub struct Resampler {
-    table: Box<[[f32; RESAMPLER_TAPS]]>,
-    history: [f32; RESAMPLER_TAPS],
-    /// Position between the two centre taps, `0.0..1.0`.
-    frac: f64,
-    /// Input samples per output sample.
-    step: f64,
-    pulled: u64,
-}
-
-impl Resampler {
-    /// A converter from `in_rate_hz` to `out_rate_hz`.
-    #[must_use]
-    pub fn new(in_rate_hz: f64, out_rate_hz: f64) -> Self {
-        let fc = 2.0 * RESAMPLER_CUTOFF_HZ / in_rate_hz;
-        let i0b = bessel_i0(KAISER_BETA);
-        let h = HALF_TAPS as f64;
-        let kernel = |d: f64| {
-            let r = d / h;
-            if r.abs() >= 1.0 {
-                return 0.0;
-            }
-            let x = std::f64::consts::PI * fc * d;
-            let sinc = if x.abs() < 1e-12 { 1.0 } else { x.sin() / x };
-            fc * sinc * bessel_i0(KAISER_BETA * (1.0 - r * r).sqrt()) / i0b
-        };
-        let table: Vec<[f32; RESAMPLER_TAPS]> = (0..=RESAMPLER_PHASES)
-            .map(|p| {
-                let frac = p as f64 / RESAMPLER_PHASES as f64;
-                let mut row = [0.0f64; RESAMPLER_TAPS];
-                for (j, c) in row.iter_mut().enumerate() {
-                    // distance from tap j to the output point, input samples
-                    *c = kernel((RESAMPLER_TAPS - 1 - HALF_TAPS) as f64 - j as f64 + frac);
-                }
-                let sum: f64 = row.iter().sum();
-                let mut out = [0.0f32; RESAMPLER_TAPS];
-                for (o, c) in out.iter_mut().zip(row) {
-                    *o = (c / sum) as f32;
-                }
-                out
-            })
-            .collect();
-        Self {
-            table: table.into_boxed_slice(),
-            history: [0.0; RESAMPLER_TAPS],
-            frac: 0.0,
-            step: in_rate_hz / out_rate_hz.max(1.0),
-            pulled: 0,
-        }
-    }
-
-    /// Input samples per output sample (the nominal ratio times any drift correction).
-    pub fn set_step(&mut self, step: f64) {
-        self.step = step.max(0.0);
-    }
-
-    /// The next output sample; `pull` is called once for every input sample consumed.
-    pub fn next(&mut self, mut pull: impl FnMut() -> f32) -> f32 {
-        self.frac += self.step;
-        while self.frac >= 1.0 {
-            self.frac -= 1.0;
-            self.history.copy_within(1.., 0);
-            self.history[RESAMPLER_TAPS - 1] = pull();
-            self.pulled += 1;
-        }
-        let pos = self.frac * RESAMPLER_PHASES as f64;
-        let p = (pos as usize).min(RESAMPLER_PHASES - 1);
-        let w = (pos - p as f64) as f32;
-        let (a, b) = (&self.table[p], &self.table[p + 1]);
-        let mut y = 0.0f32;
-        for j in 0..RESAMPLER_TAPS {
-            y += self.history[j] * (a[j] + (b[j] - a[j]) * w);
-        }
-        y
-    }
-
-    /// How many input samples the next [`Resampler::next`] call will pull (a caller converting a
-    /// finite block stops before it runs out).
-    #[must_use]
-    pub fn needs(&self) -> usize {
-        (self.frac + self.step).floor() as usize
-    }
-
-    /// Time of the last output sample in input samples, counting the first input pulled as 0.
-    #[must_use]
-    pub fn input_time(&self) -> f64 {
-        self.pulled as f64 - 1.0 - HALF_TAPS as f64 + self.frac
-    }
-
-    /// Forget the input history (silence) and the position.
-    pub fn reset(&mut self) {
-        self.history = [0.0; RESAMPLER_TAPS];
-        self.frac = 0.0;
-    }
 }
 
 /// The audio thread's view of the queue of PCG samples. Implementations must not lock, allocate or

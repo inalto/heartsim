@@ -7,8 +7,9 @@ use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use heartsim_ui::{Palette, cards, t};
 use std::path::PathBuf;
 
+use crate::sound_check::{SoundCheck, Tone};
 use crate::tutorial::{
-    Mode, PageRun, ProgressStore, Tutorial, TutorialHost, TutorialLibrary, TutorialProgress,
+    Mode, PageRun, ProgressStore, Step, Tutorial, TutorialHost, TutorialLibrary, TutorialProgress, UiAction,
 };
 
 /// The open tutorial and the reader's state for its current page.
@@ -32,6 +33,13 @@ pub struct Tutorials {
     /// Control outlined for the learner (set by a page's `Highlight`, cleared on page change).
     pub highlight: Option<String>,
     markdown: CommonMarkCache,
+    /// Whether heart sounds can be played here (set by the app every frame): the sound check offers
+    /// its tones only then, and is text otherwise (B28).
+    pub sound_available: bool,
+    /// The learner's answer to the sound check.
+    pub sound_check: SoundCheck,
+    /// A tone the learner asked to hear this frame.
+    tone_request: Option<Tone>,
 }
 
 impl std::fmt::Debug for Tutorials {
@@ -62,6 +70,63 @@ impl Tutorials {
             session: None,
             highlight: None,
             markdown: CommonMarkCache::default(),
+            sound_available: false,
+            sound_check: SoundCheck::default(),
+            tone_request: None,
+        }
+    }
+
+    /// The tone of the sound check the learner asked for this frame, if any (the app plays it).
+    pub fn take_tone_request(&mut self) -> Option<Tone> {
+        self.tone_request.take()
+    }
+
+    /// The sound check (B28): headphone advice is in the page text; here the two tones, and what to
+    /// do when the low one cannot be heard. Text only where there is no sound output.
+    fn sound_check_ui(
+        ui: &mut egui::Ui,
+        available: bool,
+        check: &mut SoundCheck,
+        request: &mut Option<Tone>,
+    ) {
+        ui.separator();
+        ui.strong(t!("tut-sound-check"));
+        if !available {
+            ui.add(egui::Label::new(t!("tut-sound-check-none")).wrap());
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(t!("tut-sound-check-low")).clicked() {
+                *request = Some(Tone::Low);
+            }
+            if ui.button(t!("tut-sound-check-high")).clicked() {
+                *request = Some(Tone::High);
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            let heard = &mut check.heard_low;
+            if ui
+                .selectable_label(*heard == Some(true), t!("tut-sound-check-heard"))
+                .clicked()
+            {
+                *heard = Some(true);
+            }
+            if ui
+                .selectable_label(*heard == Some(false), t!("tut-sound-check-not-heard"))
+                .clicked()
+            {
+                *heard = Some(false);
+            }
+        });
+        match check.heard_low {
+            Some(true) => {
+                cards::result_box(ui, true, t!("tut-sound-check-ok"));
+            }
+            Some(false) => {
+                cards::result_box(ui, false, t!("tut-sound-check-small"));
+                ui.add(egui::Label::new(t!("tut-sound-check-small-hint")).wrap());
+            }
+            None => {}
         }
     }
 
@@ -380,6 +445,14 @@ impl Tutorials {
             .max_height((ui.available_height() - 140.0).max(120.0))
             .show(ui, |ui| {
                 CommonMarkViewer::new().show(ui, &mut self.markdown, &p.markdown);
+                if p.actions.contains(&Step::Ui(UiAction::SoundCheck)) {
+                    Self::sound_check_ui(
+                        ui,
+                        self.sound_available,
+                        &mut self.sound_check,
+                        &mut self.tone_request,
+                    );
+                }
                 if let Some(q) = &p.check {
                     ui.separator();
                     ui.strong(t!("tut-check"));

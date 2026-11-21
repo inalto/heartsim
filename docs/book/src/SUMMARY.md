@@ -14,6 +14,7 @@
 - [The EP lab](user/ep-lab.md)
 - [Tutorials](user/tutorials.md)
 - [Quizzes](user/quizzes.md)
+- [Learning auscultation](user/auscultation.md)
 - [Exporting and reviewing ECGs](user/exports.md)
 - [Command line](user/cli.md)
 - [FAQ](user/faq.md)

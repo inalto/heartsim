@@ -538,6 +538,28 @@ impl Murmur {
             .sum()
     }
 
+    /// The sum of sinusoids with every partial's frequency multiplied by `factor` (small-speaker
+    /// mode, brief B28) and its weight by `weight(true hz)`; a partial that would land above
+    /// `ceiling_hz` is left out.
+    #[must_use]
+    pub fn noise_scaled(
+        &self,
+        tau_ms: f64,
+        factor: f64,
+        ceiling_hz: f64,
+        weight: impl Fn(f64) -> f64,
+    ) -> f64 {
+        self.partials
+            .iter()
+            .filter(|p| p.hz * factor <= ceiling_hz)
+            .map(|p| {
+                p.weight
+                    * weight(p.hz)
+                    * (std::f64::consts::TAU * p.hz * factor * tau_ms / 1000.0 + p.phase).sin_d()
+            })
+            .sum()
+    }
+
     /// Whether the murmur is silent from `t` on.
     #[must_use]
     pub fn finished_at(&self, t: f64) -> bool {

@@ -63,6 +63,8 @@ impl HeartSimApp {
     /// Run the heart-sound player for this frame (after the simulation stepped) and hand its
     /// display delay, status and playhead to the strip.
     pub(super) fn heart_sound_frame(&mut self, dt_s: f64) {
+        self.teaching_before_player();
+        self.sounds.set_small_speaker(self.settings.small_speaker);
         match self.ecg.take_lane_request() {
             Some(LaneRequest::Play { start, end }) => self.sound_player.play_slice(start, end),
             Some(LaneRequest::Stop) => self.sound_player.stop_slice(),
@@ -76,10 +78,15 @@ impl HeartSimApp {
             speed: self.clock.speed,
             sim_now_ms: self.engine.now().0,
             dt_s,
-            // an imported recording's beats are not the engine's
-            muted: !self.heart_sounds_live(),
+            // an imported recording's beats are not the engine's; the teaching pages play their own
+            // clips
+            muted: !self.heart_sounds_live() || self.teaching_page_open(),
         };
         self.sound_player.frame(&mut self.sounds, &input);
+        self.teaching_after_player();
+        // the lane says when what is heard is not what it draws (B28)
+        self.ecg.sound_tag =
+            crate::heart_sounds::altered_sound_tag(self.sound_player.status(), self.sounds.small_speaker());
         self.ecg
             .set_display_delay_ms(self.sound_player.display_delay_ms());
         self.ecg.heart_sound_status = self.sound_player.status();
@@ -92,6 +99,13 @@ impl HeartSimApp {
     /// valve highlights of the 3-D heart, from the same schedule at the time the strip and the sound
     /// are at (the engine's minus the display delay and the scrub); none with reduced motion.
     pub(super) fn listening_frame(&mut self) {
+        // the breathing choice (B28): a change becomes a breath-hold action for the engine, so the
+        // sinus arrhythmia and the split freeze together; the popup then shows the engine's state
+        if let Some(phase) = self.ecg.take_breath_request() {
+            self.apply_therapy(&heartsim_core::Action::BreathHold { phase });
+        }
+        self.ecg.breath_hold_available = !self.ep_active() && !self.reentry_active();
+        self.ecg.breath_hold = self.engine.respiration().held();
         let choice = self.ecg.listening;
         self.settings.listening_site = choice.site;
         self.settings.chest_piece = choice.chest;

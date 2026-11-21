@@ -12,9 +12,29 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use heartsim_core::tutorial::{
-    CameraView, Page, PageRun, Panel, Question, Step, TUTORIAL_FORMAT_VERSION, Tutorial, TutorialError,
-    TutorialHost, UiAction, WaitEvent,
+    CameraView, ChestPieceChoice, Page, PageRun, Panel, Question, Step, StethoscopeSite,
+    TUTORIAL_FORMAT_VERSION, Tutorial, TutorialError, TutorialHost, UiAction, WaitEvent,
 };
+
+/// The listening choice a tutorial's `Listen` action names (B28).
+#[must_use]
+pub fn listening_choice(site: StethoscopeSite, chest: ChestPieceChoice) -> heartsim_ecg::ListeningChoice {
+    use heartsim_ecg::{ChestPiece, ListeningSite};
+    heartsim_ecg::ListeningChoice {
+        site: match site {
+            StethoscopeSite::Overview => ListeningSite::Overview,
+            StethoscopeSite::Aortic => ListeningSite::Aortic,
+            StethoscopeSite::Pulmonic => ListeningSite::Pulmonic,
+            StethoscopeSite::Erb => ListeningSite::Erb,
+            StethoscopeSite::Tricuspid => ListeningSite::Tricuspid,
+            StethoscopeSite::Mitral => ListeningSite::Mitral,
+        },
+        chest: match chest {
+            ChestPieceChoice::Bell => ChestPiece::Bell,
+            ChestPieceChoice::Diaphragm => ChestPiece::Diaphragm,
+        },
+    }
+}
 
 /// How the learner moves through a tutorial.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

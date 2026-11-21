@@ -114,7 +114,7 @@ impl TimingEngine {
         if s.respiration_depth <= 0.0 {
             return rr;
         }
-        let phase = super::params::respiration_angle_rad(s.respiration_rate_bpm, t);
+        let phase = self.respiration.angle_rad(s.respiration_rate_bpm, t);
         rr * (1.0 - s.respiration_depth * phase.sin_d())
     }
 

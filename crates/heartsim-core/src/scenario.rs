@@ -84,6 +84,26 @@ pub enum Action {
         electrode: Electrode,
         position_mm: [f64; 3],
     },
+    /// Breath-hold (brief B28): hold the respiratory phase at `phase`, or breathe again from the
+    /// held phase with `None`. While held, the sinus node's respiratory modulation and the S2 split
+    /// stop changing with the breath, so a split can be studied beat after beat. Only the timing
+    /// engine honours it (the respiratory clock lives there); a scenario that never uses it runs
+    /// bit for bit as before.
+    BreathHold {
+        phase: Option<BreathPhase>,
+    },
+}
+
+/// Where a breath-hold stops the respiratory cycle (`Action::BreathHold`). Other manoeuvres
+/// (Valsalva, squatting, handgrip) change venous return and afterload, which the timing model does
+/// not have, so they are not offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum BreathPhase {
+    /// After a breath out: the lungs at their resting volume, the S2 split at its narrowest and the
+    /// sinus cycle at its longest.
+    EndExpiration,
+    /// At the top of a breath in: the S2 split at its widest and the sinus cycle at its shortest.
+    PeakInspiration,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

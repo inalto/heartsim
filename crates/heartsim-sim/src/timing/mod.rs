@@ -38,9 +38,10 @@ pub use ladder::{LadderDirection, LadderSample};
 pub use pacer::{MarkerKind, PacerMarker, T_WAVE_DELAY_MS};
 pub use params::{
     AccessoryPathway, AtrialDriver, AtrialDriverKind, AvParams, AvPathway, BundleEdge, DriverStart,
-    EscapeParams, Focus, FocusMode, FocusRegion, HisPurkinjeParams, LeadParams, LeadSite, PMT_DETECT_CYCLES,
-    PacerChannel, PacerConfig, PacerMode, PacerPreset, Side, SinusParams, TimingParams, VentricularDriver,
-    VentricularDriverKind, inspiration_depth, respiration_angle_rad, respiratory_phase,
+    END_EXPIRATION_PHASE, EscapeParams, Focus, FocusMode, FocusRegion, HisPurkinjeParams, LeadParams,
+    LeadSite, PEAK_INSPIRATION_PHASE, PMT_DETECT_CYCLES, PacerChannel, PacerConfig, PacerMode, PacerPreset,
+    RespiratoryClock, Side, SinusParams, TimingParams, VentricularDriver, VentricularDriverKind,
+    inspiration_depth, respiration_angle_rad, respiratory_phase,
 };
 
 use crate::defib::{
@@ -331,6 +332,9 @@ pub struct TimingEngine {
     markers: Vec<PacerMarker>,
     /// Electrogram amplitude per pacer channel measured on the mesh (Tier 1), mV.
     measured_amplitude_mv: [Option<f64>; 3],
+    /// The respiratory clock with any breath-hold (B28): read by the sinus node here and copied by
+    /// the heart-sound synthesiser ([`Self::respiration`]).
+    respiration: RespiratoryClock,
 }
 
 impl TimingEngine {
@@ -375,6 +379,7 @@ impl TimingEngine {
             pacer: Pacer::default(),
             markers: Vec::with_capacity(16),
             measured_amplitude_mv: [None; 3],
+            respiration: RespiratoryClock::default(),
         };
         e.reset();
         e
@@ -386,7 +391,15 @@ impl TimingEngine {
     /// [`respiratory_phase`]).
     #[must_use]
     pub fn respiratory_phase(&self, t: Millis) -> f64 {
-        respiratory_phase(self.params.sinus.respiration_rate_bpm, t.0)
+        self.respiration
+            .phase(self.params.sinus.respiration_rate_bpm, t.0)
+    }
+
+    /// The respiratory clock, breath-holds included (B28). The heart-sound synthesiser takes a copy
+    /// after every action so that its S2 split follows the same breath as the sinus node.
+    #[must_use]
+    pub fn respiration(&self) -> RespiratoryClock {
+        self.respiration
     }
 
     /// Ladder-diagram samples produced since the last call (see [`ladder`]).
@@ -826,6 +839,11 @@ impl TimingEngine {
             Action::SetRegion { .. } => Err(ActionError::Unsupported("SetRegion")),
             Action::Ablate { .. } => Err(ActionError::Unsupported("Ablate")),
             Action::MoveElectrode { .. } => Err(ActionError::Unsupported("MoveElectrode")),
+            Action::BreathHold { phase } => {
+                self.respiration
+                    .hold(*phase, self.params.sinus.respiration_rate_bpm, at);
+                Ok(())
+            }
         }
     }
 
@@ -952,6 +970,7 @@ impl Engine for TimingEngine {
         self.foci.resize(self.params.foci.len(), FocusState::default());
         self.pacer.reset(0.0);
         self.markers.clear();
+        self.respiration = RespiratoryClock::default();
         self.schedule(200.0, Pending::Sinus);
         self.schedule_automatic_foci(0.0);
         if let Some(d) = &self.params.atrial_driver {

@@ -62,6 +62,11 @@ pub struct Settings {
     pub listening_site: heartsim_ecg::ListeningSite,
     /// Bell or diaphragm; not used at the overview.
     pub chest_piece: heartsim_ecg::ChestPiece,
+    /// Small-speaker mode (B28): every heart-sound frequency is multiplied by
+    /// [`heartsim_ecg::SMALL_SPEAKER_FACTOR`] in what is played, so S3, S4 and the rumble reach laptop
+    /// and phone speakers. The lane keeps the true trace and says "altered sound". Off by default: it
+    /// changes how the sounds sound and has no proven teaching effect.
+    pub small_speaker: bool,
 }
 
 /// The colour scheme preference, stored by name.
@@ -113,6 +118,7 @@ impl Default for Settings {
             audio_offset_ms: crate::sound_out::DEFAULT_AUDIO_OFFSET_MS,
             listening_site: heartsim_ecg::ListeningSite::Overview,
             chest_piece: heartsim_ecg::ChestPiece::Diaphragm,
+            small_speaker: false,
         }
     }
 }
@@ -320,6 +326,10 @@ fn heart_sound_section(
                 }
             });
             ui.weak(t!("settings-hs-sync-hint"));
+            changed |= ui
+                .checkbox(&mut settings.small_speaker, t!("settings-hs-small-speaker"))
+                .changed();
+            ui.weak(t!("settings-hs-small-speaker-hint"));
         });
         if settings.heart_sound_audio {
             use heartsim_ui::HeartSoundStatus;
@@ -469,6 +479,7 @@ mod tests {
             audio_offset_ms: 120.0,
             listening_site: heartsim_ecg::ListeningSite::Tricuspid,
             chest_piece: heartsim_ecg::ChestPiece::Bell,
+            small_speaker: true,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -514,6 +525,21 @@ mod tests {
         assert!(!old.heart_sound_audio);
         assert!((old.heart_sound_volume - crate::sound_out::DEFAULT_HEART_SOUND_VOLUME).abs() < f32::EPSILON);
         assert!((old.audio_offset_ms - crate::sound_out::DEFAULT_AUDIO_OFFSET_MS).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn small_speaker_mode_is_off_by_default_also_for_older_settings_and_round_trips() {
+        assert!(!Settings::default().small_speaker);
+        let old: Settings =
+            ron::from_str("(heart_sound_audio: true, heart_sounds: true)").expect("old settings load");
+        assert!(!old.small_speaker);
+        let on = Settings {
+            small_speaker: true,
+            ..Settings::default()
+        };
+        let back: Settings = ron::from_str(&on.to_storage_string()).expect("valid RON");
+        assert!(back.small_speaker);
+        assert_eq!(back, on);
     }
 
     #[test]

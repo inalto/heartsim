@@ -1,13 +1,13 @@
 # A tour of the window
 
-The window has a one-line **top bar**: the program name and version, then the eleven pages as **tabs** in three groups, and on
+The window has a one-line **top bar**: the program name and version, then the thirteen pages as **tabs** in three groups, and on
 the right a button that cycles the theme and the **hamburger menu** (three lines). The groups are *Explore* (Simulator, 12-Lead ECG,
-Heart Vector, Electrodes, EP Lab), *Practise* (Axis Trainer, Axis Quiz, Rhythm Quiz, Interval Drill) and *Learn* (Tutorials, Help).
-The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for eleven tabs
+Heart Vector, Electrodes, EP Lab), *Practise* (Axis Trainer, Axis Quiz, Rhythm Quiz, Interval Drill, Sound Trainer, Auscultation Quiz) and *Learn* (Tutorials, Help).
+The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for thirteen tabs
 the bar shows three group buttons instead (*Explore*, *Practise*, *Learn*): the group of the open page carries its name, and a
 click lists the pages of that group. On a phone-narrow window the bar shows only the name of the open page, and the hamburger
-menu is the way to the other pages. The hamburger menu always lists the eleven pages (the open one marked, each with its
-number-key shortcut), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
+menu is the way to the other pages. The hamburger menu always lists the thirteen pages (the open one marked, each with its
+number-key shortcut where it has one; the Sound Trainer and the Auscultation Quiz have none), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
 
 Below the bar, on the pages that run the simulation, is the **rhythm bar**. Its one row holds the rhythm picker, *Restart*,
 *About this rhythm* (hover it for the description, click it for the full explanation), *Run / Pause* with the simulation speed, the *Pacemaker* and *Therapy*

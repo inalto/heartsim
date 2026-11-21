@@ -125,6 +125,16 @@ impl ScenarioLibrary {
             .filter(|&i| self.in_ecg_quiz_pool(i))
             .collect()
     }
+
+    /// The auscultation cases ([`heartsim_core::Scenario::is_auscultation_case`]), the only
+    /// scenarios the auscultation quiz asks and offers (B28): the complement of
+    /// [`Self::ecg_quiz_pool`].
+    #[must_use]
+    pub fn auscultation_pool(&self) -> Vec<usize> {
+        (0..self.entries.len())
+            .filter(|&i| self.entries[i].scenario.is_auscultation_case())
+            .collect()
+    }
 }
 
 /// The timeline of the running scenario: actions are handed out once, in time order, when the
