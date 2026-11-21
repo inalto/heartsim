@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-21
+
 ### Added
 - Heart sounds, phase 5: teaching (brief B28). **Sound Trainer** (Practise): 22 single findings (S1 and S2, the four splits,
   soft and variable S1, S3, S4, summation gallop, clicks, opening snap, each murmur, rub) as loops cut at a quiet point of
