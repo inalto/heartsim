@@ -1,4 +1,5 @@
 mod bridge;
+mod calc;
 mod content;
 
 use anyhow::Result;
@@ -18,6 +19,23 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Cmd {
+    /// Echo calculators (brief B29), for education only: `calc list`, or `calc <id> input=value …` with the
+    /// inputs `calc list` and the user book name. Prints the values, the worked formula, the findings with
+    /// their criterion and source; invalid input exits non-zero with the message per field.
+    Calc {
+        /// `list`, or a calculator id followed by `input=value` pairs (a number, or a choice id).
+        #[arg(num_args = 1..)]
+        args: Vec<String>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+        /// Start from the calculator's worked example (pairs given override it).
+        #[arg(long)]
+        example: bool,
+        /// Language of names and findings: en or it.
+        #[arg(long, default_value = "en")]
+        lang: String,
+    },
     /// Synthesise a Tier-0 12-lead ECG and write it as CSV (ms, I..V6 in mV).
     Synth {
         #[arg(long, default_value_t = 70.0)]
@@ -486,6 +504,17 @@ fn anatomy_info(dir: &Path) -> Result<()> {
 
 fn main() -> Result<()> {
     match Cli::parse().cmd {
+        Cmd::Calc {
+            args,
+            json,
+            example,
+            lang,
+        } => {
+            print!("{}", calc::run(&args, json, example, &lang)?);
+            if json {
+                println!();
+            }
+        }
         Cmd::Synth {
             bpm,
             seconds,

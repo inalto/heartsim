@@ -2249,6 +2249,7 @@ dependencies = [
  "egui_kittest",
  "embed-resource",
  "glam",
+ "heartsim-calc",
  "heartsim-core",
  "heartsim-ecg",
  "heartsim-geometry",
@@ -2272,6 +2273,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "heartsim-calc"
+version = "0.21.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "heartsim-cli"
 version = "0.21.0"
 dependencies = [
@@ -2281,6 +2289,7 @@ dependencies = [
  "epaint_default_fonts",
  "glam",
  "heartsim-app",
+ "heartsim-calc",
  "heartsim-core",
  "heartsim-ecg",
  "heartsim-geometry",

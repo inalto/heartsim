@@ -11,6 +11,7 @@ pub mod auscultation_quiz;
 pub mod axis_quiz;
 pub mod case_ui;
 pub mod disclaimer;
+pub mod echo_calc;
 pub mod electrode_tab;
 #[cfg(feature = "export")]
 pub mod export_panel;

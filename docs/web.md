@@ -111,7 +111,8 @@ Servers that gzip or brotli `.wasm` on the fly make the transfer smaller still.
 Run `trunk serve` (or open a deployed build) and go through: loading screen disappears; heart visible in the Simulator tab and
 rotating with the mouse; strip scrolls and the beat on the heart matches the QRS; pick a rhythm; 12-lead tab; Electrodes tab
 (drag an electrode); a tutorial page and its check; Rhythm Quiz; reload the page and see the quiz score again; resize the
-window (canvas follows); background the tab and return.
+window (canvas follows); background the tab and return; Tools → Echo calculators: load a worked example, change a value,
+reload and see the favourite kept and the typed values gone.
 
 Sound (B26), with headphones: switch on *Play heart sounds* and hear S1/S2 (on the click, or the next one); run *Check sync* in
 Settings and note the offset at which click and dot coincide; slow motion (0.25×) stretches an RBBB's S2 split; above 1× it is

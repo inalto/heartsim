@@ -4,6 +4,42 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Echo calculators (brief B29, part A): a fourth group in the top bar, **Tools** (it: *Strumenti*), with the page **Echo
+  calculators** (*Calcolatori eco*). In part A, 58 calculators in nine categories (stenosis, regurgitation, filling pressures, left
+  ventricle and aorta, right heart and pulmonary circulation, pericardium, shunts and congenital, prosthetic valves, ultrasound
+  physics), each with its inputs in order of acquisition, units and plausible ranges, the live result, the formula with the
+  numbers substituted, the findings with the criterion they meet, the reference with table and page and a DOI link, a worked
+  example and a review badge: 30 are **verified** (formula and every threshold read in the primary guideline or paper during
+  this work) and 28 **formula only** (standard arithmetic, no grading). Search by name or measurement in English and Italian,
+  favourites and the last calculator remembered (typed values never stored), Tab and Enter between fields, decimal comma in
+  Italian, a phone layout, and the heart rate of the running rhythm offered to the cardiac-output and shunt-flow calculators.
+  The educational disclaimer is on the page; findings are worded as criteria, never as diagnoses.
+- New pure crate `heartsim-calc` (no dependencies, no I/O, builds for wasm32): the calculator model (`Calculator`, typed
+  `Inputs`, `Outcome` with values, worked steps and `Finding`s carrying criterion and locator, graded tables as data), the
+  shared building blocks (Bernoulli, areas, stroke volume, continuity, PISA, body surface area, indexing) and the registry.
+  Property tests check that no in-range input gives NaN or infinity.
+- Echo calculators, part B (brief B29): 16 guideline decision tools, each a decision tree whose every step and result cites
+  the figure or table and page: diastolic function and LAP in sinus rhythm (ASE 2025, Figure 3, with the age-specific e' of
+  Table 6) and in atrial fibrillation (Figure 8), moderate or severe MAC (Figure 4), pulmonary hypertension (Figure 6), heart
+  transplant (Figure 5), diastolic exercise echocardiography, and the Table 7 indicators for mitral stenosis, mitral
+  regurgitation, HCM, restrictive cardiomyopathy, sinus tachycardia and LVAD (with the LAP from the RAP and septal position);
+  aortic stenosis stepwise grading with the low-flow, low-gradient pathway, dobutamine and calcium score (EACVI/ASE 2017,
+  Figure 8); aortic prosthesis screening (ASE 2024 Figure 13 and Table 5) with mismatch (Table 7), the serial comparison of an
+  aortic bioprosthesis with its baseline (Tables 5 and 6), and mitral prosthesis screening (Tables 11 and 12). The page shows
+  the path taken; any field may be left empty, and the result is **indeterminate** (with the results still possible) only when
+  an empty field could change it. Two new finding classes, *abnormal* and *indeterminate*.
+- Sex-specific normal ranges and abnormality partitions (chamber quantification 2015, Table 4 and Supplemental Table 3) for
+  the ejection fraction, the LV diameters and volumes (absolute and indexed) and the linear LV mass, wall thickness and
+  geometry: an optional *Sex* input; *ejection fraction*, *indexed LV diameters* and *indexed LV volumes* are now verified.
+  74 calculators, 49 verified.
+- `heartsim-cli calc list` and `heartsim-cli calc <id> input=value … [--example] [--json] [--lang it]`.
+- Docs: user page *Echo calculators*, developer page *Adding a calculator*, the source table `docs/research/echo-calculators.md`.
+
+### Changed
+- With fourteen pages the top bar shows every page as a tab from about 1380 px (English) instead of 1280 px; narrower windows
+  show the four group menus.
+
 ## [0.21.0] — 2026-11-22
 
 ### Added

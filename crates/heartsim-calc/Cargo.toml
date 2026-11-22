@@ -1,0 +1,17 @@
+[package]
+name = "heartsim-calc"
+description = "Echocardiography and haemodynamics calculators for heartsim: pure functions from typed inputs to typed results, each with its reference and review status."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# No dependencies: no I/O, no GUI, no threads, so it builds for wasm32 like the engine crates.
+[dependencies]
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

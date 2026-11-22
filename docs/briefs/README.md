@@ -34,3 +34,5 @@ mechanical, fully specified tasks. Order and parallelism: `../ROADMAP.md`.
 | B26 | Heart sounds in the browser: Web Audio sink, click-gated start, latency reported by the sink (heart sounds, phase 3) | web, app | Opus | M9 |
 | B27 | Gallops, murmurs and listening sites: S3, S4, clicks, snap, rub, murmur envelopes, `auscultation` scenario section, valve scenarios, five sites with bell and diaphragm (heart sounds, phase 4) | core, ecg, ui, app | Opus | M9 |
 | B28 | Teaching auscultation: sound trainer with listen counter, auscultation quiz, tutorial, breath-hold, small-speaker mode, WAV export, licensed reference clips (heart sounds, phase 5) | core, ecg, app, ui, io, cli | Opus | M9 |
+| B29 | Echo calculators: a Tools group with a catalogue of echo and haemodynamic calculators and ultrasound physics, re-derived from the primary guidelines, each marked verified or formula-only | calc (new), ui, app, cli | Opus | M10 |
+| B30 | The beating heart: kinematic wall motion driven by cell activation and the valve schedule, LVEF read-out (echo simulator, phase 1) | echo (new), render, app, ui | Opus | M11 |

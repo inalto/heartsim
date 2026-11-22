@@ -76,11 +76,23 @@ and for AV block in inferior infarction, the 48-hour rule and the 120–200 J en
 nitrates in right-ventricular infarction, the ST-elevation thresholds for STEMI, and the sentence on reciprocal changes in
 III and aVF.
 
+### The echo calculators
+
+The 49 verified calculators, among them the 16 guideline decision tools, were copied from the guideline tables and figures by
+the implementer and tested at every boundary and on every branch, but no clinician has reviewed them for this program. Values
+that fall in a gap between two printed limits are put in the more abnormal band. Where a guideline's figure and its text give
+different limits (several do), the figure is followed; the list is in the research note. The way empty fields are handled
+(indeterminate only when they could change the result) and the reading of "most parameters" in the mitral prosthesis table
+(three of five) are the implementer's, not the guideline's.
+The body surface area formulas of Mosteller and Du Bois could not be read in their original papers (the Haycock formula
+was). Details per calculator: `docs/research/echo-calculators.md`.
+
 ### Translation
 
 Tutorial pages, scenario texts, electrode presets and exercise texts, ischaemia preset descriptions, the detector's findings,
 pacemaker preset codes, territory names and export preset descriptions are English only; the Italian locale covers the
-interface.
+interface. The echo calculators are written in English and Italian; in German, French and Spanish they appear in English, and
+their source locators are in English in every language.
 
 ## 3. Behaviour that is approximate or missing
 

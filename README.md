@@ -56,6 +56,12 @@ from any other simulator.
   at the same point of the cycle; an auscultation quiz that asks what you hear before what it is; two heart-sound tutorials
   with a sound check; a breath-hold to study the S2 split beat after beat; an optional small-speaker mode (labelled as
   altering the sound). Everything works without sound too, from the labelled phonocardiogram.
+* **Echo calculators** (Tools). 74 calculators for valve areas, regurgitant volumes, filling and pulmonary pressures, chamber
+  size and function (sex-specific ranges), shunts, prostheses, the pericardium and ultrasound physics, each with the formula
+  worked out, the guideline's criterion where one was read in the source (marked *verified*, otherwise *formula only*) and the
+  page it is on; 16 guideline algorithms (diastolic function and its special populations, the low-flow aortic stenosis
+  pathway, prosthetic-valve screening) show the path they take. Also on the command line (`heartsim-cli calc`). A study aid,
+  not a medical device.
 * **Exports.** 12-lead PDF, PNGs, CSV, WFDB record, the scenario file, a share bundle and the heart sounds as WAV; a command line (`heartsim-cli`) that
   writes the same files headless, validates the content, runs the tutorials, and exports a case to openCARP for comparison with
   a scientific solver.
@@ -68,6 +74,7 @@ More screenshots: [LBBB with the heart-vector arrow, scrubbed](docs/images/simul
 [anterior STEMI](docs/images/twelve-lead-stemi.png), [torsades](docs/images/twelve-lead-torsades.png),
 [axis trainer](docs/images/axis-trainer.png), [axis quiz](docs/images/axis-quiz.png), [electrodes](docs/images/electrodes.png),
 [rhythm quiz](docs/images/rhythm-quiz.png), [interval drill](docs/images/interval-drill.png),
+[echo calculators](docs/images/echo-calculators.png),
 [tutorials](docs/images/tutorials.png), [the EP lab](docs/images/ep-lab-avrt.png).
 
 ## Status

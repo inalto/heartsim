@@ -19,6 +19,7 @@ heartsim-core = { path = "crates/heartsim-core", version = "0.21.0" }
 heartsim-geometry = { path = "crates/heartsim-geometry", version = "0.21.0" }
 heartsim-sim = { path = "crates/heartsim-sim", version = "0.21.0", default-features = false }
 heartsim-ecg = { path = "crates/heartsim-ecg", version = "0.21.0", default-features = false }
+heartsim-calc = { path = "crates/heartsim-calc", version = "0.21.0" }
 heartsim-render = { path = "crates/heartsim-render", version = "0.21.0", default-features = false }
 heartsim-ui = { path = "crates/heartsim-ui", version = "0.21.0" }
 heartsim-io = { path = "crates/heartsim-io", version = "0.21.0" }

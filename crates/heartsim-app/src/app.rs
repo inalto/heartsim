@@ -88,6 +88,13 @@ pub struct HeartSimApp {
     sound_trainer: crate::sound_trainer::SoundTrainer,
     /// Features, then diagnosis, of a hidden auscultation case (B28).
     auscultation_quiz: crate::auscultation_quiz::AuscultationQuiz,
+    /// Echo calculators (B29): favourites and the last calculator persist, typed values do not.
+    echo_calc: crate::echo_calc::EchoCalcPage,
+    /// The last ventricular RR intervals of the engine, ms, newest last: the "from the running rhythm"
+    /// heart rate of the calculators is derived from these events and nothing else.
+    v_rr_ms: std::collections::VecDeque<f64>,
+    /// Time of the first ventricular event of the last beat, ms.
+    v_beat_ms: Option<f64>,
     /// Documentation screenshot run (`HEARTSIM_SCREENSHOT_DIR`).
     tour: Option<tour::Tour>,
     /// Guided tutorials (B15) and the scenario timeline editor.
@@ -297,6 +304,13 @@ impl HeartSimApp {
         {
             sound_trainer.restore_counts(&counts);
         }
+        let mut echo_calc = crate::echo_calc::EchoCalcPage::default();
+        if let Some(saved) = cc
+            .storage
+            .and_then(|s| s.get_string(crate::echo_calc::STORAGE_KEY))
+        {
+            echo_calc.restore(&saved);
+        }
         let mut auscultation_quiz = crate::auscultation_quiz::AuscultationQuiz::default();
         if let Some(score) = cc
             .storage
@@ -345,6 +359,9 @@ impl HeartSimApp {
             interval_drill: crate::interval_drill::IntervalDrill::default(),
             sound_trainer,
             auscultation_quiz,
+            echo_calc,
+            v_rr_ms: std::collections::VecDeque::new(),
+            v_beat_ms: None,
             tour,
             tutorials: Self::load_tutorials(cc, assets),
             cases: assets.map_or_else(
@@ -420,6 +437,7 @@ impl HeartSimApp {
             let events = self.engine.drain_events();
             for e in &events {
                 if e.region.is_ventricular() && e.kind != heartsim_sim::EventKind::Blocked {
+                    self.note_ventricular_beat(e.at.0);
                     self.last_v_activation = e.at;
                     self.beep.on_ventricular_event(e.at.0);
                 }
@@ -444,6 +462,40 @@ impl HeartSimApp {
                 self.sounds.push_for_ecg_sample(self.engine.now());
             }
         }
+    }
+
+    /// Records a ventricular activation for [`Self::running_heart_rate_bpm`]. Several regions activate
+    /// in one beat, so an event within 150 ms of the beat's first one belongs to that beat.
+    fn note_ventricular_beat(&mut self, at_ms: f64) {
+        match self.v_beat_ms {
+            // the clock went back (a new rhythm): start again
+            Some(prev) if at_ms < prev => {
+                self.v_rr_ms.clear();
+                self.v_beat_ms = Some(at_ms);
+            }
+            Some(prev) if at_ms - prev < 150.0 => {}
+            Some(prev) => {
+                self.v_rr_ms.push_back(at_ms - prev);
+                if self.v_rr_ms.len() > 8 {
+                    self.v_rr_ms.pop_front();
+                }
+                self.v_beat_ms = Some(at_ms);
+            }
+            None => self.v_beat_ms = Some(at_ms),
+        }
+    }
+
+    /// The ventricular rate of the running rhythm, bpm: the mean of the last (up to eight) RR intervals
+    /// between engine ventricular events; `None` without a beat in the last 3 s.
+    fn running_heart_rate_bpm(&self) -> Option<f64> {
+        let recent = self
+            .v_beat_ms
+            .is_some_and(|t| self.engine.now().0 - t < 3000.0 && t <= self.engine.now().0);
+        if !recent || self.v_rr_ms.is_empty() {
+            return None;
+        }
+        let mean = self.v_rr_ms.iter().sum::<f64>() / self.v_rr_ms.len() as f64;
+        (mean > 0.0).then(|| 60_000.0 / mean)
     }
 
     /// Whether the heart-sound lane can be shown: not while an imported recording is in the strip
@@ -802,8 +854,8 @@ impl HeartSimApp {
         });
     }
 
-    /// The top bar: the product and its version on the left, then the pages as tabs in three groups
-    /// (Explore, Practise, Learn) or, when the window is too narrow for thirteen tabs, as three group
+    /// The top bar: the product and its version on the left, then the pages as tabs in four groups
+    /// (Explore, Practise, Learn, Tools) or, when the window is too narrow for fourteen tabs, as four group
     /// menus (see [`nav::page_bar`]); on a phone-narrow window only the name of the open page. On the
     /// right a button cycling the theme (system monitor, sun, moon) and a hamburger menu (painted
     /// three lines) with every page (the current one marked, with its number-key shortcut), the
@@ -940,6 +992,7 @@ impl HeartSimApp {
                 ui.label(t!("help-tab-interval-drill"));
                 ui.label(t!("help-tab-sound-trainer"));
                 ui.label(t!("help-tab-auscultation-quiz"));
+                ui.label(t!("help-tab-echo-calculators"));
                 ui.separator();
                 ui.strong(t!("help-rhythms-heading"));
                 ui.label(t!("help-rhythms-text"));
@@ -1113,6 +1166,10 @@ impl eframe::App for HeartSimApp {
             Tab::Tutorials => self.tutorials_tab(ui),
             Tab::EpLab => self.ep_lab_tab(ui),
             Tab::Help => Self::help_tab(ui),
+            Tab::EchoCalculators => {
+                let hr = self.running_heart_rate_bpm();
+                self.echo_calc.ui(ui, hr);
+            }
         }
 
         ctx.request_repaint();
@@ -1130,6 +1187,7 @@ impl eframe::App for HeartSimApp {
         );
         #[cfg(not(feature = "native"))]
         storage.set_string(TUTORIAL_PROGRESS_KEY, self.tutorials.progress.to_text());
+        storage.set_string(crate::echo_calc::STORAGE_KEY, self.echo_calc.storage_string());
         storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());
     }
 }

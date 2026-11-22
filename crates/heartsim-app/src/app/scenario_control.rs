@@ -42,6 +42,8 @@ impl HeartSimApp {
             &s.scenario.auscultation,
         );
         self.last_v_activation = Millis(-1000.0);
+        self.v_rr_ms.clear();
+        self.v_beat_ms = None;
         if let Some(h) = &mut self.heart {
             h.retime(&s.timing);
         }

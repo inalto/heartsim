@@ -47,6 +47,16 @@ enum Extra {
     SmallSpeakerLane,
     /// The Export window with the WAV button (B28).
     ExportWindow,
+    /// Echo calculators (B29): the aortic valve area filled from its worked example.
+    EchoExample,
+    /// Echo calculators: a formula-only calculator, filled from its worked example.
+    EchoFormulaOnly,
+    /// Echo calculators: an out-of-range input (the message, no result).
+    EchoError,
+    /// Echo calculators: a search by measurement.
+    EchoSearch,
+    /// Echo calculators (B29 part B): a decision tool with its path, filled from its worked example.
+    EchoDecision,
 }
 
 /// One screenshot.
@@ -81,7 +91,7 @@ const DEFAULT: Step = Step {
     listening: None,
 };
 
-const STEPS: [Step; 32] = [
+const STEPS: [Step; 38] = [
     Step {
         file: "simulator-sinus.png",
         ..DEFAULT
@@ -333,6 +343,56 @@ const STEPS: [Step; 32] = [
         run_s: 1.0,
         after_qrs_ms: 0.0,
         extra: Extra::SoundTrainer,
+        ..DEFAULT
+    },
+    // brief B29: the Tools group (typed values are the tour's own and are never stored)
+    Step {
+        file: "echo-calculators.png",
+        tab: Tab::EchoCalculators,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoExample,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-calculators-formula-only.png",
+        tab: Tab::EchoCalculators,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoFormulaOnly,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-calculators-error.png",
+        tab: Tab::EchoCalculators,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoError,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-calculators-search.png",
+        tab: Tab::EchoCalculators,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoSearch,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-calculators-decision.png",
+        tab: Tab::EchoCalculators,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoDecision,
+        ..DEFAULT
+    },
+    // run with HEARTSIM_WINDOW_SIZE=900x700 to see the four group menus
+    Step {
+        file: "nav-narrow-tools.png",
+        tab: Tab::EchoCalculators,
+        run_s: 1.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoExample,
         ..DEFAULT
     },
 ];
@@ -593,6 +653,26 @@ impl HeartSimApp {
                         #[cfg(feature = "export")]
                         {
                             self.exports.open = true;
+                        }
+                    }
+                    Extra::EchoExample
+                    | Extra::EchoFormulaOnly
+                    | Extra::EchoError
+                    | Extra::EchoSearch
+                    | Extra::EchoDecision => {
+                        let page = &mut self.echo_calc;
+                        page.query.clear();
+                        let id = match step.extra {
+                            Extra::EchoFormulaOnly => "lap-from-mr-jet",
+                            Extra::EchoDecision => "diastolic-atrial-fibrillation",
+                            _ => "aortic-valve-area",
+                        };
+                        page.select(id);
+                        page.load_example();
+                        match step.extra {
+                            Extra::EchoError => page.set_field("lvot_d_cm", "7.5"),
+                            Extra::EchoSearch => "pressure half-time".clone_into(&mut page.query),
+                            _ => {}
                         }
                     }
                 }

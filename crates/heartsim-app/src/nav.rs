@@ -1,15 +1,15 @@
-//! Page navigation: the pages, their three groups and the one-line page bar in the top bar.
+//! Page navigation: the pages, their four groups and the one-line page bar in the top bar.
 //!
-//! The bar adapts to the width it is given and never wraps: with room for all thirteen pages they are
+//! The bar adapts to the width it is given and never wraps: with room for all fourteen pages they are
 //! tabs, grouped with a small caption (or just a separator when the captions would not fit); with
-//! less, three group buttons whose menus list the pages (the group of the open page shows its name);
+//! less, four group buttons whose menus list the pages (the group of the open page shows its name);
 //! the phone-narrow layout is left to the caller (title and hamburger only).
 
 use eframe::egui::{self, Color32, RichText, TextStyle, Ui};
 use heartsim_ui::t;
 
 /// The top-level pages, one tab each. The order of [`Tab::ALL`] is the order of the number-key
-/// shortcuts (1–9, 0; the last three pages have none), not of the bar.
+/// shortcuts (1–9, 0; the last four pages have none), not of the bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Simulator,
@@ -27,9 +27,11 @@ pub enum Tab {
     SoundTrainer,
     /// Features, then diagnosis, of a hidden auscultation case (B28).
     AuscultationQuiz,
+    /// Echocardiography and haemodynamics calculators (B29).
+    EchoCalculators,
 }
 
-/// The three groups of pages in the bar: see, practise, learn.
+/// The four groups of pages in the bar: see, practise, learn, and the tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {
     /// Pages that show the heart and its signals.
@@ -38,11 +40,13 @@ pub enum Group {
     Practise,
     /// Reading material.
     Learn,
+    /// Reference tools that do not drive the simulation.
+    Tools,
 }
 
 impl Group {
     /// Every group, in bar order.
-    pub const ALL: [Group; 3] = [Group::Explore, Group::Practise, Group::Learn];
+    pub const ALL: [Group; 4] = [Group::Explore, Group::Practise, Group::Learn, Group::Tools];
 
     /// The pages of the group, in bar order.
     #[must_use]
@@ -64,6 +68,7 @@ impl Group {
                 Tab::AuscultationQuiz,
             ],
             Group::Learn => &[Tab::Tutorials, Tab::Help],
+            Group::Tools => &[Tab::EchoCalculators],
         }
     }
 
@@ -74,13 +79,14 @@ impl Group {
             Group::Explore => t!("nav-group-explore"),
             Group::Practise => t!("nav-group-practise"),
             Group::Learn => t!("nav-group-learn"),
+            Group::Tools => t!("nav-group-tools"),
         }
     }
 }
 
 impl Tab {
     /// Every page in shortcut order (see [`Tab::shortcut`]).
-    pub const ALL: [Tab; 13] = [
+    pub const ALL: [Tab; 14] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -94,6 +100,7 @@ impl Tab {
         Tab::Help,
         Tab::SoundTrainer,
         Tab::AuscultationQuiz,
+        Tab::EchoCalculators,
     ];
 
     /// The page's name, as in the bar and the menus.
@@ -113,6 +120,7 @@ impl Tab {
             Tab::Help => t!("tab-help"),
             Tab::SoundTrainer => t!("tab-sound-trainer"),
             Tab::AuscultationQuiz => t!("tab-auscultation-quiz"),
+            Tab::EchoCalculators => t!("tab-echo-calculators"),
         }
     }
 
@@ -125,8 +133,8 @@ impl Tab {
             .unwrap_or(Group::Explore)
     }
 
-    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to thirteenth pages (Help,
-    /// the Sound Trainer and the auscultation quiz) have none.
+    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to fourteenth pages (Help,
+    /// the Sound Trainer, the auscultation quiz and the echo calculators) have none.
     #[must_use]
     pub fn shortcut(self) -> Option<&'static str> {
         const LABELS: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
@@ -142,7 +150,7 @@ pub enum BarStyle {
     TabsWithCaptions,
     /// Every page a tab, groups only separated.
     Tabs,
-    /// Three group buttons with a menu each.
+    /// Four group buttons with a menu each.
     GroupMenus,
 }
 

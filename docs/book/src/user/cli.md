@@ -33,5 +33,8 @@ when it exports at that moment of the same scenario, so classes can be prepared 
 * `heartsim-cli synth --bpm 70 --seconds 10 --out ecg.csv` synthesises a simple sinus or complete-block ECG.
 * `heartsim-cli default-scenario --out my.ron` writes a starting point for a new scenario.
 * `heartsim-cli anatomy-info assets/anatomy/default` describes an anatomy pack.
+* `heartsim-cli calc list` lists the echo calculators; `heartsim-cli calc <id> input=value …` (add `--example` to start from
+  the worked example, `--json` for JSON, `--lang it` for Italian) prints the values, the worked formula and the findings with
+  their source, as the [Echo calculators](echo-calculators.md) page does. Invalid input exits non-zero, naming the field.
 
 `heartsim-cli --help` and `heartsim-cli <command> --help` list all options.
