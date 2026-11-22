@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-22
+
 ### Added
 - Echo calculators (brief B29, part A): a fourth group in the top bar, **Tools** (it: *Strumenti*), with the page **Echo
   calculators** (*Calcolatori eco*). In part A, 58 calculators in nine categories (stenosis, regurgitation, filling pressures, left
