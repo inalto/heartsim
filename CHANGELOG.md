@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-22
+
 ### Added
 - Real reference recordings in the Sound Trainer (brief B28, Part C): seven clips under `assets/sounds/reference/`
   (16-bit mono 4 kHz WAV, with an RON index) from Wikimedia Commons (normal heart sounds, James Heilman, CC0 1.0) and
