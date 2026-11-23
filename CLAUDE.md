@@ -12,8 +12,8 @@ work packages in `docs/briefs/`.
    Rendering interpolates; it never drives the simulation.
 3. **One source of truth**: beat timing comes from `heartsim_sim::TimingEngine` events; the ECG strip and the 3-D colour map are both
    derived from engine state so they can never disagree.
-4. **Layering** (`core` → `geometry` → `sim` → `ecg` → `render` → `ui` → `io` → `app`/`cli`): lower crates never depend on higher ones;
-   `core`, `geometry`, `sim`, `ecg` compile without wgpu/egui and on `wasm32`.
+4. **Layering** (`core` → `geometry` → `sim` → `ecg` → `echo` → `render` → `ui` → `io` → `app`/`cli`): lower crates never depend on higher ones;
+   `core`, `geometry`, `sim`, `ecg`, `echo` and the dependency-free `calc` compile without wgpu/egui and on `wasm32`.
 5. **Units in names**: `_ms`, `_mv`, `_mm`, `_bpm`, `_m_s`. Heart coordinates are millimetres, +x = patient's left, +y = cranial,
    +z = anterior.
 6. **Tests before "done"**: every brief lists its acceptance tests; run `cargo xtask ci` (fmt, clippy -D warnings, tests, deny) before
@@ -25,7 +25,7 @@ work packages in `docs/briefs/`.
   `docs/research/rust-stack.md` §1.2). GUI docking: `egui_tiles` (not `egui_dock`). Audio: `kira`. Packaging: `cargo-packager`.
 * Dependencies are declared once in the root `[workspace.dependencies]`; crates use `dep.workspace = true`.
 * `cargo build` of the GUI crates takes several minutes cold; run pure-crate tests first:
-  `cargo test -p heartsim-core -p heartsim-geometry -p heartsim-sim -p heartsim-ecg`.
+  `cargo test -p heartsim-core -p heartsim-geometry -p heartsim-sim -p heartsim-ecg -p heartsim-calc -p heartsim-echo`.
 * Feature unification depends on which packages a command selects: `-p heartsim-ui` builds `heartsim-sim` without
   `parallel`, `--workspace` with it, so alternating the two recompiles the engine crates each time. For one GUI test,
   keep the workspace selection and filter: `cargo test --workspace --test axis_panel`.
