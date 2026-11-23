@@ -37,3 +37,6 @@ mechanical, fully specified tasks. Order and parallelism: `../ROADMAP.md`.
 | B29 | Echo calculators: a Tools group with a catalogue of echo and haemodynamic calculators and ultrasound physics, re-derived from the primary guidelines, each marked verified or formula-only | calc (new), ui, app, cli | Opus | M10 |
 | B30 | The beating heart: kinematic wall motion driven by cell activation and the valve schedule, LVEF read-out (echo simulator, phase 1) | echo (new), render, app, ui | Opus | M11 |
 | B31 | Probe and slice: baked label volumes of heart and thorax, designed leaflets and papillary muscles, a probe on the figure, the anatomical cross-section of the beating heart (echo simulator, phase 2) | xtask, geometry, echo, render, ui, app | Opus (A), Sonnet (B) | M11 |
+| B32 | The ultrasound image: attenuation, reflection, shadows, lung reverberation, tissue-locked speckle, point-spread function, gain and compression on the label slice (echo simulator, phase 3) | echo, render, ui, app, assets | Opus | M11 |
+| B33 | Standard views: targets from landmarks, a geometric "view found" score with hints, a tutorial and a self-test (echo simulator, phase 4) | echo, core, ui, app, assets | Sonnet | M11 |
+| B34 | M-mode, annular tissue Doppler and calipers that feed the echo calculators (echo simulator, phase 5) | echo, ui, app, calc | Sonnet | M11 |
