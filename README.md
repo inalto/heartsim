@@ -38,6 +38,9 @@ from any other simulator.
   Each one carries an explanation, the rhythms it is confused with and references. **15 heart-sound scenarios** add gallops,
   clicks, the opening snap and the classic murmurs (aortic and mitral stenosis and regurgitation, prolapse, tricuspid
   regurgitation, pulmonary stenosis, septal defects, an innocent murmur) to an ordinary ECG.
+* **The beating heart.** The 3-D heart contracts on the engine's own timing (phases gated by the valve closures, the septal flash of
+  LBBB, no ejection after a premature beat, no atrial kick in AF), with a switch, an exaggeration slider and LVEF, volume, MAPSE and
+  TAPSE read-outs labelled *model*. A kinematic model, not electromechanics.
 * **Physiology controls.** Sinus rate, AV block, Mobitz II ratio, axis shift, QRS width, speed; a pacemaker window (AAI, VVI,
   DDD, biventricular, capture and sensing faults); an ischaemia panel by coronary territory; a drug table; a defibrillator.
 * **Re-entry.** A persistent-AF preset on the detailed engine: shock it, ablate round the pulmonary veins, give drugs, and hand

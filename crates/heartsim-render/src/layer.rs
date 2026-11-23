@@ -1,6 +1,7 @@
 //! Scene layers: one GPU mesh plus the display state that the UI toggles (visibility, opacity,
-//! colour map, clipping). Geometry is uploaded once; only the per-vertex scalar buffer changes
-//! per frame.
+//! colour map, clipping). Geometry is uploaded once; the per-vertex scalar buffer changes per
+//! frame, and the position + normal buffer can be overwritten in place for a moving mesh
+//! ([`MeshGpu::write_vertices`], B30) without reallocating.
 
 use crate::lut::LutId;
 use bytemuck::{Pod, Zeroable};
@@ -66,7 +67,9 @@ pub fn srgb_color(c: [f32; 4]) -> [f32; 4] {
     ]
 }
 
-/// Immutable GPU geometry of one layer, plus the CPU copy that picking needs.
+/// GPU geometry of one layer, plus the CPU copy that picking needs. The topology is immutable;
+/// the vertex buffer can be overwritten for a deforming mesh, but the CPU copy, the bounds and
+/// therefore picking, the transparent-layer sort key and the label anchor keep the **rest** mesh.
 #[derive(Debug)]
 pub struct MeshGpu {
     pub(crate) vertices: wgpu::Buffer,
@@ -84,7 +87,7 @@ impl MeshGpu {
         let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("heartsim mesh vertices"),
             contents: bytemuck::cast_slice(&mesh.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         let scalars = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("heartsim mesh scalars"),
@@ -130,6 +133,17 @@ impl MeshGpu {
     #[must_use]
     pub fn cpu(&self) -> &TriMesh {
         &self.cpu
+    }
+
+    /// Overwrite the positions and normals (a deforming mesh, B30): one `write_buffer` of 24
+    /// bytes per vertex into the buffer made by [`Self::new`], no allocation. `vertices.len()`
+    /// must equal [`Self::vertex_count`]; a mismatch writes nothing. The CPU copy used for picking
+    /// is not changed (it stays the rest mesh).
+    pub fn write_vertices(&self, queue: &wgpu::Queue, vertices: &[heartsim_geometry::Vertex]) {
+        debug_assert_eq!(vertices.len(), self.vertex_count());
+        if vertices.len() == self.vertex_count() {
+            queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(vertices));
+        }
     }
 
     /// Overwrite the per-vertex scalars; `values.len()` must equal [`Self::vertex_count`].

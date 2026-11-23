@@ -240,6 +240,10 @@ impl HeartSimApp {
         }
         if let Some(h) = &mut self.heart {
             h.retime(&preset.timing);
+            h.reset_motion(
+                preset.timing.sinus.respiration_rate_bpm,
+                &heartsim_core::Auscultation::default(),
+            );
             h.set_external_cells(Some(engine.cells()));
         }
         self.reentry.status = None;
@@ -303,6 +307,7 @@ impl HeartSimApp {
             self.sounds.on_events(&events);
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, dt, act.engine.now());
+                h.motion_events(&events, act.engine.timing().respiration());
             }
             self.sample_accumulator += dt.0;
             while self.sample_accumulator >= period {
@@ -325,6 +330,7 @@ impl HeartSimApp {
         self.engine = act.engine.timing().clone();
         if let Some(h) = &mut self.heart {
             h.set_external_cells(Some(act.engine.cells()));
+            h.motion_record_cells();
         }
         self.record_heart_history();
         self.reentry.active = Some(act);

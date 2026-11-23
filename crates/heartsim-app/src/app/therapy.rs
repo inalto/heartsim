@@ -45,10 +45,12 @@ impl HeartSimApp {
     /// Hand an action to the 3-D heart where it is spatial (coronary lesions); the timing engine
     /// gets it separately (timeline, therapy window).
     pub(super) fn forward_to_heart(&mut self, action: &Action) {
-        if let (Action::Stenosis { .. }, Some(h)) = (action, &mut self.heart)
-            && let Err(e) = h.engine_mut().apply(action, self.engine.now())
-        {
-            tracing::warn!("3-D heart: {e}");
+        if let (Action::Stenosis { .. }, Some(h)) = (action, &mut self.heart) {
+            if let Err(e) = h.engine_mut().apply(action, self.engine.now()) {
+                tracing::warn!("3-D heart: {e}");
+            }
+            // the lesion also weakens the wall motion of its territory (B30)
+            h.refresh_motion_injury();
         }
     }
 

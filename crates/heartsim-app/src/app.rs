@@ -448,6 +448,9 @@ impl HeartSimApp {
             self.sounds.on_events(&events);
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, self.clock.dt, self.engine.now());
+                // the wall-motion record: the same events, the same breathing, the cells just stepped
+                h.motion_events(&events, self.engine.respiration());
+                h.motion_record_cells();
             }
             self.pacing_step();
             self.therapy_step();
@@ -1072,9 +1075,7 @@ impl eframe::App for HeartSimApp {
             }
         }
         self.therapy.set_reduced_motion(self.settings.reduced_motion);
-        if let Some(h) = &mut self.heart {
-            h.panel.reduced_motion = self.settings.reduced_motion;
-        }
+        self.sync_wall_motion_in();
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
         if !self.ecg.is_paused() {
             self.step_simulation(Millis::from_seconds(f64::from(dt)));
@@ -1097,6 +1098,7 @@ impl eframe::App for HeartSimApp {
             self.electrodes.deactivate(frame.wgpu_render_state.as_ref());
         }
         self.sync_scrub();
+        self.set_wall_motion_time();
         self.drive_tour(&ctx);
         if let Some(rs) = frame.wgpu_render_state.as_ref() {
             let scalars = self.heart.is_none().then(|| self.view_scalars());
@@ -1171,6 +1173,7 @@ impl eframe::App for HeartSimApp {
                 self.echo_calc.ui(ui, hr);
             }
         }
+        self.sync_wall_motion_out();
 
         ctx.request_repaint();
     }

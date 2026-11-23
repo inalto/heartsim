@@ -67,6 +67,12 @@ pub struct Settings {
     /// and phone speakers. The lane keeps the true trace and says "altered sound". Off by default: it
     /// changes how the sounds sound and has no proven teaching effect.
     pub small_speaker: bool,
+    /// Wall motion of the 3-D heart (B30), on by default; forced off while `reduced_motion` is on
+    /// (the stored choice is kept for when it goes off again). Switched in the heart panel.
+    pub wall_motion: bool,
+    /// Multiplier on the wall displacement for teaching, `0.5..=1.5` (the model folds the thin
+    /// walls at 2x); 1 is the model.
+    pub wall_motion_exaggeration: f32,
 }
 
 /// The colour scheme preference, stored by name.
@@ -119,6 +125,8 @@ impl Default for Settings {
             listening_site: heartsim_ecg::ListeningSite::Overview,
             chest_piece: heartsim_ecg::ChestPiece::Diaphragm,
             small_speaker: false,
+            wall_motion: true,
+            wall_motion_exaggeration: 1.0,
         }
     }
 }
@@ -480,6 +488,8 @@ mod tests {
             listening_site: heartsim_ecg::ListeningSite::Tricuspid,
             chest_piece: heartsim_ecg::ChestPiece::Bell,
             small_speaker: true,
+            wall_motion: false,
+            wall_motion_exaggeration: 1.25,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -494,6 +504,19 @@ mod tests {
         assert!((old.torso_image_opacity - DEFAULT_TORSO_IMAGE_OPACITY).abs() < f32::EPSILON);
         let off: Settings = ron::from_str("(torso_image_opacity: 0.0)").expect("settings load");
         assert!(off.torso_image_opacity.abs() < f32::EPSILON);
+    }
+
+    /// B30: wall motion is on at 1x by default, also for settings saved before it existed.
+    #[test]
+    fn wall_motion_is_on_by_default_and_older_settings_load_with_it() {
+        let d = Settings::default();
+        assert!(d.wall_motion);
+        assert!((d.wall_motion_exaggeration - 1.0).abs() < f32::EPSILON);
+        let old: Settings = ron::from_str("(language: None, adjust_open: true)").expect("old settings load");
+        assert!(old.wall_motion);
+        assert!((old.wall_motion_exaggeration - 1.0).abs() < f32::EPSILON);
+        let off: Settings = ron::from_str("(wall_motion: false)").expect("settings load");
+        assert!(!off.wall_motion);
     }
 
     #[test]

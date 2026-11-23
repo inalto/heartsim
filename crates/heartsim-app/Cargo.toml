@@ -42,6 +42,7 @@ heartsim-core.workspace = true
 heartsim-geometry.workspace = true
 heartsim-sim.workspace = true
 heartsim-ecg.workspace = true
+heartsim-echo.workspace = true
 heartsim-render.workspace = true
 heartsim-ui.workspace = true
 heartsim-calc.workspace = true

@@ -542,6 +542,33 @@ fn msaa_matches_single_sample_and_smooths_edges() {
     g.assert_no_errors();
 }
 
+/// B30: a layer's vertex buffer is overwritten in place; the drawn silhouette follows it while
+/// picking keeps the rest mesh.
+#[test]
+fn overwriting_the_vertices_moves_the_drawing_but_not_the_pick() {
+    let g = gpu_or_skip!();
+    let mut scene = g.scene();
+    let id = vm_sphere(&g, &mut scene);
+    let before = render(&g, &mut scene, (128, 128));
+    let mut shrunk = sphere(0.5).vertices;
+    for v in &mut shrunk {
+        v.normal = Vec3::from(v.position).normalize_or_zero().to_array();
+    }
+    scene.set_layer_vertices(&g.queue, id, &shrunk);
+    let after = render(&g, &mut scene, (128, 128));
+    assert!(
+        before.mean_abs_diff(&after) > 0.01,
+        "the shrunk sphere draws differently"
+    );
+    let hit = scene.pick((0.5, 0.5)).expect("the rest mesh is still picked");
+    assert!(
+        hit.position.length() > 0.9,
+        "pick on the rest sphere: {}",
+        hit.position.length()
+    );
+    g.assert_no_errors();
+}
+
 #[test]
 fn hundred_frames_without_validation_errors() {
     let g = gpu_or_skip!();

@@ -9,6 +9,7 @@
 //!
 //! Everything except [`HeartView::viewport`] runs without a GPU, which keeps the mapping testable.
 
+use crate::heart_motion::{self, HeartMotion, Tick};
 #[cfg(feature = "native")]
 use anyhow::Context as _;
 use eframe::egui;
@@ -19,7 +20,7 @@ use heartsim_render::{
     ClipPlane, Contour, GlyphInstance, GlyphSetId, LayerDesc, LayerId, LutId, LutStyle, ScalarMode,
     SceneRenderer, VertexSmoother, map_hoods, oblique_yaw_deg,
 };
-use heartsim_sim::timing::PacerConfig;
+use heartsim_sim::timing::{PacerConfig, RespiratoryClock};
 use heartsim_sim::{EikonalEngine, EikonalParams, Engine, Event, EventKind, TimingEngine, TimingParams};
 use heartsim_ui::t;
 use heartsim_ui::{
@@ -301,6 +302,15 @@ pub struct HeartView {
     pending_actions: Vec<Action>,
     /// Highlight of each valve ring this frame, `heartsim_ecg::Valve::ALL` order (B27 part B).
     valve_glow: [f32; 4],
+    /// Wall motion (B30); `None` when the pack lacks what the model needs (the heart is then drawn
+    /// at rest and the controls are absent).
+    motion: Option<HeartMotion>,
+    /// Frame numbers (`Context::cumulative_frame_nr`) in which the 3-D view and the read-out card
+    /// were last drawn: the card alone triggers a read-out evaluation, the view an upload.
+    view_frame: Option<u64>,
+    card_frame: Option<u64>,
+    /// Scratch for the vertices of one valve disc.
+    disc_scratch: Vec<heartsim_geometry::Vertex>,
 }
 
 impl std::fmt::Debug for HeartView {
@@ -385,6 +395,11 @@ impl HeartView {
     /// sides from `timing`, as `Tier1Engine::new` does) and the display layers.
     #[must_use]
     pub fn from_pack(pack: AnatomyPack, timing: &TimingParams) -> Self {
+        // the motion model reads the whole pack (meshes, hoods, cells); the engine below consumes
+        // it, so the model is built first
+        let motion = HeartMotion::new(&pack, pack.cells.len())
+            .inspect_err(|e| tracing::warn!("no wall motion: {e}"))
+            .ok();
         let params = Parameters::default();
         let mut engine = EikonalEngine::with_seed_sets(
             Arc::new(pack.cells),
@@ -485,6 +500,10 @@ impl HeartView {
             external: None,
             pending_actions: Vec::new(),
             valve_glow: [0.0; 4],
+            motion,
+            view_frame: None,
+            card_frame: None,
+            disc_scratch: Vec::new(),
         }
     }
 
@@ -493,6 +512,113 @@ impl HeartView {
     /// with reduced motion. Only the `valve_planes` layer shows it.
     pub fn set_valve_glow(&mut self, glow: [f32; 4]) {
         self.valve_glow = glow;
+    }
+
+    // ---- wall motion (B30) -----------------------------------------------------------------
+
+    /// The wall-motion model and its state, if the pack supports it.
+    #[must_use]
+    pub fn motion(&self) -> Option<&HeartMotion> {
+        self.motion.as_ref()
+    }
+
+    /// The wall-motion state, for the switch, the exaggeration and the evaluation policy.
+    pub fn motion_mut(&mut self) -> Option<&mut HeartMotion> {
+        self.motion.as_mut()
+    }
+
+    /// The user's choices from the settings: reduced motion (forces the motion off), the "Wall
+    /// motion" switch and the exaggeration (clamped to what the slider offers).
+    pub fn set_motion_options(&mut self, reduced_motion: bool, on: bool, exaggeration: f32) {
+        if let Some(m) = &mut self.motion {
+            m.reduced_motion = reduced_motion;
+            m.on = on;
+            m.exaggeration =
+                exaggeration.clamp(heart_motion::MIN_EXAGGERATION, heart_motion::MAX_EXAGGERATION);
+        }
+    }
+
+    /// The switch and the exaggeration as the user left them (what the settings store).
+    #[must_use]
+    pub fn motion_options(&self) -> Option<(bool, f32)> {
+        self.motion.as_ref().map(|m| (m.on, m.exaggeration))
+    }
+
+    /// Feed one step's timing events and the engine's breathing clock to the motion record
+    /// (every 1 ms step, where [`Self::on_step`] runs). Never read back by an engine.
+    pub fn motion_events(&mut self, events: &[Event], respiration: RespiratoryClock) {
+        if let Some(m) = &mut self.motion {
+            m.on_events(events, respiration);
+        }
+    }
+
+    /// Note the activations of the cell state on display (after [`Self::on_step`], or once per
+    /// frame while an external engine drives the heart).
+    pub fn motion_record_cells(&mut self) {
+        let cells = self.external.as_ref().unwrap_or_else(|| self.engine.cells());
+        if let Some(m) = &mut self.motion {
+            m.record_cells(cells);
+        }
+    }
+
+    /// A new scenario: forget the motion record and the lesions (called where the heart sounds
+    /// are reset, with the same breathing rate and `auscultation`).
+    pub fn reset_motion(&mut self, respiration_rate_bpm: f64, auscultation: &heartsim_core::Auscultation) {
+        if let Some(m) = &mut self.motion {
+            m.reset(respiration_rate_bpm, auscultation);
+        }
+    }
+
+    /// The coronary lesions changed (an `Action::Stenosis` reached the 3-D engine).
+    pub fn refresh_motion_injury(&mut self) {
+        if let Some(m) = &mut self.motion {
+            m.refresh_injury(&self.engine, &self.aha_segments);
+        }
+    }
+
+    /// The time the view is drawn at (engine time minus display delay and scrub, ms) and the
+    /// respiratory phase there.
+    pub fn set_motion_time(&mut self, t_ms: f64, resp_phase: f64) {
+        if let Some(m) = &mut self.motion {
+            m.set_time(t_ms, resp_phase);
+        }
+    }
+
+    /// Evaluate the wall motion if the policy in [`crate::heart_motion`] says so. Returns the
+    /// seconds to wait before the next evaluation is due, if the rate cap held one back.
+    pub fn tick_motion(&mut self, wall_s: f64, want_vertices: bool, want_readout: bool) -> Option<f64> {
+        match self.motion.as_mut()?.tick(wall_s, want_vertices, want_readout) {
+            Tick::Wait(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Write the evaluated vertices to the GPU layers, once per evaluation. Picking and the
+    /// markers keep the rest positions (see [`Self::viewport`]).
+    fn upload_motion(&mut self, scene: &mut SceneRenderer, queue: &wgpu::Queue) {
+        let Some(motion) = &mut self.motion else { return };
+        let discs: Vec<(heartsim_ecg::Valve, Vec<u32>)> = motion
+            .model()
+            .valve_discs()
+            .iter()
+            .map(|d| (d.valve, d.vertices.clone()))
+            .collect();
+        let Some(frame) = motion.take_upload() else { return };
+        for l in &self.layers {
+            let Some(part) = frame.part(&l.name) else { continue };
+            if let Some(id) = l.id {
+                scene.set_layer_vertices(queue, id, &part.vertices);
+            }
+            for (valve, _, id) in &l.valves {
+                let (Some(id), Some((_, idx))) = (*id, discs.iter().find(|(v, _)| v == valve)) else {
+                    continue;
+                };
+                self.disc_scratch.clear();
+                self.disc_scratch
+                    .extend(idx.iter().map(|&i| part.vertices[i as usize]));
+                scene.set_layer_vertices(queue, id, &self.disc_scratch);
+            }
+        }
     }
 
     /// The valve discs found in the anatomy, with the centre of each (tests, the tour).
@@ -904,11 +1030,92 @@ impl HeartView {
             }
         });
         ui.separator();
+        self.motion_controls(ui);
         let r = ui.scope(|ui| anatomy_panel(ui, &mut self.panel));
         heartsim_ui::highlight::mark(&r.response, "camera_views");
         if let Some(c) = r.inner {
             self.camera_command = Some(c);
         }
+    }
+
+    /// The "Wall motion" switch, the exaggeration slider and the read-out card (B30). Absent when
+    /// the pack gave no motion model.
+    pub fn motion_controls(&mut self, ui: &mut egui::Ui) {
+        let frame_nr = ui.ctx().cumulative_frame_nr();
+        self.card_frame = Some(frame_nr);
+        // no 3-D view drawn last frame or this one (the card without the view): read-out only
+        if self.view_frame.is_none_or(|f| f + 1 < frame_nr)
+            && let Some(wait_s) = self.tick_motion(ui.input(|i| i.time), false, true)
+        {
+            ui.ctx().request_repaint_after_secs(wait_s as f32);
+        }
+        let Some(m) = &mut self.motion else { return };
+        let reduced = m.reduced_motion;
+        let mut on = m.on && !reduced;
+        let switch = ui
+            .add_enabled(!reduced, egui::Checkbox::new(&mut on, t!("heart-motion")))
+            .on_hover_text(if reduced {
+                t!("heart-motion-reduced")
+            } else {
+                t!("heart-motion-hint")
+            });
+        if switch.changed() {
+            m.on = on;
+        }
+        if reduced {
+            ui.weak(t!("heart-motion-reduced"));
+        }
+        ui.add_enabled_ui(on, |ui| {
+            heartsim_ui::controls::slider(
+                ui,
+                &t!("heart-motion-exaggeration"),
+                egui::Slider::new(
+                    &mut m.exaggeration,
+                    heart_motion::MIN_EXAGGERATION..=heart_motion::MAX_EXAGGERATION,
+                )
+                .max_decimals(2),
+                heartsim_ui::controls::TIMES,
+            );
+        });
+        let r = *m.readout();
+        let dash = || "\u{2014}".to_string();
+        let model = t!("heart-motion-model");
+        heartsim_ui::cards::card(ui, |ui| {
+            heartsim_ui::cards::heading(ui, t!("heart-motion-card"));
+            egui::Grid::new("heart_motion_readout")
+                .num_columns(3)
+                .show(ui, |ui| {
+                    let rows = [
+                        (
+                            t!("heart-motion-lvef"),
+                            r.lvef.map_or_else(dash, |v| format!("{:.0} %", v * 100.0)),
+                        ),
+                        (
+                            t!("heart-motion-edv"),
+                            r.lvef.map_or_else(dash, |_| format!("{:.0} mL", r.lv_edv_ml)),
+                        ),
+                        (
+                            t!("heart-motion-esv"),
+                            r.lvef.map_or_else(dash, |_| format!("{:.0} mL", r.lv_esv_ml)),
+                        ),
+                        (
+                            t!("heart-motion-mapse"),
+                            r.mapse_mm.map_or_else(dash, |v| format!("{v:.1} mm")),
+                        ),
+                        (
+                            t!("heart-motion-tapse"),
+                            r.tapse_mm.map_or_else(dash, |v| format!("{v:.1} mm")),
+                        ),
+                    ];
+                    for (label, value) in rows {
+                        ui.label(label);
+                        ui.label(value);
+                        ui.weak(&model);
+                        ui.end_row();
+                    }
+                });
+            ui.small(t!("heart-motion-note"));
+        });
     }
 
     /// Move the camera on the next frame (tutorial pages, the screenshot tour).
@@ -925,6 +1132,14 @@ impl HeartView {
         if self.tier1 {
             self.update_scalars();
         }
+        // wall motion: at most one evaluation per drawn frame, capped in rate, none when nothing
+        // changed (see `crate::heart_motion`); the simulation never waits for it
+        let frame_nr = ui.ctx().cumulative_frame_nr();
+        self.view_frame = Some(frame_nr);
+        let card = self.card_frame.is_some_and(|f| f + 1 >= frame_nr);
+        if let Some(wait_s) = self.tick_motion(ui.input(|i| i.time), true, card) {
+            ui.ctx().request_repaint_after_secs(wait_s as f32);
+        }
         let dt = ui.input(|i| i.stable_dt).min(0.1);
         let size = ui.available_size();
         let response = Viewport3d::ui(ui, size);
@@ -935,6 +1150,7 @@ impl HeartView {
         };
         let scene = &mut res.scene;
         let camera_basis = scene.camera.basis();
+        self.upload_motion(scene, &rs.queue);
         self.sync_scene(scene, &rs.queue, dt);
         if let Some(id) = self.lead_set {
             if self.overlay_glyphs.is_empty() {
@@ -955,6 +1171,13 @@ impl HeartView {
             scene.set_tubes(&rs.device, &rs.queue, id, &tubes);
         }
 
+        // Picking (stimulate, ablate, the hover read-out, the EP lab's catheter placement) ray-casts
+        // the REST mesh, not the moving one: the target of a click is the anatomical site, and the
+        // hoods that map a vertex to its cells index the rest mesh. The drawn wall is at most about
+        // a centimetre from there (the apex stays, the base moves), so a click lands on the cell
+        // under the resting surface point. The lead, catheter and territory markers are glyphs at
+        // the cells' rest positions and do not move either; the valve discs and their highlights
+        // are layers and do move with the annuli.
         let uv = |p: egui::Pos2| {
             (
                 (p.x - rect.left()) / rect.width(),

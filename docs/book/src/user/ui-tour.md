@@ -27,6 +27,9 @@ Every slider has its label before it and its unit after the value (*SA rate*, th
 * **Centre: the 3-D heart.** Drag to rotate, scroll to zoom. The colour is the membrane voltage of each region (blue at
   rest, red when depolarised); the panel on the left switches to *activation time* or *APD* maps, changes the colour range
   and offers a colour-blind-safe palette. *Click on the heart* stimulates there; shift-click ablates.
+* **The heart moves.** The heart panel has a *Wall motion* switch, an *Exaggeration* slider and a read-out card (LVEF, volumes,
+  MAPSE, TAPSE, each labelled *model*). They are explained on [The beating heart (wall motion)](wall-motion.md), with what the
+  model cannot show.
 * **Left: layers.** Show, hide or fade each chamber, the great vessels, the valve rings and the torso. The heart-vector
   arrow and its loop can be overlaid; *see-through* fades the walls so the arrow stays visible.
 * **Right: the frontal QRS axis** measured from the strip. The hexaxial circle shows the four axis classes as soft

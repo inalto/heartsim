@@ -790,6 +790,19 @@ impl SceneRenderer {
         }
     }
 
+    /// Overwrite a layer's positions and normals (a deforming mesh, B30; length must equal its
+    /// vertex count). Picking keeps using the rest mesh (see [`crate::MeshGpu`]).
+    pub fn set_layer_vertices(
+        &self,
+        queue: &wgpu::Queue,
+        id: LayerId,
+        vertices: &[heartsim_geometry::Vertex],
+    ) {
+        if let Some(l) = self.layer(id) {
+            l.mesh.write_vertices(queue, vertices);
+        }
+    }
+
     /// Single-mesh convenience kept from the first renderer: replace the primary layer by `mesh`,
     /// colour-mapped through the voltage LUT over 0–1, and frame the camera on it.
     pub fn set_mesh(&mut self, device: &wgpu::Device, mesh: &TriMesh) {

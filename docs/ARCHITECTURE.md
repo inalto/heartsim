@@ -10,7 +10,7 @@ Status: v0.1 (2026-10-31). Companion to `REQUIREMENTS.md`. Research backing: `re
    re-entry). Same parameter vocabulary, same ECG forward model, same scenario files. (The research-grade monodomain/HPC path is an
    *export bridge* to openCARP/MonoAlg3D, not something we re-implement.)
 3. **Data-driven pathologies.** A pathology is a scenario file (parameters, masks, templates, timeline). Adding one needs no code.
-4. **Pure core.** `core/geometry/sim/ecg` (and `calc`) have no GPU, GUI, I/O or wall-clock dependencies, compile to wasm32, and are what the CLI
+4. **Pure core.** `core/geometry/sim/ecg` (and `calc`, `echo`) have no GPU, GUI, I/O or wall-clock dependencies, compile to wasm32, and are what the CLI
    and the tests exercise.
 5. **Determinism.** Fixed dt, seeded RNG, fixed-order reductions. Golden snapshots guard every preset.
 
@@ -27,6 +27,8 @@ heartsim-ecg       LeadVectors, Tier-0 GaussianSynth, ForwardModel (weight matri
 heartsim-calc      echo and haemodynamics calculators (B29): Calculator descriptions, pure compute to an Outcome (values,
                    substituted formula, findings with criterion and locator), graded tables as data, references, review
                    status; no dependencies, beside `ecg` in the order (only `app` and `cli` use it)
+heartsim-echo      the beating heart (B30): a kinematic model of wall motion in cardiac coordinates, timed by the engine's
+                   events and the valve schedule; LVEF, volume, MAPSE and TAPSE read-outs; pure (core, geometry, sim, ecg)
 heartsim-render    wgpu: offscreen scene (colour+depth), per-vertex scalar buffer + LUT textures, clip planes, picking rays, glyphs,
                    lines (vector arrow, catheters), offscreen capture to PNG
 heartsim-ui        egui widgets: ecg_strip (painter), twelve-lead page, Viewport3d (egui_wgpu callback), Cabrera wheel, calipers,

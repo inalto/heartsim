@@ -46,6 +46,7 @@ impl HeartSimApp {
         self.v_beat_ms = None;
         if let Some(h) = &mut self.heart {
             h.retime(&s.timing);
+            h.reset_motion(s.timing.sinus.respiration_rate_bpm, &s.scenario.auscultation);
         }
         if self.ecg.is_paused() {
             self.ecg.toggle_pause();
@@ -82,6 +83,41 @@ impl HeartSimApp {
             .then(|| Millis(self.engine.now().0 - back))
             .and_then(|t| self.heart_history.at(t, h.mode));
         h.set_scrub_cells(cells);
+    }
+
+    /// Before the UI: reduced motion, the "Wall motion" switch and the exaggeration of the settings
+    /// go to the heart's motion state (the switch is forced off with reduced motion; the stored
+    /// choice is kept for when it goes off again).
+    pub(super) fn sync_wall_motion_in(&mut self) {
+        let Some(h) = &mut self.heart else { return };
+        h.panel.reduced_motion = self.settings.reduced_motion;
+        h.set_motion_options(
+            self.settings.reduced_motion,
+            self.settings.wall_motion,
+            self.settings.wall_motion_exaggeration,
+        );
+    }
+
+    /// After the UI: what the switch and slider changed goes back to the settings.
+    pub(super) fn sync_wall_motion_out(&mut self) {
+        if let Some((on, exaggeration)) = self
+            .heart
+            .as_ref()
+            .and_then(crate::heart_view::HeartView::motion_options)
+        {
+            self.settings.wall_motion = on;
+            self.settings.wall_motion_exaggeration = exaggeration;
+        }
+    }
+
+    /// The time the 3-D heart is drawn at: the engine's minus the scrub and the heart-sound display
+    /// delay (the strip's and the colour map's), and the breathing phase there.
+    pub(super) fn set_wall_motion_time(&mut self) {
+        let t = (self.engine.now().0 - self.heart_view_offset_ms()).max(0.0);
+        let phase = self.engine.respiratory_phase(Millis(t));
+        if let Some(h) = &mut self.heart {
+            h.set_motion_time(t, phase);
+        }
     }
 
     /// Heart vector at the strip cursor (the newest sample on screen), mV.

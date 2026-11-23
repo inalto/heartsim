@@ -129,6 +129,25 @@ their source locators are in English in every language.
 * No rotors, no anatomical flutter circuit and no drawn twist on the 3-D heart for torsades: those rhythms are drawn by the
   timing engine for the strip, and the heart shows a schematic version.
 
+### Wall motion (the beating heart)
+
+Brief B30. A kinematic model of wall motion, not electromechanics; see [the page](user/wall-motion.md). Nobody has compared it
+with a real echocardiogram and **no clinician has reviewed it**: the look, the designed parameters and the read-outs need that
+review before they are taught as more than a schematic.
+
+* Many parameters are **designed**, not sourced (contraction timing, filling phases, the shape of the movement, the quivers,
+  the respiratory shift); `crates/heartsim-echo/src/params.rs` marks each one.
+* No valve leaflets, papillary muscles or pericardium; valve planes are discs. No pressure, flow or Doppler.
+* The right ventricle has no closed cavity, so there is no RV volume or RVEF read-out; ischaemia reduces the left ventricle's
+  inward motion only.
+* No dilated or hypertrophied chamber shapes.
+* One small fold of the RV surface near the tricuspid annulus can appear briefly in LBBB; thin walls (atria, vessel roots) may
+  slip a few millimetres against their neighbours.
+* Scrubbing back more than about 6 s shows the motion without regional detail.
+* The motion is evaluated up to 30 times a second on the desktop and 20 times in the browser. One evaluation takes about 18 ms on
+  one core of the development machine (a virtual machine; the bench is `cargo bench -p heartsim-echo`); its cost in the browser has not
+  been measured.
+
 ### Rhythms
 
 * Typical flutter exists in two separate forms that do not meet: a strip-level driver (scenarios `flutter_*`) and the EP lab's

@@ -11,6 +11,7 @@ heartsim-sim       the timing engine (SA, AV, His, escape, pathways, pacemakers;
 heartsim-ecg       Tier-0 Gaussian synthesiser, forward model (cells → electrodes), ring buffers, analysis (QRS/P/T,
                    intervals, axis, heart vector), scenario runs
 heartsim-calc      the echo calculators: inputs, pure computations, graded tables and references (no dependencies)
+heartsim-echo      the beating heart: kinematic wall motion timed by the engine's events, read-outs (pure; no GPU or I/O)
 heartsim-render    wgpu: offscreen heart rendering, colour maps, picking, glyphs, capture
 heartsim-ui        egui widgets: strip, 12-lead page, calipers, axis dial, vector view, panels, CPU snapshots
 heartsim-io        exports and imports: 12-lead PDF, PNG, CSV, WFDB, scenario RON, share bundles
@@ -19,7 +20,7 @@ heartsim-cli       headless runs and exports, scenario validation
 xtask              CI entry point, asset pipeline, release checks
 ```
 
-`core`, `geometry`, `sim`, `ecg` and `calc` contain no GPU, GUI, file or clock access and compile for `wasm32`; they are what the tests
+`core`, `geometry`, `sim`, `ecg`, `calc` and `echo` contain no GPU, GUI, file or clock access and compile for `wasm32`; they are what the tests
 and the CLI exercise.
 
 ## Three rules that shape the code

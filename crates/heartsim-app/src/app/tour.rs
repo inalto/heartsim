@@ -57,6 +57,12 @@ enum Extra {
     EchoSearch,
     /// Echo calculators (B29 part B): a decision tool with its path, filled from its worked example.
     EchoDecision,
+    /// Wall motion (B30): opaque walls, a fixed right-anterior-oblique camera (the same in every such
+    /// shot, so end-diastole and end-systole compare), no vector arrow.
+    WallMotion,
+    /// Wall motion with the front half of the heart cut away, so the walls and the cavity show in
+    /// section (the septal flash cannot be seen from outside).
+    WallMotionCut,
 }
 
 /// One screenshot.
@@ -91,7 +97,7 @@ const DEFAULT: Step = Step {
     listening: None,
 };
 
-const STEPS: [Step; 38] = [
+const STEPS: [Step; 45] = [
     Step {
         file: "simulator-sinus.png",
         ..DEFAULT
@@ -211,6 +217,54 @@ const STEPS: [Step; 38] = [
         scenario: EP_TOUR_PROCEDURE,
         run_s: 7.0,
         after_qrs_ms: 0.0,
+        ..DEFAULT
+    },
+    // brief B30: the beating heart, same camera: end-diastole (just after the QRS onset), end-systole,
+    // the start of ejection in LBBB (the scrub steps by 0.1 s, so the 60-130 ms of the isovolumic
+    // septal flash falls between two drawable times), each also cut open, and the read-out card
+    // (the heart panel at end-systole, when the beat's ejection fraction is known)
+    Step {
+        file: "motion-sinus-end-diastole.png",
+        after_qrs_ms: 5.0,
+        extra: Extra::WallMotion,
+        ..DEFAULT
+    },
+    Step {
+        file: "motion-sinus-end-systole.png",
+        after_qrs_ms: 410.0,
+        extra: Extra::WallMotion,
+        ..DEFAULT
+    },
+    Step {
+        file: "motion-lbbb-septal-flash.png",
+        scenario: "lbbb",
+        after_qrs_ms: 140.0,
+        extra: Extra::WallMotion,
+        ..DEFAULT
+    },
+    Step {
+        file: "motion-cut-sinus-end-diastole.png",
+        after_qrs_ms: 5.0,
+        extra: Extra::WallMotionCut,
+        ..DEFAULT
+    },
+    Step {
+        file: "motion-cut-sinus-end-systole.png",
+        after_qrs_ms: 410.0,
+        extra: Extra::WallMotionCut,
+        ..DEFAULT
+    },
+    Step {
+        file: "motion-cut-lbbb-septal-flash.png",
+        scenario: "lbbb",
+        after_qrs_ms: 140.0,
+        extra: Extra::WallMotionCut,
+        ..DEFAULT
+    },
+    Step {
+        file: "motion-readout-card.png",
+        after_qrs_ms: 450.0,
+        extra: Extra::WallMotion,
         ..DEFAULT
     },
     // brief B27: a systolic and a diastolic murmur in the heart-sound lane (`sounds` in
@@ -543,6 +597,8 @@ impl HeartSimApp {
                     let mut alphas: Vec<&mut f32> = h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
                     // the app opens with the see-through heart, so every shot shows that default
                     self.vector.set_see_through(true, &mut alphas);
+                    // and uncut, with the camera free (the wall-motion shots set their own)
+                    h.panel.clip_enabled = false;
                 }
                 self.layout = step.layout;
                 if let Some(deg) = step.axis_deg {
@@ -550,6 +606,19 @@ impl HeartSimApp {
                 }
                 match step.extra {
                     Extra::None => {}
+                    Extra::WallMotion | Extra::WallMotionCut => {
+                        if let Some(h) = &mut self.heart {
+                            h.panel.clip_enabled = step.extra == Extra::WallMotionCut;
+                            h.panel.clip_depth = 0.0;
+                            let mut alphas: Vec<&mut f32> =
+                                h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                            self.vector.set_see_through(false, &mut alphas);
+                            h.panel.auto_rotate = false;
+                            h.command_camera(heartsim_ui::CameraCommand::Preset(
+                                heartsim_render::CameraPreset::Rao,
+                            ));
+                        }
+                    }
                     Extra::RhythmQuiz => {
                         self.rhythm_quiz.next_question(&self.library);
                         if let Some(q) = &self.rhythm_quiz.question {
@@ -696,6 +765,17 @@ impl HeartSimApp {
                     let slot = Arc::new(Mutex::new(None));
                     let out = Arc::clone(&slot);
                     let path = tour.dir.join(step.file);
+                    if let Some(m) = self.heart.as_ref().and_then(|h| h.motion()) {
+                        tracing::info!(
+                            "{}: engine {:.0} ms, last ventricular event {:.0} ms, drawn at {:.0} ms, LV volume {:.1} mL, {:?}",
+                            step.file,
+                            self.engine.now().0,
+                            self.last_v_activation.0,
+                            m.time_ms(),
+                            m.readout().lv_volume_ml,
+                            m.readout()
+                        );
+                    }
                     ctx.request_screenshot(move |img| {
                         let r = save_png(&img, &path);
                         if let Ok(mut s) = out.lock() {

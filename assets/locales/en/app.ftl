@@ -220,6 +220,18 @@ heart-territory = Territory: { $territory }
 heart-activated = Activated at { $time } ms this beat
 heart-not-activated = Not yet activated this beat
 heart-apd = APD { $value } ms
+heart-motion = Wall motion
+heart-motion-hint = The heart wall moves with the simulated activation and valve timing. A kinematic model, not electromechanics; no pressure or flow.
+heart-motion-reduced = Off while reduced motion is on (Settings).
+heart-motion-exaggeration = Exaggeration
+heart-motion-card = Wall-motion read-out
+heart-motion-lvef = LVEF
+heart-motion-edv = LV EDV
+heart-motion-esv = LV ESV
+heart-motion-mapse = MAPSE
+heart-motion-tapse = TAPSE
+heart-motion-model = model
+heart-motion-note = Current beat, from the deformed mesh at 1x. A model, not a measurement; "—" when the rhythm has no ejection.
 
 ## Shared feedback
 feedback-correct = Correct.

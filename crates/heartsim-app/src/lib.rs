@@ -16,6 +16,7 @@ pub mod electrode_tab;
 #[cfg(feature = "export")]
 pub mod export_panel;
 pub mod heart_history;
+pub mod heart_motion;
 pub mod heart_sound_player;
 pub mod heart_sounds;
 pub mod heart_view;

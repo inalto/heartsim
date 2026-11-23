@@ -1,0 +1,26 @@
+[package]
+name = "heartsim-echo"
+description = "Kinematic wall-motion model of the heart for heartsim's echo simulator: cardiac coordinates, contraction from activation, valve-gated volumes, mesh deformation and read-outs."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Pure: no GPU, no GUI, no I/O, no clock; builds for wasm32 like the engine crates.
+[dependencies]
+heartsim-core.workspace = true
+heartsim-geometry.workspace = true
+heartsim-sim.workspace = true
+heartsim-ecg.workspace = true
+glam.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "motion"
+harness = false

@@ -2252,6 +2252,7 @@ dependencies = [
  "heartsim-calc",
  "heartsim-core",
  "heartsim-ecg",
+ "heartsim-echo",
  "heartsim-geometry",
  "heartsim-io",
  "heartsim-render",
@@ -2330,6 +2331,18 @@ dependencies = [
  "rayon",
  "ron",
  "serde",
+]
+
+[[package]]
+name = "heartsim-echo"
+version = "0.22.0"
+dependencies = [
+ "criterion",
+ "glam",
+ "heartsim-core",
+ "heartsim-ecg",
+ "heartsim-geometry",
+ "heartsim-sim",
 ]
 
 [[package]]

@@ -166,6 +166,10 @@ impl HeartSimApp {
         }
         if let Some(h) = &mut self.heart {
             h.retime(&preset.timing);
+            h.reset_motion(
+                preset.timing.sinus.respiration_rate_bpm,
+                &heartsim_core::Auscultation::default(),
+            );
             h.set_external_cells(Some(lab.cells()));
             h.set_pick_mode(true);
             // the catheters are inside the chambers
@@ -245,6 +249,7 @@ impl HeartSimApp {
             self.sounds.on_events(&events);
             if let Some(h) = &mut self.heart {
                 h.on_step(&events, dt, act.lab.now());
+                h.motion_events(&events, act.lab.timing().respiration());
             }
             act.recorder.push(&act.lab.cells().vm, act.lab.now().0);
             self.sample_accumulator += dt.0;
@@ -267,6 +272,7 @@ impl HeartSimApp {
         self.engine = act.lab.timing().clone();
         if let Some(h) = &mut self.heart {
             h.set_external_cells(Some(act.lab.cells()));
+            h.motion_record_cells();
         }
         self.record_heart_history();
         self.ep.active = Some(act);

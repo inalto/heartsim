@@ -4,6 +4,23 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- The beating heart: wall motion of the 3-D heart (brief B30, echo simulator phase 1). Each region contracts after its own
+  activation for about the length of its action potential; the valve closures that place the heart sounds also bound ejection
+  and filling, so the motion, the ECG, the colour map and the sounds agree. Sinus beats show the base descending toward the
+  apex, thickening walls and left-ventricular twist; LBBB shows a small septal flash; a premature beat does not eject and the
+  beat after it does; AF has no atrial kick and a beat-to-beat ejection fraction; complete AV block has atria on their own
+  clock; an ischaemic territory moves less; VF and asystole show no organised motion.
+- New pure crate `heartsim-echo` (depends on core, geometry, sim and ecg; no GPU, no I/O, builds for wasm32): the kinematic model
+  in cardiac coordinates, the phase gating, the beat-to-beat ejection fraction and the mapping to every mesh of the pack. It is a
+  model of wall motion, not electromechanics: no pressure, no flow, no Doppler. Every parameter is in one file with its source or
+  the word "designed".
+- Heart panel controls: a **Wall motion** switch (on by default, off while Reduced motion is on, remembered), an
+  **Exaggeration** slider (0.5× to 1.5×, 1× by default; the read-outs always use 1×) and a **Wall-motion read-out** card with
+  LVEF, LV end-diastolic and end-systolic volumes, MAPSE and TAPSE, each labelled *model* (English and Italian).
+- User page *The beating heart (wall motion)*, a known-issues entry, and the layering line with `heartsim-echo` in the architecture
+  docs.
+
 ## [0.22.0] — 2026-11-22
 
 ### Added

@@ -221,6 +221,18 @@ heart-territory = Territorio: { $territory }
 heart-activated = Attivato a { $time } ms in questo battito
 heart-not-activated = Non ancora attivato in questo battito
 heart-apd = APD { $value } ms
+heart-motion = Movimento delle pareti
+heart-motion-hint = La parete del cuore si muove con l'attivazione simulata e i tempi delle valvole. Un modello cinematico, non elettromeccanico; niente pressione né flusso.
+heart-motion-reduced = Disattivato finché il movimento ridotto è attivo (Impostazioni).
+heart-motion-exaggeration = Esagerazione
+heart-motion-card = Valori del movimento delle pareti
+heart-motion-lvef = FEVS
+heart-motion-edv = VTD VS
+heart-motion-esv = VTS VS
+heart-motion-mapse = MAPSE
+heart-motion-tapse = TAPSE
+heart-motion-model = modello
+heart-motion-note = Battito corrente, dalla mesh deformata a 1x. Un modello, non una misura; "—" quando il ritmo non ha eiezione.
 
 ## Riscontro comune
 feedback-correct = Corretto.
