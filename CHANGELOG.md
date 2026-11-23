@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-11-23
+
 ### Added
 - The beating heart: wall motion of the 3-D heart (brief B30, echo simulator phase 1). Each region contracts after its own
   activation for about the length of its action potential; the valve closures that place the heart sounds also bound ejection

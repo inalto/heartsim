@@ -2238,7 +2238,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-app"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "anyhow",
  "directories",
@@ -2275,14 +2275,14 @@ dependencies = [
 
 [[package]]
 name = "heartsim-calc"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "heartsim-cli"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2305,7 +2305,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-core"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "approx",
  "glam",
@@ -2318,7 +2318,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-ecg"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "approx",
  "criterion",
@@ -2335,7 +2335,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-echo"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "criterion",
  "glam",
@@ -2347,7 +2347,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-geometry"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "approx",
  "base64 0.22.1",
@@ -2366,7 +2366,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-io"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "egui",
  "heartsim-core",
@@ -2383,7 +2383,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-render"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "bytemuck",
  "glam",
@@ -2397,7 +2397,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-sim"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "approx",
  "criterion",
@@ -2411,7 +2411,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-ui"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "egui",
  "egui-wgpu",
@@ -2433,7 +2433,7 @@ dependencies = [
 
 [[package]]
 name = "heartsim-web"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "console_error_panic_hook",
  "eframe",
@@ -6047,7 +6047,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.22.0"
+version = "0.23.0"
 dependencies = [
  "anyhow",
  "clap",
