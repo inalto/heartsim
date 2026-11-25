@@ -36,3 +36,6 @@ Thumbs.db
 
 # Third-party models of unknown licence, kept locally for reference only (not shipped)
 /assets/objects/*.blend
+
+# Tricuspid benchmark dataset (Laurence et al. 2021, 272 MB): kept locally, only the article PDF is committed
+/docs/research/tricuspid/DataInBrief_TricuspidValveBenchmark/

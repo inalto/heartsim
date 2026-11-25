@@ -40,3 +40,4 @@ mechanical, fully specified tasks. Order and parallelism: `../ROADMAP.md`.
 | B32 | The ultrasound image: attenuation, reflection, shadows, lung reverberation, tissue-locked speckle, point-spread function, gain and compression on the label slice (echo simulator, phase 3) | echo, render, ui, app, assets | Opus | M11 |
 | B33 | Standard views: targets from landmarks, a geometric "view found" score with hints, a tutorial and a self-test (echo simulator, phase 4) | echo, core, ui, app, assets | Sonnet | M11 |
 | B34 | M-mode, annular tissue Doppler and calipers that feed the echo calculators (echo simulator, phase 5) | echo, ui, app, calc | Sonnet | M11 |
+| B35 | A measured tricuspid valve in the 3-D heart: an open finite-element valve (Texas TriValve 1.1, CC BY 4.0) baked, fitted to the tricuspid ring and posed by the engine's valve schedule; echo leaflets kept consistent | xtask, geometry, echo, render, app | Opus (Haiku for docs) | M11 follow-up |
