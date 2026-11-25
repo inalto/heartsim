@@ -4,6 +4,93 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-11-25
+
+### Added
+- The Echo page (brief B31, echo simulator phase 2), in the Explore group after Heart Vector. A transthoracic probe is put on
+  the figure from four windows (parasternal, apical, subcostal, suprasternal), then slid, tilted, rocked and rotated by drag,
+  handles, sliders or keys; depth and sector are adjustable. The sector is drawn in the 3-D heart, with an optional cut at the
+  image plane. A coloured anatomical cross-section, not an ultrasound image, shows the tissues along the plane with a legend, a
+  depth scale in centimetres, a hover read-out and "No contact" where the beam misses the skin. Hidden areas behind rib or lung
+  are dimmed and hatched. Valve leaflets, papillary muscles, the moderator band, the pericardium and the lung-edge retraction
+  are designed and labelled as such.
+- Anatomy pack format 3: two label volumes, `labels_heart.bin` (1 mm, the heart) and `labels_thorax.bin` (2 mm, the thorax), with
+  the tissue labels in `docs/anatomy-pack.md`. A version-2 pack is refused with a message to re-bake it.
+- User page *The Echo page: probe and cross-section*, and a known-issues entry.
+- The grey simulated image on the Echo page (brief B32, echo simulator phase 3). The right panel shows a grey sector by default,
+  with a display switch: *Image*, *Anatomy* (the B31 cross-section) and *Both* (the colours over the grey image, with the legend).
+  The image comes from a simple line model: two-way attenuation, reflection and transmission at tissue boundaries, incidence
+  weighting, bone shadow, lung reflection with designed reverberation, enhancement behind blood, speckle that moves with the
+  tissue, a point-spread blur, time-gain compensation and log compression. It is labelled as a simulated image from a simple
+  model, not a recording, and nothing was compared with a real echocardiogram.
+- Image settings: frequency (2–5 MHz), gain (±30 dB), dynamic range (30–90 dB), focus (with an F marker on the depth scale), an
+  automatic time-gain compensation with eight sliders, and a reset that also restores depth and sector (English and Italian).
+- The acoustic table `assets/echo/acoustic.ron` (format version 1): one row per tissue, with the impedance, attenuation,
+  backscatter, scatterer density, mean, spread and specularity, each marked read, unverified or designed.
+- User page *The Echo page: probe, cross-section and simulated image*, with a *Reading the image* section; known-issues entries for
+  the image; a developer note in `docs/ARCHITECTURE.md` (section 4.6).
+- The standard views on the Echo page (brief B33, echo simulator phase 4), in a *Standard views* card with two modes. *Practise*
+  asks for a view and scores the probe from 0 to 100 %, gives one hint in words, ticks a checklist of what the view must show,
+  animates the probe to the reference pose with *Show me* (instant with Reduced motion), and can show a ghost of the target plane
+  in the 3-D heart and name the structures on the image. A view is found at a score of 80 % held for one second. *Self-test*
+  asks the shipped views without hints, ghost, checklist or labels, times each one and shows a summary; it has no pass mark, and
+  its progress is saved like the other quizzes.
+- Thirteen of the fifteen standard views are shipped, with their pages in Mitchell et al. 2019 (doi:10.1016/j.echo.2018.06.004).
+  The targets are computed from the pack's landmarks. Two views are not reachable in this model: the subcostal inferior vena cava
+  (the pack's vein is too short) and the suprasternal arch (best score 35 %). Tolerances, the marker rules the guideline does not
+  give, and the hint wording are designed and not reviewed by a sonographer; the user page *Standard views* lists them.
+- `heartsim-cli echo views` prints each view's status, score, hidden share, reference pose and guideline pages.
+- Tutorial *Echo: the standard views* (16 pages, English): windows and probe movements, then the views in guideline order, each
+  page with a "view found" check (the new `view_check` page field). The tutorial actions `ProbeAtWindow`, `ProbeAtView` and
+  `SetEchoView` and the Echo panel are new.
+- User page *Standard views: find the view with the probe*, a known-issues subsection on the standard views, and four screenshots
+  (three views, and the self-test, which is scripted: its scores and times are not real).
+- *Settings → Faster M-mode trace (echo)*, off by default: the M-mode trace takes a column every 50 ms instead of every 25 ms, at half
+  the cost, for computers that cannot keep the full trace in real time. The columns are the full trace's own; a time read from the
+  trace is then good to 50 ms, and the M-mode panel says so. A caliper reference or a snap on a column that was not taken now reads
+  the column the trace draws there.
+- M-mode, tissue Doppler and calipers on the Echo page (brief B34, echo simulator phase 5), in a fourth left-column section, *Measure*,
+  with three modes: *2-D*, *M-mode* and *Tissue Doppler*. M-mode puts a cursor line on the sector and draws a depth-against-time trace of
+  that scan line, one column every 25 ms of simulated time, with the ECG lead on the same clock, at 25, 50 or 100 mm/s; it can be frozen
+  and scrubbed. Tissue Doppler places a gate on the septal or lateral mitral annulus or the lateral tricuspid annulus and draws its
+  velocity along the beam, positive toward the probe, with S', e' and a' marked. The angle to the motion is shown and not corrected, and
+  a thin band round the curve is labelled designed. There is no blood Doppler. Calipers measure distances, areas, depths, times, slopes
+  and velocities. Up to four named measurements (LVIDd, LVIDs, IVSd, LVPWd, LA diameter, aortic root, TAPSE, MAPSE, e', a', S') show the
+  model's own value for the same place and instant, with the difference. A named measurement can be sent to the matching echo
+  calculator input, marked "from the echo simulator"; nothing measured is saved.
+- User page *Measuring on the echo*, with four screenshots; known-issues entries for the B34 limits and the three open decisions; three
+  measuring pages appended to the tutorial *Echo: the standard views* (19 pages now, English) and four tour steps. The conventions are
+  cited from Mitchell et al. 2019 with their pages.
+
+### Changed
+- Buttons have more padding (8 × 4 points) across the app, and the top-bar group menus and their rows 12 × 6 points; the rhythm
+  bar wraps at narrow widths and its picker has a fixed width (a long name is cut short, the full name on hover).
+- Interface pass: one accent-coloured primary button per panel (Run, Check answer, Next question, Play, Start or Continue); shared
+  slider rows, helper text at a readable size and contrast, "More" for long explanations, tick rows, segmented controls and
+  collapsible sections. Selected tabs and pills have at least 4.5:1 text contrast in both themes and in high contrast.
+- Simulator: the left panel is five collapsible sections (Colour map, Click on the heart, Anatomy and camera, Wall motion, Heart
+  vector; the first three open at first, the state remembered) in a scroll area; layers are listed by their translated names; the
+  ablation hint reads "Shift-click the heart to ablate without switching mode."
+- Narrow windows (below 700 px): the Echo page shows an *Image | 3-D chest* switch above the figure and keeps the sector (and the trace
+  when M-mode or Tissue Doppler is on) at a fixed height, with the section control and its controls scrolling below. The Echo page's
+  left column is 300 px wide by default.
+- Echo page: the left column is one section at a time (Probe | Image | Views | Measure); the image keeps its rectangle in Image, Anatomy and
+  Both, with the read-out and legend below it; the description is one line with "More"; Reset has its own row; the drag hint goes
+  after the first probe move; the checklist shows ticks; the self-test table has Best and Time columns ("—" for a view not found);
+  the view order follows the guideline (RV outflow before RV inflow, RV-focused four-chamber after the apical four-chamber).
+- Narrow windows (below 700 px): Simulator, 12-lead, Sound Trainer, Auscultation Quiz, EP Lab and Electrodes show one part at a
+  time behind a segmented control; the interval drill, rhythm quiz, axis quiz, axis trainer and heart vector stack the trace above
+  the controls; the ECG strip toolbar folds into a lead picker and a Display menu.
+- Interval drill: a line says what to do next while Check answer is disabled. Calculators: a legend explains the italic,
+  formula-only entries, and the disclaimer is larger. Sound trainer: a legend explains the bracketed listen count.
+- Tutorials and cases lists: one accent button on the page (Continue on the last opened unfinished tutorial, otherwise Start on the
+  first not completed).
+
+### Fixed
+- Starting the echo self-test prepares the views one per frame with a "Preparing views n of 15" progress bar, instead of blocking
+  the page for the whole preparation.
+- The 12-lead beat markers no longer overlap the lead labels.
+
 ## [0.23.0] — 2026-11-23
 
 ### Added

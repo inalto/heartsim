@@ -12,6 +12,8 @@
 //!   hoods/<name>.bin   8 nearest cells + inverse-distance weights per vertex of each myocardial mesh
 //!   landmarks.ron      named cells and named cell sets (PMJ seeds per fascicle)
 //!   electrodes.ron     electrode sites in the heart frame
+//!   labels_heart.bin   HSVL label volume of the heart box (1 mm; format 3, optional)
+//!   labels_thorax.bin  HSVL label volume of the thorax box (2 mm; format 3, optional)
 //! ```
 //!
 //! Loading verifies the format version, every file's size and CRC-32, and the cross-file counts, so
@@ -34,12 +36,18 @@ use crate::hood::{Hood, compute_hoods};
 use crate::mesh::TriMesh;
 use crate::procedural::{MeshKind, NamedMesh, Resolution, idealised_heart, procedural_torso};
 use crate::territory::Territory;
+use crate::volume::{LabelVolume, VolumeError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Bump when the set of files or their meaning changes; binary record versions live in `binary`.
-pub const PACK_FORMAT_VERSION: u32 = 2;
+/// Version 3 added the label volumes (`labels_heart.bin`, `labels_thorax.bin`).
+pub const PACK_FORMAT_VERSION: u32 = 3;
+/// File of the heart-box label volume.
+pub const HEART_LABELS_FILE: &str = "labels_heart.bin";
+/// File of the thorax-box label volume.
+pub const THORAX_LABELS_FILE: &str = "labels_thorax.bin";
 /// Description of the coordinate frame written into every manifest.
 pub const HEART_FRAME: &str =
     "millimetres; origin = ventricular centroid; +x = patient's left, +y = cranial, +z = anterior";
@@ -56,8 +64,17 @@ pub enum PackError {
     Manifest(#[from] ron::error::SpannedError),
     #[error("RON serialisation error: {0}")]
     Ron(#[from] ron::Error),
-    #[error("pack format version {found} is not supported (this build reads {PACK_FORMAT_VERSION})")]
+    #[error(
+        "pack format version {found} is not supported (this build reads {PACK_FORMAT_VERSION}); \
+         re-bake the pack with `cargo xtask bake-anatomy` (version 3 added the echo label volumes)"
+    )]
     Version { found: u32 },
+    #[error("{file}: {source}")]
+    Volume {
+        file: String,
+        #[source]
+        source: VolumeError,
+    },
     #[error("{file}: checksum mismatch (expected {expected:08x}, found {found:08x})")]
     Checksum { file: String, expected: u32, found: u32 },
     #[error("{file}: size mismatch (manifest says {expected} bytes, file has {found})")]
@@ -128,6 +145,19 @@ pub struct AnatomyPack {
     pub aha_segments: Vec<u8>,
     /// The pack's `LICENSE` text: licence and attribution of the geometry.
     pub licence: String,
+    /// The label volumes the echo cross-section samples; `None` for a pack without them (the
+    /// procedural pack). Both files or neither.
+    pub volumes: Option<LabelVolumes>,
+}
+
+/// The two label volumes of a pack, in the heart frame (`docs/anatomy-pack.md`, *Label volumes*).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LabelVolumes {
+    /// The pack heart at 1 mm: myocardium and blood of each chamber, aortic and pulmonary wall and
+    /// lumen. Everything else is [`crate::volume::Label::Outside`].
+    pub heart: LabelVolume,
+    /// The KCL torso at 2 mm: bone, lung, liver, soft tissue, thoracic blood, outside (air).
+    pub thorax: LabelVolume,
 }
 
 /// Procedural pack licence text (the pack is heartsim's own work).
@@ -193,6 +223,7 @@ impl AnatomyPack {
             body: None,
             aha_segments: heart.aha_segments,
             licence: PROCEDURAL_LICENSE.to_string(),
+            volumes: None,
         }
     }
 
@@ -242,6 +273,10 @@ impl AnatomyPack {
         put("landmarks.ron", to_ron(&self.landmarks)?.as_bytes())?;
         put("electrodes.ron", self.electrodes.to_ron()?.as_bytes())?;
         put("LICENSE", self.licence.as_bytes())?;
+        if let Some(v) = &self.volumes {
+            put(HEART_LABELS_FILE, &v.heart.encode())?;
+            put(THORAX_LABELS_FILE, &v.thorax.encode())?;
+        }
         self.manifest.files = files;
         self.manifest.format_version = PACK_FORMAT_VERSION;
         self.manifest.cell_count = self.cells.len() as u32;
@@ -372,6 +407,29 @@ impl AnatomyPack {
             hoods.insert(m.name.clone(), h);
         }
 
+        let volumes = match (
+            manifest.files.contains_key(HEART_LABELS_FILE),
+            manifest.files.contains_key(THORAX_LABELS_FILE),
+        ) {
+            (false, false) => None,
+            (true, true) => {
+                let vol = |rel: &str, bytes: Vec<u8>| {
+                    LabelVolume::decode(&bytes).map_err(|source| PackError::Volume {
+                        file: rel.to_string(),
+                        source,
+                    })
+                };
+                let heart = vol(HEART_LABELS_FILE, read(HEART_LABELS_FILE)?)?;
+                let thorax = vol(THORAX_LABELS_FILE, read(THORAX_LABELS_FILE)?)?;
+                Some(LabelVolumes { heart, thorax })
+            }
+            _ => {
+                return Err(PackError::Format(format!(
+                    "the manifest lists only one of {HEART_LABELS_FILE} and {THORAX_LABELS_FILE}"
+                )));
+            }
+        };
+
         let body = read_file("human.glb")
             .ok()
             .and_then(|b| body::read_human_body(&b).ok());
@@ -395,6 +453,7 @@ impl AnatomyPack {
             body,
             aha_segments,
             licence,
+            volumes,
         })
     }
 }

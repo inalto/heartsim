@@ -11,10 +11,24 @@ use heartsim_render::CameraPreset;
 pub struct LayerToggle {
     /// Layer name shown in the list (`lv`, `aorta`, `torso`, …).
     pub name: String,
+    /// Translated name for the list, set by the app (it owns the part names); empty shows `name`.
+    pub display: String,
     /// Draw the layer at all.
     pub visible: bool,
     /// Opacity 0–1; below 1 the structures behind show through (e.g. the torso over the heart).
     pub alpha: f32,
+}
+
+impl LayerToggle {
+    /// The name the list shows: the translated one, or the pack id when the app gave none.
+    #[must_use]
+    pub fn label(&self) -> &str {
+        if self.display.is_empty() {
+            &self.name
+        } else {
+            &self.display
+        }
+    }
 }
 
 /// Everything the anatomy panel edits.
@@ -49,6 +63,7 @@ impl AnatomyPanelState {
                 .into_iter()
                 .map(|(name, alpha)| LayerToggle {
                     name,
+                    display: String::new(),
                     visible: true,
                     alpha,
                 })
@@ -86,25 +101,26 @@ pub fn anatomy_panel(ui: &mut Ui, state: &mut AnatomyPanelState) -> Option<Camer
     ui.strong(t!("anatomy-layers"));
     egui::Grid::new("anatomy_layers").num_columns(2).show(ui, |ui| {
         for l in &mut state.layers {
-            ui.checkbox(&mut l.visible, l.name.as_str());
-            ui.add_enabled(
-                l.visible,
-                egui::Slider::new(&mut l.alpha, 0.0..=1.0)
-                    .show_value(false)
-                    .text(t!("anatomy-opacity")),
-            );
+            let shown = l.label().to_owned();
+            ui.checkbox(&mut l.visible, shown);
+            ui.add_enabled_ui(l.visible, |ui| {
+                // a compact opacity rail beside its layer's checkbox (a grid, not a labelled row);
+                // named "<layer> opacity" for screen readers
+                let name = format!("{} {}", l.label(), t!("anatomy-opacity"));
+                let slider = ui.add(egui::Slider::new(&mut l.alpha, 0.0..=1.0).show_value(false));
+                slider.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, true, &name));
+            });
             ui.end_row();
         }
     });
     ui.checkbox(&mut state.labels, t!("anatomy-labels"));
     ui.horizontal(|ui| {
         ui.checkbox(&mut state.clip_enabled, t!("anatomy-cut-away"));
-        ui.add_enabled(
-            state.clip_enabled,
-            egui::Slider::new(&mut state.clip_depth, -1.0..=1.0)
-                .show_value(false)
-                .text(t!("anatomy-depth")),
-        );
+        ui.add_enabled_ui(state.clip_enabled, |ui| {
+            let name = t!("anatomy-depth");
+            let slider = ui.add(egui::Slider::new(&mut state.clip_depth, -1.0..=1.0).show_value(false));
+            slider.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Slider, true, &name));
+        });
     });
     ui.separator();
     ui.strong(t!("anatomy-view"));
@@ -118,18 +134,18 @@ pub fn anatomy_panel(ui: &mut Ui, state: &mut AnatomyPanelState) -> Option<Camer
             command = Some(CameraCommand::Frame);
         }
     });
-    if ui
-        .add(
-            egui::Slider::new(&mut state.lao_rao_deg, -90.0..=90.0)
-                .step_by(5.0)
-                .custom_formatter(|v, _| match v {
-                    v if v < -0.5 => format!("LAO {:.0}°", -v),
-                    v if v > 0.5 => format!("RAO {v:.0}°"),
-                    _ => "AP".to_string(),
-                })
-                .text(t!("anatomy-oblique")),
-        )
-        .changed()
+    if crate::widgets::slider_row(
+        ui,
+        &t!("anatomy-oblique"),
+        egui::Slider::new(&mut state.lao_rao_deg, -90.0..=90.0)
+            .step_by(5.0)
+            .custom_formatter(|v, _| match v {
+                v if v < -0.5 => format!("LAO {:.0}°", -v),
+                v if v > 0.5 => format!("RAO {v:.0}°"),
+                _ => "AP".to_string(),
+            }),
+    )
+    .changed()
     {
         command = Some(CameraCommand::Oblique(state.lao_rao_deg));
     }

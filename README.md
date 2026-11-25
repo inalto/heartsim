@@ -41,6 +41,10 @@ from any other simulator.
 * **The beating heart.** The 3-D heart contracts on the engine's own timing (phases gated by the valve closures, the septal flash of
   LBBB, no ejection after a premature beat, no atrial kick in AF), with a switch, an exaggeration slider and LVEF, volume, MAPSE and
   TAPSE read-outs labelled *model*. A kinematic model, not electromechanics.
+* **The Echo page.** A transthoracic probe on the figure, from four windows (parasternal, apical, subcostal, suprasternal), moved by
+  drag, handles or keys. The panel shows a grey simulated image from a simple line model (shadows, reverberation, speckle that moves
+  with the tissue), a coloured anatomical cross-section, or both. It is a schematic for teaching, not a recording, and nothing was
+  compared with a real echocardiogram, and its standard views (thirteen of fifteen, scored from geometry) have a tutorial and a self-test, and M-mode, annular tissue Doppler and calipers can send their values to the echo calculators.
 * **Physiology controls.** Sinus rate, AV block, Mobitz II ratio, axis shift, QRS width, speed; a pacemaker window (AAI, VVI,
   DDD, biventricular, capture and sensing faults); an ischaemia panel by coronary territory; a drug table; a defibrillator.
 * **Re-entry.** A persistent-AF preset on the detailed engine: shock it, ablate round the pulmonary veins, give drugs, and hand
@@ -82,7 +86,7 @@ More screenshots: [LBBB with the heart-vector arrow, scrubbed](docs/images/simul
 
 ## Status
 
-Version 0.23.0 (2026-11-23). The work packages B01–B30 in [docs/briefs/](docs/briefs/) are implemented; [CHANGELOG.md](CHANGELOG.md)
+Version 0.24.0 (2026-11-25). The work packages B01–B34 in [docs/briefs/](docs/briefs/) are implemented; [CHANGELOG.md](CHANGELOG.md)
 lists what each release added and [docs/ROADMAP.md](docs/ROADMAP.md) the milestones. The program has so far been tested
 headless (software rendering, no display) and on GitHub's runners: nobody has yet used it on a real screen, and several
 physiology numbers are cited from memory. See [known limitations and open questions](docs/book/src/known-issues.md).

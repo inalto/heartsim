@@ -118,13 +118,13 @@ drug-dose-given = Dose somministrata { $dose } × standard, { $ago } fa; effetto
 
 ## Pannello anatomico (anatomy_panel.rs)
 anatomy-layers = Strati
-anatomy-opacity = opacità
+anatomy-opacity = Opacità
 anatomy-labels = Etichette
 anatomy-cut-away = Sezione
-anatomy-depth = profondità
+anatomy-depth = Profondità
 anatomy-view = Vista
 anatomy-fit = Adatta
-anatomy-oblique = obliquità
+anatomy-oblique = Obliquità
 anatomy-auto-rotate = Rotazione automatica
 
 ## Pacemaker (pacer_panel.rs)
@@ -258,7 +258,7 @@ timeline-hint = Linea temporale dello scenario: un segno per azione, rosso = ora
 ## Controlli di trasporto (transport.rs)
 transport-run = Avvia
 transport-pause = Pausa
-transport-speed = velocità
+transport-speed = Velocità
 
 ## Barra dei colori e pulsante di scarica
 colour-min = min
@@ -304,3 +304,12 @@ ecg-art-mains = Ronzio di rete
 ecg-art-muscle = Muscolare
 ecg-art-intensity = Intensità
 orientation-hint = Orientamento: L / R = sinistra / destra del paziente, S / I = superiore (verso la testa) / inferiore, A / P = anteriore (davanti) / posteriore (dietro). Ruota con la vista.
+
+## Shared primitives (widgets.rs)
+ui-more = Altro
+ui-less = Meno
+ui-status-met = Soddisfatto
+ui-status-not-met = Non soddisfatto
+
+## Strip toolbar on a phone-narrow window
+ecg-lead = Derivazione

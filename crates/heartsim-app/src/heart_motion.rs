@@ -23,8 +23,8 @@
 use heartsim_core::Auscultation;
 use heartsim_ecg::PcgParams;
 use heartsim_echo::{
-    MotionError, MotionFrame, MotionHistory, MotionInput, MotionModel, MotionParams, MotionReadout,
-    mechanical_injury,
+    EchoAnatomy, MotionError, MotionFrame, MotionHistory, MotionInput, MotionModel, MotionParams,
+    MotionReadout, SliceState, mechanical_injury,
 };
 use heartsim_geometry::AnatomyPack;
 use heartsim_sim::timing::RespiratoryClock;
@@ -82,6 +82,32 @@ struct Key {
     epoch: u64,
 }
 
+/// What the last vertex evaluation was made with: the cross-section (B31) samples the same
+/// instant, so it needs these and not the time the clock has reached since.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Evaluated {
+    t_ms: f64,
+    resp_phase: f64,
+    enabled: bool,
+    exaggeration: f32,
+}
+
+/// What the M-mode and tissue-Doppler scans (brief B34) read from the motion: the model they
+/// evaluate at their own times, the record, the drawn time and the page's switches.
+#[derive(Debug)]
+pub struct ScanParts<'a> {
+    pub model: &'a mut MotionModel,
+    pub history: &'a MotionHistory,
+    /// The drawn time (the strip's), ms.
+    pub t_ms: f64,
+    /// Wall motion drawn (the switch on, reduced motion off).
+    pub enabled: bool,
+    /// The page's exaggeration (clamped), so a trace and the sector agree.
+    pub exaggeration: f32,
+    /// Reduced motion: the traces hold still.
+    pub reduced_motion: bool,
+}
+
 /// The wall-motion model, its record and the evaluation policy.
 #[derive(Debug)]
 #[allow(
@@ -112,6 +138,10 @@ pub struct HeartMotion {
     upload_pending: bool,
     readout: MotionReadout,
     last_forget_ms: f64,
+    /// The inputs of the last evaluation that wrote the frame, and how many such evaluations
+    /// there have been (the echo cross-section follows them).
+    evaluated: Option<Evaluated>,
+    serial: u64,
 }
 
 impl HeartMotion {
@@ -140,6 +170,8 @@ impl HeartMotion {
             upload_pending: false,
             readout: MotionReadout::default(),
             last_forget_ms: 0.0,
+            evaluated: None,
+            serial: 0,
         })
     }
 
@@ -225,6 +257,13 @@ impl HeartMotion {
         };
         if want_vertices && (enabled || !self.rest_uploaded) {
             self.model.evaluate(&input, &mut self.frame);
+            self.evaluated = Some(Evaluated {
+                t_ms: input.t_ms,
+                resp_phase: input.resp_phase,
+                enabled: input.enabled,
+                exaggeration: input.exaggeration,
+            });
+            self.serial += 1;
             self.readout = self.frame.readout;
             self.rest_uploaded = !enabled;
             self.upload_pending = true;
@@ -275,5 +314,51 @@ impl HeartMotion {
     #[must_use]
     pub fn time_ms(&self) -> f64 {
         self.t_ms
+    }
+
+    /// The parts a scan needs, borrowed together (the model is evaluated at the scan's own times,
+    /// never read back by an engine).
+    pub fn scan_parts(&mut self) -> ScanParts<'_> {
+        ScanParts {
+            enabled: self.active(),
+            exaggeration: self.exaggeration.clamp(0.0, MAX_EXAGGERATION),
+            t_ms: self.t_ms,
+            reduced_motion: self.reduced_motion,
+            model: &mut self.model,
+            history: &self.history,
+        }
+    }
+
+    // ---- the echo cross-section (B31) ------------------------------------------------------
+
+    /// Changes whenever the cross-section has something new to show, and not otherwise: the
+    /// number of vertex evaluations (the moving wall; the rate cap of [`tick`](Self::tick)
+    /// applies), and, while the frame is the rest mesh (motion off), the drawn time in bits (the
+    /// leaflets still open and close by phase). A paused clock therefore never changes it.
+    #[must_use]
+    pub fn echo_key(&self) -> (u64, u64) {
+        match self.evaluated {
+            Some(e) if e.enabled => (self.serial, 0),
+            _ => (self.serial, self.t_ms.to_bits()),
+        }
+    }
+
+    /// Refresh `state` for the instant of the frame that is drawn: the displacement grid from
+    /// **this frame** (the one the 3-D heart uploads; no second evaluation of the model) and the
+    /// valve openings at its time. With the motion off the grid is at rest and the openings follow
+    /// the drawn time.
+    pub fn echo_update(&self, state: &mut SliceState, anatomy: &EchoAnatomy) {
+        let (enabled, t_ms, resp_phase, exaggeration) = match self.evaluated {
+            Some(e) if e.enabled => (true, e.t_ms, e.resp_phase, e.exaggeration),
+            _ => (false, self.t_ms, self.resp_phase, 1.0),
+        };
+        let input = MotionInput {
+            history: &self.history,
+            t_ms,
+            resp_phase,
+            enabled,
+            exaggeration,
+        };
+        state.update(anatomy, &self.model, &self.frame, &input);
     }
 }

@@ -11,6 +11,7 @@ const GROUP_W: f32 = 150.0;
 
 fn harness() -> Harness<'static, Vec<Rect>> {
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(Vec2::new(WINDOW_W, 300.0))
         .build_ui_state(
             |ui, rects: &mut Vec<Rect>| {
@@ -58,6 +59,7 @@ fn a_group_that_does_not_fit_the_row_starts_a_new_one() {
 #[test]
 fn groups_that_fit_stay_on_one_row() {
     let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(Vec2::new(1000.0, 300.0))
         .build_ui_state(
             |ui, rects: &mut Vec<Rect>| {

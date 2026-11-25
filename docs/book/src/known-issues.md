@@ -20,6 +20,7 @@ with a textbook open** before relying on them in class.
 | The heart sounds (B25) | Never heard. The build server has no sound device and no ALSA headers, so the `audio` build (kira stream, shared device) could not even be compiled there: its kira code was compiled and unit-tested against kira's mock backend only, and the CI's `--features audio` clippy job is its first real compile. Everything else (the player, the resampler, the fades, the limiter, the drift correction, the display delay) is tested with a fake sink. The real output latency, the default 60 ms offset and the sync check have not been tried on any machine. | On Linux, Windows and macOS: switch the heart sounds on, run *Check sync* in Settings, and note the offset at which click and flash coincide. |
 | Printed and exported ECGs | PDF, PNG, CSV and WFDB exports are checked by tests that read them back, not by a person looking at a printout or opening the WFDB record in another program. | Print a PDF at 25 mm/s and measure the grid; open the WFDB record in WFDB tools or PhysioNet's LightWAVE. |
 | The validation bridge | **No solver has been run** on the openCARP exports. The element node order, the `carputils` calls in `run.py` and the `im_param` syntax were taken from documentation. | Run the exported case in openCARP and compare with `heartsim-cli validation-report` (see `docs/validation-bridge.md`). |
+| The Echo page on a real GPU | Its cross-section shader ran only under software rendering (Mesa lavapipe). Keyboard control and handle dragging have no automated test. | Open the Echo page on a laptop with a GPU, move the probe with the keys and the handles, and check the cross-section against the legend. |
 | The re-tuned anatomy in the 3-D view | The 0.6.0 pack (heart tilted as measured, atria and veins at anatomical levels, narrower torso) was checked by the automated tests and the screenshot tour only; nobody has looked at the chambers, vessels and torso layers from every angle. The default view is now a right anterior oblique so the long axis lies in the screen; the straight-on AP preset looks down the long axis and shows the left ventricle as a round outline in front of the atria, which is correct but easy to misread. | Open the Simulator, turn each layer on and rotate the heart; report anything that looks misplaced. |
 | AF induction on Windows and macOS | The persistent-AF presets depend on a narrow stimulation window (S1 125 ms induces AF, 120 and 130 do not) and on the seed; the presets passed on Linux and on GitHub's runners for 0.6.0, but a failure on another machine or a later seed change would show as "no AF" after the burst. | Run `af_persistent` and the EP lab's "AF with PVI" on each system and confirm the atria fibrillate. |
 
@@ -148,6 +149,112 @@ review before they are taught as more than a schematic.
   one core of the development machine (a virtual machine; the bench is `cargo bench -p heartsim-echo`); its cost in the browser has not
   been measured.
 
+### The Echo page (probe and cross-section)
+
+Brief B31, phase 2 of the echo simulator; the grey image of phase 3 is in the next subsection. See [the page](user/echo.md). The
+cross-section is an anatomical map of the model's tissues, not an ultrasound image, and **no clinician or sonographer has reviewed it**.
+
+* Valve leaflets, papillary muscles, the moderator band, the pericardium and the lung-edge retraction (the parasternal window)
+  are **designed**. The lung retraction's extent, and the shares of each window hidden by bone or lung (parasternal about 0.41 at full
+  inspiration and 0.16 in expiration, apical 0.09, subcostal 0.06, suprasternal 0.5; `heartsim-echo/tests/slice.rs`), were measured
+  on the default pack's start poses; they are not checked against patients.
+* The shader that draws the cross-section ran only on the software renderer (Mesa lavapipe). Nobody has seen it on a GPU.
+* Keyboard control and dragging of the probe's handles have no automated test.
+* M-mode, tissue Doppler and calipers are built (phase 5, B34); see *M-mode, tissue Doppler and calipers (B34)* below. There is no
+  blood Doppler. The standard views are built; see *The standard views (B33)* below.
+* RV venous lumens are absent from the heart box, and the closed tricuspid valve has a flat shape.
+* Cost: about 4.3 ms per drawn frame for the grid update and 7.2 ms for the slice on the development machine (release build), on
+  top of the 18 ms of the wall-motion evaluation, at most 30 times a second on the desktop and 20 in the browser. The first visit
+  builds the anatomy in about 0.7 s on the desktop; the browser cost is not measured. The browser uses a 128 × 256 label image
+  instead of 128 × 512.
+* The web size budget was not run (the development machine has no `trunk`).
+* The cell-in-voxel agreement is 1.07 % off, with a one-voxel tolerance.
+
+### The grey simulated image (B32)
+
+Brief B32, phase 3 of the echo simulator. See [the page](user/echo.md). The image is a **simulated appearance from a simple line
+model**, not a recording. Nobody has compared it with a real echocardiogram, and **no clinician or sonographer has reviewed how it
+looks**. Treat it as a schematic.
+
+* **Acoustic values.** The impedances and most attenuations are read from the source the research note cites
+  (`docs/research/echo-simulator.md`, section 3.2). The myocardial attenuation (the table uses 1.0 dB/cm/MHz; in vivo values by layer
+  are about 0.8 to 1.9) and the aperture (about 2 cm) are **unverified**. Every backscatter level, scatterer density, specularity and
+  spread is **designed**, as are the leaflet and pericardium impedance, the lung treated as air, and the reverberation parameters.
+  The status of each value is in `assets/echo/acoustic.ron`.
+* **Speckle.** The grain is coarser than a real image at depth (about 1 to 2.4 mm axially), and its texture is cellular.
+* **Not modelled.** Side lobes, refraction, mirror artefacts, harmonic imaging, near-field clutter, contrast agents and any pathology
+  look. Reverberation is a designed repeat of the pleural line; its number and decay are not checked against a patient.
+* **No measurement** is offered on the image in this phase.
+* **Identical output on native and web** is argued from the design (the same CPU code and the same inputs), not tested.
+* **Web cost not measured.** The estimate is 25 to 30 ms per image. The web uses 128 × 256 and caps the image at 20 Hz.
+* **Web size budget** not run (the development machine has no `trunk`).
+* **The shader** that scan-converts the image ran only on the software renderer (Mesa lavapipe).
+* **Cost** on the development machine (release build): the grey image takes 14.7 ms per frame (line model 2.9, speckle 6.4, blur and
+  envelope 2.8, compensation and compression 0.5), on top of 18 ms of wall motion, 4.3 ms of grid update and 7.2 ms of slice. The
+  four stages add to 12.6 ms; the rest is not attributed.
+
+### The standard views (B33)
+
+Brief B33, phase 4 of the echo simulator. See [the page](user/echo-views.md). The targets, the tolerances, the marker rules of
+the views the guideline describes only in words, the hint wording and the screenshots are written for this model. **No
+sonographer or clinician has reviewed them.**
+
+* **Designed values.** Every tolerance of the score, the hints and the reference search is listed on the page with its default.
+  The marker rules of RV inflow, RV outflow, the four short-axis levels, the subcostal IVC and the suprasternal arch are designed,
+  because the guideline gives no angle for them.
+* **Supine anatomy.** The patient is supine. The guideline images the parasternal and apical windows in the left lateral
+  position, which is not modelled.
+* **Hidden shares.** At the reference poses, bone or lung covers 0.5 of the sector for RV outflow, 0.4 for the apical five-chamber,
+  0.3 for the parasternal long axis and the apical two-chamber, and 0.2 or less for the other views. These are geometry checks on
+  the default pack, not tests on patients.
+* **Not reachable.** The subcostal IVC (the pack's inferior vena cava is shorter than the 30 mm the view needs) and the suprasternal
+  arch (its best pose scores 35 %, below the 80 % that counts as found). The page lists both with the reason.
+* **Preparing the self-test.** Starting the self-test prepares the reference pose of each view one per frame, with a progress bar
+  (*Preparing views n of 15*), so the page no longer freezes for the whole run. The total time and the time for one view have not
+  been measured since this change; before it, the whole run blocked the page for about 12 s on the development machine. The web is
+  not measured. Otherwise a reference pose is computed the first time its view is used.
+* **Checklist.** A checklist line is ticked when a designed share of the image's samples shows its structure. A thin or hidden
+  structure may stay unticked at a pose that the score otherwise accepts.
+* **Screenshots.** The self-test screenshot is scripted: its scores and times were set by a script, not measured.
+* **What would settle it.** A sonographer's review of the targets, the tolerances and the hints, and a comparison of the
+  checklists and the scores with recorded views of the same windows.
+
+### M-mode, tissue Doppler and calipers (B34)
+
+Brief B34, phase 5 of the echo simulator. See [Measuring on the echo](user/echo-measuring.md). Every value is a measurement of the
+model. **No clinician or sonographer has reviewed the measurements or the conventions** they follow (Mitchell et al. 2019, pp. 18,
+31–33 and 44). Treat them as a study aid.
+
+* **No blood Doppler**, spectral, colour or continuous wave, and no control for it. The model has no blood flow field. Tissue Doppler
+  is offered only at the septal and lateral mitral annuli and the lateral tricuspid annulus.
+* **The velocities are not corrected for the angle** between the beam and the motion; the angle is shown. The thin band round the
+  Doppler curve is **designed** and labelled "designed band".
+* **Tissue Doppler was exercised** in sinus rhythm, and for a' in atrial fibrillation, and nowhere else.
+* **Low model values.** The model shortens little at the level of the LV dimensions: at 60 beats a minute its fractional shortening is
+  about 20 % (LVIDd 45.0 mm, LVIDs 36.2 mm). Its tricuspid S' (8.6 cm/s at the lateral annulus) is smaller than its mitral S' (9.6 and
+  14.0 cm/s). These are the model's numbers, not norms, and they have not been checked against a patient.
+* **The M-mode trace cannot keep real time on the development machine.** One column costs about 34 ms against a 25 ms step. When the
+  trace falls more than 16 steps (0.4 s) behind, the page computes every other column and fills the gaps from their neighbours; more
+  than 32 steps behind, it skips ahead and leaves a gap. This was not measured on faster hardware or in the web build.
+  *Settings → Faster M-mode trace (echo)* records a column every 50 ms from the start, which halves the cost of the trace; a time read
+  from it is then good to 50 ms. The switch is off by default, and whether it is enough on the development machine was not measured in
+  the running app.
+* **Snap distances** are the page's own choices: 8 mm for the tissue Doppler gate, and 3 mm for the caliper snap, which is off by
+  default.
+* **Narrow window.** At 400 × 800 px with a trace on, the sector is about 160 px high and the controls about 100 px: cramped.
+* **Send to calculator** takes only the names the simulator measures. MAPSE, a', the mitral S' and the left atrial diameter have no
+  calculator input, so **Send to calculator** is disabled for them. Nothing measured is saved.
+* **Italian labels** were checked for fit by a width test only.
+
+**Decisions for the maintainer, still open.** The defaults taken for now:
+
+* *The designed band.* Default: drawn on the tissue Doppler trace and labelled "designed band". Open: whether a plain curve is the
+  more honest choice.
+* *Blood Doppler.* Default: none, and the research note advises against a first version. Open: whether a schematic blood Doppler,
+  labelled as schematic, is wanted later.
+* *Clinician review.* Default: none yet, so the page describes the Echo section as a study aid. Open: a clinician's review of the
+  measurement conventions and of the whole echo section, before it is described as more than a study aid.
+
 ### Rhythms
 
 * Typical flutter exists in two separate forms that do not meet: a strip-level driver (scenarios `flutter_*`) and the EP lab's
@@ -201,6 +308,16 @@ review before they are taught as more than a schematic.
   context is suspended; on return the old stream is dropped and playback restarts from the present. A main-thread frame
   longer than about 120 ms (three times the queue) makes a gap in the sound, which then restarts with a short fade-in;
   shorter long frames are absorbed by the look-ahead. No browser has been listened to.
+
+### Narrow windows (below 700 px)
+
+These come from the interface pass (the one-part-at-a-time pages, the folded strip toolbar, the stacked trace). See [the tour](user/ui-tour.md#narrow-windows-and-phones).
+
+* The tutorial and case reader is still a side panel over the page at this width.
+* On the Axis Quiz and the Axis Trainer the dial needs scrolling to reach the cards below it.
+* The timeline editor has not been checked at this width.
+* The narrow layouts of the 12-lead, Heart Vector, Electrodes and EP Lab pages were checked by screenshots only; no automated test
+  covers them.
 
 ### Browser version
 

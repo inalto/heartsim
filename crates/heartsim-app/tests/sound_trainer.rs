@@ -5,7 +5,7 @@
 //! keeps its samples, the sound does not, the tag says so.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{By, NodeT, Queryable};
 use heartsim_app::heart_sound_player::{HeartSoundPlayer, PlayerInput};
 use heartsim_app::heart_sounds::{HeartSounds, altered_sound_tag};
 use heartsim_app::scenarios::ScenarioLibrary;
@@ -148,6 +148,7 @@ struct Page {
 fn page(player: HeartSoundPlayer) -> Harness<'static, Page> {
     i18n::set_language("en");
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1200.0, 800.0))
         .build_ui_state(
             |ui, p: &mut Page| {
@@ -230,4 +231,33 @@ fn small_speaker_mode_alters_the_sound_and_not_the_lane() {
     assert!(altered_sound_tag(HeartSoundStatus::Paused, true).is_some());
     assert_eq!(altered_sound_tag(HeartSoundStatus::Off, true), None);
     assert!(altered_sound_tag(HeartSoundStatus::SlowMotion, false).is_some());
+}
+
+/// The primary actions on the page (by label, in tree order): the rule of use allows one per panel.
+fn primary_names<S>(h: &Harness<'_, S>) -> Vec<String> {
+    h.query_all(By::new())
+        .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+        .map(|n| n.accesskit_node().label().unwrap_or_default())
+        .collect()
+}
+
+/// Play is the one primary action (Stop is plain), and the counts beside the items are explained:
+/// a legend says what the bracketed number is and each item says it on hover.
+#[test]
+fn the_trainer_has_one_primary_action_and_explains_its_counts() {
+    let mut h = page(HeartSoundPlayer::with_sink(Box::new(FakeSink::new())));
+    h.run();
+    assert_eq!(primary_names(&h), ["Play"]);
+    let _ = h.get_by_label("The number in brackets is how many times you have listened to that item.");
+    h.get_by_label("Play").click();
+    h.run();
+    assert!(primary_names(&h).is_empty(), "Stop is a plain button");
+    let _ = h.get_by_label("Stop");
+    for lang in ["en", "it"] {
+        i18n::set_language(lang);
+        for key in ["st-count-legend", "st-count-hint"] {
+            assert_ne!(i18n::tr(key), key, "{lang}: {key}");
+        }
+    }
+    i18n::set_language("en");
 }

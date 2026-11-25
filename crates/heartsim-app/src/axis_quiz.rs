@@ -131,10 +131,26 @@ impl AxisQuiz {
     pub fn panel(&mut self, ui: &mut egui::Ui) -> Option<f64> {
         let mut asked_new = None;
         ui.horizontal_wrapped(|ui| {
-            if ui.button(t!("app-quiz-new")).clicked() {
+            // the one primary action: a new question while none is open or the last is revealed,
+            // Check answer while one is open
+            let new_is_main = self.target_deg.is_none() || self.revealed;
+            let new = if new_is_main {
+                heartsim_ui::primary_button(ui, t!("app-quiz-new"))
+            } else {
+                ui.button(t!("app-quiz-new"))
+            };
+            if new.clicked() {
                 asked_new = Some(self.next_question());
             }
-            let check = ui.add_enabled(self.can_check(), egui::Button::new(t!("app-quiz-check")));
+            let check = ui
+                .add_enabled_ui(self.can_check(), |ui| {
+                    if new_is_main {
+                        ui.button(t!("app-quiz-check"))
+                    } else {
+                        heartsim_ui::primary_button(ui, t!("app-quiz-check"))
+                    }
+                })
+                .inner;
             let check = if self.revealed {
                 check
             } else {

@@ -631,6 +631,9 @@ struct DiscFit {
     gram_inv: Mat3,
     /// The lateral point of the rim (TAPSE, MAPSE are read at the rim), mm.
     lateral_rim_mm: Vec3,
+    /// The point of the rim on the side of the other atrioventricular valve (the septal rim of
+    /// the mitral annulus), mm.
+    septal_rim_mm: Vec3,
 }
 
 /// How a vessel follows its root (see [`vessel_root`]): per vertex, its nearest root vertices with
@@ -1335,6 +1338,62 @@ pub struct MotionReadout {
     pub lv_phase: Option<CardiacPhase>,
     /// Mean contraction state of each chamber (`MotionChamber::ALL` order), `0..1`.
     pub chamber_activity: [f32; 4],
+}
+
+/// A point of an atrioventricular annulus the measurements read: the tissue-Doppler gate sits on
+/// one of these, and the annular excursions (MAPSE, TAPSE) are the motion of one of them. Each is
+/// a point of the valve disc's rim carried by the same affine fit to the ventricle that moves the
+/// disc in the 3-D heart, so the point is where the drawn annulus is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum AnnulusSite {
+    /// The mitral annulus on the septal side (the rim point nearest the tricuspid valve).
+    MitralSeptal,
+    /// The mitral annulus on the lateral side (the rim point furthest from the tricuspid valve).
+    MitralLateral,
+    /// The tricuspid annulus on the free-wall side (where TAPSE is measured).
+    TricuspidLateral,
+}
+
+impl AnnulusSite {
+    /// The three sites, in the order of the page's list.
+    pub const ALL: [Self; 3] = [Self::MitralSeptal, Self::MitralLateral, Self::TricuspidLateral];
+
+    /// The valve whose annulus it is.
+    #[must_use]
+    pub fn valve(self) -> Valve {
+        match self {
+            Self::MitralSeptal | Self::MitralLateral => Valve::Mitral,
+            Self::TricuspidLateral => Valve::Tricuspid,
+        }
+    }
+
+    /// The side of the heart whose ventricle moves it.
+    #[must_use]
+    pub fn side(self) -> Side {
+        match self {
+            Self::MitralSeptal | Self::MitralLateral => Side::Left,
+            Self::TricuspidLateral => Side::Right,
+        }
+    }
+}
+
+/// The times of one beat of one ventricle, from the model's own valve schedule: what a reader
+/// finds on the ECG and the valve motion. Every field is a time in ms on the simulation clock.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BeatTimes {
+    /// QRS onset of the beat.
+    pub qrs_ms: f64,
+    /// Closure of the inflow valve (mitral or tricuspid): end-diastole of the cycle.
+    pub end_diastole_ms: f64,
+    /// Opening and closure of the outflow valve; `None` for a beat that does not eject.
+    pub ejection_ms: Option<(f64, f64)>,
+    /// Opening of the inflow valve: filling starts.
+    pub inflow_open_ms: f64,
+    /// QRS onset of the next organised beat, once it is in the record.
+    pub next_qrs_ms: Option<f64>,
+    /// The organised atrial activation that ends this diastole (after the outflow valve closed
+    /// and before the next QRS), if any: `None` in atrial fibrillation and flutter-free silence.
+    pub atrial_onset_ms: Option<f64>,
 }
 
 /// One part's vertices this frame, in the pack mesh's vertex order and GPU layout.
@@ -2313,6 +2372,17 @@ impl MotionModel {
     /// values whenever it is computed. With `enabled = false` the vertices are the rest mesh's,
     /// bit for bit.
     pub fn evaluate(&mut self, input: &MotionInput<'_>, out: &mut MotionFrame) {
+        self.evaluate_with(input, out, true);
+    }
+
+    /// [`Self::evaluate`] without the vertex normals: the positions (and the read-outs) are bit for
+    /// bit those of `evaluate`, the normals are left as they were. For consumers that read
+    /// positions only (the M-mode scan, whose displacement grid needs no normal).
+    pub fn evaluate_positions(&mut self, input: &MotionInput<'_>, out: &mut MotionFrame) {
+        self.evaluate_with(input, out, false);
+    }
+
+    fn evaluate_with(&mut self, input: &MotionInput<'_>, out: &mut MotionFrame, normals: bool) {
         if out.parts.len() != self.parts.len() {
             *out = self.new_frame();
         }
@@ -2341,7 +2411,13 @@ impl MotionModel {
                     .zip(&state.disp[k])
                     .map(|(rv, d)| Vec3A::from(*rv + *d * e + shift)),
             );
-            normals_csr(&mut o.vertices, pos, &p.tris, &p.incident, &mut self.normal_acc);
+            if normals {
+                normals_csr(&mut o.vertices, pos, &p.tris, &p.incident, &mut self.normal_acc);
+            } else {
+                for (v, q) in o.vertices.iter_mut().zip(pos.iter()) {
+                    v.position = q.to_array();
+                }
+            }
         }
         let r = self.readout_of(input, &state);
         out.readout = r;
@@ -2477,6 +2553,113 @@ impl MotionModel {
             }
         }
         out
+    }
+
+    /// Displacement of the three [`AnnulusSite`]s, mm (mitral septal, mitral lateral, tricuspid
+    /// lateral): the affine fit of each disc to the ventricle it hangs on, read at the rim point.
+    fn annulus_sites(&self, st: &WallState) -> [Vec3; 3] {
+        let mut out = [Vec3::ZERO; 3];
+        let Some(dp) = self.discs_part else {
+            return out;
+        };
+        let Mapping::Discs(fits) = &self.parts[dp].mapping else {
+            return out;
+        };
+        for f in fits {
+            let (t, l) = disc_affine(f, &st.disp[f.anchor_part]);
+            let at = |rim: Vec3| t + l * (rim - f.anchor_centre);
+            match f.disc.valve {
+                Valve::Mitral => {
+                    out[0] = at(f.septal_rim_mm);
+                    out[1] = at(f.lateral_rim_mm);
+                }
+                Valve::Tricuspid => out[2] = at(f.lateral_rim_mm),
+                _ => {}
+            }
+        }
+        out
+    }
+
+    /// The rest position of an annulus site, heart frame, mm (the rim point of its valve disc).
+    /// `None` when the pack has no such disc.
+    #[must_use]
+    pub fn annulus_rest_mm(&self, site: AnnulusSite) -> Option<Vec3> {
+        let dp = self.discs_part?;
+        let Mapping::Discs(fits) = &self.parts[dp].mapping else {
+            return None;
+        };
+        let f = fits.iter().find(|f| f.disc.valve == site.valve())?;
+        Some(match site {
+            AnnulusSite::MitralSeptal => f.septal_rim_mm,
+            AnnulusSite::MitralLateral | AnnulusSite::TricuspidLateral => f.lateral_rim_mm,
+        })
+    }
+
+    /// Where an annulus site is at `input.t_ms`, heart frame, mm: its rest point, the wall motion
+    /// of the ventricle it hangs on (times `input.exaggeration`) and the whole heart's respiratory
+    /// shift — the same displacement the 3-D heart's valve disc and the cross-section take. About
+    /// a fifth of one [`Self::evaluate`] (the ventricles' own motion only; no mesh is written).
+    /// With `input.enabled == false` the rest point. `None` when the pack has no such disc.
+    pub fn annulus_position(&mut self, input: &MotionInput<'_>, site: AnnulusSite) -> Option<Vec3> {
+        let rest = self.annulus_rest_mm(site)?;
+        if !input.enabled {
+            return Some(rest);
+        }
+        let mut st = std::mem::take(&mut self.metrics_scratch);
+        self.wall_state(input.history, input.t_ms, &mut st, false);
+        let d = self.annulus_sites(&st)[match site {
+            AnnulusSite::MitralSeptal => 0,
+            AnnulusSite::MitralLateral => 1,
+            AnnulusSite::TricuspidLateral => 2,
+        }];
+        self.metrics_scratch = st;
+        let e = input.exaggeration.clamp(0.0, MAX_EXAGGERATION);
+        let shift = Vec3::new(
+            0.0,
+            -(self.params.respiratory_shift_mm * heartsim_sim::timing::inspiration_depth(input.resp_phase))
+                as f32,
+            0.0,
+        );
+        Some(rest + d * e + shift)
+    }
+
+    /// The valve times of the beat of `side` that holds `t_ms` (the last whose inflow valve has
+    /// closed), with the QRS of the next beat and the atrial activation that ends its diastole
+    /// when they are in the record. `None` before the first organised beat.
+    #[must_use]
+    pub fn beat_times(&self, history: &MotionHistory, t_ms: f64, side: Side) -> Option<BeatTimes> {
+        let inp = VolumeInputs {
+            beats: history.beats(),
+            atrial_onsets_ms: history.atrial_onsets_ms(),
+            params: &self.params,
+            pcg: history.pcg_params(),
+            ef_scale: self.ef_scale,
+        };
+        let c = volume_at(t_ms, side, &inp).cycle?;
+        let next_qrs_ms = history
+            .beats()
+            .iter()
+            .find(|(b, _)| b.organised && b.qrs_onset.0 > c.qrs_ms + 1.0)
+            .map(|(b, _)| b.qrs_onset.0);
+        let after = c.ejection_ms.map_or(c.closure_ms, |(_, close)| close);
+        let upto = next_qrs_ms.unwrap_or(f64::INFINITY);
+        let atrial_onset_ms = if history.atria_disorganised_at(t_ms.min(upto)) {
+            None
+        } else {
+            history
+                .atrial_onsets_ms()
+                .iter()
+                .copied()
+                .rfind(|&a| a > after && a < upto)
+        };
+        Some(BeatTimes {
+            qrs_ms: c.qrs_ms,
+            end_diastole_ms: c.closure_ms,
+            ejection_ms: c.ejection_ms,
+            inflow_open_ms: c.inflow_open_ms,
+            next_qrs_ms,
+            atrial_onset_ms,
+        })
     }
 
     /// Per-cell effective contraction at `t_ms`, restricted to the coupling voxels and coupled
@@ -2954,6 +3137,15 @@ fn disc_fit(
                 .total_cmp(&(*b - disc.centre_mm).dot(away))
         })
         .unwrap_or(disc.centre_mm);
+    let septal_rim_mm = pts
+        .iter()
+        .copied()
+        .min_by(|a, b| {
+            (*a - disc.centre_mm)
+                .dot(away)
+                .total_cmp(&(*b - disc.centre_mm).dot(away))
+        })
+        .unwrap_or(disc.centre_mm);
     DiscFit {
         disc: disc.clone(),
         anchor_part,
@@ -2962,6 +3154,7 @@ fn disc_fit(
         anchor_q,
         gram_inv,
         lateral_rim_mm,
+        septal_rim_mm,
     }
 }
 

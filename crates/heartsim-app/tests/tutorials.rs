@@ -3,7 +3,7 @@
 
 use egui::accesskit::Role;
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{By, NodeT, Queryable};
 use heartsim_app::scenarios::ScenarioLibrary;
 use heartsim_app::tutorial::{Mode, TutorialHost, TutorialLibrary, UiAction};
 use heartsim_app::tutorial_ui::Tutorials;
@@ -46,6 +46,7 @@ struct Model {
 fn harness() -> Harness<'static, Model> {
     let library = TutorialLibrary::load_dir(&assets().join("tutorials")).unwrap();
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(900.0, 900.0))
         .build_ui_state(
             |ui, m: &mut Model| {
@@ -374,4 +375,114 @@ fn the_sound_check_plays_through_the_sink_and_degrades_to_text_without_one() {
     h.get_by_label("I cannot hear the low tone").click();
     frames(&mut h);
     let _ = h.get_by_label("Your speakers are too small for heart sounds.");
+}
+
+/// B33: a page with a "view found" check keeps self-study from moving on until the view was found
+/// (and its question answered), the progress records it, the echo actions reach the host, and every
+/// echo view the tutorial names exists.
+#[test]
+fn a_view_found_check_gates_the_next_page_and_is_saved() {
+    let mut h = harness();
+    frames(&mut h);
+    let i = h
+        .state()
+        .tutorials
+        .library
+        .tutorials
+        .iter()
+        .position(|t| t.id == "13_echo_views")
+        .expect("the echo tutorial is installed");
+    let t = h.state().tutorials.library.tutorials[i].clone();
+    let page = t
+        .pages
+        .iter()
+        .position(|p| p.view_check.as_ref().is_some_and(|v| v.view == "a4c"))
+        .expect("an a4c page");
+    for p in &t.pages {
+        if let Some(v) = &p.view_check {
+            assert!(heartsim_echo::ViewId::from_id(&v.view).is_some(), "{}", v.view);
+        }
+    }
+    // the pages before it are done
+    let done = h
+        .state_mut()
+        .tutorials
+        .progress
+        .tutorials
+        .entry(t.id.clone())
+        .or_default();
+    for (n, p) in t.pages.iter().enumerate().take(page) {
+        if p.check.is_some() {
+            done.passed.insert(n);
+        }
+        if p.view_check.is_some() {
+            done.views_found.insert(n);
+        }
+    }
+    h.state_mut().tutorials.open(i, page);
+    frames(&mut h);
+    assert!(h.state().host.ui.contains(&UiAction::SetEchoView("a4c".into())));
+    assert_eq!(h.state().tutorials.current_view_check().as_deref(), Some("a4c"));
+    let _ = h.get_by_label_contains("Find this view with the probe");
+    // answer the question: still blocked until the view is found
+    let q = t.pages[page].check.clone().expect("a question on the page");
+    h.get_by_label(&q.choices[q.answer]).click();
+    frames(&mut h);
+    assert!(!h.state().tutorials.may_visit(i, page + 1), "not found yet");
+    h.state_mut().tutorials.mark_view_found();
+    frames(&mut h);
+    assert!(h.state().tutorials.may_visit(i, page + 1));
+    let _ = h.get_by_label("View found.");
+    assert!(
+        h.state()
+            .tutorials
+            .progress
+            .get("13_echo_views")
+            .views_found
+            .contains(&page)
+    );
+}
+
+/// The primary actions on the page (by label).
+fn primary_names(h: &Harness<'_, Model>) -> Vec<String> {
+    h.query_all(By::new())
+        .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+        .map(|n| n.accesskit_node().label().unwrap_or_default())
+        .collect()
+}
+
+/// A list of cards has exactly one primary button: "Start" on the first tutorial not completed,
+/// "Continue" on the most recently opened unfinished one; all the others are plain. The reader has
+/// one primary, Next.
+#[test]
+fn the_tutorial_list_has_one_primary_button_and_the_reader_one_primary_next() {
+    let mut h = harness();
+    frames(&mut h);
+    let first = h.state().tutorials.library.tutorials[0].title.clone();
+    assert_eq!(primary_names(&h), [format!("Start {first}")]);
+    // the other cards still have their Start buttons, as plain buttons
+    let starts = h.query_all_by_role(Role::Button).filter(|n| {
+        n.accesskit_node()
+            .label()
+            .is_some_and(|l| l.starts_with("Start "))
+    });
+    assert!(starts.count() >= 2, "several Start buttons on the page");
+
+    click(&mut h, &format!("Start {first}"));
+    assert_eq!(primary_names(&h), ["Next"]);
+    button(&mut h, "Next");
+    button(&mut h, "Close tutorial");
+    // begun: its Continue is now the one primary
+    let names = primary_names(&h);
+    assert_eq!(names.len(), 1, "{names:?}");
+    assert!(names[0].starts_with(&format!("Continue {first}")), "{names:?}");
+
+    // a second tutorial opened last takes the primary from the first
+    let second = h.state().tutorials.library.tutorials[1].title.clone();
+    click(&mut h, &format!("Start {second}"));
+    button(&mut h, "Close tutorial");
+    let names = primary_names(&h);
+    assert_eq!(names.len(), 1, "{names:?}");
+    // opened last: it takes the primary (as "Start" while it has not been advanced)
+    assert!(names[0].contains(&second), "{names:?}");
 }

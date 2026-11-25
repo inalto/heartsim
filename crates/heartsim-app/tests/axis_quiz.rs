@@ -2,7 +2,7 @@
 //! is reachable through AccessKit nodes, and every question respects the guard bands. No GPU.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{By, NodeT, Queryable};
 use heartsim_app::axis_quiz::{AxisQuiz, TOLERANCE_DEG};
 use heartsim_core::axis::drill_axis_allowed;
 use heartsim_ui::i18n;
@@ -16,6 +16,7 @@ struct Model {
 fn harness() -> Harness<'static, Model> {
     i18n::set_language("en");
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(900.0, 900.0))
         .build_ui_state(
             |ui, m: &mut Model| {
@@ -95,4 +96,31 @@ fn the_explanation_is_available_in_italian() {
     h.run();
     let _ = h.get_by_label_contains("vettore QRS netto");
     i18n::set_language("en");
+}
+
+/// The primary actions on the page (by label, in tree order): the rule of use allows one per panel.
+fn primary_names<S>(h: &Harness<'_, S>) -> Vec<String> {
+    h.query_all(By::new())
+        .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+        .map(|n| n.accesskit_node().label().unwrap_or_default())
+        .collect()
+}
+
+/// Exactly one primary action at a time: New question before the first question and after an answer,
+/// Check answer while a question is open (also while it cannot be pressed yet).
+#[test]
+fn the_axis_drill_has_one_primary_action_that_follows_the_task() {
+    let mut h = harness();
+    h.run();
+    assert_eq!(primary_names(&h), ["New question"]);
+    h.get_by_label("New question").click();
+    h.run();
+    assert_eq!(primary_names(&h), ["Check answer"]);
+    let target = h.state().quiz.target_deg.unwrap();
+    h.state_mut().quiz.set_guess(target);
+    h.run();
+    assert_eq!(primary_names(&h), ["Check answer"]);
+    h.get_by_label("Check answer").click();
+    h.run();
+    assert_eq!(primary_names(&h), ["New question"]);
 }

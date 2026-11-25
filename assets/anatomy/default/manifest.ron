@@ -1,7 +1,7 @@
 PackManifest(
-    format_version: 2,
+    format_version: 3,
     name: "default",
-    source: "Rodero et al. 2021 average four-chamber heart (Zenodo 4593739) + KCL whole-torso CT model 1 (Zenodo 7253863), baked by heartsim xtask 0.10.0 (spacing 2.3 mm)",
+    source: "Rodero et al. 2021 average four-chamber heart (Zenodo 4593739) + KCL whole-torso CT model 1 (Zenodo 7253863), baked by heartsim xtask 0.23.0 (spacing 2.3 mm)",
     licence: "CC-BY-4.0 (sources) AND (MIT OR Apache-2.0) (heartsim additions)",
     frame: "millimetres; origin = ventricular centroid; +x = patient\'s left, +y = cranial, +z = anterior",
     cell_spacing_mm: 2.3,
@@ -69,8 +69,8 @@ PackManifest(
     )],
     files: {
         "LICENSE": FileEntry(
-            bytes: 2150,
-            crc32: 2395885749,
+            bytes: 2444,
+            crc32: 2449324911,
         ),
         "cells.bin": FileEntry(
             bytes: 581491,
@@ -95,6 +95,14 @@ PackManifest(
         "hoods/rv.bin": FileEntry(
             bytes: 959696,
             crc32: 4266772128,
+        ),
+        "labels_heart.bin": FileEntry(
+            bytes: 167705,
+            crc32: 115816791,
+        ),
+        "labels_thorax.bin": FileEntry(
+            bytes: 367523,
+            crc32: 4215293214,
         ),
         "landmarks.ron": FileEntry(
             bytes: 3614,

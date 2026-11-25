@@ -31,11 +31,15 @@ pub mod tag {
 pub struct BakedTorso {
     pub mesh: TriMesh,
     pub electrodes: ElectrodeSet,
+    /// The subject's ventricular centroid in the file frame and the uniform scale about it: a
+    /// file point `p` is at `lps_to_heart((p − centre) · scale)` in the heart frame, as the skin.
+    pub subject_centre: Vec3,
+    pub scale: f32,
     pub report: Vec<String>,
 }
 
 /// DICOM LPS (+x left, +y posterior, +z superior) → heart frame (+x left, +y cranial, +z anterior).
-fn lps_to_heart(v: Vec3) -> Vec3 {
+pub fn lps_to_heart(v: Vec3) -> Vec3 {
     Vec3::new(v.x, v.z, -v.y)
 }
 
@@ -175,6 +179,8 @@ pub fn bake_torso(mesh: &TetMesh, triangles: usize, heart_lv_length_mm: f32) -> 
     Ok(BakedTorso {
         mesh: torso,
         electrodes,
+        subject_centre: vc,
+        scale,
         report,
     })
 }

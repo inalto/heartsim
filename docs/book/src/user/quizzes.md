@@ -41,7 +41,8 @@ Measure an interval with the calipers, as you would on paper. Press **New questi
 (1 mm is 20 ms) and the question names an interval: the **PR interval** (start of the P wave to start of the QRS), the **QRS
 duration**, or the **QT interval** (start of the QRS to end of the T wave). Press **Place calipers**, drag the two lines to the
 start and end of the interval (or shift-click the strip for another pair), press **Use caliper reading** or type the value, and
-press **Check answer**. The strip uses the height of the window (the paper scale stays 1 mm = 20 ms); the two buttons that are greyed out until you have placed the calipers or entered a value say so when you hover them.
+press **Check answer**. While a question is open and *Check answer* is still disabled, a line under the buttons says what to do
+next. The strip uses the height of the window (the paper scale stays 1 mm = 20 ms); the two buttons that are greyed out until you have placed the calipers or entered a value say so when you hover them.
 
 An answer is correct within ±20 ms for PR and QT and ±15 ms for QRS, about one small square. The reference is the simulator's own
 measurement of the same strip, taken only on a regular rhythm with a clean signal and a value inside the scenario's textbook

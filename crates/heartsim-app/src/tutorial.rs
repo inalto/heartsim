@@ -12,8 +12,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use heartsim_core::tutorial::{
-    CameraView, ChestPieceChoice, Page, PageRun, Panel, Question, Step, StethoscopeSite,
-    TUTORIAL_FORMAT_VERSION, Tutorial, TutorialError, TutorialHost, UiAction, WaitEvent,
+    CameraView, ChestPieceChoice, Page, PageRun, Panel, ProbeWindow, Question, Step, StethoscopeSite,
+    TUTORIAL_FORMAT_VERSION, Tutorial, TutorialError, TutorialHost, UiAction, ViewCheck, WaitEvent,
 };
 
 /// The listening choice a tutorial's `Listen` action names (B28).
@@ -57,12 +57,18 @@ pub struct TutorialProgress {
     pub passed: BTreeSet<usize>,
     /// The last page was reached with every check passed.
     pub completed: bool,
+    /// Pages whose "view found" check was met (B33).
+    #[serde(default)]
+    pub views_found: BTreeSet<usize>,
 }
 
 /// Progress of every tutorial, persisted as RON in the settings directory.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ProgressStore {
     pub tutorials: BTreeMap<String, TutorialProgress>,
+    /// Id of the tutorial opened last: the list offers it as the one primary "Continue".
+    #[serde(default)]
+    pub last_opened: Option<String>,
 }
 
 impl ProgressStore {
@@ -223,6 +229,7 @@ mod tests {
                         }),
                         Step::Ui(UiAction::SetSpeed(0.5)),
                     ],
+                    view_check: None,
                     check: None,
                 },
                 Page {
@@ -239,6 +246,7 @@ mod tests {
                         }),
                         Step::Ui(UiAction::Pause),
                     ],
+                    view_check: None,
                     check: Some(Question {
                         prompt: "?".into(),
                         choices: vec!["a".into(), "b".into()],
@@ -386,6 +394,7 @@ mod tests {
             title: String::new(),
             markdown: String::new(),
             actions: vec![Step::Ui(UiAction::WaitForEvent(WaitEvent::Qrs))],
+            view_check: None,
             check: None,
         };
         let mut h = Clock {
@@ -412,6 +421,7 @@ mod tests {
                 furthest: 3,
                 passed: [1, 3].into(),
                 completed: false,
+                views_found: [2].into(),
             },
         );
         s.save(&path).unwrap();

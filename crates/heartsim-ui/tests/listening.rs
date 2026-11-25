@@ -55,6 +55,7 @@ fn popup_harness() -> Harness<'static, Model> {
     let mut view = EcgView::new();
     view.play_heart_sounds = Some(false);
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1300.0, 1000.0))
         .build_ui_state(
             |ui, m: &mut Model| {
@@ -124,6 +125,7 @@ fn the_display_popup_offers_six_sites_and_the_chest_piece() {
 fn the_chest_markers_select_their_site() {
     i18n::set_language("en");
     let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(300.0, 320.0))
         .build_ui_state(
             |ui, site: &mut ListeningSite| {

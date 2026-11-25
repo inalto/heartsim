@@ -22,20 +22,22 @@ fn drug_tray_doses_go_through_the_engine() {
         sent: Vec<Action>,
     }
     let table = DrugTable::builtin();
-    let mut h = Harness::new_ui_state(
-        move |ui, m: &mut Model| {
-            let actions = drug_tray(ui, &table, &m.active);
-            for a in &actions {
-                m.engine.apply(a, m.engine.now()).unwrap();
-            }
-            m.sent.extend(actions);
-        },
-        Model {
-            engine: TimingEngine::new(TimingParams::default()),
-            active: Vec::new(),
-            sent: Vec::new(),
-        },
-    );
+    let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui_state(
+            move |ui, m: &mut Model| {
+                let actions = drug_tray(ui, &table, &m.active);
+                for a in &actions {
+                    m.engine.apply(a, m.engine.now()).unwrap();
+                }
+                m.sent.extend(actions);
+            },
+            Model {
+                engine: TimingEngine::new(TimingParams::default()),
+                active: Vec::new(),
+                sent: Vec::new(),
+            },
+        );
     // adenosine offers ×1 and ×2: the first "×1" button belongs to it (table order)
     h.get_all_by_label("×1").next().unwrap().click();
     h.run();
@@ -71,23 +73,25 @@ fn ischaemia_presets_and_apply_issue_stenosis_actions() {
         lesions: IschaemiaState,
         highlight: Option<heartsim_sim::ischaemia::CoronaryBranch>,
     }
-    let mut h = Harness::new_ui_state(
-        |ui, m: &mut Model| {
-            let r = ischaemia_panel(ui, &mut m.panel, m.lesions.lesions());
-            for a in r.actions {
-                let Action::Stenosis { branch, severity } = a else {
-                    panic!("only stenosis actions")
-                };
-                m.lesions.apply(&branch, severity).unwrap();
-            }
-            m.highlight = r.highlight;
-        },
-        Model {
-            panel: IschaemiaPanelState::default(),
-            lesions: IschaemiaState::default(),
-            highlight: None,
-        },
-    );
+    let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui_state(
+            |ui, m: &mut Model| {
+                let r = ischaemia_panel(ui, &mut m.panel, m.lesions.lesions());
+                for a in r.actions {
+                    let Action::Stenosis { branch, severity } = a else {
+                        panic!("only stenosis actions")
+                    };
+                    m.lesions.apply(&branch, severity).unwrap();
+                }
+                m.highlight = r.highlight;
+            },
+            Model {
+                panel: IschaemiaPanelState::default(),
+                lesions: IschaemiaState::default(),
+                highlight: None,
+            },
+        );
     h.run();
     assert_eq!(
         h.state().highlight,
@@ -113,22 +117,24 @@ fn defibrillator_charges_then_shocks_on_the_r_wave() {
         engine: TimingEngine,
         sounds: Vec<DefibSound>,
     }
-    let mut h = Harness::new_ui_state(
-        |ui, m: &mut Model| {
-            let now = m.engine.now().0;
-            let armed = m.engine.shock_armed();
-            let r = defib_panel(ui, &mut m.panel, now, armed);
-            if let Some(a) = r.action {
-                m.engine.apply(&a, m.engine.now()).unwrap();
-            }
-            m.sounds.extend(r.sounds);
-        },
-        Model {
-            panel: DefibPanelState::default(),
-            engine: TimingEngine::new(TimingParams::default()),
-            sounds: Vec::new(),
-        },
-    );
+    let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui_state(
+            |ui, m: &mut Model| {
+                let now = m.engine.now().0;
+                let armed = m.engine.shock_armed();
+                let r = defib_panel(ui, &mut m.panel, now, armed);
+                if let Some(a) = r.action {
+                    m.engine.apply(&a, m.engine.now()).unwrap();
+                }
+                m.sounds.extend(r.sounds);
+            },
+            Model {
+                panel: DefibPanelState::default(),
+                engine: TimingEngine::new(TimingParams::default()),
+                sounds: Vec::new(),
+            },
+        );
     h.get_by_label("SYNC").click();
     h.get_by_label("CHARGE").click();
     h.run();

@@ -63,6 +63,34 @@ enum Extra {
     /// Wall motion with the front half of the heart cut away, so the walls and the cavity show in
     /// section (the septal flash cannot be seen from outside).
     WallMotionCut,
+    /// The Echo page (B31, B32) from the apical window, the simulated image, the heart opaque.
+    EchoApical,
+    /// The Echo page from the parasternal window, the simulated image.
+    EchoParasternal,
+    /// The Echo page from the apical window, the tissue colours over the simulated image.
+    EchoBothApical,
+    /// The Echo page from the parasternal window, the tissue colours over the simulated image, the
+    /// left column showing the image controls.
+    EchoBothParasternal,
+    /// The Echo page from the apical window, the anatomical cross-section alone (B31's look).
+    EchoAnatomyApical,
+    /// The Echo page asking for the parasternal long axis, the probe at its reference pose (B33).
+    EchoViewPlax,
+    /// The Echo page asking for the apical four-chamber, the probe at its reference pose (B33).
+    EchoViewA4c,
+    /// The Echo page asking for the short axis at the papillary level, the probe at its reference pose (B33).
+    EchoViewPsaxPapillary,
+    /// The Echo page's self-test summary after a scripted session (B33; the times are made up).
+    EchoSelfTest,
+    /// M-mode at the parasternal long axis through the mitral leaflet tips, LVIDd and LVIDs measured
+    /// (B34).
+    EchoMModeLvid,
+    /// M-mode at the apical four-chamber through the lateral tricuspid annulus, TAPSE measured (B34).
+    EchoMModeTapse,
+    /// Tissue Doppler at the lateral mitral annulus, e' measured (B34).
+    EchoTissueDoppler,
+    /// A measurement of the Echo page sent to the calculators that take it (B34).
+    EchoSent,
 }
 
 /// One screenshot.
@@ -97,7 +125,7 @@ const DEFAULT: Step = Step {
     listening: None,
 };
 
-const STEPS: [Step; 45] = [
+const STEPS: [Step; 58] = [
     Step {
         file: "simulator-sinus.png",
         ..DEFAULT
@@ -440,6 +468,114 @@ const STEPS: [Step; 45] = [
         extra: Extra::EchoDecision,
         ..DEFAULT
     },
+    // briefs B31 and B32: the Echo page from two windows, in early ventricular diastole of the same sinus
+    // beat; the simulated image, the colours over it, and the anatomical cross-section alone
+    Step {
+        file: "echo-apical.png",
+        tab: Tab::Echo,
+        after_qrs_ms: 5.0,
+        extra: Extra::EchoApical,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-parasternal.png",
+        tab: Tab::Echo,
+        // 14 s in the breath is out of inspiration, where the designed lung-edge retraction (the cardiac
+        // notch) is widest; at full inspiration it narrows (hidden 0.41 of the sector) but the window
+        // stays open
+        run_s: 14.0,
+        after_qrs_ms: 300.0,
+        extra: Extra::EchoParasternal,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-both-apical.png",
+        tab: Tab::Echo,
+        after_qrs_ms: 5.0,
+        extra: Extra::EchoBothApical,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-both-parasternal.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 300.0,
+        extra: Extra::EchoBothParasternal,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-anatomy-apical.png",
+        tab: Tab::Echo,
+        after_qrs_ms: 5.0,
+        extra: Extra::EchoAnatomyApical,
+        ..DEFAULT
+    },
+    // brief B33: the standard views, the probe at the reference pose of two of them, and the self-test
+    Step {
+        file: "echo-view-plax.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 300.0,
+        extra: Extra::EchoViewPlax,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-view-a4c.png",
+        tab: Tab::Echo,
+        after_qrs_ms: 5.0,
+        extra: Extra::EchoViewA4c,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-view-psax-papillary.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 150.0,
+        extra: Extra::EchoViewPsaxPapillary,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-selftest.png",
+        tab: Tab::Echo,
+        after_qrs_ms: 5.0,
+        extra: Extra::EchoSelfTest,
+        ..DEFAULT
+    },
+    // brief B34: M-mode and tissue Doppler measured on the model, and a measurement sent to a calculator;
+    // the strip is not scrubbed (the traces are recorded as the beat plays), the measurements are put
+    // on the frozen trace when the run ends
+    Step {
+        file: "echo-mmode-lvid.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoMModeLvid,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-mmode-tapse.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoMModeTapse,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-tissue-doppler.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoTissueDoppler,
+        ..DEFAULT
+    },
+    Step {
+        file: "echo-send-to-calculator.png",
+        tab: Tab::Echo,
+        run_s: 14.0,
+        after_qrs_ms: 0.0,
+        extra: Extra::EchoSent,
+        ..DEFAULT
+    },
     // run with HEARTSIM_WINDOW_SIZE=900x700 to see the four group menus
     Step {
         file: "nav-narrow-tools.png",
@@ -601,6 +737,20 @@ impl HeartSimApp {
                     h.panel.clip_enabled = false;
                 }
                 self.layout = step.layout;
+                // the Simulator's left panel: its default sections, except in the wall-motion shots,
+                // which show only the read-out section (the card then fits under its header)
+                self.settings.simulator_sections =
+                    if matches!(step.extra, Extra::WallMotion | Extra::WallMotionCut) {
+                        crate::settings::SimulatorSections {
+                            colour: false,
+                            tool: false,
+                            layers: false,
+                            motion: true,
+                            vector: false,
+                        }
+                    } else {
+                        crate::settings::SimulatorSections::default()
+                    };
                 if let Some(deg) = step.axis_deg {
                     self.set_qrs_axis(deg);
                 }
@@ -618,6 +768,85 @@ impl HeartSimApp {
                                 heartsim_render::CameraPreset::Rao,
                             ));
                         }
+                    }
+                    Extra::EchoApical
+                    | Extra::EchoParasternal
+                    | Extra::EchoBothApical
+                    | Extra::EchoBothParasternal
+                    | Extra::EchoAnatomyApical => {
+                        if let Some(h) = &mut self.heart {
+                            let mut alphas: Vec<&mut f32> =
+                                h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                            self.vector.set_see_through(false, &mut alphas);
+                        }
+                        let apical = matches!(
+                            step.extra,
+                            Extra::EchoApical | Extra::EchoBothApical | Extra::EchoAnatomyApical
+                        );
+                        self.echo.request_window(if apical {
+                            heartsim_echo::EchoWindow::Apical
+                        } else {
+                            heartsim_echo::EchoWindow::Parasternal
+                        });
+                        self.echo.set_display(match step.extra {
+                            Extra::EchoBothApical | Extra::EchoBothParasternal => {
+                                crate::echo_page::DisplayMode::Both
+                            }
+                            Extra::EchoAnatomyApical => crate::echo_page::DisplayMode::Anatomy,
+                            _ => crate::echo_page::DisplayMode::Image,
+                        });
+                        // the left column: the image controls in one shot, the probe in the others
+                        self.echo
+                            .set_section(if step.extra == Extra::EchoBothParasternal {
+                                crate::echo_page::EchoSection::Image
+                            } else {
+                                crate::echo_page::EchoSection::Probe
+                            });
+                    }
+                    Extra::EchoViewPlax
+                    | Extra::EchoViewA4c
+                    | Extra::EchoViewPsaxPapillary
+                    | Extra::EchoSelfTest => {
+                        if let Some(h) = &mut self.heart {
+                            let mut alphas: Vec<&mut f32> =
+                                h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                            self.vector.set_see_through(false, &mut alphas);
+                        }
+                        self.echo.set_display(crate::echo_page::DisplayMode::Image);
+                        match step.extra {
+                            Extra::EchoViewPlax => {
+                                self.echo.request_view(heartsim_echo::ViewId::ParasternalLongAxis);
+                                self.echo
+                                    .request_probe_at_view(heartsim_echo::ViewId::ParasternalLongAxis);
+                            }
+                            Extra::EchoViewA4c => {
+                                self.echo.request_view(heartsim_echo::ViewId::ApicalFourChamber);
+                                self.echo
+                                    .request_probe_at_view(heartsim_echo::ViewId::ApicalFourChamber);
+                            }
+                            Extra::EchoViewPsaxPapillary => {
+                                self.echo.request_view(heartsim_echo::ViewId::ShortAxisPapillary);
+                                self.echo
+                                    .request_probe_at_view(heartsim_echo::ViewId::ShortAxisPapillary);
+                            }
+                            _ => self.echo.script_selftest(),
+                        }
+                    }
+                    Extra::EchoMModeLvid
+                    | Extra::EchoMModeTapse
+                    | Extra::EchoTissueDoppler
+                    | Extra::EchoSent => {
+                        if let Some(h) = &mut self.heart {
+                            let mut alphas: Vec<&mut f32> =
+                                h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                            self.vector.set_see_through(false, &mut alphas);
+                        }
+                        self.echo.set_display(crate::echo_page::DisplayMode::Image);
+                        self.echo.request_demo(match step.extra {
+                            Extra::EchoMModeTapse => crate::echo_page::Demo::Tapse,
+                            Extra::EchoTissueDoppler => crate::echo_page::Demo::EPrime,
+                            _ => crate::echo_page::Demo::Lvid,
+                        });
                     }
                     Extra::RhythmQuiz => {
                         self.rhythm_quiz.next_question(&self.library);
@@ -750,6 +979,14 @@ impl HeartSimApp {
             Phase::Running => {
                 if self.engine.now().0 >= step.run_s * 1000.0 {
                     self.ecg.toggle_pause();
+                    // the recorded trace is frozen and measured where it stands
+                    match step.extra {
+                        Extra::EchoSent => self.echo.finish_demo_and_send(),
+                        Extra::EchoMModeLvid | Extra::EchoMModeTapse | Extra::EchoTissueDoppler => {
+                            self.echo.finish_demo();
+                        }
+                        _ => {}
+                    }
                     let back = self.engine.now().0 - (self.last_v_activation.0 + step.after_qrs_ms);
                     if step.after_qrs_ms > 0.0 && back > 0.0 {
                         self.ecg.playback.set_scrub_ms(back, back);

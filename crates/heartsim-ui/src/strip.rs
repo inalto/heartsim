@@ -383,15 +383,30 @@ pub fn draw_strip(
         );
     }
 
-    if let Some(marks) = trace.marks {
-        draw_marks(&painter, &win, ring, style, trace, marks);
-    }
-
-    // 1 mV calibration pulse and label
+    // 1 mV calibration pulse and label: the wave letters and interval read-outs scroll through
+    // their boxes, so those are kept clear of both
     let cal_h = win.px_per_mv;
     let mm = style.px_per_mm;
     let cx = rect.left() + 4.0;
     let cy = rect.center().y;
+    let label = if trace.invert {
+        format!("−{}", trace.label)
+    } else {
+        trace.label.to_owned()
+    };
+    let label_pos = rect.left_top() + Vec2::new(6.0, 2.0);
+    let label_font = FontId::proportional(13.0);
+    let label_box = Rect::from_min_size(
+        label_pos,
+        painter
+            .layout_no_wrap(label.clone(), label_font.clone(), style.trace)
+            .size(),
+    );
+    let avoid = keep_clear_boxes(label_box, Pos2::new(cx, cy), cal_h, 2.0 * mm);
+    if let Some(marks) = trace.marks {
+        draw_marks(&painter, &win, ring, style, trace, marks, &avoid);
+    }
+
     painter.add(Shape::line(
         vec![
             Pos2::new(cx, cy),
@@ -401,20 +416,27 @@ pub fn draw_strip(
         ],
         Stroke::new(1.0, style.trace),
     ));
-    let label = if trace.invert {
-        format!("−{}", trace.label)
-    } else {
-        trace.label.to_owned()
-    };
-    painter.text(
-        rect.left_top() + Vec2::new(6.0, 2.0),
-        Align2::LEFT_TOP,
-        label,
-        FontId::proportional(13.0),
-        style.trace,
-    );
+    painter.text(label_pos, Align2::LEFT_TOP, label, label_font, style.trace);
     win
 }
+
+/// The boxes that wave letters and interval read-outs must stay out of: the lead label and the 1 mV
+/// calibration pulse (its foot at `foot`, `height` tall, `width` wide), each with
+/// [`LABEL_CLEARANCE_PT`] around it.
+fn keep_clear_boxes(label_box: Rect, foot: Pos2, height: f32, width: f32) -> [Rect; 2] {
+    [
+        label_box.expand(LABEL_CLEARANCE_PT),
+        Rect::from_min_max(
+            Pos2::new(foot.x, foot.y - height),
+            Pos2::new(foot.x + width, foot.y),
+        )
+        .expand(LABEL_CLEARANCE_PT),
+    ]
+}
+
+/// Clear space kept around the lead label and the calibration pulse, points: a wave letter or an
+/// interval read-out whose box would touch it is not drawn.
+const LABEL_CLEARANCE_PT: f32 = 3.0;
 
 /// Polyline builder that drops a vertex when it lies within 0.2 pt of the straight line from
 /// its predecessor to the new point (and is not a turnaround). Isoelectric stretches and smooth
@@ -469,7 +491,9 @@ fn draw_marks(
     style: &StripStyle,
     trace: &StripTrace<'_>,
     marks: LeadMarks<'_>,
+    avoid: &[Rect],
 ) {
+    let hits = |r: Rect| avoid.iter().any(|a| a.intersects(r));
     let sign = if trace.invert { -1.0 } else { 1.0 };
     let font = FontId::proportional(11.0);
     let rect = win.rect;
@@ -502,6 +526,11 @@ fn draw_marks(
                     Align2::CENTER_TOP,
                 )
             };
+            // the letter's box: about 8 points wide and 12 high
+            let letter_box = align.anchor_size(pos, Vec2::new(8.0, 12.0));
+            if hits(letter_box) {
+                continue;
+            }
             painter.text(pos, align, kind.label(), font.clone(), style.marker);
         }
     }
@@ -569,8 +598,14 @@ fn draw_marks(
             .iter()
             .map(|(x0, x1, w, _)| (f32::midpoint(*x0, *x1), *w))
             .collect();
-        for ((x0, x1, _, text), keep) in row.into_iter().zip(labels_that_fit(&spans, 2.0)) {
-            if keep {
+        for ((x0, x1, w, text), keep) in row.into_iter().zip(labels_that_fit(&spans, 2.0)) {
+            // the read-out's box, 10 points high above (RR) or below (PR) the bracket line
+            let (top, bottom) = if above { (y - 13.0, y) } else { (y, y + 13.0) };
+            let text_box = Rect::from_min_max(
+                Pos2::new(f32::midpoint(x0, x1) - w / 2.0, top),
+                Pos2::new(f32::midpoint(x0, x1) + w / 2.0, bottom),
+            );
+            if keep && !hits(text_box) {
                 bracket(x0, x1, y, 3.0, text, above);
             }
         }
@@ -650,6 +685,22 @@ fn grid_mesh(rect: Rect, style: &StripStyle, ppp: f32) -> Mesh {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The lead label and the calibration pulse are kept clear: a letter box on either is refused,
+    /// one well to the right of them is not (the letters scroll through the left edge).
+    #[test]
+    fn marks_keep_clear_of_the_lead_label_and_the_calibration_pulse() {
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(750.0, 54.0));
+        let label = Rect::from_min_size(rect.left_top() + Vec2::new(6.0, 2.0), Vec2::new(22.0, 15.0));
+        let avoid = keep_clear_boxes(label, Pos2::new(4.0, 27.0), 10.0, 10.0);
+        let hits = |r: Rect| avoid.iter().any(|a| a.intersects(r));
+        let letter = |x: f32, y: f32| Rect::from_center_size(Pos2::new(x, y), Vec2::new(8.0, 12.0));
+        assert!(hits(letter(15.0, 8.0)), "on the label");
+        assert!(hits(letter(30.0, 8.0)), "touching the label's clearance");
+        assert!(hits(letter(9.0, 25.0)), "on the calibration pulse");
+        assert!(!hits(letter(60.0, 8.0)), "clear of both");
+        assert!(!hits(letter(15.0, 45.0)), "below both");
+    }
 
     #[test]
     fn labels_never_overlap_the_previous_drawn_one() {

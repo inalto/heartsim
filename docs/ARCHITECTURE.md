@@ -158,6 +158,30 @@ mapping each cell's template phase to `(u, v)`.
 `core::scenario::Action` is the only way to mutate an engine; the app queues actions with timestamps, so tutorials, timelines and
 user clicks go through one path and are replayable. Drugs are parameter-modifier sets with onset/offset curves.
 
+### 4.6 Echo: wall motion, label slice, the grey image and measurement (`heartsim-echo`, B30–B34)
+The Echo page evaluates the wall motion once per drawn frame (`HeartView::with_scene`, the Simulator's policy and rate cap).
+`SliceState` then reads that frame: it samples the label volumes (`labels_heart.bin`, `labels_thorax.bin`) on a polar grid under the
+probe, keeping for each sample the label, its rest position (the position before the motion, used for speckle) and a hidden
+flag (`HIDDEN_BIT`) for samples behind bone or lung. The grey image (`bmode::EchoImager`) reads only that slice, never the motion. It runs five stages per
+frame, in this order: a line model (two-way attenuation from the label's coefficient and the transmit frequency; reflection at
+label changes from the impedances in `assets/echo/acoustic.ron`; bone shadow; lung reflection and designed reverberation),
+speckle (a hash of the rest position on a 0.15 mm lattice, so the pattern moves with the tissue), a separable point-spread blur
+in polar space with the envelope, time-gain compensation with log compression to `u8`, and the scan conversion on the GPU.
+Every stage is a pure function of its inputs and the seed; the same inputs give the same bytes on native and wasm32, which is
+argued and not tested across targets.
+
+Cost on the development machine (release build; the bench is `cargo bench -p heartsim-echo --bench slice`): the grey image 14.7 ms
+(line model 2.9, speckle 6.4, blur and envelope 2.8, compensation and compression 0.5), wall motion 18 ms, the grid update 4.3 ms and
+the slice 7.2 ms. The image and the slice are recomputed only when the slice, the settings or the display change, and only while the
+Echo page is shown. The browser cost is estimated, not measured. To cut it, the browser halves the samples per line (128 × 256)
+and caps the redraw at 20 Hz. The settings and the display mode are not stored; they live in `EchoPage`.
+
+Measurement (B34) uses three pure, deterministic modules. `mmode` samples one scan line of the same label slice and grey image into a
+`StepBuffer` of columns every `MMODE_STEP_MS` (25 ms) of simulated time, whatever the frame rate. `doppler` samples the velocity of an
+annulus point along the beam every `DOPPLER_STEP_MS` (10 ms), by the central difference of the model's annular position, with no
+correction for the angle. `measure` holds the calipers' geometry, the conventions of Mitchell et al. 2019 (pp. 18, 31–33 and 44) and the
+model's reference value for each named measurement; the send-to-calculator mapping is in `crates/heartsim-app/src/echo_send.rs`.
+
 ## 5. Rendering
 * Offscreen pass (Rgba8UnormSrgb + Depth32Float) sized to the widget in physical pixels, blitted in egui's pass (implemented).
 * Per-vertex scalar vertex buffer updated with `queue.write_buffer`; LUT 256×1 textures (V_m, isochrone, APD); WebGL2-safe (no

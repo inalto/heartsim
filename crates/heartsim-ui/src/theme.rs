@@ -5,7 +5,7 @@
 //! The ECG paper and the 3-D colour maps keep their own clinical colours (`strip`, `colour_bar`);
 //! this palette is for the chrome around them.
 
-use egui::{Color32, Context, CornerRadius, Stroke, Theme, Ui};
+use egui::{Color32, Context, CornerRadius, Stroke, Theme, Ui, Vec2};
 use heartsim_core::AxisClass;
 
 /// The colours of one axis class: a soft fill for its sector and legend chip, a saturated one
@@ -207,10 +207,90 @@ impl Palette {
     pub fn warn(&self) -> ClassColours {
         self.class(AxisClass::LeftDeviation)
     }
+
+    /// The colours of the one primary action of a panel ([`crate::widgets::primary_button`]): the
+    /// accent as the fill, a darker (light theme) or lighter (dark theme) accent hovered, and a text
+    /// colour that reads at 4.5:1 or more on all three. The dark theme's accent is light, so its
+    /// text is near-black, not white.
+    #[must_use]
+    pub fn primary(&self) -> PrimaryColours {
+        if self.dark {
+            PrimaryColours {
+                fill: self.accent,
+                hover: Color32::from_rgb(150, 195, 255),
+                pressed: Color32::from_rgb(86, 146, 236),
+                text: Color32::from_rgb(14, 22, 36),
+            }
+        } else {
+            PrimaryColours {
+                fill: self.accent,
+                hover: Color32::from_rgb(47, 92, 158),
+                pressed: self.accent_strong,
+                text: WHITE,
+            }
+        }
+    }
+
+    /// Explanatory text ([`crate::widgets::helper_text`]): quieter than body text but at 4.5:1 or
+    /// more on the panel, cards, pills and group fills in both themes (`muted` is not: 4.1:1 on
+    /// the light panel).
+    #[must_use]
+    pub fn helper_text(&self) -> Color32 {
+        if self.dark {
+            Color32::from_rgb(160, 172, 190)
+        } else {
+            Color32::from_rgb(84, 98, 120)
+        }
+    }
+
+    /// The opacity of the accent in the fill of a selected button, tab or pill.
+    #[must_use]
+    pub fn selected_alpha(&self) -> f32 {
+        if self.dark { 0.45 } else { 0.3 }
+    }
+
+    /// The fill of a selected button (`Button::selectable`, a tab, the nav pill) as seen over
+    /// `background`: the accent at [`Self::selected_alpha`] blended over it.
+    #[must_use]
+    pub fn selected_fill_over(&self, background: Color32) -> Color32 {
+        let a = self.selected_alpha();
+        let mix = |x: u8, y: u8| (f32::from(x) * (1.0 - a) + f32::from(y) * a).round() as u8;
+        Color32::from_rgb(
+            mix(background.r(), self.accent.r()),
+            mix(background.g(), self.accent.g()),
+            mix(background.b(), self.accent.b()),
+        )
+    }
+
+    /// The text of a selected button, tab or pill: it reads at 4.5:1 or more on
+    /// [`Self::selected_fill_over`] the panel and a card (the accent itself did not: 3.2:1 light,
+    /// 2.9:1 dark, on the panel).
+    #[must_use]
+    pub fn selected_text(&self) -> Color32 {
+        if self.dark {
+            Color32::from_rgb(235, 242, 255)
+        } else {
+            self.accent_strong
+        }
+    }
+}
+
+/// The colours of the primary button in one theme: its fill at rest, hovered and pressed, and the
+/// text on all three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PrimaryColours {
+    pub fill: Color32,
+    pub hover: Color32,
+    pub pressed: Color32,
+    pub text: Color32,
 }
 
 /// Corner radius of cards and windows, points.
 pub const CARD_RADIUS: u8 = 10;
+
+/// Space between a button's label and its edge, in points (egui's own is 4 × 1, which reads as
+/// cramped and gives a small pointer and touch target).
+pub const BUTTON_PADDING: Vec2 = Vec2::new(8.0, 4.0);
 
 /// Puts the palette's panel, window and widget colours into the style of the theme the context
 /// resolves to now. Called once per frame by the application; it writes only when the style does
@@ -221,11 +301,19 @@ pub fn apply_to_context(ctx: &Context) {
     let theme = ctx.theme();
     let p = Palette::for_theme(theme);
     let style = ctx.style_of(theme);
+    // spacing is set for every setting, high contrast included: it is not a colour
+    if style.spacing.button_padding != BUTTON_PADDING {
+        ctx.style_mut_of(theme, |s| s.spacing.button_padding = BUTTON_PADDING);
+    }
     let v = &style.visuals;
     if v.override_text_color.is_some() {
         return;
     }
-    if v.panel_fill == p.panel && v.window_fill == p.card && v.hyperlink_color == p.accent {
+    if v.panel_fill == p.panel
+        && v.window_fill == p.card
+        && v.hyperlink_color == p.accent
+        && v.selection.stroke.color == p.selected_text()
+    {
         return;
     }
     ctx.style_mut_of(theme, |s| {
@@ -238,9 +326,10 @@ pub fn apply_to_context(ctx: &Context) {
         v.hyperlink_color = p.accent;
         v.faint_bg_color = p.accent_soft;
         v.extreme_bg_color = if p.dark { p.panel } else { p.card };
-        v.selection.bg_fill = p.accent.gamma_multiply(if p.dark { 0.45 } else { 0.3 });
-        // no outline on a selected pill or tab (zero width): the fill marks it, the colour is the label text
-        v.selection.stroke = Stroke::new(0.0, p.accent);
+        v.selection.bg_fill = p.accent.gamma_multiply(p.selected_alpha());
+        // no outline on a selected pill or tab (zero width): the fill marks it, the colour is the
+        // label text, which must read on that fill (the accent did not)
+        v.selection.stroke = Stroke::new(0.0, p.selected_text());
         for w in [
             &mut v.widgets.noninteractive,
             &mut v.widgets.inactive,
@@ -335,13 +424,7 @@ mod tests {
     #[test]
     fn amber_toggle_text_reads_on_the_panel_and_on_the_selected_fill() {
         for p in [Palette::light(), Palette::dark()] {
-            let a = if p.dark { 0.45 } else { 0.3 };
-            let mix = |x: u8, y: u8| (f32::from(x) * (1.0 - a) + f32::from(y) * a).round() as u8;
-            let selected = Color32::from_rgb(
-                mix(p.panel.r(), p.accent.r()),
-                mix(p.panel.g(), p.accent.g()),
-                mix(p.panel.b(), p.accent.b()),
-            );
+            let selected = p.selected_fill_over(p.panel);
             let text = p.warn_text();
             assert!(contrast_ratio(text, p.panel) >= 4.5, "{} panel", theme_name(&p));
             assert!(
@@ -351,6 +434,51 @@ mod tests {
                 contrast_ratio(text, selected)
             );
         }
+    }
+
+    /// The label of a selected button, tab or nav pill ("Explore: Echo ▾") reads on its fill, over
+    /// the panel (the bars) and over a card, in both themes. Measured before the fix (the accent as
+    /// the text) on the panel: 3.2:1 light, 2.9:1 dark; after: 7.1:1 and 6.1:1.
+    #[test]
+    fn the_selected_label_reads_on_the_selected_fill() {
+        for p in [Palette::light(), Palette::dark()] {
+            let old = contrast_ratio(p.accent, p.selected_fill_over(p.panel));
+            assert!(old < 4.5, "the old pairing failed: {old:.2}");
+            for bg in [p.panel, p.card] {
+                let fill = p.selected_fill_over(bg);
+                let r = contrast_ratio(p.selected_text(), fill);
+                assert!(r >= 4.5, "{} selected label: {r:.2}", theme_name(&p));
+            }
+        }
+    }
+
+    /// The selection colours [`apply_to_context`] writes are those the test above measures: the
+    /// accent at the palette's alpha, the selected text as the label colour.
+    #[test]
+    fn apply_to_context_uses_the_measured_selection_colours() {
+        for theme in [Theme::Light, Theme::Dark] {
+            let ctx = Context::default();
+            ctx.set_theme(theme);
+            apply_to_context(&ctx);
+            let p = Palette::for_theme(theme);
+            let v = ctx.style_of(theme).visuals.clone();
+            assert_eq!(v.selection.stroke.color, p.selected_text());
+            assert_eq!(v.selection.bg_fill, p.accent.gamma_multiply(p.selected_alpha()));
+            assert_eq!(ctx.style_of(theme).spacing.button_padding, BUTTON_PADDING);
+        }
+    }
+
+    /// Helper text reads at AA on every surface it is written on, in both themes (the old `muted`
+    /// did not on the light panel).
+    #[test]
+    fn helper_text_reads_on_panels_cards_pills_and_groups() {
+        for p in [Palette::light(), Palette::dark()] {
+            for bg in [p.panel, p.card, p.pill, p.accent_soft] {
+                let r = contrast_ratio(p.helper_text(), bg);
+                assert!(r >= 4.5, "{} helper on {bg:?}: {r:.2}", theme_name(&p));
+            }
+        }
+        assert!(contrast_ratio(Palette::light().muted, Palette::light().panel) < 4.5);
     }
 
     fn theme_name(p: &Palette) -> &'static str {

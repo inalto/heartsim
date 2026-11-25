@@ -152,10 +152,12 @@ fn extra_leads_are_recorded_and_placement_reloads_from_the_scenario() {
 #[test]
 fn panel_presets_and_exercises_edit_the_placement() {
     let editor = ElectrodeEditor::new(pack().electrodes.clone(), Some(&pack().torso), RATE_HZ, 1000);
-    let mut h = Harness::new_ui_state(
-        |ui, ed: &mut ElectrodeEditor| electrode_editor_panel(ui, ed),
-        editor,
-    );
+    let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui_state(
+            |ui, ed: &mut ElectrodeEditor| electrode_editor_panel(ui, ed),
+            editor,
+        );
     h.get_by_label("Mason–Likar").click();
     h.run();
     assert_eq!(

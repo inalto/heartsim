@@ -274,11 +274,37 @@ impl EcgView {
         lead: Option<&mut Lead>,
         before: impl FnOnce(&mut Ui, &mut Self),
     ) {
+        if ui.ctx().content_rect().width() < crate::NARROW_PX {
+            // phone width: one row, the lead as a combo box and everything else behind the Display
+            // button, so the trace keeps the height of the panel
+            ui.horizontal_wrapped(|ui| {
+                if let Some(selected) = lead {
+                    let combo = egui::ComboBox::from_id_salt("ecg_lead_narrow")
+                        .selected_text(selected.label())
+                        .show_ui(ui, |ui| {
+                            for l in Lead::ALL {
+                                ui.selectable_value(selected, l, l.label());
+                            }
+                        });
+                    name_combo(&combo.response, &t!("ecg-lead"));
+                    crate::highlight::mark(&combo.response, "lead_selector");
+                }
+                let mut before = Some(before);
+                self.display_button_with(ui, |ecg, ui| {
+                    if let Some(before) = before.take() {
+                        before(ui, ecg);
+                    }
+                    ecg.trace_controls(ui, rings);
+                    ui.separator();
+                });
+            });
+            return;
+        }
         ui.horizontal_wrapped(|ui| {
             before(ui, self);
             if let Some(selected) = lead {
                 let leads = ui
-                    .horizontal(|ui| {
+                    .horizontal_wrapped(|ui| {
                         for l in Lead::ALL {
                             ui.selectable_value(selected, l, l.label());
                         }
@@ -287,63 +313,75 @@ impl EcgView {
                 crate::highlight::mark(&leads, "lead_selector");
                 ui.separator();
             }
-            let speed = egui::ComboBox::from_id_salt("ecg_speed")
-                .selected_text(format!("{} mm/s", self.style.mm_per_s))
-                .show_ui(ui, |ui| {
-                    for s in SPEEDS_MM_S {
-                        ui.selectable_value(&mut self.style.mm_per_s, s, format!("{s} mm/s"));
-                    }
-                });
-            name_combo(&speed.response, &t!("ecg-speed"));
-            speed.response.on_hover_text(t!("ecg-speed"));
-            let gain = egui::ComboBox::from_id_salt("ecg_gain")
-                .selected_text(format!("{} mm/mV", self.style.mm_per_mv))
-                .show_ui(ui, |ui| {
-                    for g in GAINS_MM_MV {
-                        ui.selectable_value(&mut self.style.mm_per_mv, g, format!("{g} mm/mV"));
-                    }
-                });
-            name_combo(&gain.response, &t!("ecg-gain"));
-            gain.response.on_hover_text(t!("ecg-gain"));
-            for m in [SweepMode::Scroll, SweepMode::Sweep] {
-                ui.selectable_value(&mut self.style.mode, m, m.label());
-            }
-            if ui
-                .button(t!("ecg-calipers"))
-                .on_hover_text(t!("ecg-calipers-hint"))
-                .clicked()
-            {
-                self.strip_calipers.reset();
-                self.page_calipers.iter_mut().for_each(CaliperSet::reset);
-                self.page_sound_calipers.reset();
-            }
-            if self.playback.is_paused() {
-                let fs = fs_of(rings);
-                let visible = rings
-                    .first()
-                    .map_or(0, |r| r.len() as u64)
-                    .min((10.0 * fs) as u64);
-                let max = rings.first().map_or(0.0, |r| Playback::max_scrub_ms(r, visible));
-                let mut back_s = self.playback.scrub_ms() / 1000.0;
-                if crate::controls::slider(
-                    ui,
-                    &t!("ecg-scrub-back"),
-                    egui::Slider::new(&mut back_s, 0.0..=(max / 1000.0).max(0.0)).max_decimals(1),
-                    crate::controls::S,
-                )
-                .changed()
-                {
-                    self.playback.set_scrub_ms(back_s * 1000.0, max);
-                }
-            }
+            self.trace_controls(ui, rings);
             self.display_button(ui);
         });
+    }
+
+    /// Paper speed, gain, Scroll / Sweep, Clear calipers and, while paused, the scrub slider.
+    fn trace_controls(&mut self, ui: &mut Ui, rings: &[LeadRing]) {
+        let speed = egui::ComboBox::from_id_salt("ecg_speed")
+            .selected_text(format!("{} mm/s", self.style.mm_per_s))
+            .show_ui(ui, |ui| {
+                for s in SPEEDS_MM_S {
+                    ui.selectable_value(&mut self.style.mm_per_s, s, format!("{s} mm/s"));
+                }
+            });
+        name_combo(&speed.response, &t!("ecg-speed"));
+        speed.response.on_hover_text(t!("ecg-speed"));
+        let gain = egui::ComboBox::from_id_salt("ecg_gain")
+            .selected_text(format!("{} mm/mV", self.style.mm_per_mv))
+            .show_ui(ui, |ui| {
+                for g in GAINS_MM_MV {
+                    ui.selectable_value(&mut self.style.mm_per_mv, g, format!("{g} mm/mV"));
+                }
+            });
+        name_combo(&gain.response, &t!("ecg-gain"));
+        gain.response.on_hover_text(t!("ecg-gain"));
+        for m in [SweepMode::Scroll, SweepMode::Sweep] {
+            ui.selectable_value(&mut self.style.mode, m, m.label());
+        }
+        // never squeezed to fit: on a narrow window the row wraps before it instead
+        if ui
+            .add(egui::Button::new(t!("ecg-calipers")).wrap_mode(egui::TextWrapMode::Extend))
+            .on_hover_text(t!("ecg-calipers-hint"))
+            .clicked()
+        {
+            self.strip_calipers.reset();
+            self.page_calipers.iter_mut().for_each(CaliperSet::reset);
+            self.page_sound_calipers.reset();
+        }
+        if self.playback.is_paused() {
+            let fs = fs_of(rings);
+            let visible = rings
+                .first()
+                .map_or(0, |r| r.len() as u64)
+                .min((10.0 * fs) as u64);
+            let max = rings.first().map_or(0.0, |r| Playback::max_scrub_ms(r, visible));
+            let mut back_s = self.playback.scrub_ms() / 1000.0;
+            if crate::controls::slider(
+                ui,
+                &t!("ecg-scrub-back"),
+                egui::Slider::new(&mut back_s, 0.0..=(max / 1000.0).max(0.0)).max_decimals(1),
+                crate::controls::S,
+            )
+            .changed()
+            {
+                self.playback.set_scrub_ms(back_s * 1000.0, max);
+            }
+        }
     }
 
     /// The Display button: opens the popup with the paper, label, filter and artefact controls. It
     /// is drawn as selected, and says what is on, while a filter or an artefact changes the trace,
     /// because those change what the learner sees.
     fn display_button(&mut self, ui: &mut Ui) {
+        self.display_button_with(ui, |_, _| {});
+    }
+
+    /// [`Self::display_button`] with `extras` drawn at the top of its popup (the controls the
+    /// phone-width toolbar folds into it).
+    fn display_button_with(&mut self, ui: &mut Ui, extras: impl FnOnce(&mut Self, &mut Ui)) {
         let cfg = *self.display.config();
         let mut parts = Vec::new();
         if cfg.filter != FilterMode::Off {
@@ -379,6 +417,7 @@ impl EcgView {
         }
         popup.show(|ui| {
             ui.set_min_width(300.0);
+            extras(self, ui);
             self.display_controls(ui);
         });
     }
@@ -411,7 +450,7 @@ impl EcgView {
                     .changed()
                     && *play;
                 if *play && let Some(note) = status.note() {
-                    ui.weak(note);
+                    crate::helper_text(ui, note);
                 }
             });
             if shown {

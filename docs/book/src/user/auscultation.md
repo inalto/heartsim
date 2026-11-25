@@ -21,7 +21,9 @@ scenario, heard at the site where that finding is best heard: a whole number of 
 diastole, so it loops without a click (an irregular rhythm loops 9 s with a short fade instead).
 
 * **Play / Stop** loops the clip. The **listen counter** adds one each time a loop has been heard to its end (a loop you stop
-  half way does not count), per finding and in total. The counts are kept between sessions.
+  half way does not count), per finding and in total. The counts are kept between sessions. The number in brackets after each
+  name in the list is that item's count, and a line above the list says so. The **Listen** part shows the count of the selected
+  item and the total over all findings (*Listens: 37 · all findings: 543*).
 * **Half speed** plays a slowed version: the gaps between the sounds double, each sound keeps its pitch. It is labelled
   *altered sound*, on the button and on the lane, because it is an aid, not the real timing.
 * **Show the trace** draws the clip: lead II above the labelled phonocardiogram, with a playhead. Hide it to listen first and

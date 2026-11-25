@@ -2,5 +2,8 @@
 
 transport-run = Reproducir
 transport-pause = Pausa
-transport-speed = velocidad
+transport-speed = Velocidad
 pacer-title = Marcapasos
+
+## Strip toolbar on a phone-narrow window
+ecg-lead = Derivación

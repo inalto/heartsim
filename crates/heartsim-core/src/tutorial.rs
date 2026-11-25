@@ -50,6 +50,18 @@ pub struct Page {
     pub actions: Vec<Step>,
     #[serde(default)]
     pub check: Option<Question>,
+    /// A "view found" check (B33): the learner finds an echo view with the probe; in self-study the
+    /// next page opens once the view has been found (its score held above the threshold for a
+    /// second). May stand next to a question.
+    #[serde(default)]
+    pub view_check: Option<ViewCheck>,
+}
+
+/// The "view found" check of a page (brief B33): the stable id of a standard echo view
+/// (`heartsim_echo::ViewId::id`, e.g. `"plax"`, `"a4c"`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewCheck {
+    pub view: String,
 }
 
 /// A page action: a scenario intervention (same vocabulary as scenario timelines) or an
@@ -112,6 +124,29 @@ pub enum UiAction {
     /// Show the sound check on this page (B28): a low and a higher tone to play, and what to do when
     /// the low one cannot be heard. Without sound output it is text only.
     SoundCheck,
+    /// Put the echo probe at a window's starting pose (B33; the pose a learner starts from).
+    ProbeAtWindow(ProbeWindow),
+    /// Put the echo probe at the reference pose of a view (by id): a demonstration, so a page can
+    /// show where the transducer goes before asking the learner to find it.
+    ProbeAtView(String),
+    /// Choose the view the Echo page asks for (by id) and show it in the picker.
+    SetEchoView(String),
+    /// Set the Echo page up for a measurement (B34): the probe at the view the measurement is made
+    /// in, the mode and the cursor or gate, the trace recording. The learner measures; nothing is
+    /// measured for them. Ids: `lvid` (M-mode at the parasternal long axis through the mitral
+    /// leaflet tips), `tapse` (M-mode at the apical four-chamber through the lateral tricuspid
+    /// annulus), `e-prime` (tissue Doppler at the lateral mitral annulus).
+    EchoMeasure(String),
+}
+
+/// The echo windows a tutorial can start the probe from (`heartsim_echo::EchoWindow`, named alike;
+/// this crate cannot name that type).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProbeWindow {
+    Parasternal,
+    Apical,
+    Subcostal,
+    Suprasternal,
 }
 
 /// Where the stethoscope is, for [`UiAction::Listen`] (the listening sites of `heartsim_ecg`, named
@@ -149,6 +184,8 @@ pub enum Panel {
     SoundTrainer,
     /// The auscultation quiz (B28).
     AuscultationQuiz,
+    /// The Echo page (B33).
+    Echo,
 }
 
 /// Standard radiological views of the heart.
@@ -299,6 +336,11 @@ impl Tutorial {
             if let Some(q) = &p.check {
                 out.extend(q.problems(&at));
             }
+            if let Some(v) = &p.view_check
+                && v.view.trim().is_empty()
+            {
+                out.push(format!("{at}: empty view id"));
+            }
         }
         out
     }
@@ -408,6 +450,7 @@ mod tests {
             title: "t".into(),
             markdown: "text".into(),
             actions,
+            view_check: None,
             check: with_check.then(|| Question {
                 prompt: "?".into(),
                 choices: vec!["a".into(), "b".into()],

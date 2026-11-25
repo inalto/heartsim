@@ -1,4 +1,4 @@
-//! The top bar's page navigation: with room, all fourteen pages are tabs; with less, four group
+//! The top bar's page navigation: with room, all fifteen pages are tabs; with less, four group
 //! menus (Explore, Practise, Learn, Tools); always one line high, and every page is reachable in at
 //! most two clicks.
 
@@ -17,6 +17,7 @@ struct Model {
 fn harness(width: f32) -> Harness<'static, Model> {
     i18n::set_language("en");
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(width, 300.0))
         .build_ui_state(
             |ui, m: &mut Model| {
@@ -36,11 +37,11 @@ fn harness(width: f32) -> Harness<'static, Model> {
 }
 
 #[test]
-fn at_1440_all_fourteen_pages_are_tabs_and_a_click_switches_page() {
-    // fourteen English tabs need about 1380 px (thirteen fitted in 1280): below that, group menus
-    assert_eq!(Tab::ALL.len(), 14);
+fn at_1520_all_fifteen_pages_are_tabs_and_a_click_switches_page() {
+    // fifteen English tabs need about 1420 px (fourteen fitted in 1380): below that, group menus
+    assert_eq!(Tab::ALL.len(), 15);
     assert_eq!(Group::ALL.len(), 4);
-    let mut h = harness(1440.0);
+    let mut h = harness(1520.0);
     h.run();
     assert!(matches!(
         h.state().style,
@@ -168,11 +169,74 @@ fn the_shortcuts_are_unchanged() {
             None,
             None,
             None,
+            None,
             None
         ]
     );
     assert_eq!(Tab::EchoCalculators.shortcut(), None);
+    assert_eq!(
+        Tab::Echo.shortcut(),
+        None,
+        "the Echo page is new and takes no number key"
+    );
     assert_eq!(Tab::Simulator.shortcut(), Some("1"));
     assert_eq!(Tab::Tutorials.shortcut(), Some("9"));
     assert_eq!(Tab::EpLab.shortcut(), Some("0"));
+}
+
+#[test]
+fn the_echo_page_is_in_explore_right_after_heart_vector_in_both_languages() {
+    assert_eq!(Tab::Echo.group(), Group::Explore);
+    let explore = Group::Explore.tabs();
+    let i = explore
+        .iter()
+        .position(|t| *t == Tab::HeartVector)
+        .expect("Heart Vector");
+    assert_eq!(explore[i + 1], Tab::Echo, "Echo follows Heart Vector");
+    // nothing else moved: the other groups are as they were
+    assert_eq!(Group::Tools.tabs(), [Tab::EchoCalculators]);
+    assert_eq!(Group::Learn.tabs(), [Tab::Tutorials, Tab::Help]);
+    i18n::set_language("en");
+    assert_eq!(Tab::Echo.title(), "Echo");
+    i18n::set_language("it");
+    assert_eq!(Tab::Echo.title(), "Eco");
+    i18n::set_language("en");
+}
+
+#[test]
+fn the_echo_page_is_a_tab_at_the_wide_width_and_a_menu_entry_when_narrow() {
+    for lang in ["en", "it"] {
+        i18n::set_language(lang);
+        let mut h = harness(1700.0);
+        h.run();
+        h.get_by_label(&Tab::Echo.title()).click();
+        h.run();
+        assert_eq!(h.state().tab, Tab::Echo, "{lang}");
+    }
+    i18n::set_language("en");
+}
+
+/// The group menu buttons are roomier than ordinary buttons (12 × 6 against 8 × 4): taller by the
+/// extra vertical padding, wider by the extra horizontal one, and the bar still fits one line.
+#[test]
+fn the_group_buttons_have_their_own_roomier_padding() {
+    assert_eq!(nav::GROUP_BUTTON_PADDING, egui::vec2(12.0, 6.0));
+    const { assert!(nav::GROUP_BUTTON_PADDING.x > heartsim_ui::theme::BUTTON_PADDING.x) };
+    const { assert!(nav::GROUP_BUTTON_PADDING.y > heartsim_ui::theme::BUTTON_PADDING.y) };
+    i18n::set_language("en");
+    let mut h = harness(900.0);
+    h.run();
+    for g in Group::ALL {
+        let r = h.get_by_label_contains(&g.title()).rect();
+        // text line (at least 12 pt) plus 2 x 6 pt of padding
+        assert!(
+            r.height() >= 12.0 + 2.0 * nav::GROUP_BUTTON_PADDING.y - 0.5,
+            "{g:?} {r:?}"
+        );
+        // the label plus two 12 pt paddings and the room for the triangle
+        assert!(
+            r.width() >= 2.0 * nav::GROUP_BUTTON_PADDING.x + 12.0,
+            "{g:?} {r:?}"
+        );
+    }
 }

@@ -61,6 +61,7 @@ struct Model {
 fn harness() -> Harness<'static, Model> {
     i18n::set_language("en");
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1300.0, 600.0))
         .build_ui_state(
             |ui, m: &mut Model| {

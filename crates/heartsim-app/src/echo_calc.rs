@@ -33,6 +33,10 @@ pub struct EchoCalcPage {
     focus: Option<&'static str>,
     /// Phone width: the detail is shown instead of the list.
     narrow_detail: bool,
+    /// The fields the Echo page sent a measurement to (calculator, input) and the text it put
+    /// there: the mark "from the echo simulator" shows while the field still holds that text.
+    /// Session only, like every typed value.
+    from_echo: HashMap<(&'static str, &'static str), String>,
 }
 
 impl Default for EchoCalcPage {
@@ -44,6 +48,7 @@ impl Default for EchoCalcPage {
             fields: HashMap::new(),
             focus: None,
             narrow_detail: false,
+            from_echo: HashMap::new(),
         }
     }
 }
@@ -141,6 +146,28 @@ impl EchoCalcPage {
             .get(self.selected.id)
             .and_then(|f| f.get(input))
             .map_or("", String::as_str)
+    }
+
+    /// Puts a measurement of the Echo page (brief B34) into field `input` of calculator
+    /// `calculator`, marked "from the echo simulator" until the learner edits it. Unknown ids are
+    /// ignored; nothing is stored beyond the session.
+    pub fn receive_from_echo(&mut self, calculator: &str, input: &str, text: &str) {
+        let Some(c) = by_id(calculator) else { return };
+        let Some(spec) = c.input(input) else { return };
+        self.fields
+            .entry(c.id)
+            .or_default()
+            .insert(spec.id, text.to_owned());
+        self.from_echo.insert((c.id, spec.id), text.to_owned());
+    }
+
+    /// Whether field `input` of the selected calculator holds what the Echo page sent.
+    #[must_use]
+    pub fn is_from_echo(&self, input: &str) -> bool {
+        let text = self.field(input);
+        self.from_echo
+            .get(&(self.selected.id, input))
+            .is_some_and(|sent| !text.is_empty() && sent == text)
     }
 
     /// Types `text` into field `input` of the selected calculator.
@@ -261,10 +288,13 @@ impl EchoCalcPage {
         let label = ui.label(t!("calc-search"));
         ui.add(search_box).labelled_by(label.id);
         ui.add_space(4.0);
+        // what the italic names of the list mean (see `Review::FormulaOnly`)
+        heartsim_ui::helper_text(ui, t!("calc-italic-legend"));
+        ui.add_space(4.0);
         if !self.query.trim().is_empty() {
             let hits = search(&self.query, lang);
             if hits.is_empty() {
-                ui.weak(t!("calc-no-match"));
+                heartsim_ui::helper_text(ui, t!("calc-no-match"));
             }
             for c in hits {
                 self.list_entry(ui, c, lang);
@@ -310,7 +340,7 @@ impl EchoCalcPage {
         });
         ui.weak(c.category.name().get(lang));
         ui.label(c.summary.get(lang));
-        ui.label(RichText::new(t!("calc-disclaimer")).small().color(p.muted));
+        heartsim_ui::helper_text(ui, t!("calc-disclaimer"));
         ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
             if ui.button(t!("calc-example")).clicked() {
@@ -353,7 +383,7 @@ impl EchoCalcPage {
                 cards::subheading(ui, t!("calc-result"));
                 let only_missing = errors.iter().all(|e| e.kind == ErrorKind::Missing);
                 if only_missing {
-                    ui.weak(t!("calc-empty"));
+                    heartsim_ui::helper_text(ui, t!("calc-empty"));
                 } else {
                     ui.colored_label(p.bad().strong, t!("calc-no-result"));
                     for e in errors.iter().filter(|e| e.input.is_none()) {
@@ -368,7 +398,7 @@ impl EchoCalcPage {
             let rf = r.reference;
             ui.label(format!("{} {}. {}.", rf.authors, rf.title, rf.journal));
             ui.horizontal_wrapped(|ui| {
-                ui.weak(t!("calc-locator", place = r.locator));
+                heartsim_ui::helper_text(ui, t!("calc-locator", place = r.locator));
                 if let Some(doi) = rf.doi {
                     ui.hyperlink_to(format!("doi:{doi}"), format!("https://doi.org/{doi}"));
                 }
@@ -378,13 +408,12 @@ impl EchoCalcPage {
             });
         }
         ui.add_space(6.0);
-        ui.label(
-            RichText::new(match c.review {
+        heartsim_ui::helper_text(
+            ui,
+            match c.review {
                 Review::Verified => t!("calc-status-verified"),
                 Review::FormulaOnly => t!("calc-status-formula"),
-            })
-            .small()
-            .color(p.muted),
+            },
         );
     }
 
@@ -439,9 +468,21 @@ impl EchoCalcPage {
                             if spec.optional {
                                 let _ = write!(hint, " · {}", t!("calc-optional"));
                             }
-                            ui.horizontal(|ui| {
-                                ui.weak(hint.trim_start());
-                                Self::field_error(ui, errors, spec.id, lang);
+                            let from_echo = self.is_from_echo(spec.id);
+                            ui.vertical(|ui| {
+                                ui.horizontal_wrapped(|ui| {
+                                    heartsim_ui::helper_text(ui, hint.trim_start());
+                                    Self::field_error(ui, errors, spec.id, lang);
+                                });
+                                // the origin of a value the Echo page sent (brief B34): a pill where
+                                // there is room, plain text where the column is narrow
+                                if from_echo {
+                                    if ui.available_width() >= 200.0 {
+                                        cards::pill(ui, t!("calc-from-echo"));
+                                    } else {
+                                        heartsim_ui::helper_text(ui, t!("calc-from-echo"));
+                                    }
+                                }
                             });
                         }
                         InputKind::Choice(choices) => {
@@ -464,7 +505,7 @@ impl EchoCalcPage {
                                 .labelled_by(label.id);
                             ui.horizontal(|ui| {
                                 if spec.optional {
-                                    ui.weak(t!("calc-optional"));
+                                    heartsim_ui::helper_text(ui, t!("calc-optional"));
                                 }
                                 Self::field_error(ui, errors, spec.id, lang);
                             });
@@ -525,10 +566,10 @@ impl EchoCalcPage {
             },
         );
         if tree {
-            ui.weak(t!("calc-path-hint"));
+            heartsim_ui::helper_text(ui, t!("calc-path-hint"));
         }
         if out.findings.is_empty() {
-            ui.weak(t!("calc-no-findings"));
+            heartsim_ui::helper_text(ui, t!("calc-no-findings"));
         }
         for f in &out.findings {
             ui.horizontal_wrapped(|ui| {
@@ -544,10 +585,13 @@ impl EchoCalcPage {
                 };
                 ui.label(localise(f.text.get(lang)));
             });
-            ui.weak(localise(&format!(
-                "{} — {}, {}",
-                f.criterion, f.source.reference.journal, f.source.locator
-            )));
+            heartsim_ui::helper_text(
+                ui,
+                localise(&format!(
+                    "{} — {}, {}",
+                    f.criterion, f.source.reference.journal, f.source.locator
+                )),
+            );
         }
     }
 }

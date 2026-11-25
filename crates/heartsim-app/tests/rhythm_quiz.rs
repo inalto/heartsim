@@ -2,7 +2,7 @@
 //! AccessKit nodes, without a GPU.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{By, NodeT, Queryable};
 use heartsim_app::rhythm_quiz::RhythmQuiz;
 use heartsim_app::scenarios::ScenarioLibrary;
 use heartsim_ui::StripStyle;
@@ -19,6 +19,7 @@ fn harness() -> Harness<'static, Model> {
         ScenarioLibrary::load_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios"))
             .unwrap();
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1200.0, 700.0))
         .build_ui_state(
             |ui, m: &mut Model| {
@@ -115,4 +116,27 @@ fn answered_options_are_marked_without_relying_on_colour() {
     assert_eq!((h.state().quiz.asked, h.state().quiz.correct), (1, 0));
     // the score says what it counts
     let _ = h.get_by_label("Score: 0 of 1 correct");
+}
+
+/// The primary actions on the page (by label, in tree order): the rule of use allows one per panel.
+fn primary_names<S>(h: &Harness<'_, S>) -> Vec<String> {
+    h.query_all(By::new())
+        .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+        .map(|n| n.accesskit_node().label().unwrap_or_default())
+        .collect()
+}
+
+/// New question first, none while the choices are the action, Next question after the answer.
+#[test]
+fn the_rhythm_quiz_has_one_primary_action_at_a_time() {
+    let mut h = harness();
+    h.run();
+    assert_eq!(primary_names(&h), ["New question"]);
+    h.get_by_label("New question").click();
+    h.run();
+    assert!(primary_names(&h).is_empty(), "the answers are the action");
+    let q = h.state().quiz.question.clone().unwrap();
+    h.get_by_label(&title(&h, q.answer)).click();
+    h.run();
+    assert_eq!(primary_names(&h), ["Next question"]);
 }

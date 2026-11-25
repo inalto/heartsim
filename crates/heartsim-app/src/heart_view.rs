@@ -10,11 +10,13 @@
 //! Everything except [`HeartView::viewport`] runs without a GPU, which keeps the mapping testable.
 
 use crate::heart_motion::{self, HeartMotion, Tick};
+use crate::settings::SimulatorSections;
 #[cfg(feature = "native")]
 use anyhow::Context as _;
 use eframe::egui;
 use glam::Vec3;
 use heartsim_core::{Action, Millis, Parameters, Region, StimSite};
+use heartsim_echo::{DesignedParams, EchoAnatomy, ViewTargets};
 use heartsim_geometry::{AnatomyPack, Hood, MeshKind, Territory};
 use heartsim_render::{
     ClipPlane, Contour, GlyphInstance, GlyphSetId, LayerDesc, LayerId, LutId, LutStyle, ScalarMode,
@@ -311,6 +313,40 @@ pub struct HeartView {
     card_frame: Option<u64>,
     /// Scratch for the vertices of one valve disc.
     disc_scratch: Vec<heartsim_geometry::Vertex>,
+    /// The echo cross-section's anatomy (B31), built on first use.
+    echo: EchoState,
+}
+
+/// Where the echo anatomy is: waiting to be built from a reduced copy of the pack (the cells, the
+/// figure and the label volumes: what [`EchoAnatomy::new`] reads, about 20 MB), built, or not
+/// possible (a pack without label volumes, or without the wall-motion model).
+#[derive(Debug)]
+enum EchoState {
+    Source(Box<AnatomyPack>),
+    Built(Box<(EchoAnatomy, Option<ViewTargets>)>),
+    Unavailable,
+}
+
+/// The parts of `pack` that [`EchoAnatomy::new`] reads, copied before the engine consumes the cells.
+fn echo_source(pack: &AnatomyPack) -> Box<AnatomyPack> {
+    Box::new(AnatomyPack {
+        manifest: pack.manifest.clone(),
+        // only the IVC (the standard views' vena cava check) is read from the meshes
+        meshes: pack.meshes.iter().filter(|m| m.name == "ivc").cloned().collect(),
+        cells: pack.cells.clone(),
+        hoods: std::collections::BTreeMap::new(),
+        landmarks: pack.landmarks.clone(),
+        electrodes: pack.electrodes.clone(),
+        torso: if pack.body.is_some() {
+            heartsim_geometry::TriMesh::default()
+        } else {
+            pack.torso.clone()
+        },
+        body: pack.body.clone(),
+        aha_segments: pack.aha_segments.clone(),
+        licence: String::new(),
+        volumes: pack.volumes.clone(),
+    })
 }
 
 impl std::fmt::Debug for HeartView {
@@ -400,6 +436,11 @@ impl HeartView {
         let motion = HeartMotion::new(&pack, pack.cells.len())
             .inspect_err(|e| tracing::warn!("no wall motion: {e}"))
             .ok();
+        let echo = if motion.is_some() && pack.volumes.is_some() {
+            EchoState::Source(echo_source(&pack))
+        } else {
+            EchoState::Unavailable
+        };
         let params = Parameters::default();
         let mut engine = EikonalEngine::with_seed_sets(
             Arc::new(pack.cells),
@@ -504,6 +545,7 @@ impl HeartView {
             view_frame: None,
             card_frame: None,
             disc_scratch: Vec::new(),
+            echo,
         }
     }
 
@@ -591,6 +633,99 @@ impl HeartView {
             Tick::Wait(s) => Some(s),
             _ => None,
         }
+    }
+
+    // ---- the echo cross-section (B31) -----------------------------------------------------
+
+    /// Whether the pack can show the echo page (it has the label volumes and the motion model).
+    #[must_use]
+    pub fn echo_possible(&self) -> bool {
+        !matches!(self.echo, EchoState::Unavailable)
+    }
+
+    /// Build the echo anatomy now if it is still waiting (about 0.7 s natively, once; the
+    /// reduced pack copy is dropped afterwards). A failure is logged and leaves the page
+    /// unavailable.
+    pub fn build_echo(&mut self) {
+        if let EchoState::Source(_) = &self.echo
+            && let EchoState::Source(pack) = std::mem::replace(&mut self.echo, EchoState::Unavailable)
+        {
+            let built = self.motion.as_ref().map(|m| {
+                EchoAnatomy::new(&pack, m.model(), DesignedParams::default()).map(|a| {
+                    let views = ViewTargets::new(&pack, m.model(), &a);
+                    (a, views)
+                })
+            });
+            self.echo = match built {
+                Some(Ok(a)) => EchoState::Built(Box::new(a)),
+                Some(Err(e)) => {
+                    tracing::warn!("no echo cross-section: {e}");
+                    EchoState::Unavailable
+                }
+                None => EchoState::Unavailable,
+            };
+        }
+    }
+
+    /// The echo anatomy, once [`Self::build_echo`] has built it.
+    #[must_use]
+    pub fn echo_anatomy(&self) -> Option<&EchoAnatomy> {
+        match &self.echo {
+            EchoState::Built(a) => Some(&a.0),
+            _ => None,
+        }
+    }
+
+    /// The echo anatomy and the motion parts a scan needs, borrowed together (B34): the scans
+    /// evaluate the model at their own times.
+    pub fn echo_scan_parts(&mut self) -> Option<(&EchoAnatomy, heart_motion::ScanParts<'_>)> {
+        let anatomy = match &self.echo {
+            EchoState::Built(a) => &a.0,
+            _ => return None,
+        };
+        Some((anatomy, self.motion.as_mut()?.scan_parts()))
+    }
+
+    /// The standard views' targets (B33), built with the echo anatomy.
+    #[must_use]
+    pub fn echo_views(&self) -> Option<&ViewTargets> {
+        match &self.echo {
+            EchoState::Built(a) => a.1.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// The scene layer of the figure's skin ("torso"), once the view is installed.
+    #[must_use]
+    pub fn torso_layer(&self) -> Option<LayerId> {
+        self.layers.iter().find(|l| l.name == "torso").and_then(|l| l.id)
+    }
+
+    /// The 3-D view's per-frame work for a page that arranges the scene itself (the Echo page):
+    /// the colour map, the wall-motion policy (**the one evaluation per drawn frame**, capped in
+    /// rate, shared with the cross-section) and the upload of the moving vertices, then `f` with
+    /// the scene. Layer visibility and opacity come from the anatomy panel as usual; the camera
+    /// and the clip plane are left to `f`. No picking, no click on the heart. `None` before the
+    /// view is installed in a GPU scene.
+    pub fn with_scene<R>(
+        &mut self,
+        ui: &egui::Ui,
+        f: impl FnOnce(&mut SceneRenderer, &egui_wgpu::RenderState) -> R,
+    ) -> Option<R> {
+        let rs = self.render_state.clone()?;
+        if self.tier1 {
+            self.update_scalars();
+        }
+        self.view_frame = Some(ui.ctx().cumulative_frame_nr());
+        if let Some(wait_s) = self.tick_motion(ui.input(|i| i.time), true, false) {
+            ui.ctx().request_repaint_after_secs(wait_s as f32);
+        }
+        let dt = ui.input(|i| i.stable_dt).min(0.1);
+        let mut renderer = rs.renderer.write();
+        let res = renderer.callback_resources.get_mut::<ViewportResources>()?;
+        self.upload_motion(&mut res.scene, &rs.queue);
+        self.sync_scene(&mut res.scene, &rs.queue, dt, true);
+        Some(f(&mut res.scene, &rs))
     }
 
     /// Write the evaluated vertices to the GPU layers, once per evaluation. Picking and the
@@ -964,8 +1099,57 @@ impl HeartView {
 
     // ---- UI ------------------------------------------------------------------------------
 
-    /// Colour-map, tool and anatomy controls (left panel of the Simulator tab).
-    pub fn controls(&mut self, ui: &mut egui::Ui) {
+    /// The whole left panel of the Simulator: [`Self::controls`] and the vector overlay's section,
+    /// in a vertical scroll area whose bar stays visible while the content overflows (on a short
+    /// window the sections run past the bottom; the bar says so).
+    pub fn controls_panel(
+        &mut self,
+        ui: &mut egui::Ui,
+        sections: &mut SimulatorSections,
+        vector: &mut crate::vector_overlay::VectorOverlay,
+    ) {
+        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                self.controls(ui, sections);
+                let mut alphas: Vec<&mut f32> = self.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
+                heartsim_ui::collapsible_section(ui, &mut sections.vector, &t!("vector-heading"), |ui| {
+                    vector.controls(ui, &mut alphas);
+                });
+            });
+    }
+
+    /// Colour-map, tool, anatomy and wall-motion controls (left panel of the Simulator tab), as
+    /// collapsible sections whose open state is `sections` (the caller stores it in the settings).
+    /// The caller puts this in a vertical scroll area.
+    pub fn controls(&mut self, ui: &mut egui::Ui, sections: &mut SimulatorSections) {
+        // the layer list names follow the language; an unknown part keeps its pack id
+        for l in &mut self.panel.layers {
+            l.display = pretty_name(&l.name);
+        }
+        heartsim_ui::collapsible_section(ui, &mut sections.colour, &t!("heart-section-colour"), |ui| {
+            self.colour_section(ui);
+        });
+        heartsim_ui::collapsible_section(ui, &mut sections.tool, &t!("heart-click"), |ui| {
+            self.tool_section(ui);
+        });
+        heartsim_ui::collapsible_section(ui, &mut sections.layers, &t!("heart-section-layers"), |ui| {
+            let r = ui.scope(|ui| anatomy_panel(ui, &mut self.panel));
+            heartsim_ui::highlight::mark(&r.response, "camera_views");
+            if let Some(c) = r.inner {
+                self.camera_command = Some(c);
+            }
+        });
+        if self.motion.is_some() {
+            heartsim_ui::collapsible_section(ui, &mut sections.motion, &t!("heart-section-motion"), |ui| {
+                self.motion_controls(ui);
+            });
+        }
+    }
+
+    /// The 3-D activation switch, the colour mode, its window and the wavefront outline.
+    fn colour_section(&mut self, ui: &mut egui::Ui) {
         let mut tier1 = self.tier1;
         if ui
             .checkbox(&mut tier1, t!("heart-tier1"))
@@ -1007,11 +1191,16 @@ impl HeartView {
                 self.mode == ColourMode::Voltage,
                 egui::Checkbox::new(&mut self.wavefront, t!("heart-wavefront")),
             );
-            ui.separator();
-            ui.strong(t!("heart-click"));
+        });
+    }
+
+    /// Stimulate or ablate on a click, the lesion radius, and clearing the ablation.
+    fn tool_section(&mut self, ui: &mut egui::Ui) {
+        ui.add_enabled_ui(self.tier1, |ui| {
             ui.horizontal(|ui| {
                 ui.radio_value(&mut self.tool, ClickTool::Stimulate, t!("heart-stimulate"));
-                ui.radio_value(&mut self.tool, ClickTool::Ablate, t!("heart-ablate"));
+                ui.radio_value(&mut self.tool, ClickTool::Ablate, t!("heart-ablate"))
+                    .on_hover_text(t!("heart-shift-click"));
             });
             heartsim_ui::controls::slider(
                 ui,
@@ -1019,23 +1208,14 @@ impl HeartView {
                 egui::Slider::new(&mut self.ablate_radius_mm, 2.0..=15.0),
                 heartsim_ui::controls::MM,
             );
-            ui.horizontal(|ui| {
-                ui.label(t!("heart-shift-click"));
-                if ui.button(t!("heart-clear-ablation")).clicked() {
-                    self.clear_ablation();
-                }
-            });
+            heartsim_ui::helper_text(ui, t!("heart-shift-click"));
+            if ui.button(t!("heart-clear-ablation")).clicked() {
+                self.clear_ablation();
+            }
             if let Some(s) = &self.status {
                 ui.label(s);
             }
         });
-        ui.separator();
-        self.motion_controls(ui);
-        let r = ui.scope(|ui| anatomy_panel(ui, &mut self.panel));
-        heartsim_ui::highlight::mark(&r.response, "camera_views");
-        if let Some(c) = r.inner {
-            self.camera_command = Some(c);
-        }
     }
 
     /// The "Wall motion" switch, the exaggeration slider and the read-out card (B30). Absent when
@@ -1063,7 +1243,7 @@ impl HeartView {
             m.on = on;
         }
         if reduced {
-            ui.weak(t!("heart-motion-reduced"));
+            heartsim_ui::helper_text(ui, t!("heart-motion-reduced"));
         }
         ui.add_enabled_ui(on, |ui| {
             heartsim_ui::controls::slider(
@@ -1110,11 +1290,11 @@ impl HeartView {
                     for (label, value) in rows {
                         ui.label(label);
                         ui.label(value);
-                        ui.weak(&model);
+                        heartsim_ui::helper_text(ui, model.clone());
                         ui.end_row();
                     }
                 });
-            ui.small(t!("heart-motion-note"));
+            heartsim_ui::helper_text(ui, t!("heart-motion-note"));
         });
     }
 
@@ -1151,7 +1331,7 @@ impl HeartView {
         let scene = &mut res.scene;
         let camera_basis = scene.camera.basis();
         self.upload_motion(scene, &rs.queue);
-        self.sync_scene(scene, &rs.queue, dt);
+        self.sync_scene(scene, &rs.queue, dt, false);
         if let Some(id) = self.lead_set {
             if self.overlay_glyphs.is_empty() {
                 scene.set_spheres(&rs.device, &rs.queue, id, &self.lead_glyphs);
@@ -1282,7 +1462,7 @@ impl HeartView {
     }
 
     /// Copy display state into the renderer and upload this frame's scalars.
-    fn sync_scene(&mut self, scene: &mut SceneRenderer, queue: &wgpu::Queue, dt: f32) {
+    fn sync_scene(&mut self, scene: &mut SceneRenderer, queue: &wgpu::Queue, dt: f32, own_camera: bool) {
         if self.luts_dirty {
             for id in [LutId::Voltage, LutId::Isochrone, LutId::Apd] {
                 scene.set_lut(queue, id, &id.table(self.lut_style));
@@ -1321,6 +1501,10 @@ impl HeartView {
                         ..Contour::default()
                     });
             }
+        }
+        if own_camera {
+            // the page that called this keeps its own camera and clip plane
+            return;
         }
         match self.camera_command.take() {
             Some(CameraCommand::Preset(p)) => scene.camera.apply_preset(p),

@@ -1,6 +1,7 @@
 mod bridge;
 mod calc;
 mod content;
+mod echo;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -35,6 +36,16 @@ enum Cmd {
         /// Language of names and findings: en or it.
         #[arg(long, default_value = "en")]
         lang: String,
+    },
+    /// The echo simulator's standard views (brief B33): `echo views` lists each view with whether the
+    /// model can show it, its reference probe pose, its score, how much of the sector bone and lung
+    /// hide, and where it is described in the ASE guideline. A regression aid for the view targets.
+    Echo {
+        /// `views`.
+        what: String,
+        /// The `assets/` directory (default: `$HEARTSIM_ASSETS`, `./assets`, the source tree).
+        #[arg(long)]
+        assets: Option<PathBuf>,
     },
     /// Synthesise a Tier-0 12-lead ECG and write it as CSV (ms, I..V6 in mV).
     Synth {
@@ -515,6 +526,7 @@ fn main() -> Result<()> {
                 println!();
             }
         }
+        Cmd::Echo { what, assets } => print!("{}", echo::run(&what, assets.as_deref())?),
         Cmd::Synth {
             bpm,
             seconds,

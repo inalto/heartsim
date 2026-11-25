@@ -40,13 +40,26 @@ Tutorial(
   tutorials as soon as the engines support them.
 * `Ui(…)`: application commands.
   * `LoadScenario("<scenario id>")`: a rhythm from `assets/scenarios/` (restarts the clock).
-  * `FocusPanel(Simulator | TwelveLead | HeartVector | AxisTrainer | AxisQuiz | Electrodes | RhythmQuiz | Tutorials)`.
+  * `FocusPanel(Simulator | TwelveLead | HeartVector | AxisTrainer | AxisQuiz | Electrodes | RhythmQuiz | Tutorials | SoundTrainer | AuscultationQuiz | Echo)`.
   * `Highlight("<tool id>")`: outline a control until the next page. Ids: `rhythm_picker`, `pause`, `speed`, `pacemaker`,
     `lead_selector`, `camera_views`, `timeline_editor` (`heartsim_ui::highlight::TOOLS`).
   * `CameraPreset(Ap | Pa | Lao | Rao | Left | Cranial | Caudal | Frame)`.
   * `SetSpeed(0.2)`, `Pause`, `Resume`, `SetQrsAxis(-60.0)`, `SelectLead(II)`.
+  * `ProbeAtWindow(Parasternal | Apical | Subcostal | Suprasternal)`: puts the Echo page's probe at that window's starting pose (B33).
+  * `ProbeAtView("<view id>")`: puts the probe at the reference pose of a standard view, to demonstrate it before the learner looks
+    for it (B33). `SetEchoView("<view id>")` chooses that view in the Echo page's Standard views picker. The ids are the
+    `heartsim_echo::ViewId::id` strings: `plax`, `rv_inflow`, `rv_outflow`, `psax_av`, `psax_mv`, `psax_papillary`, `psax_apex`,
+    `a4c`, `a5c`, `a2c`, `a3c`, `a4c_rv`, `sc_4c`, `sc_ivc`, `ssn_arch`. `heartsim-cli run-tutorial` refuses an unknown id.
   * `WaitForEvent(ElapsedMs(ms) | Qrs)`: hold the remaining actions until that much simulated time has passed, or until the next
     ventricular activation. Waits measure simulated time, so do not `Pause` before a wait.
+
+## View checks (B33)
+
+A page may carry a `view_check` field, `view_check: Some(ViewCheck(view: "plax"))`, next to or instead of its `check`. In
+self-study the next page opens once the learner has found the view on the Echo page: its score held at or above 0.8 for one
+second (`ViewTolerances::found_threshold` and `found_hold_s` in `crates/heartsim-echo/src/views.rs`). The field takes a view id
+from the list above. `view_check` and the probe actions do not count as an action that changes the simulation, so a page still
+needs a `LoadScenario` or another `Sim`, `StartReentry` or `SetQrsAxis` action (`Step::changes_simulation`).
 
 ## Modes and progress
 

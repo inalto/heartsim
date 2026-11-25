@@ -16,6 +16,7 @@ pub mod lut;
 pub mod pick;
 pub mod scalar_map;
 pub mod scene;
+pub mod section;
 
 pub use camera::{CameraPreset, OrbitCamera, oblique_yaw_deg};
 pub use glyph::{GlyphInstance, GlyphSet, GlyphSetId};
@@ -26,3 +27,4 @@ pub use scalar_map::{VertexSmoother, map_hoods};
 pub use scene::{
     ClipPlane, SceneOptions, SceneRenderer, SceneSettings, SceneUniforms, ScreenLabel, best_msaa_samples,
 };
+pub use section::{DEFAULT_OVERLAY, PALETTE_SLOTS, SectionLayout, SectionMode, SectionRenderer};

@@ -205,17 +205,19 @@ fn no_hard_coded_label_text_in_panels() {
 fn toolbar_controls_have_accessible_names() {
     i18n::set_language("en");
     let mut speed = 1.0;
-    let mut harness = Harness::new_ui(move |ui| {
-        transport_controls(ui, false, &mut speed);
-    });
+    let mut harness = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui(move |ui| {
+            transport_controls(ui, false, &mut speed);
+        });
     harness.run();
     assert!(
         harness.query_by_label("Pause").is_some(),
         "pause button has no accessible name"
     );
-    // The speed slider and its drag-value box are both labelled "speed", so accept several matches.
+    // The speed slider and its drag-value box are both labelled "Speed", so accept several matches.
     assert!(
-        harness.query_all_by_label("speed").next().is_some(),
+        harness.query_all_by_label("Speed").next().is_some(),
         "speed slider has no accessible name"
     );
 }
@@ -224,9 +226,11 @@ fn toolbar_controls_have_accessible_names() {
 fn switching_language_relabels_the_toolbar() {
     i18n::set_language("en");
     let mut speed = 1.0;
-    let mut harness = Harness::new_ui(move |ui| {
-        transport_controls(ui, false, &mut speed);
-    });
+    let mut harness = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui(move |ui| {
+            transport_controls(ui, false, &mut speed);
+        });
     harness.run();
     assert!(harness.query_by_label("Pause").is_some());
 
@@ -241,7 +245,7 @@ fn switching_language_relabels_the_toolbar() {
         "English label still present after switch"
     );
     assert!(
-        harness.query_all_by_label("velocità").next().is_some(),
+        harness.query_all_by_label("Velocità").next().is_some(),
         "slider did not relabel to Italian"
     );
 

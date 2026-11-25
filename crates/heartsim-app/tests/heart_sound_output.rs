@@ -84,6 +84,7 @@ fn harness(play: Option<bool>, info: Option<HeartSoundInfo>, settings: Settings)
         view.heart_sound_status = i.status;
     }
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(800.0, 1000.0))
         .build_ui_state(
             |ui, m: &mut Model| {

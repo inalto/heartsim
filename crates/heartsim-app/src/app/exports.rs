@@ -89,7 +89,7 @@ impl HeartSimApp {
                 ui.checkbox(&mut self.exports.as_displayed, t!("export-as-displayed"))
                     .on_hover_text(t!("export-as-displayed-hint"));
                 if self.exports.as_displayed && !self.ecg.display_config().is_identity() {
-                    ui.weak(t!("export-as-displayed-active"));
+                    heartsim_ui::helper_text(ui, t!("export-as-displayed-active"));
                 }
             });
             ui.end_row();
@@ -97,12 +97,15 @@ impl HeartSimApp {
             ui.text_edit_singleline(&mut self.exports.dir);
             ui.end_row();
         });
-        ui.weak(t!(
-            "export-settings-summary",
-            speed = self.ecg.style.mm_per_s.to_string(),
-            gain = self.ecg.style.mm_per_mv.to_string(),
-            order = self.ecg.order.label()
-        ));
+        heartsim_ui::helper_text(
+            ui,
+            t!(
+                "export-settings-summary",
+                speed = self.ecg.style.mm_per_s.to_string(),
+                gain = self.ecg.style.mm_per_mv.to_string(),
+                order = self.ecg.order.label()
+            ),
+        );
         ui.horizontal(|ui| {
             let reviewing = self.exports.review.is_some();
             if ui
@@ -145,7 +148,7 @@ impl HeartSimApp {
                 self.import(&p);
             }
         });
-        ui.weak(t!("import-drop-hint"));
+        heartsim_ui::helper_text(ui, t!("import-drop-hint"));
         if let Some(r) = &self.exports.review {
             let text = t!(
                 "export-review-length",

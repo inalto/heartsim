@@ -183,8 +183,12 @@ pub fn ischaemia_panel(
         branch = crate::labels::branch_name(state.branch),
         id = state.branch.id()
     ));
-    ui.add(egui::Slider::new(&mut state.severity, 0.0..=1.0).text(t!("ischaemia-severity")))
-        .on_hover_text(t!("ischaemia-severity-hint"));
+    crate::widgets::slider_row(
+        ui,
+        &t!("ischaemia-severity"),
+        egui::Slider::new(&mut state.severity, 0.0..=1.0),
+    )
+    .on_hover_text(t!("ischaemia-severity-hint"));
     ui.checkbox(&mut state.infarct, t!("ischaemia-infarct"));
     let kind = if state.infarct {
         LesionKind::Infarct

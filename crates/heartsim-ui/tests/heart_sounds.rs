@@ -184,6 +184,7 @@ struct Model {
 fn the_display_popup_switches_the_heart_sounds_on() {
     i18n::set_language("en");
     let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1300.0, 600.0))
         .build_ui_state(
             |ui, m: &mut Model| {
@@ -222,6 +223,7 @@ fn the_play_switch_is_in_the_display_popup_only_with_audio() {
         let mut view = EcgView::new();
         view.play_heart_sounds = play;
         Harness::builder()
+            .with_context_setup(heartsim_ui::theme::apply_to_context)
             .with_size(egui::vec2(1300.0, 700.0))
             .build_ui_state(
                 |ui, m: &mut Model| {
@@ -309,6 +311,7 @@ fn the_lane_button_plays_from_the_cursor_or_between_the_calipers() {
     view.show_heart_sounds = true;
     view.play_heart_sounds = Some(true);
     let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1400.0, 400.0))
         .build_ui_state(
             |ui, m: &mut LaneModel| {

@@ -56,3 +56,59 @@ fn no_shader_uses_what_webgl2_lacks() {
         }
     }
 }
+
+/// The echo page's scan-conversion shader (briefs B31 and B32): one uniform block, two
+/// non-filterable float textures (the label image and the grey image) read with `textureLoad`
+/// (the grey image is interpolated by hand); no integer textures (both are `R8Unorm`), no
+/// derivatives, no sampler, no storage of any kind. The generic test above covers the banned
+/// constructs; this one pins what the shader does use.
+#[test]
+fn the_section_shader_is_covered_and_stays_inside_what_webgl2_has() {
+    let all = shaders();
+    let (_, src) = all
+        .iter()
+        .find(|(n, _)| n == "section.wgsl")
+        .expect("section.wgsl is in the shader directory");
+    let code = code(src);
+    assert!(code.contains("var<uniform>"), "uniform block");
+    assert!(
+        code.contains("textureLoad"),
+        "the labels are read without filtering"
+    );
+    for binding in [
+        "@group(0) @binding(0) var<uniform> section",
+        "@group(0) @binding(1) var labels: texture_2d<f32>",
+        "@group(0) @binding(2) var greys: texture_2d<f32>",
+    ] {
+        assert!(code.contains(binding), "section.wgsl: `{binding}`");
+    }
+    assert_eq!(
+        code.matches("textureLoad").count(),
+        2,
+        "one read of the labels, one helper that reads the grey image"
+    );
+    assert!(
+        !code.contains("@binding(3)"),
+        "no third resource: three bindings are what the layout declares"
+    );
+    for (needle, why) in [
+        (
+            "texture_2d<u32>",
+            "integer textures are not part of the contract: the labels are R8Unorm",
+        ),
+        (
+            "texture_2d<i32>",
+            "integer textures are not part of the contract: the labels are R8Unorm",
+        ),
+        ("textureSample", "no filtered reads: labels are categories"),
+        ("dpdx", "no derivatives"),
+        ("dpdy", "no derivatives"),
+        ("fwidth", "no derivatives"),
+        ("sampler", "no sampler is bound"),
+        ("textureDimensions", "the sizes come from the uniform block"),
+    ] {
+        assert!(!code.contains(needle), "section.wgsl: `{needle}`: {why}");
+    }
+    // the palette is a uniform array: far below the 16 KiB WebGL2 guarantees for a uniform block
+    assert!(code.contains("array<vec4<f32>, 64>"));
+}

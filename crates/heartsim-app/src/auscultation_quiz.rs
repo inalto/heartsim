@@ -12,6 +12,7 @@
 //! auscultation cases only ([`ScenarioLibrary::auscultation_pool`]), and a clip is an offline
 //! recording. The Rhythm Quiz pool is untouched.
 
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use std::rc::Rc;
 
 use eframe::egui;
@@ -457,15 +458,29 @@ impl AuscultationQuiz {
     ) -> Option<OpenInSimulator> {
         let mut open = None;
         let sound = sound_available(player);
-        egui::Panel::left("auscultation_quiz_steps")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(380.0)
-            .show(ui, |ui| {
+        let (question_name, listen_name) = (t!("pane-question"), t!("pane-listen"));
+        let spec = PaneSpec {
+            id: "auscultation_quiz",
+            left: Some(Side {
+                id: "auscultation_quiz_steps",
+                default_px: 380.0,
+                cap_px: 100_000.0,
+                name: &question_name,
+            }),
+            right: None,
+            centre: &listen_name,
+            // on a phone the question and the listening page are two segments
+            narrow: Narrow::Segmented { start: Pane::Left },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     open = self.steps_ui(ui, library, player);
                 });
-            });
-        egui::CentralPanel::default().show(ui, |ui| self.listen_ui(ui, library, player, style, sound));
+            }
+            Pane::Centre => self.listen_ui(ui, library, player, style, sound),
+            Pane::Right => {}
+        });
         open
     }
 
@@ -496,10 +511,19 @@ impl AuscultationQuiz {
             } else {
                 t!("app-quiz-new")
             };
-            if ui
-                .add_enabled(library.auscultation_pool().len() >= 2, egui::Button::new(label))
-                .clicked()
-            {
+            // the one primary action of this panel: the next question when none is open or the
+            // last is answered; the features and diagnosis steps have their own main action
+            let next_is_main = self.question.is_none() || self.step == Step::Feedback;
+            let next = ui
+                .add_enabled_ui(library.auscultation_pool().len() >= 2, |ui| {
+                    if next_is_main {
+                        heartsim_ui::primary_button(ui, label)
+                    } else {
+                        ui.button(label)
+                    }
+                })
+                .inner;
+            if next.clicked() {
                 self.next_question(library, player);
             }
             ui.label(self.score_line());
@@ -524,7 +548,7 @@ impl AuscultationQuiz {
                     }
                 }
                 ui.add_space(6.0);
-                if ui.button(t!("aq-features-done")).clicked() {
+                if heartsim_ui::primary_button(ui, t!("aq-features-done")).clicked() {
                     self.submit_features(library);
                 }
             }
@@ -583,7 +607,7 @@ impl AuscultationQuiz {
                         ui.label(format!("{mark} {}: {heard}", item.label()));
                     }
                     if !e.scored[FeatureItem::SplitS2.index()] {
-                        ui.weak(t!("aq-split-not-scored"));
+                        heartsim_ui::helper_text(ui, t!("aq-split-not-scored"));
                     }
                 }
                 ui.separator();
@@ -639,11 +663,19 @@ impl AuscultationQuiz {
             } else {
                 t!("st-play")
             };
-            if ui
-                .add_enabled(sound, egui::Button::new(label))
-                .on_disabled_hover_text(t!("st-no-sound"))
-                .clicked()
-            {
+            // Play is the one primary action of the listening panel; Stop is a plain button
+            let playing = self.playing;
+            let play = ui
+                .add_enabled_ui(sound, |ui| {
+                    if playing {
+                        ui.button(label)
+                    } else {
+                        heartsim_ui::primary_button(ui, label)
+                    }
+                })
+                .inner
+                .on_disabled_hover_text(t!("st-no-sound"));
+            if play.clicked() {
                 if self.playing {
                     self.stop(player);
                 } else {
@@ -686,9 +718,9 @@ impl AuscultationQuiz {
         if (self.listening, self.half_speed) != old && self.playing {
             self.play(library, player, phase);
         }
-        ui.weak(t!("st-model-note"));
+        heartsim_ui::helper_text(ui, t!("st-model-note"));
         if !sound && self.step != Step::Feedback {
-            ui.weak(t!("aq-no-sound"));
+            heartsim_ui::helper_text(ui, t!("aq-no-sound"));
         }
         ui.separator();
         let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());

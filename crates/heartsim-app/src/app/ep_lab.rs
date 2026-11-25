@@ -9,6 +9,7 @@
 use super::reentry::{FRAME_BUDGET, Runtime, Stopwatch};
 use super::{HeartSimApp, SAMPLE_RATE_HZ};
 use crate::assets::AssetBundle;
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use crate::scenarios::Timeline;
 #[cfg(feature = "native")]
 use crate::scenarios::default_scenario_dir;
@@ -446,10 +447,50 @@ impl HeartSimApp {
         let channels: Vec<String> = act.recorder.channels().iter().map(|c| c.label.clone()).collect();
         let landmarks: Vec<String> = act.lab.cloud().landmarks.keys().cloned().collect();
         let panel = &mut self.ep.panel;
-        egui::Panel::left("ep_controls")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(320.0)
-            .show(ui, |ui| {
+        let surface: Vec<SurfaceRow<'_>> = SURFACE_LEADS
+            .iter()
+            .filter_map(|l| {
+                let i = Lead::ALL.iter().position(|x| x == l)?;
+                Some((l.label(), self.rings.get(i)?))
+            })
+            .collect();
+        let now_ms = act.lab.now().0;
+        let style = self.ecg.style;
+        // catheters and lesions on the heart
+        let pace_midpoint = act
+            .recorder
+            .channels()
+            .get(panel.pace_channel)
+            .and_then(|c| act.catheters.get(c.catheter).map(|k| k.pair_midpoint(c.pair)));
+        let (spheres, tubes) = catheter_glyphs(&act.catheters, act.lab.lesions().lesions(), pace_midpoint);
+        if let Some(h) = &mut self.heart {
+            h.set_catheter_glyphs(spheres, tubes);
+        }
+        let (controls_name, heart_name, egm_name) = (
+            t!("app-sim-view-controls"),
+            t!("app-sim-view-heart"),
+            t!("pane-electrograms"),
+        );
+        let spec = PaneSpec {
+            id: "ep_lab",
+            left: Some(Side {
+                id: "ep_controls",
+                default_px: 320.0,
+                cap_px: 100_000.0,
+                name: &controls_name,
+            }),
+            right: Some(Side {
+                id: "ep_egm",
+                default_px: 620.0,
+                cap_px: 100_000.0,
+                name: &egm_name,
+            }),
+            centre: &heart_name,
+            // on a phone one pane at a time: the controls, the heart or the electrograms
+            narrow: Narrow::Segmented { start: Pane::Left },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     catheter_panel(
                         ui,
@@ -481,37 +522,16 @@ impl HeartSimApp {
                         &mut commands,
                     );
                 });
-            });
-        let surface: Vec<SurfaceRow<'_>> = SURFACE_LEADS
-            .iter()
-            .filter_map(|l| {
-                let i = Lead::ALL.iter().position(|x| x == l)?;
-                Some((l.label(), self.rings.get(i)?))
-            })
-            .collect();
-        let now_ms = act.lab.now().0;
-        let style = self.ecg.style;
-        egui::Panel::right("ep_egm")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(620.0)
-            .show(ui, |ui| {
+            }
+            Pane::Right => {
                 egm_controls(ui, panel, act.recorder.conduction_intervals());
                 interval_panel(ui, &act.recorder, act.lab.protocol_outcome());
                 egm_stack(ui, panel, &surface, &act.recorder, &style, now_ms);
-            });
-        // catheters and lesions on the heart
-        let pace_midpoint = act
-            .recorder
-            .channels()
-            .get(panel.pace_channel)
-            .and_then(|c| act.catheters.get(c.catheter).map(|k| k.pair_midpoint(c.pair)));
-        let (spheres, tubes) = catheter_glyphs(&act.catheters, act.lab.lesions().lesions(), pace_midpoint);
-        if let Some(h) = &mut self.heart {
-            h.set_catheter_glyphs(spheres, tubes);
-        }
-        egui::CentralPanel::default().show(ui, |ui| {
-            if let Some(h) = &mut self.heart {
-                h.viewport(ui, &mut self.engine);
+            }
+            Pane::Centre => {
+                if let Some(h) = &mut self.heart {
+                    h.viewport(ui, &mut self.engine);
+                }
             }
         });
         self.apply_ep_commands(commands);

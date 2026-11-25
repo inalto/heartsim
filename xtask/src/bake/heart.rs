@@ -66,7 +66,25 @@ pub struct BakedHeart {
     /// Mitral-plane centre to the farthest LV node, mm: the size measure the torso is scaled to
     /// (the same measure is taken on the torso subject's own LV).
     pub lv_length_mm: f32,
+    /// The transform from the dataset's file frame to the pack's heart frame (what every mesh and
+    /// cell went through), for the label-volume bake.
+    pub to_pack: FileToPack,
     pub report: Vec<String>,
+}
+
+/// File frame (DICOM LPS, mm) → heart frame: `rotation · (r1 · (p − file_centre) − canonical_centroid)`.
+#[derive(Debug, Clone, Copy)]
+pub struct FileToPack {
+    pub r1: Quat,
+    pub file_centre: Vec3,
+    pub canonical_centroid: Vec3,
+    pub rotation: Quat,
+}
+
+impl FileToPack {
+    pub fn apply(&self, p: Vec3) -> Vec3 {
+        self.rotation * (self.r1 * (p - self.file_centre) - self.canonical_centroid)
+    }
 }
 
 const CONDUCTION_SPACING_MM: f32 = 1.5;
@@ -1236,6 +1254,12 @@ pub fn bake_heart(mesh: &TetMesh, opts: HeartOptions) -> Result<BakedHeart> {
         pmj_seeds,
         aha_segments: cells.aha,
         lv_length_mm,
+        to_pack: FileToPack {
+            r1,
+            file_centre: vc_file,
+            canonical_centroid: centroid,
+            rotation,
+        },
         report,
     })
 }

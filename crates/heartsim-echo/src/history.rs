@@ -141,6 +141,13 @@ impl MotionHistory {
         self
     }
 
+    /// Respiratory phase at `t_ms` (`0..1`) on the clock this record was given, so a time other
+    /// than the drawn one (an M-mode column) breathes as the engine does.
+    #[must_use]
+    pub fn respiratory_phase(&self, t_ms: f64) -> f64 {
+        self.respiration.phase(self.respiration_rate_bpm, t_ms)
+    }
+
     /// The engine's respiratory clock (breath-holds), as handed to the heart sounds.
     pub fn set_respiration(&mut self, clock: RespiratoryClock) {
         self.respiration = clock;

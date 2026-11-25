@@ -1,4 +1,4 @@
-//! Keyboard shortcuts (B19): Space pauses, ←/→ scrub while paused, +/− change speed, 1–9 and 0 open tabs.
+//! Keyboard shortcuts (B19): Space pauses, ←/→ scrub while paused (not on the Echo page, where the arrows slide the probe), +/− change speed, 1–9 and 0 open tabs.
 //!
 //! Shortcuts are ignored while a text box or any other widget has keyboard focus, so typing and
 //! Tab/Space on a focused button keep their usual meaning.
@@ -44,7 +44,8 @@ impl HeartSimApp {
         if space {
             self.ecg.toggle_pause();
         }
-        if self.ecg.is_paused() {
+        // on the Echo page the arrows belong to the probe (the strip's own scrub bar still scrubs)
+        if self.ecg.is_paused() && self.tab != Tab::Echo {
             let step = if shift { SCRUB_STEP_SHIFT_MS } else { SCRUB_STEP_MS };
             // scrubbing back in time is a positive offset, so ← goes back and → comes forward
             if left {

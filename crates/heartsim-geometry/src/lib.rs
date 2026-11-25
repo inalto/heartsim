@@ -18,13 +18,15 @@ pub mod primitives;
 pub mod procedural;
 pub mod spatial;
 pub mod territory;
+pub mod volume;
 
 pub use catheter::{CardiacChamber, Catheter, CatheterAnatomy, CatheterKind, CatheterSite, Cavity};
 pub use cloud::{CellCloud, K_NEIGHBOURS, Neighbour};
 pub use electrodes::ElectrodeSet;
 pub use hood::{Hood, compute_hoods};
 pub use mesh::{TriMesh, Vertex};
-pub use pack::{AnatomyPack, Landmarks, PACK_FORMAT_VERSION, PackError, PackManifest};
+pub use pack::{AnatomyPack, LabelVolumes, Landmarks, PACK_FORMAT_VERSION, PackError, PackManifest};
 pub use procedural::{IdealisedHeart, MeshKind, NamedMesh, Resolution, idealised_heart};
 pub use spatial::HashGrid;
 pub use territory::Territory;
+pub use volume::{Label, LabelVolume, VolumeError};

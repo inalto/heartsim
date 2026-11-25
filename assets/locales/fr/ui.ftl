@@ -2,5 +2,8 @@
 
 transport-run = Lecture
 transport-pause = Pause
-transport-speed = vitesse
+transport-speed = Vitesse
 pacer-title = Stimulateur
+
+## Strip toolbar on a phone-narrow window
+ecg-lead = Dérivation

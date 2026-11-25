@@ -5,7 +5,7 @@
 //! unchanged.
 
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{By, NodeT, Queryable};
 use heartsim_app::auscultation_quiz::{
     AuscultationQuiz, FeatureItem, Features, Step, expected_features, make_question, score_features,
 };
@@ -179,6 +179,7 @@ fn page(player: HeartSoundPlayer) -> Harness<'static, Page> {
     let mut player = player;
     quiz.next_question(&library, &mut player);
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1200.0, 800.0))
         .build_ui_state(
             |ui, p: &mut Page| {
@@ -247,4 +248,34 @@ fn without_sound_the_trace_is_shown_from_the_start_and_the_name_is_not() {
     let _ = h.get_by_label_contains("No sound output here, so the trace is shown from the start");
     assert!(h.query_by_label(&title).is_none(), "the name stays hidden");
     assert!(!h.state().quiz.name_visible());
+}
+
+/// The primary actions on the page (by label, in tree order): the rule of use allows one per panel.
+fn primary_names<S>(h: &Harness<'_, S>) -> Vec<String> {
+    h.query_all(By::new())
+        .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+        .map(|n| n.accesskit_node().label().unwrap_or_default())
+        .collect()
+}
+
+/// One primary action per panel: the features step has its own (the diagnosis follows it), the
+/// listening panel has Play; Next question is plain until the question is answered.
+#[test]
+fn the_auscultation_quiz_has_one_primary_action_per_panel_that_follows_the_step() {
+    let mut h = page(HeartSoundPlayer::with_sink(Box::new(FakeSink::new())));
+    h.run();
+    assert_eq!(primary_names(&h), ["Done: choose the diagnosis", "Play"]);
+    h.get_by_label("Done: choose the diagnosis").click();
+    h.run();
+    assert_eq!(
+        primary_names(&h),
+        ["Play"],
+        "the diagnosis choices are the action"
+    );
+    let q = h.state().quiz.question.clone().unwrap();
+    let other = *q.options.iter().find(|&&i| i != q.answer).unwrap();
+    let title = h.state().library.entries[other].scenario.title.clone();
+    h.get_by_label(&title).click();
+    h.run();
+    assert_eq!(primary_names(&h), ["Next question", "Play"]);
 }

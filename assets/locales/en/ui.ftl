@@ -119,13 +119,13 @@ drug-dose-given = Dose given { $dose } × standard, { $ago } ago; effect { $effe
 
 ## Anatomy panel (anatomy_panel.rs)
 anatomy-layers = Layers
-anatomy-opacity = opacity
+anatomy-opacity = Opacity
 anatomy-labels = Labels
 anatomy-cut-away = Cut-away
-anatomy-depth = depth
+anatomy-depth = Depth
 anatomy-view = View
 anatomy-fit = Fit
-anatomy-oblique = oblique
+anatomy-oblique = Oblique
 anatomy-auto-rotate = Auto-rotate
 
 ## Pacemaker panel (pacer_panel.rs)
@@ -259,7 +259,7 @@ timeline-hint = Scenario timeline: one tick per action, red = now. Click a tick 
 ## Transport controls (transport.rs)
 transport-run = Run
 transport-pause = Pause
-transport-speed = speed
+transport-speed = Speed
 
 ## Colour bar and defibrillator button
 colour-min = min
@@ -305,3 +305,12 @@ ecg-art-mains = Mains hum
 ecg-art-muscle = Muscle
 ecg-art-intensity = Intensity
 orientation-hint = Orientation: L / R = the patient's left / right, S / I = superior (towards the head) / inferior, A / P = anterior (front) / posterior (back). It turns with the view.
+
+## Shared primitives (widgets.rs)
+ui-more = More
+ui-less = Less
+ui-status-met = Met
+ui-status-not-met = Not met
+
+## Strip toolbar on a phone-narrow window
+ecg-lead = Lead

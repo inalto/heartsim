@@ -261,7 +261,7 @@ impl Updater {
                         file = asset.name.as_str(),
                         size = megabytes(asset.size)
                     ));
-                    ui.weak(t!("update-modal-note"));
+                    heartsim_ui::helper_text(ui, t!("update-modal-note"));
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
                         if ui.button(t!("update-modal-start")).clicked() {

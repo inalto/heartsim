@@ -18,6 +18,7 @@ struct Model {
 fn harness_sized(lang: &str, width: f32, page: EchoCalcPage, hr: Option<f64>) -> Harness<'static, Model> {
     i18n::set_language(lang);
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(width, 3000.0))
         .build_ui_state(|ui, m: &mut Model| m.page.ui(ui, m.hr), Model { page, hr })
 }
@@ -364,4 +365,23 @@ fn every_calculator_text_has_glyphs_in_the_app_fonts() {
         }
     }
     assert!(missing.is_empty(), "no glyph for {missing:?}");
+}
+
+/// The italic names of the list are explained by a legend line, in both languages.
+#[test]
+fn the_list_explains_what_italic_means() {
+    for (lang, legend) in [
+        (
+            "en",
+            "Italic entries are formula only: the arithmetic is shown, with no interpretation.",
+        ),
+        (
+            "it",
+            "Le voci in corsivo sono solo formula: è mostrato il calcolo, senza interpretazione.",
+        ),
+    ] {
+        let mut h = harness(lang);
+        h.run();
+        let _ = h.get_by_label(legend);
+    }
 }

@@ -567,3 +567,121 @@ mod body_regions {
         assert_eq!(body_region(head), BodyRegion::Trunk, "{head}");
     }
 }
+
+/// Brief B31: pack format 3 carries the two label volumes; their files match the manifest's sizes
+/// and CRC-32s, they decode, and they hold what the echo cross-section expects.
+#[test]
+fn default_pack_has_its_label_volumes() {
+    use heartsim_geometry::{Label, LabelVolume};
+    let dir = default_pack_dir();
+    let pack = AnatomyPack::load(&dir).expect("default pack");
+    assert_eq!(pack.manifest.format_version, 3);
+    let vols = pack
+        .volumes
+        .as_ref()
+        .expect("format 3: the default pack has its label volumes");
+    for (file, vol, spacing) in [
+        ("labels_heart.bin", &vols.heart, 1.0f32),
+        ("labels_thorax.bin", &vols.thorax, 2.0f32),
+    ] {
+        let bytes = std::fs::read(dir.join(file)).expect("volume file");
+        let entry = pack.manifest.files[file];
+        assert_eq!(bytes.len() as u64, entry.bytes, "{file}: size");
+        assert_eq!(crc32fast::hash(&bytes), entry.crc32, "{file}: CRC-32");
+        assert_eq!(&LabelVolume::decode(&bytes).expect("decodes"), vol);
+        assert_eq!(vol.spacing_mm, spacing);
+        eprintln!(
+            "{file}: {} bytes, {}×{}×{} voxels of {} mm",
+            bytes.len(),
+            vol.dims[0],
+            vol.dims[1],
+            vol.dims[2],
+            vol.spacing_mm
+        );
+    }
+    for l in [
+        Label::LvMyocardium,
+        Label::RvMyocardium,
+        Label::LaMyocardium,
+        Label::RaMyocardium,
+        Label::LvBlood,
+        Label::RvBlood,
+        Label::LaBlood,
+        Label::RaBlood,
+        Label::AortaWall,
+        Label::AortaLumen,
+        Label::PulmonaryArteryWall,
+        Label::PulmonaryArteryLumen,
+    ] {
+        assert!(vols.heart.count(l) > 0, "heart box has no {}", l.name());
+    }
+    for l in [
+        Label::Bone,
+        Label::Lung,
+        Label::Liver,
+        Label::SoftTissue,
+        Label::ThoracicBlood,
+        Label::Outside,
+    ] {
+        assert!(vols.thorax.count(l) > 0, "thorax box has no {}", l.name());
+    }
+    // the designed labels are never stored
+    for v in [&vols.heart, &vols.thorax] {
+        assert!(
+            v.labels
+                .iter()
+                .all(|b| !Label::from_u8(*b).expect("known").is_designed())
+        );
+    }
+    // the heart sits inside the thorax box and the lookup outside both is "outside"
+    let (lo, hi) = (vols.thorax.origin_mm, vols.thorax.max_mm());
+    assert!(vols.heart.origin_mm.cmpgt(lo).all() && vols.heart.max_mm().cmplt(hi).all());
+    assert_eq!(vols.thorax.label_at(hi + Vec3::splat(10.0)), Label::Outside);
+}
+
+/// A version-2 pack is refused with a message that says how to fix it.
+#[test]
+fn version_2_pack_is_refused_clearly() {
+    let dir = std::env::temp_dir().join(format!("heartsim-pack-v2-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut pack = AnatomyPack::procedural(Resolution::COARSE);
+    pack.save(&dir).expect("save");
+    let path = dir.join("manifest.ron");
+    let text = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("format_version: 3", "format_version: 2");
+    std::fs::write(&path, text).unwrap();
+    let err = AnatomyPack::load(&dir).expect_err("a version-2 pack");
+    let msg = err.to_string();
+    assert!(matches!(err, heartsim_geometry::PackError::Version { found: 2 }));
+    assert!(msg.contains("bake-anatomy") && msg.contains('3'), "{msg}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Label volumes round-trip through a pack, and a pack listing only one of the two is refused.
+#[test]
+fn label_volumes_round_trip_through_a_pack() {
+    use heartsim_geometry::{Label, LabelVolume, LabelVolumes};
+    let dir = std::env::temp_dir().join(format!("heartsim-pack-vol-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut pack = AnatomyPack::procedural(Resolution::COARSE);
+    let mut heart = LabelVolume::new(Vec3::splat(-10.0), 1.0, [20, 20, 20], Label::Outside);
+    heart.labels[4321] = Label::LvBlood as u8;
+    let thorax = LabelVolume::new(Vec3::splat(-50.0), 2.0, [50, 50, 50], Label::SoftTissue);
+    pack.volumes = Some(LabelVolumes { heart, thorax });
+    pack.save(&dir).expect("save");
+    let loaded = AnatomyPack::load(&dir).expect("load");
+    assert_eq!(loaded.volumes, pack.volumes);
+    // drop one file from the manifest
+    let path = dir.join("manifest.ron");
+    let manifest: heartsim_geometry::PackManifest =
+        ron::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut m = manifest.clone();
+    m.files.remove("labels_thorax.bin");
+    std::fs::write(&path, ron::to_string(&m).unwrap()).unwrap();
+    assert!(matches!(
+        AnatomyPack::load(&dir),
+        Err(heartsim_geometry::PackError::Format(_))
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}

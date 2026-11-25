@@ -200,6 +200,14 @@ impl TutorialHost for Headless {
             UiAction::WaitForEvent(WaitEvent::ElapsedMs(ms)) if *ms <= 0.0 => {
                 self.errors.push("wait of zero or negative length".into());
             }
+            UiAction::ProbeAtView(id) | UiAction::SetEchoView(id)
+                if heartsim_echo::ViewId::from_id(id).is_none() =>
+            {
+                self.errors.push(format!("unknown echo view `{id}`"));
+            }
+            UiAction::EchoMeasure(id) if !matches!(id.as_str(), "lvid" | "tapse" | "e-prime") => {
+                self.errors.push(format!("unknown echo measurement `{id}`"));
+            }
             // panel, camera, pause, resume, lead: nothing for the headless model to do
             _ => {}
         }
@@ -263,6 +271,13 @@ pub(crate) fn run_tutorials(target: &str, assets_arg: Option<&Path>) -> Result<(
                     problems.push(format!("id `{}` differs from the directory name", t.id));
                 }
                 problems.extend(t.content_problems());
+                for (i, p) in t.pages.iter().enumerate() {
+                    if let Some(v) = &p.view_check
+                        && heartsim_echo::ViewId::from_id(&v.view).is_none()
+                    {
+                        problems.push(format!("{} page {}: unknown echo view `{}`", t.id, i + 1, v.view));
+                    }
+                }
                 let mut host = Headless::new(&assets);
                 for (i, p) in t.pages.iter().enumerate() {
                     problems.extend(host.run_steps(&format!("{} page {}", t.id, i + 1), p.actions.clone()));

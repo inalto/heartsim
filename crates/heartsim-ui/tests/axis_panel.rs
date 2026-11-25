@@ -18,6 +18,7 @@ struct Dial {
 
 fn dial(interactive: bool) -> Harness<'static, Dial> {
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(Vec2::new(500.0, 500.0))
         .build_ui_state(
             |ui, d: &mut Dial| {
@@ -131,6 +132,7 @@ fn the_read_only_circle_has_no_hand_and_reports_no_drag() {
 
 fn panel(axis: Option<f64>) -> Harness<'static> {
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(Vec2::new(700.0, 700.0))
         .build_ui(move |ui| {
             let cfg = AxisPanel {
@@ -201,6 +203,7 @@ fn without_a_qrs_the_badge_is_empty_and_in_italian_the_cards_are_translated() {
 /// Simulator and 12-lead tabs show it. Returns the panel's width after each frame.
 fn sidebar(default_width: f32) -> Harness<'static, Vec<f32>> {
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(Vec2::new(1400.0, 900.0))
         .build_ui_state(
             move |ui, widths: &mut Vec<f32>| {

@@ -16,18 +16,20 @@ struct Model {
 }
 
 fn harness(device: Option<&PacerConfig>) -> Harness<'static, Model> {
-    Harness::new_ui_state(
-        |ui, m: &mut Model| {
-            let r = pacer_panel(ui, &mut m.panel);
-            if r.changed {
-                m.last = r;
-            }
-        },
-        Model {
-            panel: PacerPanelState::new(device),
-            last: PacerPanelResponse::default(),
-        },
-    )
+    Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .build_ui_state(
+            |ui, m: &mut Model| {
+                let r = pacer_panel(ui, &mut m.panel);
+                if r.changed {
+                    m.last = r;
+                }
+            },
+            Model {
+                panel: PacerPanelState::new(device),
+                last: PacerPanelResponse::default(),
+            },
+        )
 }
 
 #[test]

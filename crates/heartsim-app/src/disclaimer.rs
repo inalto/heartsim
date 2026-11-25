@@ -54,7 +54,7 @@ pub fn first_run_dialog(ctx: &egui::Context) -> bool {
         ui.add_space(6.0);
         disclaimer_body(ui);
         ui.add_space(6.0);
-        ui.weak(t!("disclaimer-reminder"));
+        heartsim_ui::helper_text(ui, t!("disclaimer-reminder"));
         ui.add_space(8.0);
         let button = ui.button(t!("disclaimer-accept"));
         // keyboard users land on the only action; Enter or Space acknowledges
@@ -83,7 +83,7 @@ pub fn about_window(ctx: &egui::Context, open: &mut bool, newer: Option<&crate::
                 });
             }
             ui.label(t!("about-tagline"));
-            ui.weak(t!("about-licence"));
+            heartsim_ui::helper_text(ui, t!("about-licence"));
             ui.add_space(4.0);
             cards::card(ui, |ui| {
                 cards::heading(ui, t!("about-disclaimer-heading"));

@@ -31,14 +31,8 @@ pub const DEG: &str = "°";
 /// A multiple ("1.50×").
 pub const TIMES: &str = "×";
 
-/// Draws `label`, then `slider` with `unit` as the suffix of its value. The slider is named by the
-/// label for screen readers.
+/// Draws `slider` as a [`crate::widgets::slider_row`] (label left, rail, value box) with `unit` as
+/// the suffix of its value. The slider is named by the label for screen readers.
 pub fn slider(ui: &mut Ui, label: &str, slider: Slider<'_>, unit: &str) -> Response {
-    ui.horizontal(|ui| {
-        let name = ui.label(label);
-        let response = ui.add(slider.suffix(unit));
-        response.clone().labelled_by(name.id);
-        response
-    })
-    .inner
+    crate::widgets::slider_row(ui, label, slider.suffix(unit))
 }

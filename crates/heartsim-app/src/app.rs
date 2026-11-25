@@ -1,3 +1,4 @@
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use crate::settings::{HeartSoundInfo, ThemeMode, settings_window_full};
 use eframe::egui;
 use heartsim_core::{AxisClass, FrontalAxis, LEAD_COUNT, Lead, Millis, SimClock};
@@ -17,6 +18,7 @@ use crate::scenarios::{ScenarioLibrary, Timeline, scenario_picker};
 use crate::snapshot_ring::SnapshotRing;
 use crate::vector_overlay::VectorOverlay;
 
+mod echo_tab;
 #[cfg(feature = "export")]
 mod exports;
 mod keys;
@@ -73,6 +75,9 @@ pub struct HeartSimApp {
     /// What the Adjust sliders held when the rhythm was loaded; the Adjust toggle counts the
     /// values that differ from it.
     adjust_baseline: AdjustBaseline,
+    /// What the Simulator shows on a phone-narrow window, where the side panels do not fit beside
+    /// the 3-D view.
+    simulator_view: crate::simulator_layout::SimulatorView,
     /// Rhythm presets (B11), the loaded one (`None` = slider settings) and its timeline.
     library: ScenarioLibrary,
     scenario: Option<usize>,
@@ -90,6 +95,9 @@ pub struct HeartSimApp {
     auscultation_quiz: crate::auscultation_quiz::AuscultationQuiz,
     /// Echo calculators (B29): favourites and the last calculator persist, typed values do not.
     echo_calc: crate::echo_calc::EchoCalcPage,
+    /// The Echo page (B31): the probe on the figure and the anatomical cross-section. The pose is
+    /// kept for the session and never stored.
+    echo: crate::echo_page::EchoPage,
     /// The last ventricular RR intervals of the engine, ms, newest last: the "from the running rhythm"
     /// heart rate of the calculators is derived from these events and nothing else.
     v_rr_ms: std::collections::VecDeque<f64>,
@@ -311,6 +319,13 @@ impl HeartSimApp {
         {
             echo_calc.restore(&saved);
         }
+        let mut echo_page = crate::echo_page::EchoPage::default();
+        if let Some(saved) = cc
+            .storage
+            .and_then(|s| s.get_string(crate::echo_views::STORAGE_KEY))
+        {
+            echo_page.restore_quiz(&saved);
+        }
         let mut auscultation_quiz = crate::auscultation_quiz::AuscultationQuiz::default();
         if let Some(score) = cc
             .storage
@@ -351,6 +366,7 @@ impl HeartSimApp {
             electrodes,
             library: assets.map_or_else(ScenarioLibrary::load_default, ScenarioLibrary::from_bundle),
             adjust_baseline: AdjustBaseline::default(),
+            simulator_view: crate::simulator_layout::SimulatorView::default(),
             scenario: None,
             timeline: Timeline::default(),
             heart_history: HeartHistory::new(),
@@ -360,6 +376,7 @@ impl HeartSimApp {
             sound_trainer,
             auscultation_quiz,
             echo_calc,
+            echo: echo_page,
             v_rr_ms: std::collections::VecDeque::new(),
             v_beat_ms: None,
             tour,
@@ -565,7 +582,9 @@ impl HeartSimApp {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
             let picked = cards::wrapping_group(ui, "rhythm", |ui| {
-                ui.horizontal(|ui| scenario_picker(ui, &self.library, self.scenario))
+                // wraps inside its group: with the button padding the picker, Restart and About no
+                // longer fit a phone-width row side by side
+                ui.horizontal_wrapped(|ui| scenario_picker(ui, &self.library, self.scenario))
                     .inner
             })
             .inner;
@@ -583,7 +602,7 @@ impl HeartSimApp {
             }
             highlight::mark(&transport.speed, "speed");
             cards::wrapping_group(ui, "windows", |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     highlight::mark(
                         &ui.toggle_value(&mut self.pacing.open, t!("app-pacemaker")),
                         "pacemaker",
@@ -638,53 +657,71 @@ impl HeartSimApp {
         r.on_hover_text(hint);
     }
 
-    /// The second row: the sinus rate, AV block, QRS axis shift and QRS width.
+    /// The second row: the sinus rate, AV block, QRS axis shift and QRS width. On a phone-narrow
+    /// window the controls are one group of stacked slider rows (a row of groups would run past the
+    /// edge or grow tall).
     fn adjust_row(&mut self, ui: &mut egui::Ui) {
-        cards::wrapping_group(ui, "nodes", |ui| {
-            ui.horizontal(|ui| {
-                let mut bpm = self.engine.params.sinus.rate_bpm;
-                if heartsim_ui::controls::slider(
-                    ui,
-                    &t!("app-sa-rate"),
-                    egui::Slider::new(&mut bpm, 30.0..=200.0).max_decimals(0),
-                    heartsim_ui::controls::BPM,
-                )
-                .changed()
-                {
-                    self.engine.params.sinus.rate_bpm = bpm;
-                }
-                ui.checkbox(&mut self.engine.params.av.complete_block, t!("app-av-block"));
-                let mut ratio = self.engine.params.av.mobitz2_ratio;
-                let off = t!("app-mobitz-off");
-                if heartsim_ui::controls::slider(
-                    ui,
-                    &t!("app-mobitz"),
-                    egui::Slider::new(&mut ratio, 0..=6)
-                        .custom_formatter(move |n, _| if n < 2.0 { off.clone() } else { format!("{n:.0}") }),
-                    "",
-                )
-                .changed()
-                {
-                    self.engine.params.av.mobitz2_ratio = ratio;
-                }
+        if crate::responsive::is_narrow(ui.ctx()) {
+            cards::group(ui, |ui| {
+                // a group inherits the wrapping row's layout; the rows are stacked in a column
+                ui.vertical(|ui| {
+                    self.adjust_nodes(ui);
+                    self.adjust_qrs(ui);
+                });
             });
+            return;
+        }
+        cards::wrapping_group(ui, "nodes", |ui| {
+            ui.horizontal(|ui| self.adjust_nodes(ui));
         });
         cards::wrapping_group(ui, "qrs", |ui| {
-            ui.horizontal(|ui| {
-                heartsim_ui::controls::slider(
-                    ui,
-                    &t!("app-axis-shift"),
-                    egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0).max_decimals(0),
-                    heartsim_ui::controls::DEG,
-                );
-                heartsim_ui::controls::slider(
-                    ui,
-                    &t!("app-qrs-width"),
-                    egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0).max_decimals(2),
-                    heartsim_ui::controls::TIMES,
-                );
-            });
+            ui.horizontal(|ui| self.adjust_qrs(ui));
         });
+    }
+
+    /// The sinus rate, the complete-block switch and the Mobitz II ratio.
+    fn adjust_nodes(&mut self, ui: &mut egui::Ui) {
+        let mut bpm = self.engine.params.sinus.rate_bpm;
+        if heartsim_ui::controls::slider(
+            ui,
+            &t!("app-sa-rate"),
+            egui::Slider::new(&mut bpm, 30.0..=200.0).max_decimals(0),
+            heartsim_ui::controls::BPM,
+        )
+        .changed()
+        {
+            self.engine.params.sinus.rate_bpm = bpm;
+        }
+        ui.checkbox(&mut self.engine.params.av.complete_block, t!("app-av-block"));
+        let mut ratio = self.engine.params.av.mobitz2_ratio;
+        let off = t!("app-mobitz-off");
+        if heartsim_ui::controls::slider(
+            ui,
+            &t!("app-mobitz"),
+            egui::Slider::new(&mut ratio, 0..=6)
+                .custom_formatter(move |n, _| if n < 2.0 { off.clone() } else { format!("{n:.0}") }),
+            "",
+        )
+        .changed()
+        {
+            self.engine.params.av.mobitz2_ratio = ratio;
+        }
+    }
+
+    /// The QRS axis shift and width.
+    fn adjust_qrs(&mut self, ui: &mut egui::Ui) {
+        heartsim_ui::controls::slider(
+            ui,
+            &t!("app-axis-shift"),
+            egui::Slider::new(&mut self.synth.axis_shift_deg, -180.0..=180.0).max_decimals(0),
+            heartsim_ui::controls::DEG,
+        );
+        heartsim_ui::controls::slider(
+            ui,
+            &t!("app-qrs-width"),
+            egui::Slider::new(&mut self.synth.qrs_width_scale, 0.7..=2.0).max_decimals(2),
+            heartsim_ui::controls::TIMES,
+        );
     }
 
     /// The right-hand panel of the Simulator and 12-Lead pages: the frontal QRS axis measured from
@@ -715,6 +752,7 @@ impl HeartSimApp {
         egui::Panel::bottom("strip")
             .resizable(true)
             .default_size(200.0)
+            .min_size(crate::responsive::strip_min_height(ui.ctx()))
             .show(ui, |ui| {
                 self.ecg.controls(ui, &self.rings, Some(&mut self.selected_lead));
                 let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
@@ -726,35 +764,28 @@ impl HeartSimApp {
                 self.draw_timeline_marks(ui.painter(), &window);
                 ui.allocate_rect(rect, egui::Sense::hover());
             });
-        // the side panels keep a remembered width between runs; a maximum keeps a stray wide
-        // value (or a drag) from pushing the 3-D view out of the window
-        egui::Panel::right("axis")
-            .default_size(280.0)
-            .max_size(crate::responsive::max_side(ui, 480.0))
-            .show(ui, |ui| self.live_axis_panel(ui));
-        if let Some(h) = &mut self.heart {
-            egui::Panel::left("heart")
-                .default_size(280.0)
-                .max_size(crate::responsive::max_side(ui, 480.0))
-                .show(ui, |ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        h.controls(ui);
-                        ui.separator();
-                        let mut alphas: Vec<&mut f32> =
-                            h.panel.layers.iter_mut().map(|l| &mut l.alpha).collect();
-                        self.vector.controls(ui, &mut alphas);
-                    });
-                });
-        }
+        // the vector overlay is synced before the panels so the 3-D view draws it this frame
         self.sync_vector_overlay();
-        egui::CentralPanel::default().show(ui, |ui| {
-            if let Some(h) = &mut self.heart {
-                h.viewport(ui, &mut self.engine);
-            } else {
-                let size = ui.available_size();
-                Viewport3d::ui(ui, size);
-            }
-        });
+        let mut view = self.simulator_view;
+        crate::simulator_layout::simulator_body(ui, &mut view, self);
+        self.simulator_view = view;
+    }
+
+    /// The 3-D view of the Simulator (the placeholder when no anatomy pack loaded).
+    fn heart_viewport(&mut self, ui: &mut egui::Ui) {
+        if let Some(h) = &mut self.heart {
+            h.viewport(ui, &mut self.engine);
+        } else {
+            let size = ui.available_size();
+            Viewport3d::ui(ui, size);
+        }
+    }
+
+    /// The left panel of the Simulator (see [`crate::heart_view::HeartView::controls_panel`]).
+    fn heart_controls(&mut self, ui: &mut egui::Ui) {
+        if let Some(h) = &mut self.heart {
+            h.controls_panel(ui, &mut self.settings.simulator_sections, &mut self.vector);
+        }
     }
 
     fn twelve_lead_tab(&mut self, ui: &mut egui::Ui) {
@@ -784,31 +815,57 @@ impl HeartSimApp {
                 #[cfg(not(feature = "native"))]
                 let _ = engine_ms;
                 if let Some(msg) = &ecg.last_export {
-                    ui.weak(msg);
+                    heartsim_ui::helper_text(ui, msg);
                 }
                 ui.separator();
             });
         });
-        egui::Panel::right("axis")
-            .default_size(280.0)
-            .max_size(crate::responsive::max_side(ui, 480.0))
-            .show(ui, |ui| self.live_axis_panel(ui));
-        egui::CentralPanel::default().show(ui, |ui| {
-            let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            let sounds = self.heart_sounds_live().then(|| self.sounds.lane());
-            self.ecg
-                .page_with_sounds(ui, rect, &self.rings, self.layout, sounds);
-            ui.allocate_rect(rect, egui::Sense::hover());
+        let axis_name = t!("app-sim-view-axis");
+        let page_name = t!("pane-twelve-lead");
+        // wide: the axis panel beside the grid; on a phone the grid has the full width and the
+        // axis panel is one segment away
+        let spec = PaneSpec {
+            id: "twelve_lead",
+            left: None,
+            right: Some(Side {
+                id: "axis",
+                default_px: 280.0,
+                cap_px: 480.0,
+                name: &axis_name,
+            }),
+            centre: &page_name,
+            narrow: Narrow::Segmented { start: Pane::Centre },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Right => self.live_axis_panel(ui),
+            Pane::Centre => {
+                let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
+                let sounds = self.heart_sounds_live().then(|| self.sounds.lane());
+                self.ecg
+                    .page_with_sounds(ui, rect, &self.rings, self.layout, sounds);
+                ui.allocate_rect(rect, egui::Sense::hover());
+            }
+            Pane::Left => {}
         });
     }
 
     /// The Axis Trainer: the draggable circle with its cards (the reading rule for the class is the
     /// interpretation card's note) on the left, the six limb leads on the right.
     fn axis_trainer_tab(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("dial")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(640.0)
-            .show(ui, |ui| {
+        let spec = PaneSpec {
+            id: "axis_trainer",
+            left: Some(Side {
+                id: "dial",
+                default_px: 640.0,
+                cap_px: 100_000.0,
+                name: "",
+            }),
+            right: None,
+            centre: "",
+            narrow: Narrow::Stacked { centre_height: 260.0 },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.label(t!("app-axis-trainer-hint"));
                     let axis = self.measured_axis();
@@ -835,30 +892,44 @@ impl HeartSimApp {
                         self.synth.axis_shift_deg = 0.0;
                     }
                 });
-            });
-        egui::CentralPanel::default().show(ui, |ui| {
-            let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
+            }
+            Pane::Centre => {
+                let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
+                lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
+            }
+            Pane::Right => {}
         });
     }
 
     fn quiz_tab(&mut self, ui: &mut egui::Ui) {
-        egui::Panel::left("quizdial")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(640.0)
-            .show(ui, |ui| {
+        let spec = PaneSpec {
+            id: "axis_quiz",
+            left: Some(Side {
+                id: "quizdial",
+                default_px: 640.0,
+                cap_px: 100_000.0,
+                name: "",
+            }),
+            right: None,
+            centre: "",
+            narrow: Narrow::Stacked { centre_height: 260.0 },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 if let Some(target) = self.quiz.panel(ui) {
                     self.set_qrs_axis(target);
                 }
-            });
-        egui::CentralPanel::default().show(ui, |ui| {
-            let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
+            }
+            Pane::Centre => {
+                let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
+                lead_column(ui, rect, &self.rings, &self.ecg.style, &LIMB);
+            }
+            Pane::Right => {}
         });
     }
 
     /// The top bar: the product and its version on the left, then the pages as tabs in four groups
-    /// (Explore, Practise, Learn, Tools) or, when the window is too narrow for fourteen tabs, as four group
+    /// (Explore, Practise, Learn, Tools) or, when the window is too narrow for fifteen tabs, as four group
     /// menus (see [`nav::page_bar`]); on a phone-narrow window only the name of the open page. On the
     /// right a button cycling the theme (system monitor, sun, moon) and a hamburger menu (painted
     /// three lines) with every page (the current one marked, with its number-key shortcut), the
@@ -988,6 +1059,7 @@ impl HeartSimApp {
                 ui.label(t!("help-tab-12-lead"));
                 ui.label(t!("help-tab-axis-trainer"));
                 ui.label(t!("help-tab-heart-vector"));
+                ui.label(t!("help-tab-echo"));
                 ui.label(t!("help-tab-axis-quiz"));
                 ui.label(t!("help-tab-tutorials"));
                 ui.label(t!("help-tab-ep-lab"));
@@ -1008,11 +1080,27 @@ impl HeartSimApp {
                 ui.label(t!("help-keys-arrows"));
                 ui.label(t!("help-keys-speed"));
                 ui.label(t!("help-keys-tabs"));
-                ui.weak(t!("help-keys-note"));
+                heartsim_ui::helper_text(ui, t!("help-keys-note"));
                 ui.separator();
                 ui.label(t!("help-disclaimer"));
             });
         });
+    }
+}
+
+/// The Simulator's parts, for [`crate::simulator_layout::simulator_body`].
+impl crate::simulator_layout::SimulatorParts for HeartSimApp {
+    fn has_controls(&self) -> bool {
+        self.heart.is_some()
+    }
+    fn controls(&mut self, ui: &mut egui::Ui) {
+        self.heart_controls(ui);
+    }
+    fn axis(&mut self, ui: &mut egui::Ui) {
+        self.live_axis_panel(ui);
+    }
+    fn viewport(&mut self, ui: &mut egui::Ui) {
+        self.heart_viewport(ui);
     }
 }
 
@@ -1097,6 +1185,9 @@ impl eframe::App for HeartSimApp {
         if self.tab != Tab::Electrodes {
             self.electrodes.deactivate(frame.wgpu_render_state.as_ref());
         }
+        if self.tab != Tab::Echo {
+            self.echo.deactivate(frame.wgpu_render_state.as_ref());
+        }
         self.sync_scrub();
         self.set_wall_motion_time();
         self.drive_tour(&ctx);
@@ -1129,7 +1220,7 @@ impl eframe::App for HeartSimApp {
         if self.assets_missing {
             egui::Panel::top("assets_missing").show(ui, |ui| {
                 ui.colored_label(ui.visuals().error_fg_color, t!("assets-missing"));
-                ui.small(t!("assets-missing-hint"));
+                heartsim_ui::helper_text(ui, t!("assets-missing-hint"));
             });
         }
         #[cfg(feature = "update-check")]
@@ -1138,7 +1229,12 @@ impl eframe::App for HeartSimApp {
         }
         if matches!(
             self.tab,
-            Tab::Simulator | Tab::TwelveLead | Tab::HeartVector | Tab::AxisTrainer | Tab::Electrodes
+            Tab::Simulator
+                | Tab::TwelveLead
+                | Tab::HeartVector
+                | Tab::Echo
+                | Tab::AxisTrainer
+                | Tab::Electrodes
         ) {
             egui::Panel::top("rhythm").show(ui, |ui| self.rhythm_controls(ui));
         }
@@ -1150,6 +1246,7 @@ impl eframe::App for HeartSimApp {
             Tab::Simulator => self.simulator_tab(ui),
             Tab::TwelveLead => self.twelve_lead_tab(ui),
             Tab::HeartVector => self.vector_tab(ui),
+            Tab::Echo => self.echo_tab(ui, frame.wgpu_render_state.as_ref()),
             Tab::AxisTrainer => self.axis_trainer_tab(ui),
             Tab::Quiz => self.quiz_tab(ui),
             Tab::Electrodes => {
@@ -1191,6 +1288,7 @@ impl eframe::App for HeartSimApp {
         #[cfg(not(feature = "native"))]
         storage.set_string(TUTORIAL_PROGRESS_KEY, self.tutorials.progress.to_text());
         storage.set_string(crate::echo_calc::STORAGE_KEY, self.echo_calc.storage_string());
+        storage.set_string(crate::echo_views::STORAGE_KEY, self.echo.quiz_string());
         storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());
     }
 }

@@ -174,6 +174,7 @@ fn panel_harness(reduced: bool) -> Harness<'static, Panel> {
     let mut heart = HeartView::from_pack(pack(), &TimingParams::default());
     heart.set_motion_options(reduced, true, 1.0);
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(360.0, 900.0))
         .build_ui_state(|ui, p: &mut Panel| p.heart.motion_controls(ui), Panel { heart })
 }

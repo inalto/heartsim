@@ -2293,6 +2293,7 @@ dependencies = [
  "heartsim-calc",
  "heartsim-core",
  "heartsim-ecg",
+ "heartsim-echo",
  "heartsim-geometry",
  "heartsim-io",
  "heartsim-sim",
@@ -2343,6 +2344,10 @@ dependencies = [
  "heartsim-ecg",
  "heartsim-geometry",
  "heartsim-sim",
+ "image",
+ "libm",
+ "ron",
+ "serde",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 //! Page navigation: the pages, their four groups and the one-line page bar in the top bar.
 //!
-//! The bar adapts to the width it is given and never wraps: with room for all fourteen pages they are
+//! The bar adapts to the width it is given and never wraps: with room for all fifteen pages they are
 //! tabs, grouped with a small caption (or just a separator when the captions would not fit); with
 //! less, four group buttons whose menus list the pages (the group of the open page shows its name);
 //! the phone-narrow layout is left to the caller (title and hamburger only).
@@ -9,7 +9,7 @@ use eframe::egui::{self, Color32, RichText, TextStyle, Ui};
 use heartsim_ui::t;
 
 /// The top-level pages, one tab each. The order of [`Tab::ALL`] is the order of the number-key
-/// shortcuts (1–9, 0; the last four pages have none), not of the bar.
+/// shortcuts (1–9, 0; the last five pages have none), not of the bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Simulator,
@@ -29,6 +29,8 @@ pub enum Tab {
     AuscultationQuiz,
     /// Echocardiography and haemodynamics calculators (B29).
     EchoCalculators,
+    /// The probe on the figure and the anatomical cross-section it cuts (B31).
+    Echo,
 }
 
 /// The four groups of pages in the bar: see, practise, learn, and the tools.
@@ -56,6 +58,7 @@ impl Group {
                 Tab::Simulator,
                 Tab::TwelveLead,
                 Tab::HeartVector,
+                Tab::Echo,
                 Tab::Electrodes,
                 Tab::EpLab,
             ],
@@ -86,7 +89,7 @@ impl Group {
 
 impl Tab {
     /// Every page in shortcut order (see [`Tab::shortcut`]).
-    pub const ALL: [Tab; 14] = [
+    pub const ALL: [Tab; 15] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -101,6 +104,7 @@ impl Tab {
         Tab::SoundTrainer,
         Tab::AuscultationQuiz,
         Tab::EchoCalculators,
+        Tab::Echo,
     ];
 
     /// The page's name, as in the bar and the menus.
@@ -121,6 +125,7 @@ impl Tab {
             Tab::SoundTrainer => t!("tab-sound-trainer"),
             Tab::AuscultationQuiz => t!("tab-auscultation-quiz"),
             Tab::EchoCalculators => t!("tab-echo-calculators"),
+            Tab::Echo => t!("tab-echo"),
         }
     }
 
@@ -133,8 +138,8 @@ impl Tab {
             .unwrap_or(Group::Explore)
     }
 
-    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to fourteenth pages (Help,
-    /// the Sound Trainer, the auscultation quiz and the echo calculators) have none.
+    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to fifteenth pages (Help,
+    /// the Sound Trainer, the auscultation quiz, the echo calculators and Echo) have none.
     #[must_use]
     pub fn shortcut(self) -> Option<&'static str> {
         const LABELS: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
@@ -265,11 +270,25 @@ fn tab_button(ui: &mut Ui, current: &mut Tab, tab: Tab) {
     }
 }
 
+/// Padding inside the group menu buttons (Explore, Practise, Learn, Tools), points: roomier than
+/// the global [`heartsim_ui::theme::BUTTON_PADDING`] (8 × 4), which made them read as cramped next
+/// to the other buttons. The rows of the opened menu use the same vertical padding, so each is a
+/// comfortable target.
+pub const GROUP_BUTTON_PADDING: egui::Vec2 = egui::Vec2::new(12.0, 6.0);
+
 fn group_menu(ui: &mut Ui, current: &mut Tab, group: Group) {
+    ui.scope(|ui| {
+        ui.spacing_mut().button_padding = GROUP_BUTTON_PADDING;
+        group_menu_inner(ui, current, group);
+    });
+}
+
+fn group_menu_inner(ui: &mut Ui, current: &mut Tab, group: Group) {
     let selected = current.group() == group;
     let label = format!("{}{}", group_button_label(group, *current), arrow_room(ui));
     let button = egui::Button::selectable(selected, label);
     let (response, _) = egui::containers::menu::MenuButton::from_button(button).ui(ui, |ui| {
+        ui.spacing_mut().button_padding.y = GROUP_BUTTON_PADDING.y;
         for tab in group.tabs() {
             menu_entry(ui, current, *tab);
         }

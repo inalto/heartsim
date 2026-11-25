@@ -260,29 +260,51 @@ impl Cases {
     }
 
     /// The case list with Start buttons.
-    pub fn library_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn library_ui(&mut self, ui: &mut egui::Ui, primary_allowed: bool) {
         ui.heading(t!("case-heading"));
         ui.label(t!("case-intro"));
         if self.library.cases.is_empty() {
             ui.label(t!("case-none"));
         }
         let mut start = None;
+        // the one primary button of the list: the first case not finished yet, and only when the
+        // page has no other primary action (the tutorial list above has the one)
+        let primary = primary_allowed
+            .then(|| {
+                self.library
+                    .cases
+                    .iter()
+                    .position(|c| !self.best.contains_key(&c.id))
+            })
+            .flatten();
         for (i, c) in self.library.cases.iter().enumerate() {
             ui.group(|ui| {
                 ui.horizontal(|ui| {
                     ui.strong(&c.title);
                     if let Some((ok, of)) = self.best.get(&c.id) {
-                        ui.weak(t!("case-best", correct = ok.to_string(), total = of.to_string()));
+                        heartsim_ui::helper_text(
+                            ui,
+                            t!("case-best", correct = ok.to_string(), total = of.to_string()),
+                        );
                     }
                 });
                 ui.label(&c.patient);
                 ui.label(&c.summary);
-                ui.weak(t!(
-                    "case-size",
-                    stages = c.stages.len().to_string(),
-                    questions = c.question_count().to_string()
-                ));
-                if ui.button(t!("case-start", title = c.title.as_str())).clicked() {
+                heartsim_ui::helper_text(
+                    ui,
+                    t!(
+                        "case-size",
+                        stages = c.stages.len().to_string(),
+                        questions = c.question_count().to_string()
+                    ),
+                );
+                let label = t!("case-start", title = c.title.as_str());
+                let button = if primary == Some(i) {
+                    heartsim_ui::primary_button(ui, label)
+                } else {
+                    ui.button(label)
+                };
+                if button.clicked() {
                     start = Some(i);
                 }
             });
@@ -389,7 +411,8 @@ impl Cases {
                     t!("case-answer-first")
                 };
                 if ui
-                    .add_enabled(self.can_advance(), egui::Button::new(label))
+                    .add_enabled_ui(self.can_advance(), |ui| heartsim_ui::primary_button(ui, label))
+                    .inner
                     .clicked()
                 {
                     advance = true;
@@ -397,7 +420,7 @@ impl Cases {
             }
             if running {
                 ui.spinner();
-                ui.weak(t!("tut-running"));
+                heartsim_ui::helper_text(ui, t!("tut-running"));
             }
         });
         if let Some(i) = pick {

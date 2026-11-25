@@ -43,13 +43,14 @@ struct Model {
 fn harness() -> Harness<'static, Model> {
     let library = CaseLibrary::load_dir(&assets().join("cases")).unwrap();
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(900.0, 1000.0))
         .build_ui_state(
             |ui, m: &mut Model| {
                 if m.cases.is_open() {
                     m.cases.reader_ui(ui);
                 } else {
-                    m.cases.library_ui(ui);
+                    m.cases.library_ui(ui, true);
                 }
                 m.cases.poll(&mut m.host);
             },
@@ -119,4 +120,40 @@ fn the_three_cases_are_listed_and_playable() {
     let _ = h.get_by_label("Case finished");
     button(&mut h, "Close case");
     assert!(!h.state().cases.is_open());
+}
+
+/// A list of cards has one primary button (the first case not finished), and none when the page
+/// already has its primary action elsewhere.
+#[test]
+fn the_case_list_has_one_primary_button_and_none_when_the_page_has_one() {
+    use egui_kittest::kittest::{By, NodeT};
+    let count = |h: &Harness<'_, Model>| {
+        h.query_all(By::new())
+            .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+            .count()
+    };
+    let mut h = harness();
+    frames(&mut h);
+    assert_eq!(count(&h), 1);
+    let starts = h
+        .query_all_by_role(Role::Button)
+        .filter(|n| {
+            n.accesskit_node()
+                .label()
+                .is_some_and(|l| l.starts_with("Start "))
+        })
+        .count();
+    assert!(starts >= 2, "every case keeps its Start button");
+
+    let library = CaseLibrary::load_dir(&assets().join("cases")).unwrap();
+    let mut none = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
+        .with_size(egui::vec2(900.0, 1000.0))
+        .build_ui_state(|ui, c: &mut Cases| c.library_ui(ui, false), Cases::new(library));
+    none.run();
+    let n = none
+        .query_all(By::new())
+        .filter(|n| n.accesskit_node().class_name() == Some(heartsim_ui::PRIMARY_CLASS))
+        .count();
+    assert_eq!(n, 0);
 }

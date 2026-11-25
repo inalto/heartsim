@@ -13,6 +13,7 @@
 //! calipers cannot be more exact than the line width and the learner's choice of where a wave
 //! starts, so a tolerance of that size separates a careful measurement from a wrong one.
 
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use crate::rhythm_quiz::record_strip;
 use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
@@ -264,13 +265,28 @@ impl IntervalDrill {
 
     /// The drill page: the question and controls on the left, the strip on the right.
     pub fn ui(&mut self, ui: &mut egui::Ui, library: &ScenarioLibrary, style: &StripStyle) {
-        egui::Panel::left("interval_drill_panel")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(380.0)
-            .show(ui, |ui| {
+        let spec = PaneSpec {
+            id: "interval_drill",
+            left: Some(Side {
+                id: "interval_drill_panel",
+                default_px: 380.0,
+                cap_px: 100_000.0,
+                name: "",
+            }),
+            right: None,
+            centre: "",
+            // on a phone the strip keeps a useful height on top and the controls scroll below it
+            narrow: Narrow::Stacked {
+                centre_height: STRIP_MIN_HEIGHT,
+            },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 egui::ScrollArea::vertical().show(ui, |ui| self.controls(ui, library));
-            });
-        egui::CentralPanel::default().show(ui, |ui| self.strip(ui, style));
+            }
+            Pane::Centre => self.strip(ui, style),
+            Pane::Right => {}
+        });
     }
 
     fn controls(&mut self, ui: &mut egui::Ui, library: &ScenarioLibrary) {
@@ -280,10 +296,19 @@ impl IntervalDrill {
             } else {
                 t!("app-quiz-new")
             };
-            if ui
-                .add_enabled(!library.is_empty(), egui::Button::new(label))
-                .clicked()
-            {
+            // the one primary action: the next question while none is open or the last one is
+            // graded, Check answer while one is open
+            let next_is_main = self.question.is_none() || self.grade.is_some();
+            let next = ui
+                .add_enabled_ui(!library.is_empty(), |ui| {
+                    if next_is_main {
+                        heartsim_ui::primary_button(ui, label)
+                    } else {
+                        ui.button(label)
+                    }
+                })
+                .inner;
+            if next.clicked() {
                 self.next_question(library);
             }
             ui.label(t!(
@@ -317,7 +342,12 @@ impl IntervalDrill {
             ))
             .wrap(),
         );
-        ui.add(egui::Label::new(q.interval.definition()).wrap());
+        heartsim_ui::info_disclosure(
+            ui,
+            "interval_definition",
+            t!("interval-def-summary", interval = q.interval.name()),
+            q.interval.definition(),
+        );
         ui.separator();
 
         ui.horizontal_wrapped(|ui| {
@@ -328,7 +358,7 @@ impl IntervalDrill {
                 self.calipers.reset();
             }
         });
-        ui.weak(t!("interval-calipers-hint"));
+        heartsim_ui::helper_text(ui, t!("interval-calipers-hint"));
         if let Some(ms) = self.caliper_ms() {
             ui.label(t!("interval-calipers-reading", ms = format!("{ms:.0}")));
         }
@@ -371,10 +401,29 @@ impl IntervalDrill {
             .on_hover_text(t!("interval-value-hint"))
             .labelled_by(label.id);
         });
-        let can_check = self.grade.is_none() && self.entry_ms > 0.0;
-        let mut check = ui.add_enabled(can_check, egui::Button::new(t!("app-quiz-check")));
+        let graded = self.grade.is_some();
+        let can_check = !graded && self.entry_ms > 0.0;
+        let mut check = ui
+            .add_enabled_ui(can_check, |ui| {
+                if graded {
+                    // graded: Next question is the action; this one only rests, disabled
+                    ui.button(t!("app-quiz-check"))
+                } else {
+                    heartsim_ui::primary_button(ui, t!("app-quiz-check"))
+                }
+            })
+            .inner;
         if self.grade.is_none() {
             check = check.on_disabled_hover_text(t!("interval-check-disabled"));
+            if !can_check {
+                // the next step, in words, beside the reason on hover
+                let next = if self.caliper_ms().is_some() {
+                    t!("interval-next-reading")
+                } else {
+                    t!("interval-next-calipers")
+                };
+                heartsim_ui::helper_text(ui, next);
+            }
         }
         if check.clicked() {
             self.answer(self.entry_ms);

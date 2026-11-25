@@ -37,7 +37,7 @@ and **TAPSE about 24 mm** (the same for the right ventricle, at the tricuspid an
 
 ## Using it
 
-The controls sit in the heart panel of the Simulator, beside the 3-D view.
+The controls sit in the **Wall motion** section of the Simulator's left panel. That section is closed at first; open it by its heading.
 
 * **Wall motion** (a switch, on by default). Off, the heart keeps its resting shape and the colours and the ECG work as before.
   The switch is greyed out while **Reduced motion** is on in Settings, because the heart then does not move at all. Your choice

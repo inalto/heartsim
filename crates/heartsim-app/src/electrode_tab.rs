@@ -8,6 +8,7 @@
 //! the other tabs' camera back and hides the glyphs (the heart view re-applies its own layer
 //! settings every frame).
 
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use eframe::egui;
 use glam::Vec3;
 use heartsim_core::{Electrode, LEAD_COUNT, Lead};
@@ -392,22 +393,41 @@ impl ElectrodeTab {
     ) {
         // the side panels leave the 3-D view its minimum width, so the figure is never a sliver
         let side_cap = ((ui.ctx().content_rect().width() - VIEW_MIN_WIDTH_PX) * 0.5).max(120.0);
-        egui::Panel::left("electrode_editor")
-            .max_size(crate::responsive::max_side(ui, side_cap))
-            .default_size(340.0)
-            .show(ui, |ui| {
+        let (editor_name, view_name, leads_name) = (
+            heartsim_ui::t!("pane-editor"),
+            heartsim_ui::t!("app-sim-view-heart"),
+            heartsim_ui::t!("pane-leads"),
+        );
+        let spec = PaneSpec {
+            id: "electrodes",
+            left: Some(Side {
+                id: "electrode_editor",
+                default_px: 340.0,
+                cap_px: side_cap,
+                name: &editor_name,
+            }),
+            right: Some(Side {
+                id: "electrode_leads",
+                default_px: 420.0,
+                cap_px: side_cap,
+                name: &leads_name,
+            }),
+            centre: &view_name,
+            // on a phone one pane at a time: the editor, the 3-D view or the lead traces
+            narrow: Narrow::Segmented { start: Pane::Left },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     electrode_editor_panel(ui, &mut self.editor);
                     ui.separator();
                     #[cfg(feature = "native")]
                     self.file_buttons(ui);
                 });
-            });
-        egui::Panel::right("electrode_leads")
-            .max_size(crate::responsive::max_side(ui, side_cap))
-            .default_size(420.0)
-            .show(ui, |ui| self.leads(ui, rings, style));
-        egui::CentralPanel::default().show(ui, |ui| self.viewport(ui, rs));
+            }
+            Pane::Right => self.leads(ui, rings, style),
+            Pane::Centre => self.viewport(ui, rs),
+        });
     }
 
     #[cfg(feature = "native")]
@@ -443,7 +463,7 @@ impl ElectrodeTab {
             }
         });
         if let Some(s) = &self.file_status {
-            ui.weak(s);
+            heartsim_ui::helper_text(ui, s);
         }
     }
 

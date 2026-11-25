@@ -60,6 +60,7 @@ impl TutorialHost for HeartSimApp {
                     Panel::Tutorials => Tab::Tutorials,
                     Panel::SoundTrainer => Tab::SoundTrainer,
                     Panel::AuscultationQuiz => Tab::AuscultationQuiz,
+                    Panel::Echo => Tab::Echo,
                 };
             }
             UiAction::Highlight(tool) => self.tutorials.highlight = Some(tool.clone()),
@@ -110,6 +111,32 @@ impl TutorialHost for HeartSimApp {
             }
             // the sound check is drawn by the reader on the page that has it; waits are handled by
             // the page runner
+            UiAction::ProbeAtWindow(w) => self.echo.request_window(match w {
+                crate::tutorial::ProbeWindow::Parasternal => heartsim_echo::EchoWindow::Parasternal,
+                crate::tutorial::ProbeWindow::Apical => heartsim_echo::EchoWindow::Apical,
+                crate::tutorial::ProbeWindow::Subcostal => heartsim_echo::EchoWindow::Subcostal,
+                crate::tutorial::ProbeWindow::Suprasternal => heartsim_echo::EchoWindow::Suprasternal,
+            }),
+            UiAction::ProbeAtView(id) => {
+                if let Some(v) = heartsim_echo::ViewId::from_id(id) {
+                    self.echo.request_probe_at_view(v);
+                } else {
+                    tracing::warn!("tutorial: no echo view {id}");
+                }
+            }
+            UiAction::SetEchoView(id) => {
+                if let Some(v) = heartsim_echo::ViewId::from_id(id) {
+                    self.echo.request_view(v);
+                } else {
+                    tracing::warn!("tutorial: no echo view {id}");
+                }
+            }
+            UiAction::EchoMeasure(id) => match id.as_str() {
+                "lvid" => self.echo.request_demo(crate::echo_page::Demo::Lvid),
+                "tapse" => self.echo.request_demo(crate::echo_page::Demo::Tapse),
+                "e-prime" => self.echo.request_demo(crate::echo_page::Demo::EPrime),
+                other => tracing::warn!("tutorial: no echo measurement {other}"),
+            },
             UiAction::SoundCheck | UiAction::WaitForEvent(_) => {}
         }
     }
@@ -134,6 +161,15 @@ impl HeartSimApp {
         if let Some(mut run) = self.cases.take_run() {
             run.poll(self);
             self.cases.restore_run(run);
+        }
+        if let Some(id) = self.tutorials.current_view_check()
+            && let Some(v) = heartsim_echo::ViewId::from_id(&id)
+            && self.echo.view_found(v)
+        {
+            self.tutorials.mark_view_found();
+        }
+        if self.tutorials.take_open_echo() {
+            self.tab = Tab::Echo;
         }
         if self.tutorials.is_open() {
             egui::Panel::right("tutorial_reader")
@@ -173,7 +209,9 @@ impl HeartSimApp {
                     }
                     ui.add_space(12.0);
                     ui.separator();
-                    self.cases.library_ui(ui);
+                    // one primary button on the page: the tutorial list has it unless all are done
+                    let tutorial_primary = self.tutorials.primary_card().is_some();
+                    self.cases.library_ui(ui, !tutorial_primary);
                     if self.cases.is_open() {
                         self.tutorials.close();
                     }
@@ -249,9 +287,9 @@ impl HeartSimApp {
             }
         });
         #[cfg(not(feature = "native"))]
-        ui.weak(t!("timeline-save-desktop-only"));
+        heartsim_ui::helper_text(ui, t!("timeline-save-desktop-only"));
         if let Some(s) = &tt.status {
-            ui.weak(s);
+            heartsim_ui::helper_text(ui, s);
         }
         if restart {
             self.load_scenario(index);

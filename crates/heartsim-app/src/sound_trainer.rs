@@ -10,6 +10,7 @@
 //! Without a sound output the page still teaches from the trace: it cannot be hidden then, and the
 //! page says why.
 
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
@@ -469,14 +470,26 @@ impl SoundTrainer {
         if !sound {
             self.show_trace = true;
         }
-        egui::Panel::left("sound_trainer_list")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(300.0)
-            .show(ui, |ui| {
+        let (list_name, listen_name) = (t!("st-findings"), t!("pane-listen"));
+        let spec = PaneSpec {
+            id: "sound_trainer",
+            left: Some(Side {
+                id: "sound_trainer_list",
+                default_px: 300.0,
+                cap_px: 100_000.0,
+                name: &list_name,
+            }),
+            right: None,
+            centre: &listen_name,
+            // on a phone the list and the listening page are two segments; a pick opens the page
+            narrow: Narrow::Segmented { start: Pane::Centre },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => {
                 egui::ScrollArea::vertical().show(ui, |ui| self.list_ui(ui, player));
-            });
-        egui::CentralPanel::default().show(ui, |ui| {
-            request = self.main_ui(ui, library, player, style, sound);
+            }
+            Pane::Centre => request = self.main_ui(ui, library, player, style, sound),
+            Pane::Right => {}
         });
         // one key switches the pair (when no text box has the keyboard)
         if matches!(self.selection, Selection::Pair(_))
@@ -490,6 +503,7 @@ impl SoundTrainer {
 
     fn list_ui(&mut self, ui: &mut egui::Ui, player: &mut HeartSoundPlayer) {
         cards::title_band(ui, t!("st-findings"));
+        heartsim_ui::helper_text(ui, t!("st-count-legend"));
         let mut pick = None;
         for (i, f) in FINDINGS.iter().enumerate() {
             let sel = Selection::Finding(i);
@@ -498,7 +512,12 @@ impl SoundTrainer {
                 heartsim_ui::i18n::tr(&format!("st-{}", f.id)),
                 self.count(f.id)
             );
-            if ui.selectable_label(self.selection == sel, label).clicked() {
+            let count_hint = t!("st-count-hint", count = self.count(f.id).to_string());
+            if ui
+                .selectable_label(self.selection == sel, label)
+                .on_hover_text(count_hint)
+                .clicked()
+            {
                 pick = Some(sel);
             }
         }
@@ -511,7 +530,12 @@ impl SoundTrainer {
                 heartsim_ui::i18n::tr(&format!("st-{}", p.id)),
                 self.count(p.id)
             );
-            if ui.selectable_label(self.selection == sel, label).clicked() {
+            let count_hint = t!("st-count-hint", count = self.count(p.id).to_string());
+            if ui
+                .selectable_label(self.selection == sel, label)
+                .on_hover_text(count_hint)
+                .clicked()
+            {
                 pick = Some(sel);
             }
         }
@@ -519,6 +543,7 @@ impl SoundTrainer {
             && sel != self.selection
         {
             self.select(sel, player);
+            crate::narrow::show_pane(ui.ctx(), "sound_trainer", crate::narrow::Pane::Centre);
         }
     }
 
@@ -551,11 +576,19 @@ impl SoundTrainer {
             } else {
                 t!("st-play")
             };
-            if ui
-                .add_enabled(sound, egui::Button::new(label))
-                .on_disabled_hover_text(t!("st-no-sound"))
-                .clicked()
-            {
+            // Play is the one primary action of the page; Stop is a plain button
+            let playing = self.playing;
+            let play = ui
+                .add_enabled_ui(sound, |ui| {
+                    if playing {
+                        ui.button(label)
+                    } else {
+                        heartsim_ui::primary_button(ui, label)
+                    }
+                })
+                .inner
+                .on_disabled_hover_text(t!("st-no-sound"));
+            if play.clicked() {
                 if self.playing {
                     self.stop(player);
                 } else {
@@ -569,17 +602,21 @@ impl SoundTrainer {
             ));
             ui.separator();
             let model = self.real.is_none();
-            ui.add_enabled_ui(model, |ui| {
-                ui.checkbox(&mut self.half_speed, t!("st-half-speed"))
-                    .on_hover_text(t!("st-half-speed-hint"));
-            });
-            ui.add_enabled_ui(sound && model, |ui| {
-                ui.checkbox(&mut self.show_trace, t!("st-show-trace"))
-                    .on_disabled_hover_text(t!("st-trace-no-sound"));
-            });
+            // widgets, not `add_enabled_ui` scopes: a scope is a child Ui as wide as the rest of
+            // the row, which squeezed the second checkbox into a column on a narrow window
+            ui.add_enabled(
+                model,
+                egui::Checkbox::new(&mut self.half_speed, t!("st-half-speed")),
+            )
+            .on_hover_text(t!("st-half-speed-hint"));
+            ui.add_enabled(
+                sound && model,
+                egui::Checkbox::new(&mut self.show_trace, t!("st-show-trace")),
+            )
+            .on_disabled_hover_text(t!("st-trace-no-sound"));
         });
         if !sound {
-            ui.weak(t!("st-trace-no-sound"));
+            heartsim_ui::helper_text(ui, t!("st-trace-no-sound"));
         }
         self.recording_row_ui(ui, player, sound);
         if let Selection::Pair(i) = self.selection {
@@ -667,11 +704,14 @@ impl SoundTrainer {
         {
             request = Some(TrainerRequest::SaveWav(e));
         }
-        ui.weak(if self.real.is_some() {
-            t!("st-real-note")
-        } else {
-            t!("st-model-note")
-        });
+        heartsim_ui::helper_text(
+            ui,
+            if self.real.is_some() {
+                t!("st-real-note")
+            } else {
+                t!("st-model-note")
+            },
+        );
         ui.separator();
         let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
         if let Some(c) = self.selected_recording() {
@@ -736,7 +776,7 @@ impl SoundTrainer {
                 }
             }
             if !sound {
-                ui.weak(t!("st-real-no-sound"));
+                heartsim_ui::helper_text(ui, t!("st-real-no-sound"));
             }
         });
         if let Some(k) = pick {

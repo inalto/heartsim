@@ -513,7 +513,7 @@ pub fn electrode_editor_panel(ui: &mut Ui, ed: &mut ElectrodeEditor) {
         ui.strong(t!("electrode-detector"));
         match ed.findings() {
             None => {
-                ui.weak(t!("electrode-recording"));
+                crate::helper_text(ui, t!("electrode-recording"));
             }
             Some([]) => {
                 ui.label(t!("electrode-matches-standard"));
@@ -552,7 +552,7 @@ fn electrode_list(ui: &mut Ui, ed: &mut ElectrodeEditor, cmd: &mut Option<Editor
             }
         });
     if let Some(l) = ed.landmark() {
-        ui.weak(t!("electrode-last-snap", landmark = l.to_string()));
+        crate::helper_text(ui, t!("electrode-last-snap", landmark = l.to_string()));
     }
     if let Some(Cable::Standard(e)) = ed.selected {
         ui.horizontal_wrapped(|ui| {
@@ -568,7 +568,7 @@ fn electrode_list(ui: &mut Ui, ed: &mut ElectrodeEditor, cmd: &mut Option<Editor
                 *cmd = Some(EditorCommand::Move(Cable::Standard(e), ed.standard.position(e)));
             }
         });
-        ui.weak(t!("electrode-drag-hint"));
+        crate::helper_text(ui, t!("electrode-drag-hint"));
     }
     ui.horizontal_wrapped(|ui| {
         for (id, slot, label) in [

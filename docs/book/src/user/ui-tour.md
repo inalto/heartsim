@@ -1,24 +1,30 @@
 # A tour of the window
 
-The window has a one-line **top bar**: the program name and version, then the fourteen pages as **tabs** in four groups, and on
+The window has a one-line **top bar**: the program name and version, then the fifteen pages as **tabs** in four groups, and on
 the right a button that cycles the theme and the **hamburger menu** (three lines). The groups are *Explore* (Simulator, 12-Lead ECG,
-Heart Vector, Electrodes, EP Lab), *Practise* (Axis Trainer, Axis Quiz, Rhythm Quiz, Interval Drill, Sound Trainer, Auscultation Quiz),
+Heart Vector, Echo, Electrodes, EP Lab), *Practise* (Axis Trainer, Axis Quiz, Rhythm Quiz, Interval Drill, Sound Trainer, Auscultation Quiz),
 *Learn* (Tutorials, Help) and *Tools* ([Echo calculators](echo-calculators.md)).
-The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for fourteen tabs
-(below about 1380 px in English) the bar shows four group buttons instead (*Explore*, *Practise*, *Learn*, *Tools*): the group of the open page carries its name, and a
+The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for fifteen tabs
+(below about 1420 px in English) the bar shows four group buttons instead (*Explore*, *Practise*, *Learn*, *Tools*): the group of the open page carries its name, and a
 click lists the pages of that group. On a phone-narrow window the bar shows only the name of the open page, and the hamburger
-menu is the way to the other pages. The hamburger menu always lists the fourteen pages (the open one marked, each with its
-number-key shortcut where it has one; the Sound Trainer, the Auscultation Quiz and the Echo calculators have none), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
+menu is the way to the other pages. The hamburger menu always lists the fifteen pages (the open one marked, each with its
+number-key shortcut where it has one; the Sound Trainer, the Auscultation Quiz, the Echo calculators and Echo have none), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
 
-Below the bar, on the pages that run the simulation, is the **rhythm bar**. Its one row holds the rhythm picker, *Restart*,
-*About this rhythm* (hover it for the description, click it for the full explanation), *Run / Pause* with the simulation speed, the *Pacemaker* and *Therapy*
-windows, the re-entry presets and an **Adjust** button. *Adjust* opens a second row with the sinus rate, *AV block*,
+Below the bar, on the pages that run the simulation, is the **rhythm bar**. Its one row holds the rhythm picker (a fixed width: a long name is cut short with an ellipsis, and the full name shows on
+hover), *Restart*, *About this rhythm* (hover it for the description, click it for the full explanation), *Run / Pause* with a
+**Speed** slider and its value, the *Pacemaker* and *Therapy* windows, the re-entry presets and an **Adjust** button. *Adjust* opens a second row with the sinus rate, *AV block*,
 *Mobitz II* (drop every n-th beat) and the QRS axis shift and width. The row is closed when you start, and the app remembers
 whether you opened it. When one of its values differs from the rhythm's own the button says so (*Adjust · 2*, in colour; hover
 it for the names), so a changed value is never hidden. On the Axis Trainer the axis shift is the point of the page, so the row
 is always open there. The **Export / Import** window opens from the hamburger menu; see [Exporting](exports.md).
 
-Every slider has its label before it and its unit after the value (*SA rate*, the slider, *72 bpm*).
+Every slider has its label before it and its unit after the value (*SA rate*, the slider, *72 bpm*). The sliders of the
+Echo page's probe and image controls share one row layout: label, slider and value box.
+
+**Buttons.** Each panel has one accent-coloured button, the one the next step needs: for example *Run*, *Check answer*,
+*Next question*, *Play*, *Show me*, or *Start* and *Continue* on the tutorial list. A disabled button is never accented, so the
+accent always marks an action you can take now. Explanations that run to a few sentences sit behind **More**, and the helper
+text under a control is set at a size you can read.
 
 ## Simulator
 
@@ -27,11 +33,14 @@ Every slider has its label before it and its unit after the value (*SA rate*, th
 * **Centre: the 3-D heart.** Drag to rotate, scroll to zoom. The colour is the membrane voltage of each region (blue at
   rest, red when depolarised); the panel on the left switches to *activation time* or *APD* maps, changes the colour range
   and offers a colour-blind-safe palette. *Click on the heart* stimulates there; shift-click ablates.
-* **The heart moves.** The heart panel has a *Wall motion* switch, an *Exaggeration* slider and a read-out card (LVEF, volumes,
+* **The heart moves.** The left panel's *Wall motion* section (closed at first) has a switch, an *Exaggeration* slider and a read-out card (LVEF, volumes,
   MAPSE, TAPSE, each labelled *model*). They are explained on [The beating heart (wall motion)](wall-motion.md), with what the
   model cannot show.
-* **Left: layers.** Show, hide or fade each chamber, the great vessels, the valve rings and the torso. The heart-vector
-  arrow and its loop can be overlaid; *see-through* fades the walls so the arrow stays visible.
+* **Left: five sections.** *Colour map*, *Click on the heart*, *Anatomy and camera*, *Wall motion* and *Heart vector*, each
+  collapsible; the first three are open at first, and the open or closed state is remembered. *Click on the heart* stimulates
+  there, and the hint under it reads "Shift-click the heart to ablate without switching mode." *Anatomy and camera* shows, hides
+  or fades each layer (the chambers, the great vessels, the valve rings and the torso), listed by name in the language of the
+  window. *Heart vector* overlays the heart-vector arrow and its loop; *see-through* fades the walls so the arrow stays visible.
 * **Right: the frontal QRS axis** measured from the strip. The hexaxial circle shows the four axis classes as soft
   sectors; the sector under the pointer brightens and shows its name and range (normal −30° to +90° in green, left deviation −30° to −90° in amber at the upper
   right, right deviation +90° to +180° in rose at the lower left, extreme or indeterminate −90° to ±180° in grey-yellow
@@ -206,6 +215,41 @@ Desktop builds made with the `audio` feature add a **Monitor beep** switch and a
 - To keep fast rhythms and fast-forward from turning into a buzz, at most one beep is sounded per 180 ms of *simulated* time.
 - The sound never affects the simulation. Without an audio device the program runs as usual and the beep stays silent (the
   Settings window says so).
+
+## Narrow windows and phones
+
+Below 700 px of window width (a phone held upright, or a narrow desktop window) the pages that have a figure and side panels
+cannot show them side by side without leaving the figure a sliver. They show one part at a time, chosen with a segmented control
+above the page:
+
+* **Simulator**: *3-D heart*, *Controls* or *Axis*.
+* **12-Lead ECG**: *12-lead ECG* or *Axis*.
+* **Sound Trainer**: *Findings* or *Listen*.
+* **Auscultation Quiz**: *Question* or *Listen*.
+* **EP Lab**: *Controls*, *3-D heart* or *Electrograms*.
+* **Electrodes**: *Editor*, *3-D heart* or *Leads*.
+* **Echo**: *Image* or *3-D chest* on top. The sector, and the trace when M-mode or Tissue Doppler is on, keep a fixed height; the
+  section control (Probe, Image, Views, Measure) and its controls scroll below.
+* **Interval Drill, Rhythm Quiz, Axis Quiz, Axis Trainer and Heart Vector** keep the figure (the trace, or the dial) at a
+  useful height above the controls, which scroll below it.
+
+On the pages with an ECG strip, the strip's toolbar folds into a lead picker and a **Display** menu, and the trace keeps a
+minimum height. In the top bar only the name of the open page is shown; the hamburger menu lists the other pages.
+
+![The Simulator at 400 px: the 3-D heart, with the strip's lead picker and Display menu under it](../images/narrow-simulator.png)
+
+![The 12-lead ECG at 400 px: the 3 × 4 layout, with the Axis part one tap away](../images/narrow-twelve-lead.png)
+
+![The Sound Trainer at 400 px, on the Listen part](../images/narrow-sound-trainer.png)
+
+![The Interval Drill at 400 px: the strip above the controls](../images/narrow-interval-drill.png)
+
+![The Echo page at 400 px: the sector and the M-mode trace above the Measure controls](../images/narrow-echo-mmode.png)
+
+Some narrow layouts are not finished. On the Echo page, with M-mode or Tissue Doppler on, the sector is about 160 px high and the
+controls about 100 px at 400 × 800: cramped. At this width the tutorial and case reader is still a side panel over the page, the dial of
+the Axis Quiz and the Axis Trainer needs scrolling, and the timeline editor has not been checked. The layouts of the 12-lead,
+Heart Vector, Electrodes and EP Lab pages were checked by screenshots only. The [known limitations](../known-issues.md) list them.
 
 ## Help
 

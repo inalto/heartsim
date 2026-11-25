@@ -31,6 +31,11 @@ pub mod transport;
 pub mod twelve_lead;
 pub mod vector_view;
 pub mod viewport;
+pub mod widgets;
+
+/// Below this window width (logical points) the app uses its compact layouts: one pane at a time,
+/// the strip toolbar folded behind its Display menu.
+pub const NARROW_PX: f32 = 700.0;
 
 pub use anatomy_panel::{AnatomyPanelState, CameraCommand, LayerToggle, anatomy_panel};
 pub use annotations::{EcgAnnotations, interval_readout};
@@ -61,3 +66,7 @@ pub use transport::{SPEED_RANGE, TransportResponse, transport_controls};
 pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};
 pub use vector_view::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};
 pub use viewport::{Viewport3d, ViewportResources};
+pub use widgets::{
+    PRIMARY_CLASS, collapsible_section, helper_text, info_disclosure, primary_button, segmented, slider_row,
+    status_row,
+};

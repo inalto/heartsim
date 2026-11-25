@@ -138,7 +138,6 @@ impl VectorOverlay {
     /// "see-through" switch lowers them so the arrow inside the ventricles is visible, and
     /// restores them when switched off.
     pub fn controls(&mut self, ui: &mut egui::Ui, alphas: &mut [&mut f32]) {
-        ui.strong(t!("vector-heading"));
         ui.horizontal(|ui| {
             ui.checkbox(&mut self.arrow, t!("vec-arrow"));
             ui.checkbox(&mut self.show_loop, t!("vec-loop"));

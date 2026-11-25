@@ -13,6 +13,7 @@ mod md5;
 mod surface;
 mod tet;
 mod torso;
+mod volumes;
 
 use anyhow::{Context, Result};
 use heartsim_geometry::pack::{FileEntry, HEART_FRAME, MeshEntry};
@@ -74,7 +75,8 @@ Changes by heartsim: the `average` mesh was re-oriented to the measured long-axi
 boundary surfaces extracted, smoothed and decimated, its myocardium resampled to a 2.3 mm cell\n\
 cloud with the dataset's fibres and universal ventricular coordinates; vessel tubes beyond the\n\
 cropped inlets, an appendage body, the coronary sinus, the conduction system, atrial sub-regions,\n\
-AHA segments and landmarks were added by rule (heartsim-geometry, MIT OR Apache-2.0).\n\
+AHA segments and landmarks were added by rule (heartsim-geometry, MIT OR Apache-2.0); its tags\n\
+were also rasterised into a 1 mm label volume with flood-filled chamber blood (labels_heart.bin).\n\
 \n\
 TORSO\n\
 Qian S, Monaci S, Mendonca-Costa C, Campos F, Gemmell P, Zaidi S, Rajani R, Whitaker J,\n\
@@ -84,7 +86,9 @@ Rinaldi CA, Bishop MJ. Whole Torso Computational Models (v1.0). King's College L
 Changes by heartsim: the outer skin surface of torso 1 was extracted from the tetrahedral model,\n\
 closed at the CT's cut planes, smoothed, decimated, scaled uniformly about the subject's own\n\
 ventricular centroid to the heart's left-ventricular length and translated into the heart frame;\n\
-the electrode sites were placed on it by rule; every other tag was discarded.\n\
+the electrode sites were placed on it by rule. Its bone, lung, liver and great-vessel blood tags\n\
+were rasterised into a 2 mm label volume in the same frame (labels_thorax.bin), every other tag as\n\
+generic soft tissue; nothing else of the subject's anatomy was kept.\n\
 \n\
 The pack as a whole is distributed under CC BY 4.0 for the geometry derived from the two sources\n\
 above; heartsim's own additions are MIT OR Apache-2.0.\n\
@@ -173,7 +177,6 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
         eprintln!("  {line}");
     }
     eprintln!("heart baked in {:.1?}", t.elapsed());
-    drop(heart_mesh);
 
     let torso_base = torso_dir.join("KCL_torso1").join("KCL_torso1");
     eprintln!("reading {}.pts/.elem", torso_base.display());
@@ -191,6 +194,20 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
         eprintln!("  {line}");
     }
     eprintln!("torso baked in {:.1?}", t.elapsed());
+    // the echo label volumes (brief B31): heart box and thorax box, in the heart frame
+    let t = std::time::Instant::now();
+    let xf = heart.to_pack;
+    let baked = volumes::bake_volumes(
+        &heart_mesh,
+        &|p| xf.apply(p),
+        &heart.cells,
+        &heart.aha_segments,
+        &torso_mesh,
+        torso.subject_centre,
+        torso.scale,
+    )?;
+    eprintln!("label volumes baked in {:.1?}", t.elapsed());
+    drop(heart_mesh);
     drop(torso_mesh);
 
     // nearest-cell distances per precordial lead, the numbers the forward model depends on
@@ -257,7 +274,61 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
         body: None,
         aha_segments: heart.aha_segments,
         licence: REAL_LICENSE.to_string(),
+        volumes: Some(baked),
     };
     eprintln!("total bake time {:.1?}", t0.elapsed());
     report_and_verify(&mut pack, &args.out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Brief B31: a second bake from the same sources is byte-identical, label volumes included,
+    /// and the default pack in the repository is what the bake produces (except the manifest's
+    /// provenance line, which names the xtask version). Skipped when the sources are not on disk;
+    /// ignored by default because it bakes twice (about a minute in release):
+    /// `cargo test -p xtask --release -- --ignored second_bake`.
+    #[test]
+    #[ignore = "bakes the real pack twice from assets/anatomy-src (minutes)"]
+    fn second_bake_is_byte_identical() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let sources = root.join("assets/anatomy-src");
+        if !sources.join("rodero-average").is_dir() || !sources.join("kcl-torso1").is_dir() {
+            eprintln!("sources not on disk: skipped");
+            return;
+        }
+        let tmp = std::env::temp_dir().join(format!("heartsim-bake-twice-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let bake = |out: &Path| {
+            let args = BakeArgs {
+                out: out.to_path_buf(),
+                procedural: false,
+                source_root: sources.clone(),
+                offline: true,
+                name: "default".into(),
+                voxel_mm: Resolution::DEFAULT.mesh_voxel_mm,
+                spacing_mm: Resolution::DEFAULT.cell_spacing_mm,
+                chamber_triangles: 30_000,
+                vessel_triangles: 6_000,
+                torso_triangles: 12_000,
+            };
+            run(&args).expect("bake");
+        };
+        let (a, b) = (tmp.join("a"), tmp.join("b"));
+        bake(&a);
+        bake(&b);
+        let committed = root.join("assets/anatomy/default");
+        let manifest = AnatomyPack::load(&a).expect("the baked pack loads").manifest;
+        for file in manifest.files.keys().map(String::as_str).chain(["manifest.ron"]) {
+            let x = std::fs::read(a.join(file)).expect("a");
+            let y = std::fs::read(b.join(file)).expect("b");
+            assert!(x == y, "{file} differs between two bakes");
+            if file != "manifest.ron" {
+                let z = std::fs::read(committed.join(file)).expect("committed");
+                assert!(x == z, "{file} differs from the committed pack");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }

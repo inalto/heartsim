@@ -182,6 +182,9 @@ pub fn picker_groups(library: &ScenarioLibrary) -> Vec<(Option<String>, Vec<usiz
     out
 }
 
+/// Width of the rhythm combo box, points: fits the longest preset name; a longer one is cut.
+pub const PICKER_WIDTH_PX: f32 = 230.0;
+
 /// Scenario combo box. Returns the index the user picked (also when re-picking the current
 /// one, which restarts it).
 pub fn scenario_picker(
@@ -194,40 +197,57 @@ pub fn scenario_picker(
         .and_then(|i| library.entries.get(i))
         .map_or_else(|| t!("scenario-custom"), |s| s.scenario.title.clone());
     ui.label(t!("scenario-rhythm"));
-    let combo = egui::ComboBox::from_id_salt("scenario_picker")
-        .selected_text(title)
-        .width(230.0)
-        .show_ui(ui, |ui| {
-            for (heading, group) in picker_groups(library) {
-                if let Some(heading) = heading {
-                    ui.separator();
-                    ui.weak(heading);
-                }
-                for i in group {
-                    let s = &library.entries[i];
-                    if ui
-                        .selectable_label(current == Some(i), &s.scenario.title)
-                        .on_hover_text(&s.scenario.description)
-                        .clicked()
-                    {
-                        picked = Some(i);
-                    }
-                }
-            }
-        });
+    // a fixed width whatever the rhythm's name: a long name is cut with an ellipsis (and shown whole
+    // on hover), so the bar around the picker does not reflow when the rhythm changes
+    let combo = ui
+        .allocate_ui_with_layout(
+            egui::vec2(PICKER_WIDTH_PX, ui.spacing().interact_size.y),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_max_width(PICKER_WIDTH_PX);
+                egui::ComboBox::from_id_salt("scenario_picker")
+                    .selected_text(title.as_str())
+                    .width(PICKER_WIDTH_PX)
+                    .truncate()
+                    .show_ui(ui, |ui| {
+                        for (heading, group) in picker_groups(library) {
+                            if let Some(heading) = heading {
+                                ui.separator();
+                                ui.weak(heading);
+                            }
+                            for i in group {
+                                let s = &library.entries[i];
+                                if ui
+                                    .selectable_label(current == Some(i), &s.scenario.title)
+                                    .on_hover_text(&s.scenario.description)
+                                    .clicked()
+                                {
+                                    picked = Some(i);
+                                }
+                            }
+                        }
+                    })
+            },
+        )
+        .inner;
     combo
         .response
         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t!("scenario-rhythm")));
     heartsim_ui::highlight::mark(&combo.response, "rhythm_picker");
-    if let Some(s) = current.and_then(|i| library.entries.get(i)) {
-        let r = ui
-            .button(t!("scenario-restart"))
-            .on_hover_text(t!("scenario-restart-hint"));
-        if r.clicked() {
-            picked = current;
-        }
+    combo.response.on_hover_text(title);
+    // always drawn (disabled for the custom settings, which have no rhythm to restart or explain),
+    // so the bar keeps its size
+    let s = current.and_then(|i| library.entries.get(i));
+    let r = ui
+        .add_enabled(s.is_some(), egui::Button::new(t!("scenario-restart")))
+        .on_hover_text(t!("scenario-restart-hint"));
+    if r.clicked() {
+        picked = current;
+    }
+    let about = ui.add_enabled(s.is_some(), egui::Button::new(t!("scenario-about")));
+    if let Some(s) = s {
         // a real button: hover gives the one-line description, a click opens the explanation
-        let about = ui.button(t!("scenario-about")).on_hover_ui(|ui| {
+        let about = about.on_hover_ui(|ui| {
             ui.set_max_width(420.0);
             ui.strong(&s.scenario.title);
             ui.label(&s.scenario.description);

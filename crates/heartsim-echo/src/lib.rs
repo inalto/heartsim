@@ -110,25 +110,183 @@
 //!
 //! # What it cannot show
 //!
-//! No leaflets, papillary muscles or pericardium (later phases); no pressure, flow or Doppler; no
+//! The wall-motion model itself has no leaflets, papillary muscles or pericardium (the
+//! cross-section adds them as designed parts); no pressure, flow or Doppler; no
 //! dilatation or hypertrophy; the right-ventricular volume is not computed; nothing here was
 //! compared with a real echocardiogram.
 //!
+//! # The cross-section (brief B31, echo simulator phase 2)
+//!
+//! An **anatomical cross-section, not an ultrasound image**: the plane a transducer on the
+//! figure's skin cuts through the beating heart, as a polar image of tissue labels
+//! ([`heartsim_geometry::Label`]). The anatomy is the pack's two label volumes (format 3: the heart
+//! box at 1 mm, the thorax box at 2 mm) plus the designed parts the data lacks ([`DesignedParams`]:
+//! leaflets, papillary muscles, moderator band, pericardium — each value with its source or
+//! "designed"). Each sample point goes back to the rest anatomy through a displacement grid filled
+//! from **the same evaluated frame the 3-D heart draws** ([`field`]), so the slice and the mesh
+//! cannot disagree and the motion model runs once per drawn frame. Bone and lung hide what lies
+//! behind them on each line (geometric occlusion, not acoustics).
+//!
+//! ```text
+//! // once, after the pack and the motion model are built:
+//! let anatomy = EchoAnatomy::new(&pack, &model, DesignedParams::default())?;   // ≈ 0.7 s native, once
+//! let mut state = SliceState::new(&anatomy);
+//! let mut image = LabelImage::new(128, 512);              // lines × samples
+//! let mut pose = anatomy.window_pose(EchoWindow::Apical); // or Parasternal, Subcostal, Suprasternal
+//!
+//! // the UI moves the probe (all values are clamped; NaN never propagates):
+//! pose = anatomy.slide_to(&pose, picked_point_on_the_figure);   // drag on the skin
+//! pose.tilt_deg += 5.0; pose.rock_deg -= 3.0; pose.rotation_deg += 10.0;
+//! pose.depth_mm = 180.0; pose.sector_deg = 80.0;
+//! let probe = pose.frame(anatomy.designed.contact_limit_deg); // apex, beam, marker, elevation, contact
+//! let clock = pose.clock_hours();                               // the index marker as a clock position
+//!
+//! // every drawn frame, after model.evaluate(&input, &mut frame) for the 3-D heart:
+//! state.update(&anatomy, &model, &frame, &input);   // grid from that frame + valve openings at input.t_ms
+//! state.slice(&anatomy, &pose, &mut image);         // or heartsim_echo::slice(…) for both
+//! // image.contact == false → "no contact", every label Outside
+//! // image.texels(): lines × samples bytes, label | HIDDEN_BIT behind the first bone/lung sample
+//! // image.labels_present(): for the legend; image.depth_of(sample) for the depth scale
+//! // state.label_at(&anatomy, point_mm): the tissue under a hover point in the heart frame
+//! ```
+//!
+//! With the motion switched off (`input.enabled == false`) `update` puts the grid at rest and
+//! the leaflets still open and close by phase. Line 0 of the image is the side away from the
+//! marker; the last line is the marker side (the screen's right); sample 0 is at the skin.
+//!
+//! Cost (`cargo bench -p heartsim-echo --bench slice`, release, the development VM where one
+//! [`MotionModel::evaluate`] takes about 18 ms): the slice alone, 128 × 512 from the apical
+//! window, about 7 ms; [`SliceState::update`] (grid from the frame, leaflets posed) about 4 ms;
+//! evaluate + update + slice about 30 ms. The slice runs no motion evaluation of its own. Along
+//! each line the inverse map is solved at every fourth sample (warm-started from the previous
+//! one, iterated to 0.05 mm) and interpolated between (≤ 0.3 mm from the exact map); it is skipped
+//! wherever the rest heart is out of reach of the instant's largest displacement, and the grid
+//! update interpolates only the far nodes such a sample can touch. [`EchoAnatomy::new`] takes
+//! about 0.7 s, once.
+//!
+//! The lung that covers the heart at the left sternal border in this supine subject is pulled
+//! back by a **designed** lung-edge retraction (the cardiac notch; [`DesignedParams`]
+//! `lung_retraction_*`, narrower in inspiration), applied at lookup time; ribs still hide. The
+//! apical start pose is the skin point near the LV long axis's exit whose whole start sector is
+//! clearest of bone and lung (B32 step 0).
+//!
+//! # The grey image (brief B32, echo simulator phase 3)
+//!
+//! A **simulated B-mode appearance from a simple line model** ([`bmode`]): the label slice of the
+//! same frame goes through two-way attenuation, reflection and transmission at label changes
+//! (Shams 2008) weighted by the incidence angle (Mattausch 2016), a designed lung reverberation,
+//! speckle hashed from each sample's rest position (so it rides with the tissue), a separable
+//! polar point-spread function, time-gain compensation, gain and log compression, into a `u8`
+//! polar image of the label image's layout. The acoustic numbers are in
+//! `assets/echo/acoustic.ron` ([`AcousticTable`], `format_version` 1), each with its source and
+//! status (read, unverified or designed).
+//!
+//! ```text
+//! let mut imager = EchoImager::new(AcousticTable::builtin());
+//! let settings = ImageSettings::default();                // frequency, depth, sector, focus, gain,
+//!                                                         // TGC, dynamic range, lines, samples, seed
+//! let pose = settings.apply_to(&pose);                    // depth and sector live in the pose
+//! let mut labels = settings.label_image();
+//! let mut grey = GreyImage::new(settings.lines, settings.samples);
+//! // every drawn frame, after state.update(…) as above:
+//! state.slice(&anatomy, &pose, &mut labels);
+//! imager.image(&anatomy, &state, &pose, &labels, &settings, &mut grey);
+//! // grey.pixels: lines × samples bytes (an R8 texture), grey.contact, grey.focus_mm
+//! ```
+//!
+//! Cost (`cargo bench -p heartsim-echo --bench slice -- grey`, release, the development VM): about
+//! 14.7 ms for 128 × 512 from the apical window on top of the slice — line model 2.9 ms, speckle
+//! 6.4 ms, point-spread function and envelope 2.8 ms, compensation and compression 0.5 ms. No
+//! motion is evaluated again.
+//!
+//! # M-mode, tissue Doppler and measurements (brief B34, echo simulator phase 5)
+//!
+//! * [`mmode`]: one scan line of the same cross-section (label and grey) recorded over time at a
+//!   fixed [`MMODE_STEP_MS`], independent of the frame rate: column `k` is the heart at
+//!   `k · MMODE_STEP_MS`. Sweep speeds 25, 50 and 100 mm/s ([`SweepSpeed`]). A column costs one
+//!   evaluation of the heart plus a 17-line thin slice and image, not a whole image.
+//! * [`doppler`]: **tissue** Doppler at the septal or lateral mitral and the lateral tricuspid
+//!   annulus only ([`AnnulusSite`], [`snap_gate`]): the velocity of the annulus point along the beam,
+//!   positive toward the probe, uncorrected for the angle, with S', e' and a' marked from the
+//!   model's own timing ([`BeatTimes`]). There is no blood Doppler.
+//! * [`measure`]: calipers' arithmetic, the short list of names ([`Named`]) and the model's own
+//!   value to compare a measurement with ([`reference_on_plane`], [`reference_on_mmode`],
+//!   [`reference_excursion`], [`reference_velocity`]): read from the label line along the learner's
+//!   own line, or from the annulus's motion; none where the model has none. Nothing is graded.
+//!
+//! ```text
+//! let mut scan = MModeScan::new(&anatomy, &model, AcousticTable::builtin());
+//! let ctx = ScanContext { anatomy: &anatomy, history: &history, pose, cursor_deg, settings: &settings,
+//!                         enabled: true, exaggeration: 1.0 };
+//! scan.advance(&mut model, &ctx, drawn_time_ms, 2);      // at most two columns this frame
+//! let column = scan.buffer.get(step);                    // MModeColumn: grey, labels, depth
+//!
+//! let mut doppler = DopplerScan::new();
+//! doppler.set_gate(snap_gate(&mut model, &input, &probe_frame, clicked_plane_point));
+//! doppler.advance(&mut model, &DopplerContext { history: &history, enabled: true, exaggeration: 1.0 },
+//!                 drawn_time_ms, 8);
+//! let v = doppler.velocity_cm_s(step);                   // central difference of the annulus
+//! let beat = model.beat_times(&history, t_ms, site.side());
+//! let waves = doppler.markers(&beat.unwrap());           // S', e', a' (no a' without atrial contraction)
+//! ```
+//!
+//! Cost (`cargo bench -p heartsim-echo --bench measure`, release, the development VM): one M-mode
+//! column about 33 ms (evaluate, grid update, thin slice and image; the cursor's line alone about
+//! 4.5 ms), one Doppler sample about 2.2 ms.
+//!
 //! The crate is pure: no GPU, GUI, file or clock access; it builds for `wasm32`.
 
+pub mod acoustic;
+pub mod anatomy;
+pub mod bmode;
 pub mod coords;
+pub mod designed;
+pub mod doppler;
+pub mod field;
 pub mod history;
+pub mod measure;
+pub mod mmode;
 pub mod model;
 pub mod params;
 pub mod phases;
+pub mod probe;
+pub mod slice;
 pub mod valves;
+pub mod view_hints;
+pub mod views;
+
+pub use acoustic::{ACOUSTIC_FORMAT_VERSION, AcousticError, AcousticRow, AcousticTable, Sourced, Status};
+pub use anatomy::{Capsule, EchoAnatomy, EchoError, EchoWindow, LeafletValve};
+pub use bmode::{EchoImager, GreyImage, ImageSettings, TGC_BANDS};
+pub use designed::{DesignedParams, valve_openings};
+pub use doppler::{
+    DOPPLER_STEP_MS, DopplerContext, DopplerSample, DopplerScan, GATE_SNAP_MM, Gate, Marker, WaveKind,
+    snap_gate,
+};
+pub use field::DisplacementField;
+pub use measure::{
+    Excursion, ExcursionContext, Feedback, Named, Plane2, Structure, TraceScale, cursor_toward, feedback,
+    polygon_area_cm2, reference_excursion, reference_on_mmode, reference_on_plane, reference_velocity,
+    slope_cm_s, structure_extent, structure_span,
+};
+pub use mmode::{
+    MMODE_CAPACITY, MMODE_LINES, MMODE_STEP_MS, MModeColumn, MModeSampler, MModeScan, ScanContext,
+    StepBuffer, SweepSpeed, TraceRate, cursor_frame, line_angle_deg,
+};
+pub use probe::{ProbeFrame, ProbePose, Skin};
+pub use slice::{HIDDEN_BIT, LabelImage, SliceState, slice};
 
 pub use coords::{AxisCoords, CardiacFrame, CellCoords, ChamberAxis, FrameError, MotionChamber};
 pub use history::{ACTIVATIONS_PER_CELL, CellHistory, MotionHistory};
 pub use model::{
-    MAX_EXAGGERATION, MotionError, MotionFrame, MotionInput, MotionModel, MotionReadout, PartFrame,
-    mechanical_injury,
+    AnnulusSite, BeatTimes, MAX_EXAGGERATION, MotionError, MotionFrame, MotionInput, MotionModel,
+    MotionReadout, PartFrame, mechanical_injury,
 };
 pub use params::MotionParams;
 pub use phases::{CardiacPhase, CycleTimes, Side, VolumeState};
 pub use valves::{ValveDisc, split_valve_discs};
+pub use view_hints::{Direction, Hint, HintKind, Movement, PatientDir};
+pub use views::{
+    FoundTracker, ImageStats, ItemTest, Landmarks, Reach, Reference, ViewId, ViewScore, ViewTarget,
+    ViewTargets, ViewTolerances,
+};

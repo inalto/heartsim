@@ -153,6 +153,7 @@ fn page(player: HeartSoundPlayer, finding: &str) -> Harness<'static, Page> {
     let mut p = HeartSoundPlayer::without_output();
     trainer.select(Selection::Finding(i), &mut p);
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(1200.0, 800.0))
         .build_ui_state(
             |ui, p: &mut Page| {

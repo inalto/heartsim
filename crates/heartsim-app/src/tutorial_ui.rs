@@ -38,6 +38,8 @@ pub struct Tutorials {
     pub sound_available: bool,
     /// The learner's answer to the sound check.
     pub sound_check: SoundCheck,
+    /// The reader asked for the Echo page (B33's "Go to the Echo page").
+    open_echo: bool,
     /// A tone the learner asked to hear this frame.
     tone_request: Option<Tone>,
 }
@@ -72,6 +74,7 @@ impl Tutorials {
             markdown: CommonMarkCache::default(),
             sound_available: false,
             sound_check: SoundCheck::default(),
+            open_echo: false,
             tone_request: None,
         }
     }
@@ -184,6 +187,7 @@ impl Tutorials {
             chosen: None,
         });
         self.highlight = None;
+        self.progress.last_opened = Some(t.id.clone());
         self.update_progress(|p| {
             p.page = page;
             p.furthest = p.furthest.max(page);
@@ -215,8 +219,37 @@ impl Tutorials {
 
     /// A page without a check, or whose check was answered correctly.
     fn page_cleared(&self, tutorial: usize, page: usize) -> bool {
-        self.library.tutorials[tutorial].pages[page].check.is_none()
-            || self.progress_of(tutorial).passed.contains(&page)
+        let p = &self.library.tutorials[tutorial].pages[page];
+        let progress = self.progress_of(tutorial);
+        (p.check.is_none() || progress.passed.contains(&page))
+            && (p.view_check.is_none() || progress.views_found.contains(&page))
+    }
+
+    /// The echo view the open page asks the learner to find (B33), by id.
+    #[must_use]
+    pub fn current_view_check(&self) -> Option<String> {
+        let (t, p) = self.position()?;
+        self.library.tutorials[t].pages[p]
+            .view_check
+            .as_ref()
+            .map(|v| v.view.clone())
+    }
+
+    /// The learner found the open page's view: its "view found" check is met.
+    pub fn mark_view_found(&mut self) {
+        let Some((t, page)) = self.position() else { return };
+        if self.library.tutorials[t].pages[page].view_check.is_some()
+            && !self.progress_of(t).views_found.contains(&page)
+        {
+            self.update_progress(|p| {
+                p.views_found.insert(page);
+            });
+        }
+    }
+
+    /// Whether the reader asked to bring the Echo page forward (the app clears the request).
+    pub fn take_open_echo(&mut self) -> bool {
+        std::mem::take(&mut self.open_echo)
     }
 
     /// Answer the current page's check with choice `choice`.
@@ -268,15 +301,30 @@ impl Tutorials {
         let entry = self.progress.tutorials.entry(t.id.clone()).or_default();
         f(entry);
         entry.completed = entry.furthest >= last
-            && t.pages
-                .iter()
-                .enumerate()
-                .all(|(i, p)| p.check.is_none() || entry.passed.contains(&i));
+            && t.pages.iter().enumerate().all(|(i, p)| {
+                (p.check.is_none() || entry.passed.contains(&i))
+                    && (p.view_check.is_none() || entry.views_found.contains(&i))
+            });
         if let Some(path) = &self.progress_path
             && let Err(e) = self.progress.save(path)
         {
             tracing::warn!("{}: {e}", path.display());
         }
+    }
+
+    /// The one tutorial whose button is the page's primary action: the most recently opened one if
+    /// it is not finished (its "Continue"), otherwise the first one not yet completed (its "Start",
+    /// or "Continue" when it was begun). `None` when every tutorial is completed.
+    #[must_use]
+    pub fn primary_card(&self) -> Option<usize> {
+        let unfinished = |i: usize| !self.progress_of(i).completed;
+        let last = self
+            .progress
+            .last_opened
+            .as_deref()
+            .and_then(|id| self.library.tutorials.iter().position(|t| t.id == id))
+            .filter(|&i| unfinished(i));
+        last.or_else(|| (0..self.library.tutorials.len()).find(|&i| unfinished(i)))
     }
 
     /// The tutorial list with progress, the mode switch and Start / Resume.
@@ -293,6 +341,8 @@ impl Tutorials {
             ui.label(t!("tut-none"));
         }
         let mut start = None;
+        // one primary button on the whole list (otherwise nothing stands out)
+        let primary = self.primary_card();
         // equal-width cards, as wide as the column but no wider than a line of text reads well
         let width = ui.available_width().min(TUTORIAL_CARD_MAX_WIDTH);
         for (i, t) in self.library.tutorials.iter().enumerate() {
@@ -360,7 +410,7 @@ impl Tutorials {
                                 start = Some((i, 0));
                             }
                         } else if p.page > 0 {
-                            let r = ui.button(t!("tut-continue"));
+                            let r = card_button(ui, primary == Some(i), t!("tut-continue"));
                             let name = t!(
                                 "tut-resume",
                                 title = t.title.as_str(),
@@ -374,7 +424,7 @@ impl Tutorials {
                                 start = Some((i, 0));
                             }
                         } else {
-                            let r = ui.button(t!("tut-start-short"));
+                            let r = card_button(ui, primary == Some(i), t!("tut-start-short"));
                             if named(r, t!("tut-start", title = t.title.as_str())).clicked() {
                                 start = Some((i, 0));
                             }
@@ -396,6 +446,7 @@ impl Tutorials {
         let (ti, page) = (s.tutorial, s.page);
         let chosen = s.chosen;
         let running = !s.run.is_finished();
+        let view_ok = self.progress_of(s.tutorial).views_found.contains(&s.page);
         let tutorial: &Tutorial = &self.library.tutorials[ti];
         let n = tutorial.pages.len();
         let p = &tutorial.pages[page];
@@ -419,7 +470,7 @@ impl Tutorials {
             .show(ui, |ui| {
                 for (i, pg) in tutorial.pages.iter().enumerate() {
                     let enabled = self.may_visit(ti, i);
-                    let done = pg.check.is_some() && self.progress_of(ti).passed.contains(&i);
+                    let done = (pg.check.is_some() || pg.view_check.is_some()) && self.page_cleared(ti, i);
                     let label = format!(
                         "{}. {}{}",
                         i + 1,
@@ -452,6 +503,20 @@ impl Tutorials {
                         &mut self.sound_check,
                         &mut self.tone_request,
                     );
+                }
+                if let Some(v) = &p.view_check {
+                    ui.separator();
+                    let name = heartsim_echo::ViewId::from_id(&v.view)
+                        .map_or_else(|| v.view.clone(), crate::echo_views::view_name);
+                    ui.add(egui::Label::new(t!("tut-find-view", view = name)).wrap());
+                    if view_ok {
+                        cards::result_box(ui, true, t!("tut-view-found"));
+                    } else {
+                        heartsim_ui::helper_text(ui, t!("tut-view-pending"));
+                        if ui.button(t!("tut-open-echo")).clicked() {
+                            nav = Some(Nav::OpenEcho);
+                        }
+                    }
                 }
                 if let Some(q) = &p.check {
                     ui.separator();
@@ -490,8 +555,10 @@ impl Tutorials {
             } else {
                 t!("tut-finish")
             };
+            // Next (Finish on the last page) is the one primary action of the reader
             if ui
-                .add_enabled(can_next, egui::Button::new(next_label))
+                .add_enabled_ui(can_next, |ui| heartsim_ui::primary_button(ui, next_label))
+                .inner
                 .on_disabled_hover_text(t!("tut-answer-first"))
                 .clicked()
             {
@@ -510,13 +577,14 @@ impl Tutorials {
             }
             if running {
                 ui.spinner();
-                ui.weak(t!("tut-running"));
+                heartsim_ui::helper_text(ui, t!("tut-running"));
             }
         });
         match nav {
             Some(Nav::Go(i)) => self.go_to(i),
             Some(Nav::Answer(i)) => self.answer(i),
             Some(Nav::Replay) => self.replay(),
+            Some(Nav::OpenEcho) => self.open_echo = true,
             Some(Nav::Close) => self.close(),
             None => {}
         }
@@ -528,6 +596,7 @@ enum Nav {
     Go(usize),
     Answer(usize),
     Replay,
+    OpenEcho,
     Close,
 }
 
@@ -535,5 +604,14 @@ enum Nav {
 pub fn publish_highlight(ctx: &egui::Context, tool: Option<&str>) {
     if heartsim_ui::highlight::current(ctx).as_deref() != tool {
         heartsim_ui::highlight::set(ctx, tool);
+    }
+}
+
+/// A card's button: the page's primary action when `primary`, a plain button otherwise.
+fn card_button(ui: &mut egui::Ui, primary: bool, text: String) -> egui::Response {
+    if primary {
+        heartsim_ui::primary_button(ui, text)
+    } else {
+        ui.button(text)
     }
 }

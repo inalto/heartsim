@@ -13,7 +13,8 @@ Changes by heartsim: the `average` mesh was re-oriented to the measured long-axi
 boundary surfaces extracted, smoothed and decimated, its myocardium resampled to a 2.3 mm cell
 cloud with the dataset's fibres and universal ventricular coordinates; vessel tubes beyond the
 cropped inlets, an appendage body, the coronary sinus, the conduction system, atrial sub-regions,
-AHA segments and landmarks were added by rule (heartsim-geometry, MIT OR Apache-2.0).
+AHA segments and landmarks were added by rule (heartsim-geometry, MIT OR Apache-2.0); its tags
+were also rasterised into a 1 mm label volume with flood-filled chamber blood (labels_heart.bin).
 
 TORSO
 Qian S, Monaci S, Mendonca-Costa C, Campos F, Gemmell P, Zaidi S, Rajani R, Whitaker J,
@@ -23,7 +24,9 @@ Rinaldi CA, Bishop MJ. Whole Torso Computational Models (v1.0). King's College L
 Changes by heartsim: the outer skin surface of torso 1 was extracted from the tetrahedral model,
 closed at the CT's cut planes, smoothed, decimated, scaled uniformly about the subject's own
 ventricular centroid to the heart's left-ventricular length and translated into the heart frame;
-the electrode sites were placed on it by rule; every other tag was discarded.
+the electrode sites were placed on it by rule. Its bone, lung, liver and great-vessel blood tags
+were rasterised into a 2 mm label volume in the same frame (labels_thorax.bin), every other tag as
+generic soft tissue; nothing else of the subject's anatomy was kept.
 
 The pack as a whole is distributed under CC BY 4.0 for the geometry derived from the two sources
 above; heartsim's own additions are MIT OR Apache-2.0.

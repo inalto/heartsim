@@ -73,6 +73,46 @@ pub struct Settings {
     /// Multiplier on the wall displacement for teaching, `0.5..=1.5` (the model folds the thin
     /// walls at 2x); 1 is the model.
     pub wall_motion_exaggeration: f32,
+    /// Which sections of the Simulator's left panel are open. The first three are open by default;
+    /// the wall-motion card and the vector overlay are one click away.
+    pub simulator_sections: SimulatorSections,
+    /// Record the echo M-mode trace at half its rate (B34): a column every 50 ms of simulated time
+    /// instead of every 25 ms, for computers that cannot keep the full trace in real time. The
+    /// columns it records are the ones the full trace records; a time read from the trace is then
+    /// good to 50 ms. Off by default.
+    pub echo_fast_mmode: bool,
+}
+
+/// The collapsible sections of the Simulator's left panel and whether each is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "one independent open/closed flag per section, stored by name"
+)]
+pub struct SimulatorSections {
+    /// "Colour map": the 3-D activation switch, mode, window and wavefront outline.
+    pub colour: bool,
+    /// "Click on the heart": stimulate or ablate, lesion radius, clear.
+    pub tool: bool,
+    /// "Layers and view": layer visibility and opacity, cut-away, camera presets.
+    pub layers: bool,
+    /// "Wall motion": the switch, the exaggeration and the read-out card.
+    pub motion: bool,
+    /// "Vector overlay": the heart vector ring in the 3-D view.
+    pub vector: bool,
+}
+
+impl Default for SimulatorSections {
+    fn default() -> Self {
+        Self {
+            colour: true,
+            tool: true,
+            layers: true,
+            motion: false,
+            vector: false,
+        }
+    }
 }
 
 /// The colour scheme preference, stored by name.
@@ -127,6 +167,8 @@ impl Default for Settings {
             small_speaker: false,
             wall_motion: true,
             wall_motion_exaggeration: 1.0,
+            simulator_sections: SimulatorSections::default(),
+            echo_fast_mmode: false,
         }
     }
 }
@@ -191,8 +233,14 @@ impl Settings {
             v.widgets.inactive.bg_stroke = outline;
             v.widgets.hovered.bg_stroke = Stroke::new(3.0, fg);
             v.widgets.active.bg_stroke = Stroke::new(3.0, fg);
-            v.selection.bg_fill = Color32::from_rgb(255, 210, 0);
-            v.selection.stroke = Stroke::new(2.0, Color32::BLACK);
+            // the label of a selected tab or pill is the override colour: black reads on yellow
+            // (14.5:1), white does not (1.5:1), so the dark setting selects with a deep blue (8.6:1)
+            v.selection.bg_fill = if dark {
+                Color32::from_rgb(0, 70, 170)
+            } else {
+                Color32::from_rgb(255, 210, 0)
+            };
+            v.selection.stroke = Stroke::new(2.0, fg);
             v.hyperlink_color = if dark {
                 Color32::from_rgb(120, 220, 255)
             } else {
@@ -298,19 +346,22 @@ fn heart_sound_section(
         }
         ui.add_enabled_ui(settings.heart_sound_audio, |ui| {
             let volume = egui::Slider::new(&mut settings.heart_sound_volume, 0.0..=1.0)
-                .text(t!("settings-hs-volume"))
                 .custom_formatter(|v, _| format!("{:.0} %", v * 100.0))
                 .custom_parser(parse_percent);
-            changed |= ui.add(volume).changed();
+            changed |= heartsim_ui::slider_row(ui, &t!("settings-hs-volume"), volume).changed();
             let offset = egui::Slider::new(
                 &mut settings.audio_offset_ms,
                 crate::sound_out::AUDIO_OFFSET_RANGE_MS,
             )
-            .text(t!("settings-hs-offset"))
             .suffix(heartsim_ui::controls::MS)
             .max_decimals(0);
-            changed |= ui.add(offset).changed();
-            ui.weak(t!("settings-hs-offset-hint"));
+            changed |= heartsim_ui::slider_row(ui, &t!("settings-hs-offset"), offset).changed();
+            heartsim_ui::info_disclosure(
+                ui,
+                "hs_offset",
+                t!("settings-hs-offset-summary"),
+                t!("settings-hs-offset-hint"),
+            );
             ui.horizontal(|ui| {
                 let label = if info.calibrating {
                     t!("settings-hs-sync-stop")
@@ -333,29 +384,29 @@ fn heart_sound_section(
                     );
                 }
             });
-            ui.weak(t!("settings-hs-sync-hint"));
+            heartsim_ui::helper_text(ui, t!("settings-hs-sync-hint"));
             changed |= ui
                 .checkbox(&mut settings.small_speaker, t!("settings-hs-small-speaker"))
                 .changed();
-            ui.weak(t!("settings-hs-small-speaker-hint"));
+            heartsim_ui::helper_text(ui, t!("settings-hs-small-speaker-hint"));
         });
         if settings.heart_sound_audio {
             use heartsim_ui::HeartSoundStatus;
             match info.status {
                 HeartSoundStatus::Unsupported => {
-                    ui.weak(t!("settings-hs-unsupported"));
+                    heartsim_ui::helper_text(ui, t!("settings-hs-unsupported"));
                 }
                 HeartSoundStatus::WaitingForClick => {
-                    ui.weak(t!("settings-hs-click-to-enable"));
+                    heartsim_ui::helper_text(ui, t!("settings-hs-click-to-enable"));
                 }
                 _ if info.available == Some(false) => {
-                    ui.weak(t!("settings-hs-unavailable"));
+                    heartsim_ui::helper_text(ui, t!("settings-hs-unavailable"));
                 }
                 _ => {}
             }
         }
-        ui.weak(t!("settings-hs-headphones"));
-        ui.weak(t!("settings-hs-model"));
+        heartsim_ui::helper_text(ui, t!("settings-hs-headphones"));
+        heartsim_ui::helper_text(ui, t!("settings-hs-model"));
     });
     (changed, calibrate)
 }
@@ -428,11 +479,10 @@ fn settings_window_inner(
                     .checkbox(&mut settings.reduced_motion, t!("settings-reduced-motion"))
                     .changed();
                 let slider = egui::Slider::new(&mut settings.torso_image_opacity, 0.0..=1.0)
-                    .text(t!("settings-torso-opacity"))
                     .custom_formatter(|v, _| format!("{:.0} %", v * 100.0))
                     .custom_parser(parse_percent);
-                changed |= ui.add(slider).changed();
-                ui.weak(t!("settings-torso-opacity-hint"));
+                changed |= heartsim_ui::slider_row(ui, &t!("settings-torso-opacity"), slider).changed();
+                heartsim_ui::helper_text(ui, t!("settings-torso-opacity-hint"));
             });
             #[cfg(feature = "audio")]
             cards::card(ui, |ui| {
@@ -441,25 +491,30 @@ fn settings_window_inner(
                     .changed();
                 ui.add_enabled_ui(settings.monitor_beep, |ui| {
                     let slider = egui::Slider::new(&mut settings.beep_volume, 0.0..=1.0)
-                        .text(t!("settings-beep-volume"))
                         .custom_formatter(|v, _| format!("{:.0} %", v * 100.0))
                         .custom_parser(parse_percent);
-                    changed |= ui.add(slider).changed();
+                    changed |= heartsim_ui::slider_row(ui, &t!("settings-beep-volume"), slider).changed();
                 });
-                ui.weak(t!("settings-beep-hint"));
+                heartsim_ui::helper_text(ui, t!("settings-beep-hint"));
                 if settings.monitor_beep && beep_available == Some(false) {
-                    ui.weak(t!("settings-beep-unavailable"));
+                    heartsim_ui::helper_text(ui, t!("settings-beep-unavailable"));
                 }
             });
             changed |= extra(ui, settings);
+            cards::card(ui, |ui| {
+                changed |= ui
+                    .checkbox(&mut settings.echo_fast_mmode, t!("settings-echo-fast-mmode"))
+                    .changed();
+                heartsim_ui::helper_text(ui, t!("settings-echo-fast-mmode-hint"));
+            });
             #[cfg(feature = "update-check")]
             cards::card(ui, |ui| {
                 changed |= ui
                     .checkbox(&mut settings.check_for_updates, t!("settings-update-check"))
                     .changed();
-                ui.weak(t!("settings-update-check-hint"));
+                heartsim_ui::helper_text(ui, t!("settings-update-check-hint"));
             });
-            ui.weak(t!("settings-hint"));
+            heartsim_ui::helper_text(ui, t!("settings-hint"));
         });
     changed
 }
@@ -490,6 +545,14 @@ mod tests {
             small_speaker: true,
             wall_motion: false,
             wall_motion_exaggeration: 1.25,
+            simulator_sections: SimulatorSections {
+                colour: false,
+                tool: true,
+                layers: false,
+                motion: true,
+                vector: true,
+            },
+            echo_fast_mmode: true,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -517,6 +580,23 @@ mod tests {
         assert!((old.wall_motion_exaggeration - 1.0).abs() < f32::EPSILON);
         let off: Settings = ron::from_str("(wall_motion: false)").expect("settings load");
         assert!(!off.wall_motion);
+    }
+
+    #[test]
+    fn the_faster_mmode_trace_is_off_by_default_and_in_older_settings() {
+        assert!(!Settings::default().echo_fast_mmode);
+        let old: Settings = ron::from_str("(high_contrast: true)").expect("settings load");
+        assert!(!old.echo_fast_mmode);
+    }
+
+    #[test]
+    fn simulator_sections_default_to_the_first_three_open_and_older_settings_get_that() {
+        let d = SimulatorSections::default();
+        assert!(d.colour && d.tool && d.layers && !d.motion && !d.vector);
+        let old: Settings = ron::from_str("(language: None, adjust_open: true)").expect("old settings load");
+        assert_eq!(old.simulator_sections, d);
+        let part: Settings = ron::from_str("(simulator_sections: (colour: false))").expect("settings load");
+        assert!(!part.simulator_sections.colour && part.simulator_sections.tool);
     }
 
     #[test]
@@ -636,5 +716,11 @@ mod tests {
         assert_eq!(dark.panel_fill, Color32::BLACK);
         let light = s.visuals(false);
         assert_eq!(light.override_text_color, Some(Color32::BLACK));
+        // a selected tab's label (the override colour) reads on the selection fill
+        for v in [&dark, &light] {
+            let fg = v.override_text_color.expect("override");
+            let r = heartsim_ui::theme::contrast_ratio(fg, v.selection.bg_fill);
+            assert!(r >= 7.0, "high-contrast selected label: {r:.2}");
+        }
     }
 }

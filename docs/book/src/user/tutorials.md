@@ -8,7 +8,8 @@ with a knowledge check.
   situation the text describes.
 * **Self-study mode** asks you to answer each page's question before moving on; **tutor mode** lets a teacher jump freely
   while projecting the screen.
-* Progress is saved per tutorial on your computer, so you can stop and continue later. Each card shows how far you got ("3 of 6 pages" and a progress bar, or *Completed* with a tick); its button says **Start**, **Continue** or **Start again**.
+* Progress is saved per tutorial on your computer, so you can stop and continue later. Each card shows how far you got ("3 of 6 pages" and a progress bar, or *Completed* with a tick); its button says **Start**, **Continue** or **Start again**. The list has one accent-coloured button: **Continue** on the tutorial
+you opened last if it is not finished, otherwise **Start** on the first one not completed. The other buttons are plain.
 
 Tutorials are files under `assets/tutorials/<id>/`: Markdown text plus a list of actions, the same actions a scenario
 timeline uses. A teacher can write one without programming; the format is described in the tutorial files themselves.

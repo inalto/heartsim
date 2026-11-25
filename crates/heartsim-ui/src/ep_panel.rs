@@ -620,7 +620,7 @@ pub fn catheter_panel(
             }
         });
     }
-    ui.small(t!("ep-catheter-hint"));
+    crate::helper_text(ui, t!("ep-catheter-hint"));
 }
 
 fn ms_slider(ui: &mut Ui, value: &mut f64, range: std::ops::RangeInclusive<f64>, label: &str) {
@@ -752,7 +752,7 @@ pub fn pes_panel(
         }
     });
     if !allowed {
-        ui.small(t!("ep-erp-needs-tier1"));
+        crate::helper_text(ui, t!("ep-erp-needs-tier1"));
     }
     match status {
         ProtocolStatus::Pacing {

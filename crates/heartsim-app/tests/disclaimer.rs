@@ -20,6 +20,7 @@ struct Model {
 /// What `HeartSimApp::ui` does with the dialog and the About window, on a bare context.
 fn harness(settings: Settings) -> Harness<'static, Model> {
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(900.0, 700.0))
         .build_ui_state(
             |ui, m: &mut Model| {

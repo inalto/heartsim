@@ -20,6 +20,7 @@ struct Model {
 
 fn harness(info: Option<HeartSoundInfo>) -> Harness<'static, Model> {
     Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(700.0, 900.0))
         .build_ui_state(
             |ui, m: &mut Model| {

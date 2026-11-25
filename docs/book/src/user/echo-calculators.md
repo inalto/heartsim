@@ -18,7 +18,7 @@ example of our own.
 
 * **Search** (left, at the top) matches the name, other names and abbreviations, and the measurements a calculator asks for,
   in the interface language: "pressure half-time", "EROA", "TAPSE", "tempo di dimezzamento" all work. The list below it is
-  grouped by category; favourites come first. Calculators in *italics* are formula only (see below).
+  grouped by category; favourites come first. Calculators in *italics* are formula only (see below); a line under the search box says so.
 * **Inputs** are in the order you acquire them, with the unit and the accepted range beside each. **Tab** moves between fields
   and **Enter** moves to the next number. A comma or a point both work as the decimal separator. Optional inputs are marked; a
   value outside the range, or a combination that cannot be (an end-systolic volume larger than the end-diastolic one), is
@@ -27,7 +27,9 @@ example of our own.
   calculator at the top of the list.
 * **Heart rate from the running rhythm** appears only where the simulator really has the input: the cardiac output and shunt
   flow calculators take the ventricular rate of the rhythm running in the Simulator, measured from its last beats. The
-  simulator has no echo images, so no echo measurement is ever taken from it.
+  simulator has no echo images, so the Simulator never supplies an echo measurement; those come from the Echo page, below.
+* **Measurements from the echo simulator.** A value measured on the Echo page can be sent to the matching calculator. Its field is
+  marked *from the echo simulator* until you edit it; you type the rest. See [Measuring on the echo](echo-measuring.md).
 * At phone width the list comes first; choose a calculator to open it, and **Back to the list** to return.
 
 ## Verified and formula only
@@ -36,7 +38,7 @@ Every calculator carries a badge:
 
 * **Verified against the source**: the formula and every threshold the page shows were read in the primary publication (the
   guideline or the original paper), at the table and page given under *References*.
-* **Formula only (no grading)**: the arithmetic is standard and was checked against a primary source or first principles, but
+* **Formula only (no grading)**, shown in *italics* in the list: the arithmetic is standard and was checked against a primary source or first principles, but
   no interpretation is shown, because its criteria were not read in a primary source (for example, the aortic diameter: the
   guideline defines dilatation on a nomogram whose limits are not printed as numbers).
 

@@ -1,0 +1,478 @@
+// heartsim tutorial: the standard echo views and how to find them. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/tutorial.rs.
+// Every probe position, marker direction and manoeuvre follows Mitchell et al. 2019 (see references);
+// the targets and tolerances behind "view found" are designed (heartsim_echo::views) and have not been
+// reviewed by a sonographer. This teaches orientation and view recognition in the model, not hand skill.
+Tutorial(
+    format_version: 1,
+    id: "13_echo_views",
+    title: "Echo: the standard views",
+    summary: "The four windows and the six probe movements, then thirteen standard views in the order the guideline teaches them: long axis, the two right-heart views, the four short-axis levels, the apical four-chamber and its neighbours, and the subcostal four-chamber. Each page asks you to find the view with the probe. Three last pages measure on the model: LV diameters on an M-mode, TAPSE, and tissue Doppler at the annulus.",
+    references: [
+        "Mitchell C, Rahko PS, Blauwet LA, et al. Guidelines for performing a comprehensive transthoracic echocardiographic examination in adults: recommendations from the American Society of Echocardiography. J Am Soc Echocardiogr 2019;32:1-64. doi:10.1016/j.echo.2018.06.004 (probe movements p5; PLAX, RV outflow and inflow p23-25; short-axis views p25-26; apical views p26 and p30; subcostal p31; M-mode p18; LV dimensions, left atrium p31; aortic root p32; TAPSE p33; tissue Doppler p44).",
+    ],
+    pages: [
+        Page(
+            title: "Windows and movements",
+            markdown: r#"
+The heart is imaged through a few **windows** where bone and lung leave a gap: beside the sternum
+(**parasternal**), over the apex (**apical**), under the breastbone (**subcostal**) and above it
+(**suprasternal**). The four buttons on the Echo page start the probe at each.
+
+Six words describe what the hand does (Mitchell et al., p5):
+
+* **slide** the transducer over the skin;
+* **rotate** it, turning the index marker about the beam;
+* **tilt** it, so the beam sweeps to another plane;
+* **rock** it, swinging within the same plane toward or away from the marker;
+* **angle** the beam from the same spot toward a structure;
+* and the machine's **depth**.
+
+This model has a **supine** patient. The guideline images the parasternal and apical windows in the
+left lateral position, so some views are harder here, and a few cannot be reached at all (the last
+page says which).
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "You keep the transducer where it is and aim the beam toward the aortic valve. Which movement is that?",
+                choices: ["Angle", "Slide", "Rotate", "Depth"],
+                answer: 0,
+                explanation: "Angling keeps the position and points the beam at a structure. Sliding changes the skin position, rotating turns the marker, and depth is a setting of the machine.",
+            )),
+        ),
+        Page(
+            title: "The index marker",
+            markdown: r#"
+The transducer has an **index marker**, an orange dot on the probe and on the sector. Whatever
+lies on the marker side of the beam is drawn on the **right** of the image (the usual adult
+display). In the apical views the left heart appears on the right of the screen, because the
+marker points toward the patient's left side or toward the bed (Mitchell et al., p26).
+
+On the Echo page the marker's position is also given as a clock face on the chest: 12 o'clock
+toward the head, 3 o'clock toward the patient's left. Rotating changes it.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Apical)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "A structure lies on the marker side of the beam. Where is it drawn?",
+                choices: ["On the right of the image", "On the left of the image", "At the top", "It depends on the depth"],
+                answer: 0,
+                explanation: "The marker side is the right of the sector, so the marker side is where the image's right is.",
+            )),
+        ),
+        Page(
+            title: "Parasternal long axis",
+            markdown: r#"
+Place the probe at the **third or fourth intercostal space** beside the left sternal border, the
+marker toward the **right shoulder** (about 9 to 10 o'clock). The ventricle should lie across the
+sector; **the apex should not be seen**, and a short, rounded "false apex" is cured by rotating,
+tilting or angling (Mitchell et al., p23-24). You should see two of the three aortic leaflets and
+both mitral leaflets, and no papillary muscle.
+
+Find the view. The page tells you what to change; **Show me** plays the movement.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("plax")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "plax")),
+            check: Some(Question(
+                prompt: "In the parasternal long axis the apex of the left ventricle is normally:",
+                choices: ["Not in the image", "At the top centre of the sector", "On the marker side, deep", "Replaced by the right atrium"],
+                answer: 0,
+                explanation: "In most patients the apex is not seen in this view. If the ventricle looks short and rounded, that is a false apex: rotate, tilt or angle to fix it.",
+            )),
+        ),
+        Page(
+            title: "Right ventricular outflow",
+            markdown: r#"
+From the long axis, **tilt the beam anteriorly** and **rotate slightly clockwise** (Mitchell et al.,
+p25). The right ventricular outflow tract opens into the pulmonary valve and the main pulmonary
+artery.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("rv_outflow")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "rv_outflow")),
+            check: Some(Question(
+                prompt: "Which structure does the right ventricular outflow view lead you to?",
+                choices: ["The pulmonary valve and main pulmonary artery", "The aortic valve and ascending aorta", "The coronary sinus", "The inferior vena cava"],
+                answer: 0,
+                explanation: "The outflow tract of the right ventricle ends at the pulmonary valve, with the main pulmonary artery beyond it.",
+            )),
+        ),
+        Page(
+            title: "Right ventricular inflow",
+            markdown: r#"
+**Tilt toward the patient's right hip**, with a little counterclockwise rotation if needed
+(Mitchell et al., p25). The tricuspid valve lies in the centre of the sector, the right ventricle in
+the upper part and the right atrium in the lower part.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("rv_inflow")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "rv_inflow")),
+            check: Some(Question(
+                prompt: "In the right ventricular inflow view the valve in the centre of the sector is:",
+                choices: ["The tricuspid valve", "The mitral valve", "The aortic valve", "The pulmonary valve"],
+                answer: 0,
+                explanation: "Inflow to the right ventricle crosses the tricuspid valve: it sits between the right atrium below and the right ventricle above.",
+            )),
+        ),
+        Page(
+            title: "Short axis: the great vessels and aortic valve",
+            markdown: r#"
+From the long axis **rotate the probe 90 degrees clockwise**, so that the beam cuts across the left
+ventricle instead of along it (Mitchell et al., p25). At the level of the great vessels the aorta is
+seen in cross-section with its cusps, the right ventricular outflow in front of it and the left atrium
+behind. Tilt toward the base of the heart to reach this level; one interspace higher often helps.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("psax_av")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "psax_av")),
+            check: Some(Question(
+                prompt: "What does the aortic valve look like in the short-axis view at this level?",
+                choices: ["A round valve in cross-section with its cusps", "A long tube with two leaflets", "A four-chamber outline", "A line along the septum"],
+                answer: 0,
+                explanation: "The short-axis plane cuts across the aortic root, so the valve is a round profile with three cusps; in the long axis it is a tube.",
+            )),
+        ),
+        Page(
+            title: "Short axis: the mitral valve",
+            markdown: r#"
+**Tilt toward the apex**, inferiorly and slightly leftward, stopping at the mitral valve (Mitchell et al., p26).
+The left ventricle is cut across, and the right ventricle is the crescent at the top and left of the
+sector. The leaflets should open and close fully.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("psax_mv")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "psax_mv")),
+            check: Some(Question(
+                prompt: "In the short axis at the mitral valve, the right ventricle appears as:",
+                choices: ["A crescent around the top and left of the left ventricle", "A circle in the centre", "A tube below the left atrium", "It is not in the plane"],
+                answer: 0,
+                explanation: "The right ventricle wraps around the round left ventricle, so in this cut it is a crescent at the top and left.",
+            )),
+        ),
+        Page(
+            title: "Short axis: the papillary muscles",
+            markdown: r#"
+Tilt a little further, to just below the tips of the mitral leaflets, at the level of the papillary
+muscles (Mitchell et al., p26). The ventricle should look **circular**, with the two papillary
+muscles as round bodies in the cavity, and the wall is cut evenly all round. This is the level for
+judging global and regional wall motion.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("psax_papillary")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "psax_papillary")),
+            check: Some(Question(
+                prompt: "What shows that the plane is at the papillary level?",
+                choices: ["Two round muscle bodies inside a circular cavity", "The mitral leaflets across the cavity", "The aortic cusps", "A tapered apex"],
+                answer: 0,
+                explanation: "Just below the leaflet tips the cavity is round and holds the anterolateral and posteromedial papillary muscles.",
+            )),
+        ),
+        Page(
+            title: "Short axis: the apex",
+            markdown: r#"
+For the last short-axis level **tilt or slide one or two interspaces down and toward the left** (Mitchell
+et al., p26). Only the tip of the left ventricle is cut: a small circle of cavity inside a thick
+wall, with no valve leaflet and, usually, no right ventricle.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetEchoView("psax_apex")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "psax_apex")),
+            check: Some(Question(
+                prompt: "At the apical level the short-axis view shows:",
+                choices: ["A small cavity with no valve leaflets", "The mitral valve", "The aortic valve", "Both atria"],
+                answer: 0,
+                explanation: "Near the apex there are no valves: only a small cavity surrounded by wall.",
+            )),
+        ),
+        Page(
+            title: "Apical four-chamber",
+            markdown: r#"
+Put the probe at the **apical impulse**, near the fifth intercostal space and the mid-axillary
+line, with the marker **toward the bed** (Mitchell et al., p26). All four chambers are shown, the
+**apex of the left ventricle at the top and centre**, left-sided structures on the right of the
+image. The left ventricle should fill about two thirds of the long axis and taper to a point; a
+round apex means the view is **foreshortened**.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Apical)),
+                Ui(SetEchoView("a4c")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "a4c")),
+            check: Some(Question(
+                prompt: "The ventricle looks short and its apex is round. What does that suggest?",
+                choices: ["The view is foreshortened", "The ventricle is hypertrophied", "The marker is on the wrong side", "The depth is too small"],
+                answer: 0,
+                explanation: "A rounded apex means the plane misses the true apex: slide toward the apex or tilt until the ventricle tapers.",
+            )),
+        ),
+        Page(
+            title: "Right-ventricle-focused four-chamber",
+            markdown: r#"
+From the four-chamber view, **rotate slightly counterclockwise** while keeping the probe at the
+apex, to open the right ventricle as wide as possible, and keep the plane through the centre of
+the left ventricle (Mitchell et al., p26). It is the view for right-ventricular size and
+tricuspid annular motion.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Apical)),
+                Ui(SetEchoView("a4c_rv")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "a4c_rv")),
+            check: Some(Question(
+                prompt: "Compared with the four-chamber view, the right-ventricle-focused view is made by:",
+                choices: ["A slight counterclockwise rotation", "A 90-degree clockwise rotation", "Tilting the beam posteriorly", "Moving to the subcostal window"],
+                answer: 0,
+                explanation: "A small counterclockwise rotation at the apex enlarges the right ventricle in the image; the plane stays through the centre of the left ventricle.",
+            )),
+        ),
+        Page(
+            title: "Apical five-chamber",
+            markdown: r#"
+From the four-chamber view, **tilt the beam anteriorly** until the left ventricular outflow tract,
+the aortic valve and the start of the ascending aorta appear (Mitchell et al., p26). A posterior tilt
+would instead show the coronary sinus.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Apical)),
+                Ui(SetEchoView("a5c")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "a5c")),
+            check: Some(Question(
+                prompt: "Which tilt brings the aortic valve into the apical view?",
+                choices: ["Anterior", "Posterior", "Toward the patient's left hip", "No tilt, only depth"],
+                answer: 0,
+                explanation: "The aortic root lies anterior to the mitral valve. Tilting anteriorly from the four-chamber view reaches it; a posterior tilt shows the coronary sinus.",
+            )),
+        ),
+        Page(
+            title: "Apical two-chamber",
+            markdown: r#"
+From the four-chamber view **rotate about 60 degrees counterclockwise** (Mitchell et al., p30). You
+see the left atrium, mitral valve and left ventricle, and **no right ventricle**. Only the left
+heart lies in this plane.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Apical)),
+                Ui(SetEchoView("a2c")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "a2c")),
+            check: Some(Question(
+                prompt: "Which chamber is absent from the apical two-chamber view?",
+                choices: ["The right ventricle", "The left atrium", "The left ventricle", "The mitral valve"],
+                answer: 0,
+                explanation: "The two-chamber plane passes through the left atrium, mitral valve and left ventricle; the right ventricle lies outside it.",
+            )),
+        ),
+        Page(
+            title: "Apical three-chamber",
+            markdown: r#"
+Rotate a **further 60 degrees counterclockwise** (Mitchell et al., p30). The plane now holds the
+left atrium, the mitral valve, the left ventricle, the **aortic valve and the aorta**: the apical
+long axis.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Apical)),
+                Ui(SetEchoView("a3c")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "a3c")),
+            check: Some(Question(
+                prompt: "What does the three-chamber view add to the two-chamber view?",
+                choices: ["The aortic valve and the aorta", "The tricuspid valve", "The right atrium", "The inferior vena cava"],
+                answer: 0,
+                explanation: "Turning a further 60 degrees brings the left ventricular outflow tract and aortic valve into the plane.",
+            )),
+        ),
+        Page(
+            title: "Subcostal four-chamber",
+            markdown: r#"
+With the patient **supine**, place the transducer under the xiphoid process with the marker toward
+the patient's **left** (3 o'clock) and aim at the left shoulder (Mitchell et al., p31). The
+ultrasound beam is perpendicular to the septa, which makes this the view for septal defects and the
+thickness of the right ventricular wall. Held inspiration helps in a patient; in this model the
+breath is not needed.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Subcostal)),
+                Ui(SetEchoView("sc_4c")),
+                Ui(SetSpeed(1.0)),
+            ],
+            view_check: Some(ViewCheck(view: "sc_4c")),
+            check: Some(Question(
+                prompt: "Why is the subcostal four-chamber view useful for the septa?",
+                choices: ["The beam is perpendicular to the septa", "The septa are parallel to the beam", "The lungs are out of the way", "It shows the apex best"],
+                answer: 0,
+                explanation: "From below, the beam crosses the interatrial and interventricular septa at right angles, so defects and wall thickness are seen clearly.",
+            )),
+        ),
+        Page(
+            title: "Views this model cannot show",
+            markdown: r#"
+Two views of the guideline are **not reachable in this model**:
+
+* the **subcostal inferior vena cava**: the anatomy has only a short stub of the vein, not the several
+  centimetres the view needs;
+* the **suprasternal arch**: the arch is in the model, but the best plane scores too low to count as
+  found.
+
+The Echo page lists each with the reason. The patient here is supine; the guideline images the parasternal and apical
+windows in the left lateral position.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(ProbeAtWindow(Parasternal)),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "A view is listed as not reachable in this model. What does that mean?",
+                choices: ["The anatomy cannot be imaged that way within the probe's limits", "The view has no clinical use", "The probe is broken", "The view needs a different scenario"],
+                answer: 0,
+                explanation: "It is a statement about the model, not about patients: with this anatomy, supine, no pose reaches the target within the transducer's contact limit.",
+            )),
+        ),
+        Page(
+            title: "Measuring: M-mode and the LV diameters",
+            markdown: r#"
+**M-mode** records one scan line over time: depth runs down, time runs to the right, and the ECG
+lead under it is on the same clock. Open the **Measure** section, choose **M-mode** and drag the
+yellow cursor on the sector (the button *Mitral tips* aims it for you). In the parasternal long axis
+the guideline puts the cursor perpendicular to the long axis of the ventricle, **just beyond the
+mitral leaflet tips** (Mitchell et al., p31).
+
+* **LVIDd**, the internal diameter in diastole, is read at the first frame after the mitral valve
+  closes (the peak of the R wave when the valve cannot be seen); **LVIDs** at the smallest cavity.
+* Freeze the trace, put the depth caliper on the septal and the posterior endocardium, name it, add
+  it to the list: the model then shows the value it holds for that line and instant, and your
+  difference.
+
+Sweep speed: 100 mm/s is the usual speed for measuring times (p18). This is a measurement of a
+model, to learn the method; no normal range is given here.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(EchoMeasure("lvid")),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "At which moment of the cycle is the end-diastolic dimension read?",
+                choices: ["The first frame after the mitral valve closes", "The peak of the T wave", "The moment the aortic valve opens", "The smallest cavity"],
+                answer: 0,
+                explanation: "End-diastole is the first frame after mitral leaflet closure (the R wave when the valve is not seen). The smallest cavity is the end-systolic dimension.",
+            )),
+        ),
+        Page(
+            title: "Measuring: TAPSE on an apical M-mode",
+            markdown: r#"
+**TAPSE** is the distance the **leading edge of the lateral tricuspid annulus** moves from end-diastole
+toward the apex at end-systole. The M-mode cursor is put along the right ventricular free wall, as
+parallel as possible to the movement of the annulus (Mitchell et al., p33). The button *Tricuspid
+annulus* aims it from the apical four-chamber view.
+
+A cursor that is not parallel to the motion sees only part of it: the model tells you the excursion
+along your beam and, beside it, its own reading for the beat along the annulus's own axis and the
+angle between the two.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(EchoMeasure("tapse")),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "The M-mode cursor makes 30 degrees with the motion of the annulus. What happens to the excursion you read?",
+                choices: ["It is smaller than the true excursion", "It is larger than the true excursion", "It is unchanged", "It becomes negative"],
+                answer: 0,
+                explanation: "You see only the part of the motion along the beam: the true excursion times the cosine of the angle.",
+            )),
+        ),
+        Page(
+            title: "Measuring: tissue Doppler at the annulus",
+            markdown: r#"
+**Tissue Doppler** records the velocity of the annulus itself, not of blood: the velocity of one point
+of the mitral or tricuspid annulus along the beam, positive toward the probe. Click an annulus in the
+sector (or use the buttons) to place the gate. The waves are named **S'** (systole, toward the apex),
+**e'** (early diastole) and **a'** (atrial contraction, absent without one); the guideline sets the
+velocity scale at 25 cm/s or lower and the sweep at 100 mm/s (Mitchell et al., p44).
+
+The velocity is **not corrected for the angle** between the beam and the motion: the angle is shown, and
+at 60 degrees the peak you read is half the true one. The thin band round the curve is drawn for the
+look and is labelled designed. There is no blood Doppler in this simulator.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(Echo)),
+                Ui(EchoMeasure("e-prime")),
+                Ui(SetSpeed(1.0)),
+            ],
+            check: Some(Question(
+                prompt: "Which of the three waves is absent in atrial fibrillation?",
+                choices: ["The atrial wave (a')", "The systolic wave (S')", "The early diastolic wave (e')", "None of them"],
+                answer: 0,
+                explanation: "a' follows the atrial contraction; with no organised atrial activity there is none.",
+            )),
+        ),
+    ],
+)

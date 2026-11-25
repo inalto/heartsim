@@ -14,13 +14,25 @@ heartsim-geometry.workspace = true
 heartsim-sim.workspace = true
 heartsim-ecg.workspace = true
 glam.workspace = true
+libm.workspace = true
+ron.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+image.workspace = true
 
 [lints]
 workspace = true
 
 [[bench]]
 name = "motion"
+harness = false
+
+[[bench]]
+name = "slice"
+harness = false
+
+[[bench]]
+name = "measure"
 harness = false

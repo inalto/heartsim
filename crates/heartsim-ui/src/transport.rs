@@ -1,7 +1,9 @@
 //! Run / Pause and simulation-speed controls shared by the simulator toolbars (B19).
 //!
 //! Both controls carry text labels, so they appear by name in the AccessKit tree and in screen
-//! readers; the speed slider is also named, so its value is announced with its name.
+//! readers; the speed slider is also named, so its value is announced with its name. Run / Pause is
+//! the bar's one primary action ([`crate::widgets::primary_button`]); the speed is a
+//! [`crate::widgets::slider_row`].
 
 use crate::t;
 use egui::{Response, Slider, Ui};
@@ -26,12 +28,14 @@ pub fn transport_controls(ui: &mut Ui, paused: bool, speed: &mut f64) -> Transpo
     } else {
         t!("transport-pause")
     };
-    let pause = ui.button(label);
-    let speed_response = crate::controls::slider(
+    let pause = crate::widgets::primary_button(ui, label);
+    let speed_response = crate::widgets::slider_row(
         ui,
         &t!("transport-speed"),
-        Slider::new(speed, SPEED_RANGE).logarithmic(true).max_decimals(2),
-        crate::controls::TIMES,
+        Slider::new(speed, SPEED_RANGE)
+            .logarithmic(true)
+            .max_decimals(2)
+            .suffix(crate::controls::TIMES),
     );
     TransportResponse {
         pause,

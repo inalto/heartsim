@@ -6,6 +6,7 @@
 //! deterministic and independent of the simulator, so answering never disturbs the running
 //! simulation and the rhythm's name is not visible anywhere until the answer is checked.
 
+use crate::narrow::{Narrow, Pane, PaneSpec, Side};
 use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
@@ -15,6 +16,9 @@ use heartsim_ui::t;
 use heartsim_ui::{StripStyle, TwelveLeadLayout, cards, lead_column, twelve_lead_page};
 
 /// Choices per question.
+/// Height of the strip on a phone-narrow window, points: lead II and V1 with room for the beats.
+pub const NARROW_STRIP_PX: f32 = 240.0;
+
 pub const OPTIONS: usize = 4;
 /// Length of the recording, s; the first [`SETTLE_S`] are dropped so rate-dependent rhythms
 /// (Wenckebach cycles, re-entry started by a timed premature beat) have settled.
@@ -280,115 +284,145 @@ impl RhythmQuiz {
     /// to explore the revealed rhythm there.
     pub fn ui(&mut self, ui: &mut egui::Ui, library: &ScenarioLibrary, style: &StripStyle) -> Option<usize> {
         let mut open = None;
-        egui::Panel::left("rhythm_quiz_choices")
-            .max_size(crate::responsive::max_side(ui, 100_000.0))
-            .default_size(360.0)
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let label = if self.question.is_some() {
-                        t!("rq-next")
-                    } else {
-                        t!("app-quiz-new")
-                    };
-                    if ui
-                        .add_enabled(!library.is_empty(), egui::Button::new(label))
-                        .clicked()
-                    {
-                        self.next_question(library);
-                    }
-                    ui.label(t!(
-                        "app-quiz-score",
-                        correct = self.correct.to_string(),
-                        asked = self.asked.to_string()
-                    ));
-                    if self.streak > 1 {
-                        ui.label(t!("rq-streak", count = self.streak.to_string()));
-                    }
-                });
-                ui.checkbox(&mut self.twelve_lead, t!("rq-twelve-lead"));
-                ui.separator();
-                if library.is_empty() {
-                    ui.label(t!("rq-no-library"));
-                    return;
-                }
-                if let Some(e) = &self.error {
-                    cards::result_box(ui, false, e.clone());
-                }
-                let Some(q) = self.question.clone() else {
-                    ui.label(t!("rq-intro"));
-                    return;
-                };
-                ui.label(if self.chosen.is_none() {
-                    t!("rq-question")
-                } else {
-                    t!("rq-answer")
-                });
-                for &i in &q.options {
-                    let title = &library.entries[i].scenario.title;
-                    let (state, text) = match self.chosen {
-                        None => (AnswerState::Open, title.clone()),
-                        Some(_) if i == q.answer => (
-                            AnswerState::Correct,
-                            t!("rq-correct-choice", title = title.as_str()),
-                        ),
-                        Some(c) if c == i => {
-                            (AnswerState::Wrong, t!("rq-your-choice", title = title.as_str()))
-                        }
-                        Some(_) => (AnswerState::Inactive, title.clone()),
-                    };
-                    if cards::answer_option(ui, state, &text).clicked() {
-                        self.answer(i);
-                    }
-                    ui.add_space(2.0);
-                }
-                // Pinned above the (scrolling) explanation so it is never pushed out of view.
-                if self.chosen.is_some() {
-                    ui.separator();
-                    if ui.button(t!("rq-open")).clicked() {
-                        open = Some(q.answer);
-                    }
-                }
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    if let Some(c) = self.chosen {
-                        let e = explanation(library, q.answer, c);
-                        if c == q.answer {
-                            cards::result_box(ui, true, t!("feedback-correct"));
-                        } else {
-                            cards::result_box(ui, false, t!("rq-wrong", title = e.title.as_str()));
-                        }
-                        ui.add(egui::Label::new(&e.description).wrap());
-                        if let Some((title, description)) = &e.chosen {
-                            ui.add_space(4.0);
-                            ui.strong(t!("rq-yours-was", title = title.as_str()));
-                            ui.add(egui::Label::new(description).wrap());
-                        }
-                        if let Some(teaching) = &e.teaching {
-                            ui.add_space(4.0);
-                            ui.strong(t!("rq-why"));
-                            ui.add(egui::Label::new(teaching).wrap());
-                        }
-                        if !e.confused_with.is_empty() {
-                            ui.add_space(4.0);
-                            ui.add(
-                                egui::Label::new(t!("rq-confused", list = e.confused_with.join(", "))).wrap(),
-                            );
-                        }
-                    }
-                });
-            });
-        egui::CentralPanel::default().show(ui, |ui| {
-            if self.rings.len() < LEAD_COUNT {
-                return;
-            }
-            let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
-            if self.twelve_lead {
-                twelve_lead_page(ui, rect, &self.rings, style, TwelveLeadLayout::Clinical);
-                ui.allocate_rect(rect, egui::Sense::hover());
-            } else {
-                lead_column(ui, rect, &self.rings, style, &[Lead::II, Lead::V1]);
-            }
+        let spec = PaneSpec {
+            id: "rhythm_quiz",
+            left: Some(Side {
+                id: "rhythm_quiz_choices",
+                default_px: 360.0,
+                cap_px: 100_000.0,
+                name: "",
+            }),
+            right: None,
+            centre: "",
+            // on a phone the strip keeps a useful height on top, the question scrolls below it
+            narrow: Narrow::Stacked {
+                centre_height: NARROW_STRIP_PX,
+            },
+        };
+        crate::narrow::panes(ui, &spec, |ui, pane| match pane {
+            Pane::Left => open = self.choices_ui(ui, library),
+            Pane::Centre => self.strip_ui(ui, style),
+            Pane::Right => {}
         });
         open
+    }
+
+    /// The question, the choices and, once answered, the explanation.
+    fn choices_ui(&mut self, ui: &mut egui::Ui, library: &ScenarioLibrary) -> Option<usize> {
+        let mut open = None;
+        (|| {
+            ui.horizontal(|ui| {
+                let label = if self.question.is_some() {
+                    t!("rq-next")
+                } else {
+                    t!("app-quiz-new")
+                };
+                // the one primary action: a question to answer, then the next one; while a
+                // question is open the answers (the cards below) are the action
+                let next_is_main = self.question.is_none() || self.chosen.is_some();
+                let next = ui
+                    .add_enabled_ui(!library.is_empty(), |ui| {
+                        if next_is_main {
+                            heartsim_ui::primary_button(ui, label)
+                        } else {
+                            ui.button(label)
+                        }
+                    })
+                    .inner;
+                if next.clicked() {
+                    self.next_question(library);
+                }
+                ui.label(t!(
+                    "app-quiz-score",
+                    correct = self.correct.to_string(),
+                    asked = self.asked.to_string()
+                ));
+                if self.streak > 1 {
+                    ui.label(t!("rq-streak", count = self.streak.to_string()));
+                }
+            });
+            ui.checkbox(&mut self.twelve_lead, t!("rq-twelve-lead"));
+            ui.separator();
+            if library.is_empty() {
+                ui.label(t!("rq-no-library"));
+                return;
+            }
+            if let Some(e) = &self.error {
+                cards::result_box(ui, false, e.clone());
+            }
+            let Some(q) = self.question.clone() else {
+                ui.label(t!("rq-intro"));
+                return;
+            };
+            ui.label(if self.chosen.is_none() {
+                t!("rq-question")
+            } else {
+                t!("rq-answer")
+            });
+            for &i in &q.options {
+                let title = &library.entries[i].scenario.title;
+                let (state, text) = match self.chosen {
+                    None => (AnswerState::Open, title.clone()),
+                    Some(_) if i == q.answer => (
+                        AnswerState::Correct,
+                        t!("rq-correct-choice", title = title.as_str()),
+                    ),
+                    Some(c) if c == i => (AnswerState::Wrong, t!("rq-your-choice", title = title.as_str())),
+                    Some(_) => (AnswerState::Inactive, title.clone()),
+                };
+                if cards::answer_option(ui, state, &text).clicked() {
+                    self.answer(i);
+                }
+                ui.add_space(2.0);
+            }
+            // Pinned above the (scrolling) explanation so it is never pushed out of view.
+            if self.chosen.is_some() {
+                ui.separator();
+                if ui.button(t!("rq-open")).clicked() {
+                    open = Some(q.answer);
+                }
+            }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                if let Some(c) = self.chosen {
+                    let e = explanation(library, q.answer, c);
+                    if c == q.answer {
+                        cards::result_box(ui, true, t!("feedback-correct"));
+                    } else {
+                        cards::result_box(ui, false, t!("rq-wrong", title = e.title.as_str()));
+                    }
+                    ui.add(egui::Label::new(&e.description).wrap());
+                    if let Some((title, description)) = &e.chosen {
+                        ui.add_space(4.0);
+                        ui.strong(t!("rq-yours-was", title = title.as_str()));
+                        ui.add(egui::Label::new(description).wrap());
+                    }
+                    if let Some(teaching) = &e.teaching {
+                        ui.add_space(4.0);
+                        ui.strong(t!("rq-why"));
+                        ui.add(egui::Label::new(teaching).wrap());
+                    }
+                    if !e.confused_with.is_empty() {
+                        ui.add_space(4.0);
+                        ui.add(egui::Label::new(t!("rq-confused", list = e.confused_with.join(", "))).wrap());
+                    }
+                }
+            });
+        })();
+        open
+    }
+
+    /// The strip: lead II and V1, or all twelve leads.
+    fn strip_ui(&self, ui: &mut egui::Ui, style: &StripStyle) {
+        if self.rings.len() < LEAD_COUNT {
+            return;
+        }
+        let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
+        if self.twelve_lead {
+            twelve_lead_page(ui, rect, &self.rings, style, TwelveLeadLayout::Clinical);
+            ui.allocate_rect(rect, egui::Sense::hover());
+        } else {
+            lead_column(ui, rect, &self.rings, style, &[Lead::II, Lead::V1]);
+        }
     }
 }
 

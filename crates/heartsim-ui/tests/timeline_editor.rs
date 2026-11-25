@@ -13,6 +13,7 @@ fn add_and_delete_rows() {
         action: Action::SetGlobalSinusRate { bpm: 80.0 },
     }];
     let mut h = Harness::builder()
+        .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(900.0, 400.0))
         .build_ui_state(
             |ui, ed: &mut TimelineEditor| {

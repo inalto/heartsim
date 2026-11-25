@@ -82,16 +82,16 @@ fn fmt_ms(v: Option<f64>) -> String {
 /// a guess.
 pub fn interval_readout(ui: &mut Ui, analysis: Option<&Analysis>) {
     let Some(a) = analysis else {
-        ui.weak(t!("readout-measuring"));
+        crate::helper_text(ui, t!("readout-measuring"));
         return;
     };
     match a.quality {
         SignalQuality::NoSignal => {
-            ui.weak(t!("readout-no-signal"));
+            crate::helper_text(ui, t!("readout-no-signal"));
             return;
         }
         SignalQuality::NoQrs => {
-            ui.weak(t!("readout-no-qrs"));
+            crate::helper_text(ui, t!("readout-no-qrs"));
             return;
         }
         SignalQuality::Good => {}
