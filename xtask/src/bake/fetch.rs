@@ -4,7 +4,10 @@
 //!
 //! Sources (licences and attribution: `docs/research/anatomy-meshes.md`):
 //! * heart — Rodero et al. 2021, the SSM *average* four-chamber mesh, Zenodo 4593739, CC BY 4.0;
-//! * torso — Qian, Bishop et al. 2022, KCL whole-torso CT model 1, Zenodo 7253863, CC BY 4.0.
+//! * torso — Qian, Bishop et al. 2022, KCL whole-torso CT model 1, Zenodo 7253863, CC BY 4.0;
+//! * tricuspid valve — Mathur, Rausch et al., Texas TriValve 1.1 (GitHub, pinned commit), CC BY 4.0
+//!   (brief B35; `docs/research/` has the licence check). Its files are fetched one by one at the
+//!   pinned commit and checked against the sizes and MD5s recorded here when the commit was pinned.
 
 use super::md5::file_md5;
 use anyhow::{Context, Result, bail};
@@ -56,6 +59,129 @@ pub const KCL_TORSO1: Source = Source {
     unpack: Unpack::Zip,
     marker: "KCL_torso1/KCL_torso1.elem",
 };
+
+/// One file of a repository fetched at a pinned commit.
+#[derive(Debug, Clone, Copy)]
+pub struct PinnedFile {
+    /// Path in the repository (and under the source's directory).
+    pub path: &'static str,
+    pub bytes: u64,
+    pub md5: &'static str,
+}
+
+/// A set of files of a public Git repository at one commit (no archive to unpack).
+#[derive(Debug, Clone, Copy)]
+pub struct PinnedRepo {
+    /// Sub-directory of the source root.
+    pub dir: &'static str,
+    /// `https://raw.githubusercontent.com/<owner>/<repo>`.
+    pub raw_base: &'static str,
+    pub commit: &'static str,
+    pub files: &'static [PinnedFile],
+}
+
+impl PinnedRepo {
+    /// The URL of one file at the pinned commit.
+    #[must_use]
+    pub fn url(&self, f: &PinnedFile) -> String {
+        format!("{}/{}/{}", self.raw_base, self.commit, f.path)
+    }
+}
+
+macro_rules! pinned {
+    ($($path:literal, $bytes:literal, $md5:literal;)*) => {
+        &[$(PinnedFile { path: $path, bytes: $bytes, md5: $md5 }),*]
+    };
+}
+
+/// Texas TriValve 1.1 (Mathur, Meador, Malinowski, Jazwiec, Timek, Rausch; CC BY 4.0), the
+/// healthy quasi-static load case: the Abaqus model and its 21 result frames, with the licence and
+/// the README. Commit of 2024-04-16 (the repository's `main` when pinned, 2026-11-25); the sizes
+/// are those of the GitHub tree listing, the MD5s of the files downloaded then.
+pub const TEXAS_TRIVALVE_1_1: PinnedRepo = PinnedRepo {
+    dir: "texas-trivalve-1.1",
+    raw_base: "https://raw.githubusercontent.com/SoftTissueBiomechanicsLab/Texas_TriValve_1.1",
+    commit: "cfbdad5ab8f2e02934f317dde1c2566963c98f4b",
+    files: pinned! {
+        "LICENSE-CC-BY.txt", 18_650, "4a17ffc27c9f3b240fbf4fe17783c89c";
+        "README.md", 2_993, "fe53ce74c01f090475bb45d279a8a1a5";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic.inp", 1_384_521, "9cc3ac8d543cfcd341702ba8c4f4256d";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_0.vtu", 183_738, "26a6d1156233d1c39a05f7be6b273720";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_1.vtu", 530_785, "00c0286d798013f53e69cf1378051151";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_2.vtu", 532_081, "259a86dafcb1703bff89d4ab98f1f02b";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_3.vtu", 532_177, "d9e7cf40c7649bd46852965116431bf3";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_4.vtu", 531_237, "d64f77cbf5e3cf0f724d83cedd9a2f49";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_5.vtu", 535_421, "69a925d1d29cb59cd0a16a999a1130ef";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_6.vtu", 533_681, "29f0dc37de01b16c109b0fc8a85079e0";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_7.vtu", 532_565, "6bf3552444f4d3301eb94d4ab7e59186";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_8.vtu", 536_289, "c59a887527e8781b330e86c14af875da";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_9.vtu", 536_453, "e20d4a65fdb9e0f0093c54ae93525919";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_10.vtu", 532_873, "03e3b2643c915cbc9b1da9bcb01a0f57";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_11.vtu", 537_677, "f299a73396e15b159b5989763a7a68a7";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_12.vtu", 533_017, "70c2d4c061956516395546e5a97050dc";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_13.vtu", 532_381, "737d2b4f4bf43aeb4e294722150a4af9";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_14.vtu", 535_905, "d075732dafd93997539851da038a03b8";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_15.vtu", 536_505, "13079af921ccabb894b349ce2921016e";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_16.vtu", 530_845, "2a3541f0a393b7c4be190c17056ad598";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_17.vtu", 535_993, "560f2696cd0564fc0b6a49510b255ee5";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_18.vtu", 538_889, "953b3e3922c185c05f68d1d5220c00b9";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_19.vtu", 533_817, "418e758a193842843f9e2127a25f47d6";
+        "Healthy_QuasiStatic/Healthy_QuasiStatic_20.vtu", 534_657, "7fb2f01d5329d4899e294e8e1282b1f3";
+    },
+};
+
+/// Ensure every file of `repo` is under `root/<dir>` with its recorded size and MD5, downloading
+/// the missing or corrupt ones at the pinned commit; returns the directory.
+pub fn ensure_repo(root: &Path, repo: &PinnedRepo, offline: bool) -> Result<PathBuf> {
+    let dir = root.join(repo.dir);
+    for f in repo.files {
+        let path = dir.join(f.path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+        }
+        let ok = |p: &Path| -> Result<bool> {
+            Ok(p.is_file() && p.metadata()?.len() == f.bytes && file_md5(p)? == f.md5)
+        };
+        if ok(&path)? {
+            continue;
+        }
+        let url = repo.url(f);
+        if offline {
+            bail!(
+                "{} is missing or corrupt and --offline was given; download it from {url}",
+                path.display()
+            );
+        }
+        eprintln!("downloading {url}");
+        let part = path.with_extension("part");
+        let _ = std::fs::remove_file(&part);
+        let status = Command::new("curl")
+            .args(["-L", "-sS", "--fail", "-o"])
+            .arg(&part)
+            .arg(&url)
+            .status()
+            .context("spawning curl (install curl or download the file by hand)")?;
+        if !status.success() {
+            bail!("curl failed for {url}");
+        }
+        std::fs::rename(&part, &path)?;
+        if !ok(&path)? {
+            bail!(
+                "{}: size or MD5 differs from the pinned file (expected {} bytes, md5 {})",
+                path.display(),
+                f.bytes,
+                f.md5
+            );
+        }
+    }
+    eprintln!(
+        "{}: {} pinned files ok ({})",
+        dir.display(),
+        repo.files.len(),
+        repo.commit
+    );
+    Ok(dir)
+}
 
 /// Ensure `source` is downloaded, verified and unpacked under `root`; returns its directory.
 pub fn ensure(root: &Path, source: &Source, offline: bool) -> Result<PathBuf> {

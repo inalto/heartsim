@@ -31,3 +31,19 @@ generic soft tissue; nothing else of the subject's anatomy was kept.
 The pack as a whole is distributed under CC BY 4.0 for the geometry derived from the two sources
 above; heartsim's own additions are MIT OR Apache-2.0.
 Nothing from any proprietary program or data set was used.
+
+TRICUSPID VALVE
+Mathur M, Meador WD, Malinowski M, Jazwiec T, Timek TA, Rausch MK. Texas TriValve 1.0: a
+reverse-engineered, open model of the human tricuspid valve. Engineering with Computers 2022.
+doi:10.1007/s00366-022-01659-w. Model files: Texas TriValve 1.1 (a second donor valve), Soft Tissue
+Biomechanics Laboratory, https://github.com/SoftTissueBiomechanicsLab/Texas_TriValve_1.1, commit
+cfbdad5ab8f2e02934f317dde1c2566963c98f4b, folder Healthy_QuasiStatic (Healthy_QuasiStatic.inp and
+the 21 frames Healthy_QuasiStatic_0..20.vtu). Licence: Creative Commons Attribution 4.0
+International, https://creativecommons.org/licenses/by/4.0/
+Changes by heartsim (modified): decimated, fitted to another heart's annulus, re-timed. The leaflet
+midsurface was triangulated and decimated and the chordae thinned; the valve was scaled, turned
+and warped onto the pack heart's tricuspid annulus, its chordae origins moved to the right
+ventricular wall and small excursions outside the right heart's blood pushed back; a subset of the
+result frames (a load sequence from open to shut, not a timed recording) is replayed against
+heartsim's designed valve timing (valve_tricuspid.bin). One donor's valve fitted to another
+heart; not reviewed by a clinician.

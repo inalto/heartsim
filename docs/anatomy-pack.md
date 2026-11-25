@@ -47,12 +47,14 @@ infinite-medium forward model; they are not measured values. See the doc comment
 | `electrodes.ron` | `ElectrodeSet`: `RA LA LL RL V1…V6` plus `V3R V4R V7 V8 V9`, heart frame | RON |
 | `labels_heart.bin` | label volume of the heart box (format 3; optional, see *Label volumes*) | `HSVL` v1 |
 | `labels_thorax.bin` | label volume of the thorax box (format 3; optional) | `HSVL` v1 |
+| `valve_<name>.bin` | an animated valve: leaflet triangles with a leaflet id each, chordae segments, keyframes of the shape between open and shut (format 4; optional, one file per valve, listed in the manifest's `valves`; the default pack has `valve_tricuspid.bin`) | `HSAV` v1, see *Animated valves* |
 
 Loading verifies the format version, each file's size and CRC-32, and the cross-file counts (cells ↔ neighbours
 ↔ segments, hoods ↔ mesh vertices, landmark indices in range). A pack that loads is internally consistent.
 `PACK_FORMAT_VERSION` is bumped when a file is added or changes meaning; the per-file binary version covers the
-record layout. The current version is **3** (brief B31 added the two label volumes); a version-2 pack is refused with
-a message that says to re-bake it (`cargo xtask bake-anatomy`). Within version 3 the label volumes are optional — both
+record layout. The current version is **4** (brief B35 added the optional valve files). Version 4 is version 3 plus the valve
+files: a version-3 pack still loads and simply has no valve, and it draws and images as before. Version 3 added the two label
+volumes (brief B31); a version-2 pack is refused with a message that says to re-bake it (`cargo xtask bake-anatomy`). Within versions 3 and 4 the label volumes are optional — both
 files or neither: the procedural pack has none, and the echo cross-section needs them
 (`heartsim_echo::EchoAnatomy::new` returns `EchoError::NoVolumes` without them).
 
@@ -169,6 +171,10 @@ Baked from two open, CC BY 4.0 meshes (sources, licences and the rejected altern
 * **Torso** — Qian, Bishop et al. 2022, KCL whole-torso CT model 1 of five healthy patients (Zenodo
   [7253863](https://zenodo.org/records/7253863), `KCL_torso1.zip`, 168 MB; 1 689 018 nodes, 9 686 213 tetrahedra, skin,
   bones, lungs, organs, the subject's own heart chambers and great vessels).
+* **Tricuspid valve** — Texas TriValve 1.1 (Mathur et al. 2022, doi:10.1007/s00366-022-01659-w; CC BY 4.0), the healthy
+  quasi-static finite-element valve at commit `cfbdad5ab8f2e02934f317dde1c2566963c98f4b`, fitted to the pack heart's tricuspid
+  ring. The fit, its numbers and the rejected sources are in [`research/tricuspid-valve-source.md`](research/tricuspid-valve-source.md).
+  The valve is baked by `cargo xtask bake-valve` (or by `bake-anatomy`, which bakes it unless `--no-valve` is given).
 
 ```bash
 cargo xtask bake-anatomy            # downloads into assets/anatomy-src/ (git-ignored), verifies MD5s, bakes, re-loads
@@ -247,7 +253,42 @@ frame* for the measured offsets. Electrodes are placed as before (`procedural::t
 torso axis at the site's height and azimuth, intersected with the skin; the limb sites are clamped inside the CT's vertical
 extent (shoulders to pelvis).
 
-### The procedural pack (`--procedural`)
+### Animated valves (`valve_<name>.bin`, format 4)
+
+Brief B35. A valve file holds one valve's leaflet midsurface and chordae, fitted to the pack heart at bake time, with a few
+keyframes of its shape between open and shut. The engine's valve opening (1 open … 0 shut, from `valve_openings`) selects and
+interpolates the keyframes; nothing in the file keeps a clock. The keyframes are shapes of one load sequence of the source, not
+a timed recording. The code is `heartsim_geometry::valve` (`AnimatedValve::encode` and `decode`).
+
+**File format `HSAV` version 1** (little-endian; the module reads and writes only this layout):
+
+| field | encoding |
+|---|---|
+| magic `HSAV`, `u32` version 1 | 8 bytes |
+| name | `u32` length, then UTF-8 bytes (`tricuspid`, …) |
+| leaflet names | `u32` count, then each as a length-prefixed string (tricuspid: anterior, septal, posterior) |
+| counts | seven `u32`: vertices, leaflet vertices, triangles, chordae, annulus vertices, free-edge vertices, keyframes |
+| scalars | three `f32`: `quantum_mm` (size of one keyframe offset step), `fit_scale`, the chordae radius in mm |
+| coaptation point | three `f32`, mm, rest frame |
+| source leaflet areas | one `f32` per leaflet, mm² (the donor's area before decimation and fitting) |
+| rest positions | vertices × three `f32`, mm, heart frame (the rest shape is the open keyframe) |
+| vertex leaflet | vertices × `u8` (the leaflet id; for a chordae vertex, the leaflet its chord belongs to) |
+| follow weight | vertices × `f32`: 1 on the annulus, fading to 0 toward the free edge, 0 on the chordae |
+| triangles | triangles × three `u32` (indices below the leaflet vertex count) |
+| triangle leaflet | triangles × `u8` |
+| chordae | chordae × two `u32` (vertex pairs) |
+| annulus and free edge | `u32` indices: the annulus ring, then the free edge |
+| keyframes | per keyframe: `f32` closure in `(0, 1]` (strictly increasing; the last is 1), then vertices × three `i16` offsets from the rest position, in units of `quantum_mm` |
+
+The decoder checks the magic, the version (`ValveError::Version`), truncation and every index, count and closure, so a file
+that decodes can be posed and drawn without bounds failures. The rest shape is the first keyframe. The map from opening to
+shape is piecewise linear in the closure `1 − opening`: opening 1 gives the rest shape and opening 0 the shut keyframe.
+
+**Loading.** The manifest's `valves` lists each file with its name, its file name and its counts (vertices, triangles,
+chordae, keyframes). Loading decodes the file and refuses it if the name or any count differs from the entry. Pack versions 3
+and 4 are accepted (`PACK_FORMAT_OLDEST` = 3); a version-3 pack has no `valves` entries. The procedural pack has no valve.
+
+## The procedural pack (`--procedural`)
 
 `heartsim_geometry::procedural::idealised_heart` — two truncated ellipsoidal ventricles (LV wall 10 mm, RV wall 4 mm, the LV
 wall inside the RV ellipsoid is the septum), two spherical atria whose overlap is the interatrial septum, an LA appendage,

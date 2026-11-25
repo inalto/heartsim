@@ -81,6 +81,9 @@ pub struct Settings {
     /// columns it records are the ones the full trace records; a time read from the trace is then
     /// good to 50 ms. Off by default.
     pub echo_fast_mmode: bool,
+    /// Draw the measured tricuspid valve (brief B35, the "Tricuspid valve" layer of *Layers and
+    /// view*). Off by default: it is the only valve with leaflets in the 3-D heart.
+    pub tricuspid_valve: bool,
 }
 
 /// The collapsible sections of the Simulator's left panel and whether each is open.
@@ -169,6 +172,7 @@ impl Default for Settings {
             wall_motion_exaggeration: 1.0,
             simulator_sections: SimulatorSections::default(),
             echo_fast_mmode: false,
+            tricuspid_valve: false,
         }
     }
 }
@@ -553,6 +557,7 @@ mod tests {
                 vector: true,
             },
             echo_fast_mmode: true,
+            tricuspid_valve: true,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -567,6 +572,16 @@ mod tests {
         assert!((old.torso_image_opacity - DEFAULT_TORSO_IMAGE_OPACITY).abs() < f32::EPSILON);
         let off: Settings = ron::from_str("(torso_image_opacity: 0.0)").expect("settings load");
         assert!(off.torso_image_opacity.abs() < f32::EPSILON);
+    }
+
+    /// B35: the measured valve's layer is off by default, also for settings saved before it existed.
+    #[test]
+    fn the_tricuspid_valve_layer_is_off_by_default_and_older_settings_load_without_it() {
+        assert!(!Settings::default().tricuspid_valve);
+        let old: Settings = ron::from_str("(wall_motion: true)").expect("settings load");
+        assert!(!old.tricuspid_valve);
+        let on: Settings = ron::from_str("(tricuspid_valve: true)").expect("settings load");
+        assert!(on.tricuspid_valve);
     }
 
     /// B30: wall motion is on at 1x by default, also for settings saved before it existed.

@@ -7,12 +7,14 @@
 //! * **procedural** (`--procedural`): `AnatomyPack::procedural`, the idealised heart that was the
 //!   default until 0.7 and remains the fast test fixture.
 
+mod abaqus;
 mod fetch;
 mod heart;
 mod md5;
 mod surface;
 mod tet;
 mod torso;
+mod valve;
 mod volumes;
 
 use anyhow::{Context, Result};
@@ -57,6 +59,25 @@ pub struct BakeArgs {
     /// Triangles of the body surface after decimation.
     #[arg(long, default_value_t = 12_000)]
     pub torso_triangles: usize,
+    /// Leave out the tricuspid valve (Texas TriValve 1.1).
+    #[arg(long)]
+    pub no_valve: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct ValveArgs {
+    /// The pack to add the valve to (rewritten in place; every other file is checked unchanged).
+    #[arg(long, default_value = "assets/anatomy/default")]
+    pub pack: PathBuf,
+    /// Where the downloaded sources live (git-ignored).
+    #[arg(long, default_value = "assets/anatomy-src")]
+    pub source_root: PathBuf,
+    /// Never download: fail if a source file is missing or corrupt.
+    #[arg(long)]
+    pub offline: bool,
+    /// Write the pack here instead of over `--pack`.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
 }
 
 /// Attribution the CC BY 4.0 licences of both sources require, written to the pack's `LICENSE`.
@@ -93,6 +114,45 @@ generic soft tissue; nothing else of the subject's anatomy was kept.\n\
 The pack as a whole is distributed under CC BY 4.0 for the geometry derived from the two sources\n\
 above; heartsim's own additions are MIT OR Apache-2.0.\n\
 Nothing from any proprietary program or data set was used.\n";
+
+/// The pack's `LICENSE` with the valve's attribution (brief B35).
+#[must_use]
+pub fn licence_with_valve() -> String {
+    format!("{REAL_LICENSE}\n{}", valve::VALVE_LICENSE)
+}
+
+/// `cargo xtask bake-valve`: the valve into an existing pack.
+pub fn run_valve(args: &ValveArgs) -> Result<()> {
+    let t = std::time::Instant::now();
+    let mut pack =
+        AnatomyPack::load(&args.pack).with_context(|| format!("loading {}", args.pack.display()))?;
+    let before: BTreeMap<String, Vec<u8>> = pack
+        .manifest
+        .files
+        .keys()
+        .filter(|f| f.as_str() != "LICENSE" && !f.starts_with("valve_"))
+        .map(|f| Ok((f.clone(), std::fs::read(args.pack.join(f))?)))
+        .collect::<Result<_>>()?;
+    let baked = valve::bake_for_pack(&args.source_root, args.offline, &pack)?;
+    for line in &baked.report {
+        eprintln!("  {line}");
+    }
+    pack.valves = vec![baked.valve];
+    if pack.licence == REAL_LICENSE {
+        pack.licence = licence_with_valve();
+    } else if !pack.licence.contains("TRICUSPID VALVE") {
+        pack.licence = format!("{}\n\n{}", pack.licence.trim_end(), valve::VALVE_LICENSE);
+    }
+    let out = args.out.clone().unwrap_or_else(|| args.pack.clone());
+    eprintln!("valve baked in {:.1?}", t.elapsed());
+    report_and_verify(&mut pack, &out)?;
+    for (f, bytes) in &before {
+        let now = std::fs::read(out.join(f))?;
+        anyhow::ensure!(&now == bytes, "{f} changed when only the valve was added");
+    }
+    eprintln!("the other {} pack files are byte-identical", before.len());
+    Ok(())
+}
 
 pub fn run(args: &BakeArgs) -> Result<()> {
     if args.procedural {
@@ -261,6 +321,7 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
                 triangles: m.mesh.triangle_count() as u32,
             })
             .collect(),
+        valves: Vec::new(),
         files: BTreeMap::<String, FileEntry>::new(),
     };
     let mut pack = AnatomyPack {
@@ -275,7 +336,18 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
         aha_segments: heart.aha_segments,
         licence: REAL_LICENSE.to_string(),
         volumes: Some(baked),
+        valves: Vec::new(),
     };
+    if !args.no_valve {
+        let t = std::time::Instant::now();
+        let v = valve::bake_for_pack(&args.source_root, args.offline, &pack)?;
+        for line in &v.report {
+            eprintln!("  {line}");
+        }
+        eprintln!("valve baked in {:.1?}", t.elapsed());
+        pack.valves = vec![v.valve];
+        pack.licence = licence_with_valve();
+    }
     eprintln!("total bake time {:.1?}", t0.elapsed());
     report_and_verify(&mut pack, &args.out)
 }
@@ -312,6 +384,7 @@ mod tests {
                 chamber_triangles: 30_000,
                 vessel_triangles: 6_000,
                 torso_triangles: 12_000,
+                no_valve: false,
             };
             run(&args).expect("bake");
         };

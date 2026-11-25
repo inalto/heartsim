@@ -6,6 +6,7 @@
 use crate::coords::MotionChamber;
 use crate::designed::DesignedParams;
 use crate::field::DisplacementField;
+use crate::mesh_valve::{MeshValve, PosedMeshValve};
 use crate::model::MotionModel;
 use crate::probe::{DEFAULT_DEPTH_MM, DEFAULT_SECTOR_DEG, ProbePose, Skin};
 use glam::{Vec2, Vec3};
@@ -188,6 +189,14 @@ impl LeafletValve {
     }
 }
 
+/// The designed parts of one instant: each valve's cone posed ([`LeafletValve::pose`], in
+/// [`EchoAnatomy::valves`] order) and the measured valve posed ([`PosedMeshValve`]).
+#[derive(Debug, Clone, Default)]
+pub struct Posed {
+    pub cones: Vec<Vec<Vec2>>,
+    pub mesh: PosedMeshValve,
+}
+
 /// A tapered capsule (papillary muscle, moderator band) in rest coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Capsule {
@@ -223,6 +232,9 @@ pub struct EchoAnatomy {
     heart: LabelVolume,
     thorax: LabelVolume,
     valves: Vec<LeafletValve>,
+    /// The pack's measured valve (the tricuspid, brief B35), which replaces that valve's designed
+    /// cone in the labels; `None` for a pack without one.
+    mesh_valve: Option<MeshValve>,
     /// Anterolateral, posteromedial.
     papillary: [Capsule; 2],
     moderator: Capsule,
@@ -298,11 +310,17 @@ impl EchoAnatomy {
         let ao_c = blood(Label::AortaLumen)?;
         let pa_c = blood(Label::PulmonaryArteryLumen)?;
         let valves = leaflet_valves(model, &designed, [lv_c, rv_c, ao_c, pa_c])?;
+        let mesh_valve = MeshValve::tricuspid(pack, model, &designed);
         let (mut valves_lo, mut valves_hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
         for v in &valves {
             let r = Vec3::splat(v.bound_radius_mm());
             valves_lo = valves_lo.min(v.centre_mm - r);
             valves_hi = valves_hi.max(v.centre_mm + r);
+        }
+        if let Some(m) = &mesh_valve {
+            let (lo, hi) = m.bounds_mm();
+            valves_lo = valves_lo.min(lo);
+            valves_hi = valves_hi.max(hi);
         }
         let papillary = papillary_muscles(pack, model, &heart, &designed)?;
         let moderator = moderator_band(model, &heart, lv_c, &designed)?;
@@ -317,6 +335,7 @@ impl EchoAnatomy {
             heart,
             thorax,
             valves,
+            mesh_valve,
             papillary,
             moderator,
             skin,
@@ -344,10 +363,39 @@ impl EchoAnatomy {
         &self.thorax
     }
 
-    /// The leaflets of each valve, in [`Valve::ALL`] order.
+    /// The leaflets of each valve, in [`Valve::ALL`] order (the designed cones; for the valve the
+    /// pack has a measured mesh of, the cone still gives the valve's centre, axis and reach but is
+    /// not drawn: [`Self::mesh_valve`] is).
     #[must_use]
     pub fn valves(&self) -> &[LeafletValve] {
         &self.valves
+    }
+
+    /// The measured valve that replaces its designed cone in the labels (brief B35), if any.
+    #[must_use]
+    pub fn mesh_valve(&self) -> Option<&MeshValve> {
+        self.mesh_valve.as_ref()
+    }
+
+    /// The designed parts posed at `openings` (per [`Valve::index`]): what
+    /// [`Self::heart_label_posed`] reads.
+    #[must_use]
+    pub fn pose(&self, openings: &[f32; 4]) -> Posed {
+        let mut p = Posed::default();
+        self.repose(openings, &mut p);
+        p
+    }
+
+    /// [`Self::pose`] into an existing value (the mesh valve is re-posed only when its opening
+    /// changed).
+    pub fn repose(&self, openings: &[f32; 4], posed: &mut Posed) {
+        posed.cones.clear();
+        posed
+            .cones
+            .extend(self.valves.iter().map(|v| v.pose(openings[v.valve.index()])));
+        if let Some(m) = &self.mesh_valve {
+            posed.mesh.update(m, openings[m.valve_id.index()]);
+        }
     }
 
     /// The anterolateral and posteromedial papillary muscles (rest coordinates).
@@ -406,29 +454,23 @@ impl EchoAnatomy {
     /// [`Valve::index`]), or `None` where the heart box has nothing (the thorax decides there).
     #[must_use]
     pub fn heart_label_at(&self, x: Vec3, openings: &[f32; 4]) -> Option<Label> {
-        let posed: Vec<Vec<Vec2>> = self
-            .valves
-            .iter()
-            .map(|v| v.pose(openings[v.valve.index()]))
-            .collect();
-        self.heart_label_posed(x, &posed)
+        self.heart_label_posed(x, &self.pose(openings))
     }
 
-    /// [`Self::heart_label_at`] with the leaflets already posed ([`LeafletValve::pose`], one
-    /// entry per valve in [`Self::valves`] order).
+    /// [`Self::heart_label_at`] with the leaflets already posed ([`Self::pose`]).
     #[must_use]
-    pub fn heart_label_posed(&self, x: Vec3, posed: &[Vec<Vec2>]) -> Option<Label> {
+    pub fn heart_label_posed(&self, x: Vec3, posed: &Posed) -> Option<Label> {
         let l = self.heart.get(x)?;
         if l == Label::Outside as u8 {
             return None;
         }
         let label = Label::from_u8(l)?;
-        if label.is_blood() && x.cmpge(self.valves_lo).all() && x.cmple(self.valves_hi).all() {
-            for (v, segs) in self.valves.iter().zip(posed) {
-                if v.contains_posed(x, segs) {
-                    return Some(Label::ValveLeaflet);
-                }
-            }
+        if label.is_blood()
+            && x.cmpge(self.valves_lo).all()
+            && x.cmple(self.valves_hi).all()
+            && self.leaflet_at(x, posed)
+        {
+            return Some(Label::ValveLeaflet);
         }
         if label.is_blood() {
             if label == Label::LvBlood && self.papillary.iter().any(|c| c.contains(x)) {
@@ -439,6 +481,21 @@ impl EchoAnatomy {
             }
         }
         Some(label)
+    }
+
+    /// Whether rest point `x` is in a posed leaflet: the measured valve's mesh for its valve, the
+    /// designed cones for the others (no blood or bounds check).
+    #[must_use]
+    pub fn leaflet_at(&self, x: Vec3, posed: &Posed) -> bool {
+        let skip = self.mesh_valve.as_ref().map(|m| m.valve_id);
+        for (v, segs) in self.valves.iter().zip(&posed.cones) {
+            if Some(v.valve) != skip && v.contains_posed(x, segs) {
+                return true;
+            }
+        }
+        self.mesh_valve
+            .as_ref()
+            .is_some_and(|m| posed.mesh.contains(m, x))
     }
 
     /// The baked thorax label at `x` (already moved back by the thorax's displacement), without

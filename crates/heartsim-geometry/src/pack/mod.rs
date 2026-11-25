@@ -14,6 +14,7 @@
 //!   electrodes.ron     electrode sites in the heart frame
 //!   labels_heart.bin   HSVL label volume of the heart box (1 mm; format 3, optional)
 //!   labels_thorax.bin  HSVL label volume of the thorax box (2 mm; format 3, optional)
+//!   valve_<name>.bin   HSAV animated valve: leaflets, chordae, keyframes (format 4, optional)
 //! ```
 //!
 //! Loading verifies the format version, every file's size and CRC-32, and the cross-file counts, so
@@ -36,14 +37,18 @@ use crate::hood::{Hood, compute_hoods};
 use crate::mesh::TriMesh;
 use crate::procedural::{MeshKind, NamedMesh, Resolution, idealised_heart, procedural_torso};
 use crate::territory::Territory;
+use crate::valve::{AnimatedValve, ValveError};
 use crate::volume::{LabelVolume, VolumeError};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Bump when the set of files or their meaning changes; binary record versions live in `binary`.
-/// Version 3 added the label volumes (`labels_heart.bin`, `labels_thorax.bin`).
-pub const PACK_FORMAT_VERSION: u32 = 3;
+/// Version 3 added the label volumes (`labels_heart.bin`, `labels_thorax.bin`); version 4 the
+/// optional animated valves (`valve_<name>.bin`, listed in [`PackManifest::valves`]).
+pub const PACK_FORMAT_VERSION: u32 = 4;
+/// The oldest format this build still reads (a version-3 pack is a version-4 pack without valves).
+pub const PACK_FORMAT_OLDEST: u32 = 3;
 /// File of the heart-box label volume.
 pub const HEART_LABELS_FILE: &str = "labels_heart.bin";
 /// File of the thorax-box label volume.
@@ -65,8 +70,9 @@ pub enum PackError {
     #[error("RON serialisation error: {0}")]
     Ron(#[from] ron::Error),
     #[error(
-        "pack format version {found} is not supported (this build reads {PACK_FORMAT_VERSION}); \
-         re-bake the pack with `cargo xtask bake-anatomy` (version 3 added the echo label volumes)"
+        "pack format version {found} is not supported (this build reads {PACK_FORMAT_OLDEST} to \
+         {PACK_FORMAT_VERSION}); re-bake the pack with `cargo xtask bake-anatomy` (version 3 added the \
+         echo label volumes)"
     )]
     Version { found: u32 },
     #[error("{file}: {source}")]
@@ -74,6 +80,12 @@ pub enum PackError {
         file: String,
         #[source]
         source: VolumeError,
+    },
+    #[error("{file}: {source}")]
+    Valve {
+        file: String,
+        #[source]
+        source: ValveError,
     },
     #[error("{file}: checksum mismatch (expected {expected:08x}, found {found:08x})")]
     Checksum { file: String, expected: u32, found: u32 },
@@ -100,6 +112,19 @@ pub struct MeshEntry {
     pub triangles: u32,
 }
 
+/// One animated valve of the pack (format 4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValveEntry {
+    /// `tricuspid`, …
+    pub name: String,
+    pub file: String,
+    pub vertices: u32,
+    pub triangles: u32,
+    pub chordae: u32,
+    /// Shapes including the rest shape.
+    pub keyframes: u32,
+}
+
 /// `manifest.ron`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PackManifest {
@@ -112,6 +137,9 @@ pub struct PackManifest {
     pub cell_spacing_mm: f32,
     pub cell_count: u32,
     pub meshes: Vec<MeshEntry>,
+    /// The animated valves (format 4; absent from older manifests).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub valves: Vec<ValveEntry>,
     /// Every file except the manifest itself, keyed by path relative to the pack directory.
     pub files: BTreeMap<String, FileEntry>,
 }
@@ -148,6 +176,9 @@ pub struct AnatomyPack {
     /// The label volumes the echo cross-section samples; `None` for a pack without them (the
     /// procedural pack). Both files or neither.
     pub volumes: Option<LabelVolumes>,
+    /// Animated valves fitted to this heart (brief B35; the tricuspid only so far). Empty for a
+    /// pack without them, which draws and images as before.
+    pub valves: Vec<AnimatedValve>,
 }
 
 /// The two label volumes of a pack, in the heart frame (`docs/anatomy-pack.md`, *Label volumes*).
@@ -210,6 +241,7 @@ impl AnatomyPack {
                     triangles: m.mesh.triangle_count() as u32,
                 })
                 .collect(),
+            valves: Vec::new(),
             files: BTreeMap::new(),
         };
         Self {
@@ -224,7 +256,14 @@ impl AnatomyPack {
             aha_segments: heart.aha_segments,
             licence: PROCEDURAL_LICENSE.to_string(),
             volumes: None,
+            valves: Vec::new(),
         }
+    }
+
+    /// The animated valve called `name` (`"tricuspid"`), if the pack has one.
+    #[must_use]
+    pub fn valve(&self, name: &str) -> Option<&AnimatedValve> {
+        self.valves.iter().find(|v| v.name == name)
     }
 
     /// Coronary territory of a cell.
@@ -277,6 +316,9 @@ impl AnatomyPack {
             put(HEART_LABELS_FILE, &v.heart.encode())?;
             put(THORAX_LABELS_FILE, &v.thorax.encode())?;
         }
+        for v in &self.valves {
+            put(&valve_file(&v.name), &v.encode())?;
+        }
         self.manifest.files = files;
         self.manifest.format_version = PACK_FORMAT_VERSION;
         self.manifest.cell_count = self.cells.len() as u32;
@@ -289,6 +331,18 @@ impl AnatomyPack {
                 kind: m.kind,
                 vertices: m.mesh.vertex_count() as u32,
                 triangles: m.mesh.triangle_count() as u32,
+            })
+            .collect();
+        self.manifest.valves = self
+            .valves
+            .iter()
+            .map(|v| ValveEntry {
+                name: v.name.clone(),
+                file: valve_file(&v.name),
+                vertices: v.rest_mm.len() as u32,
+                triangles: v.triangles.len() as u32,
+                chordae: v.chordae.len() as u32,
+                keyframes: v.keyframe_count() as u32,
             })
             .collect();
         let path = dir.join("manifest.ron");
@@ -313,7 +367,7 @@ impl AnatomyPack {
     ) -> Result<Self, PackError> {
         let text = String::from_utf8_lossy(&read_file("manifest.ron")?).into_owned();
         let manifest: PackManifest = ron::from_str(&text)?;
-        if manifest.format_version != PACK_FORMAT_VERSION {
+        if !(PACK_FORMAT_OLDEST..=PACK_FORMAT_VERSION).contains(&manifest.format_version) {
             return Err(PackError::Version {
                 found: manifest.format_version,
             });
@@ -430,6 +484,26 @@ impl AnatomyPack {
             }
         };
 
+        let mut valves = Vec::with_capacity(manifest.valves.len());
+        for e in &manifest.valves {
+            let v = AnimatedValve::decode(&read(&e.file)?).map_err(|source| PackError::Valve {
+                file: e.file.clone(),
+                source,
+            })?;
+            if v.name != e.name
+                || v.rest_mm.len() != e.vertices as usize
+                || v.triangles.len() != e.triangles as usize
+                || v.chordae.len() != e.chordae as usize
+                || v.keyframe_count() != e.keyframes as usize
+            {
+                return Err(PackError::Format(format!(
+                    "{}: content differs from the manifest entry",
+                    e.file
+                )));
+            }
+            valves.push(v);
+        }
+
         let body = read_file("human.glb")
             .ok()
             .and_then(|b| body::read_human_body(&b).ok());
@@ -454,8 +528,15 @@ impl AnatomyPack {
             aha_segments,
             licence,
             volumes,
+            valves,
         })
     }
+}
+
+/// The file name of the animated valve called `name`.
+#[must_use]
+pub fn valve_file(name: &str) -> String {
+    format!("valve_{name}.bin")
 }
 
 fn io_err(path: &Path, source: std::io::Error) -> PackError {

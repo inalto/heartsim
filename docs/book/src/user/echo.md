@@ -174,7 +174,14 @@ their sources in `docs/anatomy-pack.md` and the code.
 * **Valve leaflets**, the papillary muscles, the moderator band and the pericardium are drawn from measured dimensions where a
   source was read, and designed where none was found. They are not seen in the source data.
 * **The lung-edge retraction** that opens the parasternal window is designed. The model does not show a real notch.
-* **The right ventricle** has no venous lumens in the heart box, and the closed tricuspid valve has a flat shape.
+* **The right ventricle** has no venous lumens in the heart box. Without the valve file in the pack, the closed tricuspid valve
+  has a flat shape.
+
+**The tricuspid leaflets are a measured mesh.** When the pack has the valve, the tricuspid leaflets in the image and the
+cross-section are the shape of one donor's valve (Texas TriValve 1.1, CC BY 4.0) fitted to this heart, not a designed cone. They
+are drawn 1.6 mm thick, the designed thickness; the chordae are not imaged. The mitral, aortic and pulmonary leaflets are still
+the designed cones. The mesh is used whether or not the 3-D *Tricuspid valve* layer is shown, so the echo and the 3-D heart
+agree. It is one donor's valve on another heart, for education only, and it has not been reviewed by a clinician.
 
 **The grey image.** The acoustic values are in `assets/echo/acoustic.ron`, one row per tissue, with the status of each value.
 The impedances and most of the attenuations are read from the source that the research note cites (`docs/research/echo-simulator.md`,

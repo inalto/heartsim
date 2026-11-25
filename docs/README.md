@@ -7,7 +7,7 @@
 | [REQUIREMENTS.md](REQUIREMENTS.md) | Product requirements: features (P0/P1/P2), rhythms/pathologies list, UX, non-functional requirements | everyone |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Technical design: crates, data flow, simulation tiers, ECG forward model, rendering, file formats, testing, packaging | implementers |
 | [ROADMAP.md](ROADMAP.md) | Milestones M0–M8 with exit criteria and the dependency order of the briefs | planners |
-| [anatomy-pack.md](anatomy-pack.md) | Anatomy pack format, coordinate frame, the procedural default pack, and how to bake one from the open Strocchi/Rodero meshes (download, licence, attribution) | geometry/sim implementers |
+| [anatomy-pack.md](anatomy-pack.md) | Anatomy pack format (4: optional animated valve files), coordinate frame, the procedural default pack, and how to bake one from the open Strocchi/Rodero meshes (download, licence, attribution) | geometry/sim implementers |
 | [web.md](web.md) | The browser (WebAssembly) build: how to build and serve it, what it drops, the WebGL2 fallback, size budget, smoke test and browser test matrix | implementers, testers |
 | [tutorials.md](tutorials.md) | Tutorial file format (pages, actions, checks), modes, progress, the scenario timeline editor | educators, content authors |
 | [validation-bridge.md](validation-bridge.md) | Exporting to openCARP, importing solver results, comparison reports and the Niederer slab: what they do, what was not checked against a real solver | researchers, sim implementers |
@@ -16,6 +16,7 @@
 | [research/electrophysiology-and-ecg-models.md](research/electrophysiology-and-ecg-models.md) | The science: cell models, eikonal activation, conduction system, ECG forward problem, meshes, numerics | sim implementers |
 | [research/anatomy-meshes.md](research/anatomy-meshes.md) | Open heart and torso mesh sources for the anatomy pack: licence table, rejected candidates, posing plan, attribution text (Phase 1 of the real-mesh bake) | anatomy implementers |
 | [research/echo-calculators.md](research/echo-calculators.md) | The echo calculators (B29): per calculator, the primary publication read, the table and page, the review status (verified or formula only) and what could not be confirmed | reviewers, calculator authors |
+| [research/tricuspid-valve-source.md](research/tricuspid-valve-source.md) | The measured tricuspid valve (B35): the donor (Texas TriValve 1.1), its commit and licence check, the files used, the verified source facts, the rejected sources and the fit numbers | geometry/anatomy implementers, reviewers |
 | [research/rust-stack.md](research/rust-stack.md) | Crate-by-crate evaluation of rendering, GUI, compute, audio, packaging, CI | implementers |
 
 Legal note: heartsim is an independent implementation built from the published literature. It contains no code, data or assets from any

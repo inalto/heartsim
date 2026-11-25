@@ -138,7 +138,8 @@ review before they are taught as more than a schematic.
 
 * Many parameters are **designed**, not sourced (contraction timing, filling phases, the shape of the movement, the quivers,
   the respiratory shift); `crates/heartsim-echo/src/params.rs` marks each one.
-* No valve leaflets, papillary muscles or pericardium; valve planes are discs. No pressure, flow or Doppler.
+* Valve leaflets only for the tricuspid valve, and only when its layer is shown (see *The tricuspid valve (B35)* below). The
+  mitral, aortic and pulmonary valves are discs. No papillary muscles or pericardium. No pressure, flow or Doppler.
 * The right ventricle has no closed cavity, so there is no RV volume or RVEF read-out; ischaemia reduces the left ventricle's
   inward motion only.
 * No dilated or hypertrophied chamber shapes.
@@ -148,6 +149,25 @@ review before they are taught as more than a schematic.
 * The motion is evaluated up to 30 times a second on the desktop and 20 times in the browser. One evaluation takes about 18 ms on
   one core of the development machine (a virtual machine; the bench is `cargo bench -p heartsim-echo`); its cost in the browser has not
   been measured.
+
+### The tricuspid valve (B35)
+
+Brief B35. The tricuspid leaflets in the 3-D heart and on the Echo page are one donor's valve, fitted to another heart. See
+[the page](user/wall-motion.md#the-tricuspid-valve-layer). It is for education only, and **no clinician has reviewed it**.
+
+* One donor valve (Texas TriValve 1.1, a healthy valve, CC BY 4.0), fitted to this heart's tricuspid ring by a scale, a rotation
+  and a warp. The donor's shape is a finite-element result; the fit is a method choice. Nobody has compared it with a real valve.
+* The source is a load sequence of seven shapes, not a timed recording. The valve is posed by the engine's valve schedule. The
+  last keyframe segment holds about 6 mm of motion in the final 1.3 % of the closure, so the valve snaps the last part shut.
+* The mitral, aortic and pulmonary valves have no leaflets in the 3-D heart; they stay discs.
+* The chordae origins were moved up to 13.8 mm to the nearest right-ventricular wall, because this heart has no right-ventricular
+  papillary muscles.
+* The open septal leaflet touches the septum: its vertices are pushed back into the blood, but up to 0.6 mm of the open septal
+  leaflet still lies outside it, against the septum.
+* The Echo page uses the measured tricuspid leaflets even when the 3-D layer is off. Chordae are not imaged there.
+* No clinician has reviewed the fit, the timing or the look.
+* Not seen on a real GPU, in a browser or in a running app window. The valve file is 155,832 bytes in the default pack (it
+  deflates to about 104 KB); the web download size was not measured.
 
 ### The Echo page (probe and cross-section)
 
@@ -162,7 +182,8 @@ cross-section is an anatomical map of the model's tissues, not an ultrasound ima
 * Keyboard control and dragging of the probe's handles have no automated test.
 * M-mode, tissue Doppler and calipers are built (phase 5, B34); see *M-mode, tissue Doppler and calipers (B34)* below. There is no
   blood Doppler. The standard views are built; see *The standard views (B33)* below.
-* RV venous lumens are absent from the heart box, and the closed tricuspid valve has a flat shape.
+* RV venous lumens are absent from the heart box. Without the valve file in the pack, the closed tricuspid valve has a flat shape;
+  with it, the tricuspid leaflets are the measured mesh (see *The tricuspid valve (B35)*).
 * Cost: about 4.3 ms per drawn frame for the grid update and 7.2 ms for the slice on the development machine (release build), on
   top of the 18 ms of the wall-motion evaluation, at most 30 times a second on the desktop and 20 in the browser. The first visit
   builds the anatomy in about 0.7 s on the desktop; the browser cost is not measured. The browser uses a 128 × 256 label image

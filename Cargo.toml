@@ -88,6 +88,8 @@ plotters = { version = "0.3.7", default-features = false, features = ["bitmap_ba
 epaint_default_fonts = "0.37.0"
 
 # --- build tooling (xtask only) ----------------------------------------------
+# The LZMA (.xz) blocks of the Texas TriValve VTU frames (brief B35); pure Rust, Apache-2.0.
+lzma-rust2 = { version = "0.23.0", default-features = false, features = ["std", "xz"] }
 # Text, system fonts and raster images are off: the icon is pure vector paths.
 resvg = { version = "0.49.0", default-features = false }
 embed-resource = "3.0.12"

@@ -39,7 +39,7 @@ text under a control is set at a size you can read.
 * **Left: five sections.** *Colour map*, *Click on the heart*, *Anatomy and camera*, *Wall motion* and *Heart vector*, each
   collapsible; the first three are open at first, and the open or closed state is remembered. *Click on the heart* stimulates
   there, and the hint under it reads "Shift-click the heart to ablate without switching mode." *Anatomy and camera* shows, hides
-  or fades each layer (the chambers, the great vessels, the valve rings and the torso), listed by name in the language of the
+  or fades each layer (the chambers, the great vessels, the valve rings, the tricuspid valve's leaflets and the torso), listed by name in the language of the
   window. *Heart vector* overlays the heart-vector arrow and its loop; *see-through* fades the walls so the arrow stays visible.
 * **Right: the frontal QRS axis** measured from the strip. The hexaxial circle shows the four axis classes as soft
   sectors; the sector under the pointer brightens and shows its name and range (normal −30° to +90° in green, left deviation −30° to −90° in amber at the upper

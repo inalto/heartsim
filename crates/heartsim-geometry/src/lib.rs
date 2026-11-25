@@ -18,6 +18,7 @@ pub mod primitives;
 pub mod procedural;
 pub mod spatial;
 pub mod territory;
+pub mod valve;
 pub mod volume;
 
 pub use catheter::{CardiacChamber, Catheter, CatheterAnatomy, CatheterKind, CatheterSite, Cavity};
@@ -29,4 +30,5 @@ pub use pack::{AnatomyPack, LabelVolumes, Landmarks, PACK_FORMAT_VERSION, PackEr
 pub use procedural::{IdealisedHeart, MeshKind, NamedMesh, Resolution, idealised_heart};
 pub use spatial::HashGrid;
 pub use territory::Territory;
+pub use valve::{AnimatedValve, DiscCarrier, DiscRim, ValveRenderMesh};
 pub use volume::{Label, LabelVolume, VolumeError};

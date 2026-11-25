@@ -84,6 +84,7 @@ pub fn about_window(ctx: &egui::Context, open: &mut bool, newer: Option<&crate::
             }
             ui.label(t!("about-tagline"));
             heartsim_ui::helper_text(ui, t!("about-licence"));
+            heartsim_ui::helper_text(ui, t!("about-credits"));
             ui.add_space(4.0);
             cards::card(ui, |ui| {
                 cards::heading(ui, t!("about-disclaimer-heading"));

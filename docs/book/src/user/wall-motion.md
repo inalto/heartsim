@@ -56,6 +56,25 @@ anatomy says it is. The pacing-lead and catheter markers stay at their resting p
 Scrubbing back with the *Scrub back* control shows the motion for up to about 6 s. Further back, the heart still moves but
 without the regional detail of each segment.
 
+## The tricuspid valve layer
+
+The 3-D heart can show a tricuspid valve with three leaflets and their cords. Open *Anatomy and camera* in the left panel and
+tick **Tricuspid valve** in the layers list. It is off by default, and your choice is saved with your preferences.
+
+The leaflets are one donor's valve fitted to this heart. The donor is Texas TriValve 1.1, a finite-element model of a healthy
+human tricuspid valve (Mathur et al. 2022, CC BY 4.0). Its leaflets were scaled and placed on this heart's tricuspid ring. Its
+cords start on the right ventricle's wall, because this heart has no papillary muscles on that side. It is a measured shape, not a
+measurement of a patient's valve, and it has not been reviewed by a clinician.
+
+* When it is shown, it replaces the flat tricuspid disc of the *Valve planes* layer, and the closure flash of the tricuspid
+  valve is drawn on the leaflets.
+* It is easiest to see when the right ventricle or the right atrium is cut or made translucent. A click passes through it.
+* It follows the wall motion. With *Wall motion* off, or with Reduced motion on, it stays on the resting ring and still opens
+  and shuts.
+* It opens and shuts on the same timing as the heart sounds and the Echo page's leaflets. The source is a load sequence of seven
+  shapes, not a timed recording, so the valve snaps the last small part of the way shut.
+* The mitral, aortic and pulmonary valves have no leaflets in the 3-D heart.
+
 ## What each rhythm shows
 
 * **Sinus rhythm.** The normal pattern described above.
@@ -101,8 +120,9 @@ whose source the implementers could not fully confirm.
 
 ## What the model cannot show
 
-* **Valves.** The valves are drawn as flat rings. There are no leaflets yet, so you cannot see the valve opening or closing.
-  Papillary muscles and the pericardium are not shown either.
+* **Valves.** The valves are drawn as flat rings, except the tricuspid valve when its layer is shown (see *The tricuspid valve
+  layer* above). The mitral, aortic and pulmonary valves have no leaflets, so you cannot see them open or close. Papillary
+  muscles and the pericardium are not shown either.
 * **Pressure, flow and Doppler.** Nothing is measured in blood. There is no pressure curve, no flow, no regurgitation jet and no
   Doppler velocity.
 * **The right ventricle's volume.** The right ventricle has no closed cavity in the anatomy, so the model gives no RV volume and

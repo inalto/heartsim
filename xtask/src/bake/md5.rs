@@ -113,13 +113,12 @@ impl Md5 {
     pub fn finish(mut self) -> String {
         let bits = self.length.wrapping_mul(8);
         self.buffer.push(0x80);
-        while !self.buffer.len().is_multiple_of(64) {
-            if self.buffer.len() % 64 == 56 {
-                self.buffer.extend_from_slice(&bits.to_le_bytes());
-            } else {
-                self.buffer.push(0);
-            }
+        // zeros up to 56 mod 64 (into the next block when the message ends within 8 bytes of a
+        // block's end), then the bit length
+        while self.buffer.len() % 64 != 56 {
+            self.buffer.push(0);
         }
+        self.buffer.extend_from_slice(&bits.to_le_bytes());
         let blocks = std::mem::take(&mut self.buffer);
         for block in blocks.as_chunks::<64>().0 {
             compress(&mut self.state, block);
@@ -201,5 +200,14 @@ mod tests {
         let mut one = Md5::new();
         one.update(&[b'a'; 100]);
         assert_eq!(h.finish(), one.finish());
+    }
+
+    /// A message ending 56..63 bytes into a block needs a second padding block (Python's
+    /// `hashlib.md5` digests).
+    #[test]
+    fn padding_into_a_second_block() {
+        assert_eq!(md5(&"a".repeat(55)), "ef1772b6dff9a122358552954ad0df65");
+        assert_eq!(md5(&"a".repeat(58)), "dc2f2f2462a0d72358b2f99389458606");
+        assert_eq!(md5(&"a".repeat(63)), "b06521f39153d618550606be297466d5");
     }
 }

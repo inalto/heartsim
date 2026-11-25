@@ -23,8 +23,8 @@
 use heartsim_core::Auscultation;
 use heartsim_ecg::PcgParams;
 use heartsim_echo::{
-    EchoAnatomy, MotionError, MotionFrame, MotionHistory, MotionInput, MotionModel, MotionParams,
-    MotionReadout, SliceState, mechanical_injury,
+    DesignedParams, EchoAnatomy, MeshValve, MotionError, MotionFrame, MotionHistory, MotionInput,
+    MotionModel, MotionParams, MotionReadout, SliceState, mechanical_injury, valve_openings,
 };
 use heartsim_geometry::AnatomyPack;
 use heartsim_sim::timing::RespiratoryClock;
@@ -142,6 +142,10 @@ pub struct HeartMotion {
     /// there have been (the echo cross-section follows them).
     evaluated: Option<Evaluated>,
     serial: u64,
+    /// The pack's measured tricuspid valve (brief B35), when it has one.
+    valve: Option<MeshValve>,
+    /// The designed timings the valve opening is read with (the echo anatomy's).
+    designed: DesignedParams,
 }
 
 impl HeartMotion {
@@ -153,6 +157,8 @@ impl HeartMotion {
     pub fn new(pack: &AnatomyPack, cell_count: usize) -> Result<Self, MotionError> {
         let model = MotionModel::new(pack, MotionParams::default())?;
         let frame = model.new_frame();
+        let designed = DesignedParams::default();
+        let valve = MeshValve::tricuspid(pack, &model, &designed);
         Ok(Self {
             model,
             history: MotionHistory::new(PcgParams::default(), 15.0, cell_count),
@@ -172,6 +178,8 @@ impl HeartMotion {
             last_forget_ms: 0.0,
             evaluated: None,
             serial: 0,
+            valve,
+            designed,
         })
     }
 
@@ -343,15 +351,65 @@ impl HeartMotion {
         }
     }
 
+    /// The pack's measured tricuspid valve, if any.
+    #[must_use]
+    pub fn valve(&self) -> Option<&MeshValve> {
+        self.valve.as_ref()
+    }
+
+    /// The instant the drawn frame shows: with the motion on, the time of the last vertex
+    /// evaluation (the frame on the GPU); with it off, the drawn time (the valves still open and
+    /// shut by phase). The cross-section takes the same instant ([`Self::echo_update`]).
+    fn drawn_instant(&self) -> (bool, f64, f64, f32) {
+        match self.evaluated {
+            Some(e) if e.enabled => (true, e.t_ms, e.resp_phase, e.exaggeration),
+            _ => (false, self.t_ms, self.resp_phase, 1.0),
+        }
+    }
+
+    /// The tricuspid valve's opening at the drawn instant (`1` open … `0` shut): the value
+    /// [`valve_openings`] gives, the one the echo leaflets and the heart sounds follow.
+    #[must_use]
+    pub fn tricuspid_opening(&self) -> f32 {
+        let (_, t, _, _) = self.drawn_instant();
+        valve_openings(
+            &self.history,
+            self.model.params(),
+            self.model.ef_scale(),
+            t,
+            &self.designed,
+        )[heartsim_ecg::Valve::Tricuspid.index()]
+    }
+
+    /// What the posed valve depends on: the frame evaluation (with the motion on) and the
+    /// opening. Unchanged key, unchanged pose.
+    #[must_use]
+    pub fn valve_key(&self) -> (u64, bool, u32) {
+        let (enabled, ..) = self.drawn_instant();
+        (
+            if enabled { self.serial } else { 0 },
+            enabled,
+            self.tricuspid_opening().to_bits(),
+        )
+    }
+
+    /// The measured tricuspid valve at the drawn instant (heart frame, mm): posed at
+    /// [`Self::tricuspid_opening`] and, with the motion on, carried by the tricuspid disc of the
+    /// drawn frame; with it off (or reduced motion) on the rest disc. `None` without a valve.
+    pub fn pose_valve(&self, scratch: &mut Vec<glam::Vec3>, out: &mut Vec<glam::Vec3>) -> Option<f32> {
+        let v = self.valve.as_ref()?;
+        let (enabled, ..) = self.drawn_instant();
+        let o = self.tricuspid_opening();
+        v.pose(o, enabled.then_some(&self.frame), scratch, out);
+        Some(o)
+    }
+
     /// Refresh `state` for the instant of the frame that is drawn: the displacement grid from
     /// **this frame** (the one the 3-D heart uploads; no second evaluation of the model) and the
     /// valve openings at its time. With the motion off the grid is at rest and the openings follow
     /// the drawn time.
     pub fn echo_update(&self, state: &mut SliceState, anatomy: &EchoAnatomy) {
-        let (enabled, t_ms, resp_phase, exaggeration) = match self.evaluated {
-            Some(e) if e.enabled => (true, e.t_ms, e.resp_phase, e.exaggeration),
-            _ => (false, self.t_ms, self.resp_phase, 1.0),
-        };
+        let (enabled, t_ms, resp_phase, exaggeration) = self.drawn_instant();
         let input = MotionInput {
             history: &self.history,
             t_ms,

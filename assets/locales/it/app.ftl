@@ -205,6 +205,7 @@ part-svc = Vena cava superiore
 part-ivc = Vena cava inferiore
 part-valve-rings = Anelli valvolari
 part-valve-planes = Piani valvolari
+part-tricuspid-valve = Valvola tricuspide
 part-torso = Torace
 heart-ablated = Ablazione di { $radius } mm attorno a { $region }
 heart-stimulus = Stimolo: { $region } a { $time } ms
@@ -352,6 +353,7 @@ about-title = Informazioni su heartsim
 about-version = Versione { $version }
 about-tagline = Simulatore 3D di elettrofisiologia cardiaca e di ECG a 12 derivazioni per la didattica medica.
 about-licence = Software libero con licenza MIT o Apache-2.0, a scelta. Anatomia e contenuti derivano dalla letteratura pubblicata; la guida utente elenca le fonti.
+about-credits = Dati anatomici aperti (CC BY 4.0): il cuore di Rodero et al. 2021 e il torace di Qian et al. 2022 (King's College London); la valvola tricuspide di Texas TriValve 1.1 di Mathur, Meador, Malinowski, Jazwiec, Timek e Rausch (Engineering with Computers 2022, doi:10.1007/s00366-022-01659-w), modificata: semplificata, adattata all'anulus di un altro cuore, ritemporizzata. Il file LICENSE del pacchetto anatomico riporta l'attribuzione completa.
 about-disclaimer-heading = Avvertenza medica
 
 ## Esportazione del tracciato visualizzato (requisito F-15)

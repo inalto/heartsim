@@ -4,6 +4,32 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- A measured tricuspid valve in the 3-D heart (brief B35): a *Tricuspid valve* layer (Italian *Valvola tricuspide*) in *Anatomy
+  and camera*, off by default and saved with the preferences. It shows three leaflets and their chordae from one donor valve, Texas
+  TriValve 1.1 (CC BY 4.0, Mathur et al. 2022), fitted to the pack heart's tricuspid ring. When shown it replaces the flat
+  tricuspid disc, and the tricuspid closure flash is on the leaflets. It follows the wall motion and opens and shuts on the valve
+  schedule. It is one donor's valve on another heart, for education only, and no clinician has reviewed it.
+- Anatomy pack format 4 (brief B35): optional `valve_<name>.bin` files in the `HSAV` version 1 format, listed in the manifest's
+  `valves`. The default pack gains `valve_tricuspid.bin` (155,832 bytes; 2,012 vertices, 3,000 leaflet triangles, 988 chordae
+  segments, 7 keyframes). Format 3 packs still load and draw as before, without a valve.
+- `cargo xtask bake-valve` adds a valve to an existing pack and leaves every other pack file byte-identical. `cargo xtask
+  bake-anatomy` now bakes the valve too; `--no-valve` skips it.
+- A credits line in the About window naming the three open data sources.
+- The research note `docs/research/tricuspid-valve-source.md`: the source, its commit, the licence check, the rejected candidates
+  and the fit numbers.
+- User page section *The tricuspid valve layer* (in *The beating heart*), and known-issues entries for the valve.
+
+### Changed
+- The Echo page's tricuspid leaflets (image and cross-section) are the measured mesh, 1.6 mm thick, when the pack has the valve,
+  whether or not the 3-D layer is shown. The mitral, aortic and pulmonary valves keep the designed cones. Measured cost of the
+  slice: +3.7 % (8.32 ms against 8.02 ms on the development machine).
+- `xtask` gains `lzma-rust2` 0.23 (Apache-2.0, pure Rust) to read the donor's LZMA-compressed frames. It is an xtask-only
+  dependency; no shipped crate gains one.
+
+### Fixed
+- The xtask MD5 gave wrong digests for inputs whose length modulo 64 is 56 to 63. This affected only the bake's checksum check.
+
 ## [0.24.0] — 2026-11-25
 
 ### Added

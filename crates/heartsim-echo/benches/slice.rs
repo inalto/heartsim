@@ -59,6 +59,72 @@ fn bench(c: &mut Criterion) {
             black_box(&image);
         });
     });
+    // brief B35: the same slice without the measured tricuspid valve (the designed cone instead),
+    // with the valve's leaflets in the image (tricuspid half open) — the added cost of option (a)
+    let mut half = state.openings();
+    half[heartsim_ecg::Valve::Tricuspid.index()] = 0.5;
+    state.set_openings(&anatomy, half);
+    c.bench_function("slice alone, tricuspid half open, measured valve (B35)", |b| {
+        b.iter(|| {
+            state.slice(&anatomy, black_box(&pose), &mut image);
+            black_box(&image);
+        });
+    });
+    {
+        let mut bare = pack.clone();
+        bare.valves.clear();
+        let cone = EchoAnatomy::new(&bare, &model, DesignedParams::default()).expect("anatomy");
+        let mut cs = SliceState::new(&cone);
+        cs.update(&cone, &model, &frame, &input(2300.0));
+        cs.set_openings(&cone, half);
+        c.bench_function(
+            "slice alone, tricuspid half open, designed cone (before B35)",
+            |b| {
+                b.iter(|| {
+                    cs.slice(&cone, black_box(&pose), &mut image);
+                    black_box(&image);
+                });
+            },
+        );
+    }
+    if let Some(mv) = anatomy.mesh_valve() {
+        let mut posed = heartsim_echo::PosedMeshValve::default();
+        let mut o = 0u32;
+        c.bench_function("measured valve: pose + triangle grid for the echo (B35)", |b| {
+            b.iter(|| {
+                o += 1;
+                posed.update(mv, black_box((o % 100) as f32 / 100.0));
+            });
+        });
+        let (mut scratch, mut out) = (Vec::new(), Vec::new());
+        c.bench_function("measured valve: pose carried by the disc (3-D heart, B35)", |b| {
+            b.iter(|| {
+                o += 1;
+                mv.pose(
+                    black_box((o % 100) as f32 / 100.0),
+                    Some(&frame),
+                    &mut scratch,
+                    &mut out,
+                );
+                black_box(&out);
+            });
+        });
+        let mut render = heartsim_geometry::ValveRenderMesh::new(
+            &mv.data,
+            DesignedParams::default().av_leaflet_thickness_mm,
+        );
+        let mut verts = Vec::new();
+        c.bench_function(
+            "measured valve: shell and chordae vertices (3-D heart, B35)",
+            |b| {
+                b.iter(|| {
+                    render.fill(black_box(&out), &mut verts);
+                    black_box(&verts);
+                });
+            },
+        );
+    }
+    state.update(&anatomy, &model, &frame, &input(2300.0));
     let mut k = 0u32;
     c.bench_function("slice-state update (grid from frame, openings)", |b| {
         b.iter(|| {

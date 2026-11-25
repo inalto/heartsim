@@ -6,7 +6,9 @@
 //! Finite-volume solvers store fields per cell (`CellData`), finite-element ones per node
 //! (`PointData`), so [`VtkGrid`] keeps both and can give the cell centres to sample cell data at.
 //!
-//! Not supported, with a clear error: parallel `.pvtu`, structured datasets, LZ4 and LZMA compression.
+//! Not supported, with a clear error: parallel `.pvtu`, structured datasets, LZ4 and LZMA compression
+//! (a caller that has a decoder for another compressor passes it to [`parse_vtu_with`]: the bake
+//! reads the LZMA frames of a valve model that way, so no LZMA code ships in this crate).
 
 use super::BridgeError;
 use base64::Engine as _;
@@ -209,16 +211,22 @@ fn decode_base64_runs(text: &[u8]) -> Result<Vec<u8>, BridgeError> {
     Ok(out)
 }
 
+/// A decoder for one compressed block of a compressor this crate does not read: the compressor's
+/// name (`vtkLZMADataCompressor`) and the block's bytes in, the uncompressed bytes out.
+pub type BlockDecoder<'a> = &'a dyn Fn(&str, &[u8]) -> Result<Vec<u8>, String>;
+
 /// VTU binary payload layout, from the `VTKFile` attributes.
-#[derive(Debug, Clone, Copy)]
-struct Layout {
+#[derive(Clone, Copy)]
+struct Layout<'a> {
     little: bool,
     header: Scalar,
     compressed: bool,
+    /// The compressor and its decoder when it is not zlib.
+    other: Option<(&'a str, BlockDecoder<'a>)>,
 }
 
 /// `[bytes][data]`, or `[blocks, block size, last block size, compressed sizes…][zlib blocks…]`.
-fn unpack_payload(b: &[u8], l: Layout) -> Result<Vec<u8>, BridgeError> {
+fn unpack_payload(b: &[u8], l: Layout<'_>) -> Result<Vec<u8>, BridgeError> {
     let word = l.header.bytes();
     let read = |i: usize| -> Result<usize, BridgeError> {
         b.get(i * word..(i + 1) * word)
@@ -240,9 +248,13 @@ fn unpack_payload(b: &[u8], l: Layout) -> Result<Vec<u8>, BridgeError> {
         let chunk = b
             .get(pos..pos + size)
             .ok_or_else(|| BridgeError::new(VTU, "compressed block shorter than announced"))?;
-        flate2::read::ZlibDecoder::new(chunk)
-            .read_to_end(&mut out)
-            .map_err(|e| BridgeError::new(VTU, format!("zlib: {e}")))?;
+        if let Some((name, decode)) = l.other {
+            out.extend(decode(name, chunk).map_err(|e| BridgeError::new(VTU, format!("{name}: {e}")))?);
+        } else {
+            flate2::read::ZlibDecoder::new(chunk)
+                .read_to_end(&mut out)
+                .map_err(|e| BridgeError::new(VTU, format!("zlib: {e}")))?;
+        }
         pos += size;
     }
     Ok(out)
@@ -290,7 +302,7 @@ fn split_appended(bytes: &[u8]) -> Result<(String, Option<Appended<'_>>), Bridge
 }
 
 struct VtuContext<'a> {
-    layout: Layout,
+    layout: Layout<'a>,
     appended: Option<Appended<'a>>,
     /// All appended offsets, ascending: where a base64 run ends.
     offsets: Vec<usize>,
@@ -371,6 +383,16 @@ fn arrays<'a, 'i>(node: roxmltree::Node<'a, 'i>) -> impl Iterator<Item = roxmltr
 
 /// Parse an XML `.vtu` file (all pieces are concatenated).
 pub fn parse_vtu(bytes: &[u8]) -> Result<VtkGrid, BridgeError> {
+    parse_vtu_impl(bytes, None)
+}
+
+/// [`parse_vtu`] for a file whose compressor is not zlib: `decode` uncompresses each block (it is
+/// given the compressor's name). A zlib or uncompressed file reads as with `parse_vtu`.
+pub fn parse_vtu_with(bytes: &[u8], decode: BlockDecoder<'_>) -> Result<VtkGrid, BridgeError> {
+    parse_vtu_impl(bytes, Some(decode))
+}
+
+fn parse_vtu_impl(bytes: &[u8], decode: Option<BlockDecoder<'_>>) -> Result<VtkGrid, BridgeError> {
     let (xml, appended) = split_appended(bytes)?;
     let doc = roxmltree::Document::parse(&xml).map_err(|e| BridgeError::new(VTU, format!("XML: {e}")))?;
     let root = doc.root_element();
@@ -381,11 +403,13 @@ pub fn parse_vtu(bytes: &[u8]) -> Result<VtkGrid, BridgeError> {
             format!("dataset type `{kind}` (only UnstructuredGrid; merge .pvtu pieces first)"),
         ));
     }
-    if let Some(c) = root.attribute("compressor")
-        && c != "vtkZLibDataCompressor"
-    {
-        return Err(BridgeError::new(VTU, format!("unsupported compressor `{c}`")));
-    }
+    let other = match (root.attribute("compressor"), decode) {
+        (Some(c), Some(d)) if c != "vtkZLibDataCompressor" => Some((c, d)),
+        (Some(c), None) if c != "vtkZLibDataCompressor" => {
+            return Err(BridgeError::new(VTU, format!("unsupported compressor `{c}`")));
+        }
+        _ => None,
+    };
     let header_name = root.attribute("header_type").unwrap_or("UInt32");
     let layout = Layout {
         little: root.attribute("byte_order").unwrap_or("LittleEndian") != "BigEndian",
@@ -393,6 +417,7 @@ pub fn parse_vtu(bytes: &[u8]) -> Result<VtkGrid, BridgeError> {
             .filter(|s| matches!(s, Scalar::U32 | Scalar::U64))
             .ok_or_else(|| BridgeError::new(VTU, format!("unsupported header_type `{header_name}`")))?,
         compressed: root.attribute("compressor").is_some(),
+        other,
     };
     let mut offsets: Vec<usize> = doc
         .descendants()

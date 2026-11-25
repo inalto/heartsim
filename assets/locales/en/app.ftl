@@ -204,6 +204,7 @@ part-svc = Superior vena cava
 part-ivc = Inferior vena cava
 part-valve-rings = Valve rings
 part-valve-planes = Valve planes
+part-tricuspid-valve = Tricuspid valve
 part-torso = Torso
 heart-ablated = Ablated { $radius } mm around { $region }
 heart-stimulus = Stimulus: { $region } at { $time } ms
@@ -351,6 +352,7 @@ about-title = About heartsim
 about-version = Version { $version }
 about-tagline = 3-D heart electrophysiology and 12-lead ECG simulator for medical education.
 about-licence = Free software under the MIT or Apache-2.0 licence, at your choice. Anatomy and content are derived from the published literature; the user guide lists the sources.
+about-credits = Open anatomy data (CC BY 4.0): the heart of Rodero et al. 2021 and the torso of Qian et al. 2022 (King's College London); the tricuspid valve of Texas TriValve 1.1 by Mathur, Meador, Malinowski, Jazwiec, Timek and Rausch (Engineering with Computers 2022, doi:10.1007/s00366-022-01659-w), modified: decimated, fitted to another heart's annulus, re-timed. The pack's LICENSE file has the full attribution.
 about-disclaimer-heading = Medical disclaimer
 
 ## Export of the displayed trace (requirement F-15)

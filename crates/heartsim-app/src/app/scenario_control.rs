@@ -85,8 +85,8 @@ impl HeartSimApp {
         h.set_scrub_cells(cells);
     }
 
-    /// Before the UI: reduced motion, the "Wall motion" switch and the exaggeration of the settings
-    /// go to the heart's motion state (the switch is forced off with reduced motion; the stored
+    /// Before the UI: reduced motion, the "Wall motion" switch, the exaggeration and the tricuspid
+    /// valve layer of the settings go to the heart's state (the switch is forced off with reduced motion; the stored
     /// choice is kept for when it goes off again).
     pub(super) fn sync_wall_motion_in(&mut self) {
         let Some(h) = &mut self.heart else { return };
@@ -96,9 +96,12 @@ impl HeartSimApp {
             self.settings.wall_motion,
             self.settings.wall_motion_exaggeration,
         );
+        // the measured tricuspid valve's layer switch is stored with the preferences (B35)
+        h.set_tricuspid_valve_visible(self.settings.tricuspid_valve);
     }
 
-    /// After the UI: what the switch and slider changed goes back to the settings.
+    /// After the UI: what the switch, the slider and the valve layer changed goes back to the
+    /// settings.
     pub(super) fn sync_wall_motion_out(&mut self) {
         if let Some((on, exaggeration)) = self
             .heart
@@ -107,6 +110,13 @@ impl HeartSimApp {
         {
             self.settings.wall_motion = on;
             self.settings.wall_motion_exaggeration = exaggeration;
+        }
+        if let Some(on) = self
+            .heart
+            .as_ref()
+            .and_then(crate::heart_view::HeartView::tricuspid_valve_visible)
+        {
+            self.settings.tricuspid_valve = on;
         }
     }
 

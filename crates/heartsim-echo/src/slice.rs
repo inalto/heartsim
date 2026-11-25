@@ -14,7 +14,7 @@
 //! The image is a pure function of (motion frame, motion record, time, respiration, pose): the
 //! same scenario, seed, pose and time give the same bytes, whatever the sampling cadence.
 
-use crate::anatomy::EchoAnatomy;
+use crate::anatomy::{EchoAnatomy, Posed};
 use crate::designed::{DesignedParams, valve_openings};
 use crate::field::DisplacementField;
 use crate::model::{MotionFrame, MotionInput, MotionModel};
@@ -153,8 +153,8 @@ impl LabelImage {
 pub struct SliceState {
     field: DisplacementField,
     openings: [f32; 4],
-    /// The leaflets posed at `openings`, one entry per valve of the anatomy.
-    posed: Vec<Vec<glam::Vec2>>,
+    /// The leaflets posed at `openings` (the designed cones and the measured valve).
+    posed: Posed,
     thorax_shift: Vec3,
     /// Width factor of the designed lung-edge retraction at this instant (1 in expiration).
     retraction: f32,
@@ -170,7 +170,7 @@ impl SliceState {
         let openings = [a, a, 0.0, 0.0];
         Self {
             field,
-            posed: pose_leaflets(anatomy, &openings),
+            posed: anatomy.pose(&openings),
             openings,
             thorax_shift: Vec3::ZERO,
             retraction: 1.0,
@@ -195,7 +195,7 @@ impl SliceState {
             input.t_ms,
             &anatomy.designed,
         );
-        self.posed = pose_leaflets(anatomy, &self.openings);
+        anatomy.repose(&self.openings, &mut self.posed);
         if input.enabled {
             let depth = heartsim_sim::timing::inspiration_depth(input.resp_phase) as f32;
             self.retraction =
@@ -214,6 +214,19 @@ impl SliceState {
     #[must_use]
     pub fn openings(&self) -> [f32; 4] {
         self.openings
+    }
+
+    /// Pose the leaflets at `openings` instead of the schedule's (tests and tools; the next
+    /// [`Self::update`] takes the schedule's again).
+    pub fn set_openings(&mut self, anatomy: &EchoAnatomy, openings: [f32; 4]) {
+        self.openings = openings;
+        anatomy.repose(&self.openings, &mut self.posed);
+    }
+
+    /// The leaflets as posed for this instant.
+    #[must_use]
+    pub fn posed(&self) -> &Posed {
+        &self.posed
     }
 
     /// The displacement field of the current instant.
@@ -415,14 +428,6 @@ impl BoxMm {
     fn contains_point(&self, p: Vec3) -> bool {
         p.cmpge(self.lo).all() && p.cmplt(self.hi).all()
     }
-}
-
-fn pose_leaflets(anatomy: &EchoAnatomy, openings: &[f32; 4]) -> Vec<Vec<glam::Vec2>> {
-    anatomy
-        .valves()
-        .iter()
-        .map(|v| v.pose(openings[v.valve.index()]))
-        .collect()
 }
 
 /// One call for a drawn frame: [`SliceState::update`] then [`SliceState::slice`].

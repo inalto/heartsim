@@ -245,6 +245,7 @@ pub mod doppler;
 pub mod field;
 pub mod history;
 pub mod measure;
+pub mod mesh_valve;
 pub mod mmode;
 pub mod model;
 pub mod params;
@@ -256,7 +257,7 @@ pub mod view_hints;
 pub mod views;
 
 pub use acoustic::{ACOUSTIC_FORMAT_VERSION, AcousticError, AcousticRow, AcousticTable, Sourced, Status};
-pub use anatomy::{Capsule, EchoAnatomy, EchoError, EchoWindow, LeafletValve};
+pub use anatomy::{Capsule, EchoAnatomy, EchoError, EchoWindow, LeafletValve, Posed};
 pub use bmode::{EchoImager, GreyImage, ImageSettings, TGC_BANDS};
 pub use designed::{DesignedParams, valve_openings};
 pub use doppler::{
@@ -269,6 +270,7 @@ pub use measure::{
     polygon_area_cm2, reference_excursion, reference_on_mmode, reference_on_plane, reference_velocity,
     slope_cm_s, structure_extent, structure_span,
 };
+pub use mesh_valve::{MeshValve, PosedMeshValve};
 pub use mmode::{
     MMODE_CAPACITY, MMODE_LINES, MMODE_STEP_MS, MModeColumn, MModeSampler, MModeScan, ScanContext,
     StepBuffer, SweepSpeed, TraceRate, cursor_frame, line_angle_deg,

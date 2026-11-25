@@ -575,7 +575,7 @@ fn default_pack_has_its_label_volumes() {
     use heartsim_geometry::{Label, LabelVolume};
     let dir = default_pack_dir();
     let pack = AnatomyPack::load(&dir).expect("default pack");
-    assert_eq!(pack.manifest.format_version, 3);
+    assert!(pack.manifest.format_version >= 3);
     let vols = pack
         .volumes
         .as_ref()
@@ -649,7 +649,7 @@ fn version_2_pack_is_refused_clearly() {
     let path = dir.join("manifest.ron");
     let text = std::fs::read_to_string(&path)
         .unwrap()
-        .replace("format_version: 3", "format_version: 2");
+        .replace("format_version: 4", "format_version: 2");
     std::fs::write(&path, text).unwrap();
     let err = AnatomyPack::load(&dir).expect_err("a version-2 pack");
     let msg = err.to_string();
@@ -682,6 +682,82 @@ fn label_volumes_round_trip_through_a_pack() {
     assert!(matches!(
         AnatomyPack::load(&dir),
         Err(heartsim_geometry::PackError::Format(_))
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Brief B35: a version-3 pack (no valves) still loads, and draws as before (no valve); the
+/// default pack is version 4 with the tricuspid valve, whose file matches the manifest, and its
+/// LICENSE names the valve's source.
+#[test]
+fn version_3_packs_still_load_and_the_default_pack_has_its_valve() {
+    let dir = std::env::temp_dir().join(format!("heartsim-pack-v3-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut pack = AnatomyPack::procedural(Resolution::COARSE);
+    pack.save(&dir).expect("save");
+    let path = dir.join("manifest.ron");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(!text.contains("valves:"), "a pack without valves lists none");
+    std::fs::write(&path, text.replace("format_version: 4", "format_version: 3")).unwrap();
+    let old = AnatomyPack::load(&dir).expect("a version-3 pack loads");
+    assert_eq!(old.manifest.format_version, 3);
+    assert_eq!(old.valves.len(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let def = AnatomyPack::load(&default_pack_dir()).expect("default pack");
+    assert_eq!(def.manifest.format_version, 4);
+    let v = def.valve("tricuspid").expect("the tricuspid valve");
+    let e = &def.manifest.valves[0];
+    assert_eq!(
+        (e.name.as_str(), e.file.as_str()),
+        ("tricuspid", "valve_tricuspid.bin")
+    );
+    let bytes = std::fs::read(default_pack_dir().join(&e.file)).unwrap();
+    assert_eq!(def.manifest.files[&e.file].crc32, crc32fast::hash(&bytes));
+    assert_eq!(&heartsim_geometry::AnimatedValve::decode(&bytes).unwrap(), v);
+    for needle in [
+        "Texas TriValve 1.1",
+        "Mathur",
+        "Rausch",
+        "10.1007/s00366-022-01659-w",
+        "Creative Commons Attribution 4.0",
+        "decimated, fitted to another heart's annulus, re-timed",
+    ] {
+        assert!(def.licence.contains(needle), "LICENSE lacks `{needle}`");
+    }
+}
+
+/// A valve round-trips through a pack; a damaged valve file is refused, not half-loaded.
+#[test]
+fn a_valve_round_trips_through_a_pack_and_a_damaged_one_is_refused() {
+    let def = AnatomyPack::load(&default_pack_dir()).expect("default pack");
+    let dir = std::env::temp_dir().join(format!("heartsim-pack-valve-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut pack = AnatomyPack::procedural(Resolution::COARSE);
+    pack.valves = def.valves.clone();
+    pack.save(&dir).expect("save");
+    let loaded = AnatomyPack::load(&dir).expect("load");
+    assert_eq!(loaded.valves, def.valves);
+    // flip a byte and fix the manifest's checksum: the valve's own checks refuse it
+    let file = dir.join("valve_tricuspid.bin");
+    let mut bytes = std::fs::read(&file).unwrap();
+    let n = bytes.len();
+    bytes.truncate(n - 3);
+    std::fs::write(&file, &bytes).unwrap();
+    let path = dir.join("manifest.ron");
+    let mut m: heartsim_geometry::PackManifest =
+        ron::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    m.files.insert(
+        "valve_tricuspid.bin".into(),
+        heartsim_geometry::pack::FileEntry {
+            bytes: bytes.len() as u64,
+            crc32: crc32fast::hash(&bytes),
+        },
+    );
+    std::fs::write(&path, ron::to_string(&m).unwrap()).unwrap();
+    assert!(matches!(
+        AnatomyPack::load(&dir),
+        Err(heartsim_geometry::PackError::Valve { .. })
     ));
     let _ = std::fs::remove_dir_all(&dir);
 }

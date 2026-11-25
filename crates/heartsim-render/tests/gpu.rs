@@ -733,3 +733,77 @@ fn default_anatomy_pack_renders_as_a_layered_scene() {
     );
     g.assert_no_errors();
 }
+
+/// Brief B35: the pack's tricuspid valve (two-sided shell and chordae prisms, no new shader
+/// feature) draws without validation errors open and shut, from the atrial side and in a cut,
+/// and its vertices can be rewritten for the other shape. Dumps `valve_open.png`,
+/// `valve_shut.png` and the cut views with `HEARTSIM_DUMP_DIR`.
+#[test]
+fn the_tricuspid_valve_draws_open_and_shut() {
+    use heartsim_geometry::{AnatomyPack, ValveRenderMesh};
+    let g = gpu_or_skip!();
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/anatomy/default");
+    let pack = AnatomyPack::load(std::path::Path::new(dir)).expect("default pack");
+    let valve = pack
+        .valve("tricuspid")
+        .expect("the default pack has the tricuspid valve");
+    let mut render_mesh = ValveRenderMesh::new(valve, 1.6);
+    let mut scene = g.scene();
+    let id = scene.add_layer(&g.device, &{
+        let mut d = LayerDesc::new("tricuspid valve", &render_mesh.mesh);
+        d.base_color = [0.8, 0.75, 0.55];
+        d
+    });
+    scene.layer_mut(id).unwrap().clip = true;
+    // the right heart, translucent, for context
+    for name in ["rv", "ra"] {
+        if let Some(m) = pack.mesh(name) {
+            let mut d = LayerDesc::new(name, &m.mesh);
+            d.alpha = 0.15;
+            d.base_color = [0.5, 0.16, 0.14];
+            let l = scene.add_layer(&g.device, &d);
+            scene.layer_mut(l).unwrap().clip = true;
+        }
+    }
+    // look down the valve axis from the atrium
+    let (mut pos, mut verts) = (Vec::new(), Vec::new());
+    valve.keyframe_positions(0, &mut pos);
+    let centre = valve.annulus.iter().map(|&a| pos[a as usize]).sum::<Vec3>() / valve.annulus.len() as f32;
+    let down = (valve.coaptation_mm - centre).normalize();
+    scene.frame_scene();
+    scene.camera.target = centre;
+    scene.camera.yaw = down.x.atan2(down.z) + std::f32::consts::PI;
+    scene.camera.pitch = down.y.asin();
+    let dump = std::env::var_os("HEARTSIM_DUMP_DIR");
+    let mut shots = Vec::new();
+    for (k, name) in [(0usize, "open"), (valve.keyframe_count() - 1, "shut")] {
+        valve.keyframe_positions(k, &mut pos);
+        render_mesh.fill(&pos, &mut verts);
+        scene.set_layer_vertices(&g.queue, id, &verts);
+        scene.clip.enabled = false;
+        let img = render(&g, &mut scene, (320, 320));
+        shots.push(img.centre());
+        if let Some(d) = &dump {
+            let _ = std::fs::write(
+                std::path::Path::new(d).join(format!("valve_{name}.png")),
+                scene.capture_png(&g.device, &g.queue),
+            );
+        }
+        // a cut through the valve plane's centre, facing the camera
+        let back = (scene.camera.eye() - scene.camera.target).normalize_or_zero();
+        scene.clip = ClipPlane {
+            enabled: true,
+            point: centre,
+            normal: back.cross(Vec3::Y).normalize_or(Vec3::X),
+        };
+        let _ = render(&g, &mut scene, (320, 320));
+        if let Some(d) = &dump {
+            let _ = std::fs::write(
+                std::path::Path::new(d).join(format!("valve_{name}_cut.png")),
+                scene.capture_png(&g.device, &g.queue),
+            );
+        }
+        g.assert_no_errors();
+    }
+    assert_eq!(shots.len(), 2);
+}

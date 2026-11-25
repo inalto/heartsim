@@ -1,5 +1,5 @@
 PackManifest(
-    format_version: 3,
+    format_version: 4,
     name: "default",
     source: "Rodero et al. 2021 average four-chamber heart (Zenodo 4593739) + KCL whole-torso CT model 1 (Zenodo 7253863), baked by heartsim xtask 0.23.0 (spacing 2.3 mm)",
     licence: "CC-BY-4.0 (sources) AND (MIT OR Apache-2.0) (heartsim additions)",
@@ -67,10 +67,18 @@ PackManifest(
         vertices: 10331,
         triangles: 20656,
     )],
+    valves: [ValveEntry(
+        name: "tricuspid",
+        file: "valve_tricuspid.bin",
+        vertices: 2012,
+        triangles: 3000,
+        chordae: 988,
+        keyframes: 7,
+    )],
     files: {
         "LICENSE": FileEntry(
-            bytes: 2444,
-            crc32: 2449324911,
+            bytes: 3694,
+            crc32: 4288516148,
         ),
         "cells.bin": FileEntry(
             bytes: 581491,
@@ -159,6 +167,10 @@ PackManifest(
         "torso.glb": FileEntry(
             bytes: 288900,
             crc32: 2071966188,
+        ),
+        "valve_tricuspid.bin": FileEntry(
+            bytes: 155832,
+            crc32: 1479688256,
         ),
     },
 )

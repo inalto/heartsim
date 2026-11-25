@@ -39,6 +39,9 @@ enum Task {
     ReleaseNotes(ReleaseNotesArgs),
     /// Build an anatomy pack (procedural by default; `--source` for an open-licence mesh).
     BakeAnatomy(bake::BakeArgs),
+    /// Bake the tricuspid valve (Texas TriValve 1.1, brief B35) into an existing pack, leaving its other files as
+    /// they are.
+    BakeValve(bake::ValveArgs),
     /// Write `heartsim-assets.zip` (anatomy pack, rhythms, tutorials) for the browser build; trunk's `pre_build` hook.
     WebAssets(web::AssetsArgs),
     /// Fail if the `trunk build` output (wasm + asset archive) is over the 25 MiB budget.
@@ -167,6 +170,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Task::BakeAnatomy(args) => bake::run(&args),
+        Task::BakeValve(args) => bake::run_valve(&args),
         Task::WebAssets(args) => web::assets(&repo_root(), &args),
         Task::WebBudget(args) => web::budget(&repo_root(), &args),
     }
