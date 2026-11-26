@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 heartsim-geometry.workspace = true
+heartsim-echo.workspace = true
 heartsim-core.workspace = true
 anyhow.workspace = true
 glam.workspace = true

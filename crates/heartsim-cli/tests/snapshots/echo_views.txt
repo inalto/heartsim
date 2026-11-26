@@ -1,8 +1,8 @@
 view            window       status          score hidden   skin x,y,z (mm)   tilt  rock   rot depth  clock     ASE pages
 plax            parasternal  shipped          0.91    0.3    -36,  65,  70     -7     4   -51   140  10.3      23-25
-rv_outflow      parasternal  shipped          0.99    0.5     -2,  37,  81    -14    -4    10   110  0.3       25
+rv_outflow      parasternal  shipped          0.95    0.6     -3,  37,  81    -14    -2    11   110  0.4       25
 rv_inflow       parasternal  shipped          1.00    0.0    -22, -35,  82      4    53   -52   140  10.3      25
-psax_av         parasternal  shipped          1.00    0.2    -20,  55,  76     -7    12    56   120  1.9       25-26
+psax_av         parasternal  shipped          1.00    0.3    -20,  55,  76     -7    12    56   120  1.9       25-26
 psax_mv         parasternal  shipped          0.93    0.1    -14,  54,  76      4    16    50   140  1.7       25-26
 psax_papillary  parasternal  shipped          0.98    0.1    -30,  66,  72     19     9    37   150  1.2       25-26
 psax_apex       parasternal  shipped          1.00    0.1     40,  15,  80     23    -2    43   100  1.4       25-26

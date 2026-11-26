@@ -80,7 +80,7 @@ have the same whole-file CRC-32, defeating the manifest's checksum.)
 | 1–4 | `lv_myocardium`, `rv_myocardium`, `la_myocardium`, `ra_myocardium` | Rodero tags 1–4 (the septum is LV, tag 1); the atrial inlet border rings (18–24) and the inlet lids (11–17) are atrial wall |
 | 5–8 | `lv_blood`, `rv_blood`, `la_blood`, `ra_blood` | flood fill of the closed cavities |
 | 9, 10 | `aorta_wall`, `aorta_lumen` | Rodero tag 5, its cavity, and the cap at the dataset's crop |
-| 11, 12 | `pulmonary_artery_wall`, `pulmonary_artery_lumen` | Rodero tag 6 (a short stub: about 2–4 mL of lumen) |
+| 11, 12 | `pulmonary_artery_wall`, `pulmonary_artery_lumen` | Rodero tag 6 (a short stub) and its **designed** 20 mm continuation beyond the dataset's crop; about 12 mL of lumen |
 | 20 | `valve_leaflet` | **designed**, never stored: `heartsim_echo::DesignedParams` |
 | 21 | `papillary_muscle` | **designed**, never stored |
 | 22 | `moderator_band` | **designed**, never stored |
@@ -97,21 +97,38 @@ are drawn as atrial wall).
 ### The heart box (`bake/volumes.rs`, `labels_heart.bin`)
 
 The Rodero tetrahedra, moved into the heart frame by exactly the transform the meshes and cells went through, are
-rasterised on a 1 mm grid over the mesh's bounds plus 6 mm: **145 × 127 × 129 voxels** from (−92, −47, −73) mm. A
+rasterised on a 1 mm grid over the bounds of the mesh and of the pulmonary trunk's continuation (below) plus 6 mm:
+**145 × 141 × 129 voxels** from (−92, −47, −73) mm. A
 ventricular tet claims the voxels whose centres it contains (so the wall thickness and the cavity volume are unbiased);
 the thin parts — atria and their inlet borders, vessel walls, valve-plane discs, inlet lids — also claim every voxel one
 of their sub-sample points (spacing ≤ 0.5 mm) falls in, so a sub-voxel wall still separates two cavities for a
 6-connected fill. The aorta and pulmonary artery stubs are open where the dataset crops them: the cut end is fitted as
 the distal 6 mm of the tube's free boundary (a short ring whose smallest principal axis is the vessel's direction,
-refined eight times because the stub bends) and closed with a 2 mm plug (aorta: centre (−47.6, 71.4, −6.5) mm, normal
-(−0.03, 1.00, 0.09), radius 18.8 mm; pulmonary artery: (−13.4, 59.5, 0.6) mm, normal (−0.02, 0.85, −0.53), radius
-21.8 mm). A 6-connected flood fill from the box boundary marks the outside; every enclosed component of at least
+refined eight times because the stub bends). The aorta is closed there with a 2 mm plug (centre (−47.6, 71.4, −6.5) mm,
+normal (−0.03, 1.00, 0.09), radius 18.8 mm).
+
+**The pulmonary trunk is continued 20 mm beyond its crop (designed, since brief B36).** The Rodero stub ends about 9 mm
+above the pulmonary ring, less than the height of a pulmonary cusp's commissures (about 22 mm on this ring), so the
+designed cusps could not stand in it. The continuation is the stub's own end cross-section carried straight along the
+end's normal: the inner and outer wall radius are read in 48 directions about the end's axis from the last 2 mm of the
+wall (the dataset's pulmonary wall is about 4.4 mm thick there), smoothed over three directions, and the tube starts
+1.5 mm inside the stub's wall so the two overlap. Carried straight, the tube would run into the aorta's wall beside it
+(by up to 3.3 mm), so its outer face is drawn in where the aorta lies beside it, by up to 5.3 mm, to leave 2 mm between
+the two (more than the 1.5 mm under which the motion model takes two parts to be in contact), and the wall is kept at
+least 2 mm thick; the mean radii are then 11.1 mm inner and 14.9 mm outer. It runs from (−13.4, 60.4, 0.0) mm along
+(−0.02, 0.85, −0.53) to (−13.9, 77.3, −10.5) mm, where a 2 mm plug closes it. The same tube is added to the drawn
+`mesh_pulmonary_artery.glb` (`xtask/src/bake/volumes.rs`, `TubeExtension`), so the label volume and the 3-D heart agree.
+It is the only designed part of the heart's drawn surfaces and walls: a straight tube, not the real trunk, which is
+longer and divides. The length is a designed value (`PA_EXTENSION_MM`).
+
+A 6-connected flood fill from the box boundary marks the outside; every enclosed component of at least
 300 voxels is the blood of the wall that makes most of its boundary (smaller pockets become that wall; 89 voxels); the
 bake fails if a cavity touches two chambers' walls about equally (a leak) or a chamber has no cavity. Valve-disc
 voxels take the blood beside them (the leaflets are drawn over it at run time). The bake then checks that no blood
 voxel touches the outside.
 
-Measured on the default pack: blood LV 129.0 mL, RV 153.1, LA 58.9, RA 74.1, aorta 26.2, pulmonary artery 3.6 mL;
+Measured on the default pack: blood LV 129.0 mL, RV 153.1, LA 58.9, RA 74.1, aorta 26.4, pulmonary artery 11.8 mL (3.6 mL before the
+continuation);
 myocardium LV 134.1, RV 51.0, LA 36.3, RA 36.4 mL. The LV blood is within 0.5 % of the closed LV shell's cavity
 (`MotionModel::rest_lv_volume_ml`, 129.6 mL). **LV wall thickness** (median along the short-axis radius through the
 mid-wall LV cells, blood to epicardium or RV blood): basal 10.0 mm, mid 9.5 mm, apical 9.0 mm; the bake fails outside

@@ -73,7 +73,42 @@ measurement of a patient's valve, and it has not been reviewed by a clinician.
   and shuts.
 * It opens and shuts on the same timing as the heart sounds and the Echo page's leaflets. The source is a load sequence of seven
   shapes, not a timed recording, so the valve snaps the last small part of the way shut.
-* The mitral, aortic and pulmonary valves have no leaflets in the 3-D heart.
+* The mitral, aortic and pulmonary valves have their own layers. See *The mitral, aortic and pulmonary valve layers* below.
+
+## The mitral, aortic and pulmonary valve layers
+
+The 3-D heart can also show a mitral, an aortic and a pulmonary valve. Open *Anatomy and camera* in the left panel and tick
+**Mitral valve**, **Aortic valve** or **Pulmonary valve** in the layers list. Each is off by default, and your choice is saved with
+your preferences. A settings file from 0.25.0 still loads.
+
+These three valves are **designed shapes**, not measured ones. Heartsim generated each one by rule, from published dimensions, on
+this heart's own valve rings. They are not a person's anatomy. They were not taken from any model, mesh or image, and **no
+clinician has reviewed them**. No lesion is implied. The tricuspid valve stays the one measured valve.
+
+* **Mitral valve.** An anterior leaflet and a posterior leaflet. The posterior leaflet has three scallops (P1, P2 and P3), and the
+  leaflets meet at two commissures. Twelve chordae run to the two papillary muscles, six to each. The leaflet lengths are 25.1 mm
+  (anterior) and 14.4 mm (posterior) (Tarkiainen 2016). The leaflets are designed to overlap by 8 mm when shut, but on this heart's
+  ring they are too short for that: the overlap is about 5.7 mm at the centre of the leaflets and less toward the commissures. The
+  valve still shuts with no gap.
+* **Aortic valve.** Three cusps, named non-coronary, left coronary and right coronary. The pack has no coronary openings, so the
+  names come from the neighbouring chambers. The cusp heights follow Izawa 2021, Ishida 2026 and De Kerchove 2018.
+* **Pulmonary valve.** Three cusps, named by position: posterior, left anterior and right anterior (Lis 2023). Its height is set
+  from Lis 2023, and the other values are taken from the aortic valve.
+* **Timing.** Each valve has eight shapes, from open to shut. It opens and shuts on the same valve timing as the heart sounds and
+  the Echo page.
+* **Shape.** When a valve's layer is shown, it replaces that valve's flat disc of the *Valve planes* layer.
+* **Motion.** It follows the wall motion. With *Wall motion* off, or with Reduced motion on, it stays on the resting ring and still
+  opens and shuts.
+
+The full list of sources and designed values is in the research note `docs/research/designed-valve-leaflets.md`.
+
+### The lengthened pulmonary trunk
+
+The dataset's pulmonary artery stopped about 9 mm above the pulmonary ring, too short for the pulmonary cusps, whose commissures sit
+about 22 mm high. The default pack therefore continues the pulmonary trunk 20 mm beyond that end, as a straight tube. The tube
+carries the stub's own end cross-section and is drawn in to keep 2 mm clear of the aorta. It is the only designed part of the
+heart's drawn walls. The real trunk is longer and divides; the model stops at the designed end. The continuation is in the 3-D
+heart and in the echo's label volume alike, and the lumen of the pulmonary artery grows from 3.6 mL to 11.8 mL.
 
 ## What each rhythm shows
 
@@ -120,9 +155,9 @@ whose source the implementers could not fully confirm.
 
 ## What the model cannot show
 
-* **Valves.** The valves are drawn as flat rings, except the tricuspid valve when its layer is shown (see *The tricuspid valve
-  layer* above). The mitral, aortic and pulmonary valves have no leaflets, so you cannot see them open or close. Papillary
-  muscles and the pericardium are not shown either.
+* **Valves.** The valves are drawn as flat rings, except a valve whose layer is shown (see *The tricuspid valve layer* and *The
+  mitral, aortic and pulmonary valve layers* above). The mitral, aortic and pulmonary shapes are designed, not measured. The
+  mitral chordae end at the two papillary muscle sites, but the muscles themselves are not drawn. The pericardium is not shown.
 * **Pressure, flow and Doppler.** Nothing is measured in blood. There is no pressure curve, no flow, no regurgitation jet and no
   Doppler velocity.
 * **The right ventricle's volume.** The right ventricle has no closed cavity in the anatomy, so the model gives no RV volume and

@@ -52,10 +52,27 @@ const VALVE_HIGHLIGHT: [f32; 3] = [0.1, 0.75, 1.0];
 
 /// Layer name of the measured tricuspid valve (brief B35) in the anatomy panel.
 pub const TRICUSPID_VALVE_LAYER: &str = "tricuspid_valve";
+/// Layer names of the designed mitral, aortic and pulmonary valves (brief B36).
+pub const MITRAL_VALVE_LAYER: &str = "mitral_valve";
+pub const AORTIC_VALVE_LAYER: &str = "aortic_valve";
+pub const PULMONARY_VALVE_LAYER: &str = "pulmonary_valve";
 
-/// The measured tricuspid valve as drawn: its two-sided shell and chordae, the scene layer, and
-/// what its last upload was made from.
+/// The anatomy-panel layer of `valve`'s leaflets.
+#[must_use]
+pub fn valve_layer(valve: heartsim_ecg::Valve) -> &'static str {
+    use heartsim_ecg::Valve;
+    match valve {
+        Valve::Mitral => MITRAL_VALVE_LAYER,
+        Valve::Tricuspid => TRICUSPID_VALVE_LAYER,
+        Valve::Aortic => AORTIC_VALVE_LAYER,
+        Valve::Pulmonic => PULMONARY_VALVE_LAYER,
+    }
+}
+
+/// One pack valve as drawn (the measured tricuspid, B35; the designed others, B36): its two-sided
+/// shell and chordae, the scene layer, and what its last upload was made from.
 struct ValveLayer {
+    valve: heartsim_ecg::Valve,
     render: heartsim_geometry::ValveRenderMesh,
     id: Option<LayerId>,
     key: Option<(u64, bool, u32)>,
@@ -327,8 +344,9 @@ pub struct HeartView {
     card_frame: Option<u64>,
     /// Scratch for the vertices of one valve disc.
     disc_scratch: Vec<heartsim_geometry::Vertex>,
-    /// The measured tricuspid valve (B35), when the pack has one and the motion model is built.
-    tricuspid: Option<ValveLayer>,
+    /// The pack's valves with leaflets (B35, B36), in `Valve::ALL` order, when the motion model is
+    /// built.
+    valve_layers: Vec<ValveLayer>,
     /// The echo cross-section's anatomy (B31), built on first use.
     echo: EchoState,
 }
@@ -400,6 +418,9 @@ fn pretty_name(name: &str) -> String {
         "valve_rings" => t!("part-valve-rings"),
         "valve_planes" => t!("part-valve-planes"),
         TRICUSPID_VALVE_LAYER => t!("part-tricuspid-valve"),
+        MITRAL_VALVE_LAYER => t!("part-mitral-valve"),
+        AORTIC_VALVE_LAYER => t!("part-aortic-valve"),
+        PULMONARY_VALVE_LAYER => t!("part-pulmonary-valve"),
         "torso" => t!("part-torso"),
         other => other.to_string(),
     }
@@ -507,22 +528,32 @@ impl HeartView {
                 }
             })
             .collect();
-        // the measured tricuspid valve (B35): a layer of its own, off until asked for (the
-        // other three valves have no leaflets in the 3-D heart)
-        let tricuspid = motion.as_ref().and_then(|m| m.valve()).map(|v| ValveLayer {
-            render: heartsim_geometry::ValveRenderMesh::new(
-                &v.data,
-                DesignedParams::default().av_leaflet_thickness_mm,
-            ),
-            id: None,
-            key: None,
-            scratch: Vec::new(),
-            posed: Vec::new(),
-            vertices: Vec::new(),
-        });
-        if tricuspid.is_some() {
+        // the pack's valves with leaflets (the measured tricuspid, B35; the designed mitral,
+        // aortic and pulmonary, B36): a layer each, off until asked for
+        let designed = DesignedParams::default();
+        let valve_layers: Vec<ValveLayer> = motion
+            .as_ref()
+            .map(|m| {
+                m.valves()
+                    .iter()
+                    .map(|v| ValveLayer {
+                        valve: v.valve_id,
+                        render: heartsim_geometry::ValveRenderMesh::new(
+                            &v.data,
+                            heartsim_echo::mesh_valve::thickness_mm(v.valve_id, &designed),
+                        ),
+                        id: None,
+                        key: None,
+                        scratch: Vec::new(),
+                        posed: Vec::new(),
+                        vertices: Vec::new(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        for v in &valve_layers {
             layers.push(HeartLayer {
-                name: TRICUSPID_VALVE_LAYER.to_string(),
+                name: valve_layer(v.valve).to_string(),
                 kind: Some(MeshKind::Valve),
                 hoods: None,
                 smoother: None,
@@ -546,8 +577,10 @@ impl HeartView {
             t.visible = false;
             t.alpha = 0.2;
         }
-        if let Some(t) = panel.layers.iter_mut().find(|l| l.name == TRICUSPID_VALVE_LAYER) {
-            t.visible = false;
+        for v in &valve_layers {
+            if let Some(t) = panel.layers.iter_mut().find(|l| l.name == valve_layer(v.valve)) {
+                t.visible = false;
+            }
         }
         let n = engine.cloud().len();
         Self {
@@ -590,39 +623,56 @@ impl HeartView {
             view_frame: None,
             card_frame: None,
             disc_scratch: Vec::new(),
-            tricuspid,
+            valve_layers,
             echo,
         }
     }
 
-    /// Whether the measured tricuspid valve is drawn (`None` when the pack has none). Stored with
-    /// the preferences by the app.
+    /// Whether `valve`'s leaflets are drawn (`None` when the pack has none of it). Stored with the
+    /// preferences by the app.
     #[must_use]
-    pub fn tricuspid_valve_visible(&self) -> Option<bool> {
-        self.tricuspid.as_ref()?;
-        self.panel.layer(TRICUSPID_VALVE_LAYER).map(|l| l.visible)
+    pub fn valve_visible(&self, valve: heartsim_ecg::Valve) -> Option<bool> {
+        self.valve_layers.iter().find(|v| v.valve == valve)?;
+        self.panel.layer(valve_layer(valve)).map(|l| l.visible)
     }
 
-    /// Show or hide the measured tricuspid valve (no effect without one).
-    pub fn set_tricuspid_valve_visible(&mut self, on: bool) {
+    /// Show or hide `valve`'s leaflets (no effect without them).
+    pub fn set_valve_visible(&mut self, valve: heartsim_ecg::Valve, on: bool) {
         if let Some(l) = self
             .panel
             .layers
             .iter_mut()
-            .find(|l| l.name == TRICUSPID_VALVE_LAYER)
+            .find(|l| l.name == valve_layer(valve))
         {
             l.visible = on;
         }
     }
 
-    /// The measured tricuspid valve as it would be drawn now (heart frame, mm; the midsurface and
-    /// chordae vertices, before the thickness), with its opening; `None` without one (tests).
+    /// `valve` as it would be drawn now (heart frame, mm; the midsurface and chordae vertices,
+    /// before the thickness), with its opening; `None` without it (tests).
     #[must_use]
-    pub fn tricuspid_valve_pose(&self) -> Option<(f32, Vec<Vec3>)> {
+    pub fn valve_pose(&self, valve: heartsim_ecg::Valve) -> Option<(f32, Vec<Vec3>)> {
         let m = self.motion.as_ref()?;
         let (mut a, mut b) = (Vec::new(), Vec::new());
-        let o = m.pose_valve(&mut a, &mut b)?;
+        let o = m.pose_valve(valve, &mut a, &mut b)?;
         Some((o, b))
+    }
+
+    /// Whether the measured tricuspid valve is drawn ([`Self::valve_visible`]).
+    #[must_use]
+    pub fn tricuspid_valve_visible(&self) -> Option<bool> {
+        self.valve_visible(heartsim_ecg::Valve::Tricuspid)
+    }
+
+    /// Show or hide the measured tricuspid valve ([`Self::set_valve_visible`]).
+    pub fn set_tricuspid_valve_visible(&mut self, on: bool) {
+        self.set_valve_visible(heartsim_ecg::Valve::Tricuspid, on);
+    }
+
+    /// The measured tricuspid valve as it would be drawn now ([`Self::valve_pose`]).
+    #[must_use]
+    pub fn tricuspid_valve_pose(&self) -> Option<(f32, Vec<Vec3>)> {
+        self.valve_pose(heartsim_ecg::Valve::Tricuspid)
     }
 
     /// How bright each valve ring is drawn this frame (`heartsim_ecg::Valve::ALL` order, `0..=1`):
@@ -811,24 +861,24 @@ impl HeartView {
         self.upload_valve(scene, queue);
     }
 
-    /// The measured tricuspid valve, posed at the drawn instant and riding the drawn disc,
-    /// re-uploaded only when its pose changed (the frame or the opening) and only while shown.
+    /// Each shown valve, posed at the drawn instant and riding its drawn disc, re-uploaded only
+    /// when its pose changed (the frame or its opening).
     fn upload_valve(&mut self, scene: &mut SceneRenderer, queue: &wgpu::Queue) {
-        let (Some(motion), Some(v)) = (&self.motion, &mut self.tricuspid) else {
-            return;
-        };
-        let Some(id) = v.id else { return };
-        if !self.panel.layer(TRICUSPID_VALVE_LAYER).is_some_and(|l| l.visible) {
-            return;
-        }
-        let key = motion.valve_key();
-        if v.key == Some(key) {
-            return;
-        }
-        if motion.pose_valve(&mut v.scratch, &mut v.posed).is_some() {
-            v.render.fill(&v.posed, &mut v.vertices);
-            scene.set_layer_vertices(queue, id, &v.vertices);
-            v.key = Some(key);
+        let Some(motion) = &self.motion else { return };
+        for v in &mut self.valve_layers {
+            let Some(id) = v.id else { continue };
+            if !self.panel.layer(valve_layer(v.valve)).is_some_and(|l| l.visible) {
+                continue;
+            }
+            let key = motion.valve_key(v.valve);
+            if v.key == Some(key) {
+                continue;
+            }
+            if motion.pose_valve(v.valve, &mut v.scratch, &mut v.posed).is_some() {
+                v.render.fill(&v.posed, &mut v.vertices);
+                scene.set_layer_vertices(queue, id, &v.vertices);
+                v.key = Some(key);
+            }
         }
     }
 
@@ -1237,6 +1287,12 @@ impl HeartView {
             self.tool_section(ui);
         });
         heartsim_ui::collapsible_section(ui, &mut sections.layers, &t!("heart-section-layers"), |ui| {
+            // which valve is measured and which designed, under the toggles (translated each frame)
+            self.panel.layers_note = if self.valve_layers.is_empty() {
+                String::new()
+            } else {
+                t!("heart-valves-note")
+            };
             let r = ui.scope(|ui| anatomy_panel(ui, &mut self.panel));
             heartsim_ui::highlight::mark(&r.response, "camera_views");
             if let Some(c) = r.inner {
@@ -1533,9 +1589,11 @@ impl HeartView {
                 }
                 continue;
             }
-            let valve_mesh = (l.name == TRICUSPID_VALVE_LAYER)
-                .then(|| self.tricuspid.as_ref().map(|v| &v.render.mesh))
-                .flatten();
+            let valve_slot = self
+                .valve_layers
+                .iter()
+                .position(|v| valve_layer(v.valve) == l.name);
+            let valve_mesh = valve_slot.map(|k| &self.valve_layers[k].render.mesh);
             let mesh = valve_mesh.unwrap_or_else(|| {
                 self.pack_meshes
                     .iter()
@@ -1554,9 +1612,8 @@ impl HeartView {
                 layer.visible = toggle.visible;
             }
             l.id = Some(id);
-            if valve_mesh.is_some()
-                && let Some(v) = &mut self.tricuspid
-            {
+            if let Some(k) = valve_slot {
+                let v = &mut self.valve_layers[k];
                 v.id = Some(id);
                 v.key = None;
             }
@@ -1583,17 +1640,19 @@ impl HeartView {
             self.luts_dirty = false;
         }
         let (lo, hi) = self.window(self.mode);
-        // the measured tricuspid valve, when shown, takes the place of its flat disc (and its
+        // each valve with leaflets, when shown, takes the place of its flat disc (and its
         // highlight)
-        let leaflets_shown =
-            self.tricuspid.is_some() && self.panel.layer(TRICUSPID_VALVE_LAYER).is_some_and(|l| l.visible);
+        let mut leaflets_shown = [false; 4];
+        for v in &self.valve_layers {
+            leaflets_shown[v.valve.index()] =
+                self.panel.layer(valve_layer(v.valve)).is_some_and(|l| l.visible);
+        }
         for (l, toggle) in self.layers.iter().zip(&self.panel.layers) {
             for (valve, _, id) in &l.valves {
                 let Some(layer) = (*id).and_then(|id| scene.layer_mut(id)) else {
                     continue;
                 };
-                layer.visible =
-                    toggle.visible && !(leaflets_shown && *valve == heartsim_ecg::Valve::Tricuspid);
+                layer.visible = toggle.visible && !leaflets_shown[valve.index()];
                 layer.alpha = toggle.alpha;
                 layer.scalar_mode = ScalarMode::None;
                 layer.base_color = valve_colour(base_colour(&l.name, l.kind), self.valve_glow[valve.index()]);
@@ -1613,11 +1672,9 @@ impl HeartView {
                 };
                 layer.scalar_min = lo;
                 layer.scalar_max = hi;
-                if l.name == TRICUSPID_VALVE_LAYER {
-                    layer.base_color = valve_colour(
-                        base_colour(&l.name, l.kind),
-                        self.valve_glow[heartsim_ecg::Valve::Tricuspid.index()],
-                    );
+                if let Some(v) = self.valve_layers.iter().find(|v| valve_layer(v.valve) == l.name) {
+                    layer.base_color =
+                        valve_colour(base_colour(&l.name, l.kind), self.valve_glow[v.valve.index()]);
                 }
                 layer.contour =
                     (mapped && self.wavefront && self.mode == ColourMode::Voltage).then_some(Contour {

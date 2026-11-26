@@ -21,7 +21,7 @@
 //!   third of the cost, no vertex written).
 
 use heartsim_core::Auscultation;
-use heartsim_ecg::PcgParams;
+use heartsim_ecg::{PcgParams, Valve};
 use heartsim_echo::{
     DesignedParams, EchoAnatomy, MeshValve, MotionError, MotionFrame, MotionHistory, MotionInput,
     MotionModel, MotionParams, MotionReadout, SliceState, mechanical_injury, valve_openings,
@@ -142,8 +142,9 @@ pub struct HeartMotion {
     /// there have been (the echo cross-section follows them).
     evaluated: Option<Evaluated>,
     serial: u64,
-    /// The pack's measured tricuspid valve (brief B35), when it has one.
-    valve: Option<MeshValve>,
+    /// The pack's animated valves, in `Valve::ALL` order: the measured tricuspid (brief B35) and
+    /// the designed mitral, aortic and pulmonary (brief B36), those the pack has.
+    valves: Vec<MeshValve>,
     /// The designed timings the valve opening is read with (the echo anatomy's).
     designed: DesignedParams,
 }
@@ -158,7 +159,7 @@ impl HeartMotion {
         let model = MotionModel::new(pack, MotionParams::default())?;
         let frame = model.new_frame();
         let designed = DesignedParams::default();
-        let valve = MeshValve::tricuspid(pack, &model, &designed);
+        let valves = MeshValve::all(pack, &model, &designed);
         Ok(Self {
             model,
             history: MotionHistory::new(PcgParams::default(), 15.0, cell_count),
@@ -178,7 +179,7 @@ impl HeartMotion {
             last_forget_ms: 0.0,
             evaluated: None,
             serial: 0,
-            valve,
+            valves,
             designed,
         })
     }
@@ -351,10 +352,16 @@ impl HeartMotion {
         }
     }
 
-    /// The pack's measured tricuspid valve, if any.
+    /// The pack's animated valve of `valve` (the measured tricuspid, the designed others), if any.
     #[must_use]
-    pub fn valve(&self) -> Option<&MeshValve> {
-        self.valve.as_ref()
+    pub fn valve(&self, valve: Valve) -> Option<&MeshValve> {
+        self.valves.iter().find(|m| m.valve_id == valve)
+    }
+
+    /// Every animated valve of the pack, in `Valve::ALL` order.
+    #[must_use]
+    pub fn valves(&self) -> &[MeshValve] {
+        &self.valves
     }
 
     /// The instant the drawn frame shows: with the motion on, the time of the last vertex
@@ -367,10 +374,10 @@ impl HeartMotion {
         }
     }
 
-    /// The tricuspid valve's opening at the drawn instant (`1` open … `0` shut): the value
-    /// [`valve_openings`] gives, the one the echo leaflets and the heart sounds follow.
+    /// `valve`'s opening at the drawn instant (`1` open … `0` shut): the value [`valve_openings`]
+    /// gives, the one the echo leaflets and the heart sounds follow.
     #[must_use]
-    pub fn tricuspid_opening(&self) -> f32 {
+    pub fn opening(&self, valve: Valve) -> f32 {
         let (_, t, _, _) = self.drawn_instant();
         valve_openings(
             &self.history,
@@ -378,28 +385,39 @@ impl HeartMotion {
             self.model.ef_scale(),
             t,
             &self.designed,
-        )[heartsim_ecg::Valve::Tricuspid.index()]
+        )[valve.index()]
     }
 
-    /// What the posed valve depends on: the frame evaluation (with the motion on) and the
-    /// opening. Unchanged key, unchanged pose.
+    /// The tricuspid valve's opening at the drawn instant ([`Self::opening`]).
     #[must_use]
-    pub fn valve_key(&self) -> (u64, bool, u32) {
+    pub fn tricuspid_opening(&self) -> f32 {
+        self.opening(Valve::Tricuspid)
+    }
+
+    /// What `valve`'s pose depends on: the frame evaluation (with the motion on) and its opening.
+    /// Unchanged key, unchanged pose.
+    #[must_use]
+    pub fn valve_key(&self, valve: Valve) -> (u64, bool, u32) {
         let (enabled, ..) = self.drawn_instant();
         (
             if enabled { self.serial } else { 0 },
             enabled,
-            self.tricuspid_opening().to_bits(),
+            self.opening(valve).to_bits(),
         )
     }
 
-    /// The measured tricuspid valve at the drawn instant (heart frame, mm): posed at
-    /// [`Self::tricuspid_opening`] and, with the motion on, carried by the tricuspid disc of the
-    /// drawn frame; with it off (or reduced motion) on the rest disc. `None` without a valve.
-    pub fn pose_valve(&self, scratch: &mut Vec<glam::Vec3>, out: &mut Vec<glam::Vec3>) -> Option<f32> {
-        let v = self.valve.as_ref()?;
+    /// The pack's `valve` at the drawn instant (heart frame, mm): posed at [`Self::opening`] and,
+    /// with the motion on, carried by its disc of the drawn frame; with it off (or reduced motion)
+    /// on the rest disc. Returns the opening; `None` when the pack has no such valve.
+    pub fn pose_valve(
+        &self,
+        valve: Valve,
+        scratch: &mut Vec<glam::Vec3>,
+        out: &mut Vec<glam::Vec3>,
+    ) -> Option<f32> {
+        let v = self.valve(valve)?;
         let (enabled, ..) = self.drawn_instant();
-        let o = self.tricuspid_opening();
+        let o = self.opening(valve);
         v.pose(o, enabled.then_some(&self.frame), scratch, out);
         Some(o)
     }

@@ -761,3 +761,30 @@ fn a_valve_round_trips_through_a_pack_and_a_damaged_one_is_refused() {
     ));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Brief B36: the default pack lists the tricuspid valve first and the three designed valves after
+/// it, each file matching its manifest entry, still at format 4; its LICENSE says they are designed.
+#[test]
+fn the_default_pack_has_its_designed_valves() {
+    let def = AnatomyPack::load(&default_pack_dir()).expect("default pack");
+    assert_eq!(def.manifest.format_version, 4);
+    let names: Vec<&str> = def.manifest.valves.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["tricuspid", "mitral", "aortic", "pulmonary"]);
+    for e in &def.manifest.valves {
+        let bytes = std::fs::read(default_pack_dir().join(&e.file)).unwrap();
+        assert_eq!(
+            def.manifest.files[&e.file].crc32,
+            crc32fast::hash(&bytes),
+            "{}",
+            e.file
+        );
+    }
+    for needle in [
+        "DESIGNED VALVES",
+        "designed by heartsim (MIT OR Apache-2.0)",
+        "not reviewed by a clinician",
+        "docs/research/designed-valve-leaflets.md",
+    ] {
+        assert!(def.licence.contains(needle), "LICENSE lacks `{needle}`");
+    }
+}

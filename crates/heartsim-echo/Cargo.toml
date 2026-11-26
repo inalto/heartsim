@@ -36,3 +36,7 @@ harness = false
 [[bench]]
 name = "measure"
 harness = false
+
+[[bench]]
+name = "valves"
+harness = false

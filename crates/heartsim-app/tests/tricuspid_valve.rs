@@ -88,10 +88,15 @@ fn a_pack_without_the_valve_draws_the_heart_as_before() {
     expected.push("torso");
     assert_eq!(layers, expected, "the layer list of a pack without the valve");
     assert!(heart.tricuspid_valve_pose().is_none());
-    // with the valve, the one extra layer sits before the torso
+    // with the valves (the measured tricuspid and, since B36, the three designed ones), the four
+    // extra layers sit before the torso, the tricuspid's among them
     let with = HeartView::from_pack(pack(), &TimingParams::default());
     let n = with.panel.layers.len();
-    assert_eq!(with.panel.layers[n - 2].name, TRICUSPID_VALVE_LAYER);
+    assert!(
+        with.panel.layers[n - 5..n - 1]
+            .iter()
+            .any(|l| l.name == TRICUSPID_VALVE_LAYER)
+    );
 }
 
 #[test]
@@ -112,7 +117,7 @@ fn the_drawn_valve_and_the_echo_agree_on_open_and_shut() {
     let mut st = SliceState::new(heart.echo_anatomy().expect("echo anatomy"));
     let v = heart
         .motion()
-        .and_then(|m| m.valve())
+        .and_then(|m| m.valve(Valve::Tricuspid))
         .expect("the default pack's valve")
         .data
         .clone();

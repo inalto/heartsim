@@ -19,6 +19,7 @@ pub mod procedural;
 pub mod spatial;
 pub mod territory;
 pub mod valve;
+pub mod valve_design;
 pub mod volume;
 
 pub use catheter::{CardiacChamber, Catheter, CatheterAnatomy, CatheterKind, CatheterSite, Cavity};

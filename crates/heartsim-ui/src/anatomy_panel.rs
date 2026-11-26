@@ -52,6 +52,9 @@ pub struct AnatomyPanelState {
     pub auto_rotate: bool,
     /// Reduced motion (B19 settings): the automatic rotation cannot run, so its checkbox is off and disabled.
     pub reduced_motion: bool,
+    /// A note drawn under the layer list (translated by the app; empty draws nothing): which valve
+    /// leaflets are measured and which designed (B36).
+    pub layers_note: String,
 }
 
 impl AnatomyPanelState {
@@ -74,6 +77,7 @@ impl AnatomyPanelState {
             lao_rao_deg: 0.0,
             auto_rotate: false,
             reduced_motion: false,
+            layers_note: String::new(),
         }
     }
 
@@ -113,6 +117,9 @@ pub fn anatomy_panel(ui: &mut Ui, state: &mut AnatomyPanelState) -> Option<Camer
             ui.end_row();
         }
     });
+    if !state.layers_note.is_empty() {
+        ui.add(egui::Label::new(egui::RichText::new(&state.layers_note).small().weak()).wrap());
+    }
     ui.checkbox(&mut state.labels, t!("anatomy-labels"));
     ui.horizontal(|ui| {
         ui.checkbox(&mut state.clip_enabled, t!("anatomy-cut-away"));

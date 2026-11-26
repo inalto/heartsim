@@ -720,41 +720,15 @@ fn smoothstep(t: f64) -> f64 {
 
 /// Distance from `p` to the nearest voxel (as a box) whose label passes `want`, searching up to
 /// `reach_mm`; `0` inside such a voxel, `None` when none is within reach. Also the nearest point
-/// of that voxel.
+/// of that voxel ([`heartsim_geometry::valve_design::distance_to_label`], shared with the designed
+/// valves of brief B36).
 pub fn distance_to_label(
     vol: &LabelVolume,
     p: Vec3,
     reach_mm: f32,
     want: &dyn Fn(u8) -> bool,
 ) -> Option<(f32, Vec3)> {
-    if let Some(l) = vol.get(p)
-        && want(l)
-    {
-        return Some((0.0, p));
-    }
-    let s = vol.spacing_mm;
-    let r = (reach_mm / s).ceil() as i64;
-    let rel = (p - vol.origin_mm) / s;
-    let (ci, cj, ck) = (rel.x.floor() as i64, rel.y.floor() as i64, rel.z.floor() as i64);
-    let [nx, ny, nz] = vol.dims.map(i64::from);
-    let mut best: Option<(f32, Vec3)> = None;
-    for k in (ck - r).max(0)..=(ck + r).min(nz - 1) {
-        for j in (cj - r).max(0)..=(cj + r).min(ny - 1) {
-            for i in (ci - r).max(0)..=(ci + r).min(nx - 1) {
-                let l = vol.labels[vol.index(i as u32, j as u32, k as u32)];
-                if !want(l) {
-                    continue;
-                }
-                let lo = vol.origin_mm + Vec3::new(i as f32, j as f32, k as f32) * s;
-                let q = p.clamp(lo, lo + Vec3::splat(s));
-                let d = q.distance(p);
-                if best.is_none_or(|(bd, _)| d < bd) {
-                    best = Some((d, q));
-                }
-            }
-        }
-    }
-    best.filter(|(d, _)| *d <= reach_mm)
+    heartsim_geometry::valve_design::distance_to_label(vol, p, reach_mm, want)
 }
 
 /// Whether a label byte is right-heart blood (the blood pool the tricuspid leaflets must stay in).

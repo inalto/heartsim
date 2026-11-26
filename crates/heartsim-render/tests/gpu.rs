@@ -807,3 +807,55 @@ fn the_tricuspid_valve_draws_open_and_shut() {
     }
     assert_eq!(shots.len(), 2);
 }
+
+/// Brief B36: the designed mitral, aortic and pulmonary valves draw without validation errors open
+/// and shut, looked at down their axes, and their vertices can be rewritten for the other shape.
+/// Dumps `valve_<name>_open.png` and `valve_<name>_shut.png` with `HEARTSIM_DUMP_DIR`.
+#[test]
+fn the_designed_valves_draw_open_and_shut() {
+    use heartsim_geometry::{AnatomyPack, ValveRenderMesh};
+    let g = gpu_or_skip!();
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/anatomy/default");
+    let pack = AnatomyPack::load(std::path::Path::new(dir)).expect("default pack");
+    let dump = std::env::var_os("HEARTSIM_DUMP_DIR");
+    // the drawn thicknesses of DesignedParams: AV leaflets 1.6 mm, semilunar cusps 1.0 mm
+    for (name, thickness) in [("mitral", 1.6f32), ("aortic", 1.0), ("pulmonary", 1.0)] {
+        let valve = pack
+            .valve(name)
+            .unwrap_or_else(|| panic!("the default pack has the {name} valve"));
+        let mut render_mesh = ValveRenderMesh::new(valve, thickness);
+        let mut scene = g.scene();
+        let id = scene.add_layer(&g.device, &{
+            let mut d = LayerDesc::new(name, &render_mesh.mesh);
+            d.base_color = [0.8, 0.75, 0.55];
+            d
+        });
+        scene.layer_mut(id).unwrap().clip = true;
+        let (mut pos, mut verts) = (Vec::new(), Vec::new());
+        valve.keyframe_positions(0, &mut pos);
+        let centre =
+            valve.annulus.iter().map(|&a| pos[a as usize]).sum::<Vec3>() / valve.annulus.len() as f32;
+        let down = (valve.coaptation_mm - centre).normalize();
+        scene.frame_scene();
+        scene.camera.target = centre;
+        scene.camera.yaw = down.x.atan2(down.z) + std::f32::consts::PI;
+        scene.camera.pitch = down.y.asin();
+        for (k, shape) in [(0usize, "open"), (valve.keyframe_count() - 1, "shut")] {
+            valve.keyframe_positions(k, &mut pos);
+            render_mesh.fill(&pos, &mut verts);
+            scene.set_layer_vertices(&g.queue, id, &verts);
+            let img = render(&g, &mut scene, (320, 320));
+            assert!(
+                img.centre() != img.px(2, 2) || shape == "open",
+                "{name} {shape}: nothing drawn"
+            );
+            if let Some(d) = &dump {
+                let _ = std::fs::write(
+                    std::path::Path::new(d).join(format!("valve_{name}_{shape}.png")),
+                    scene.capture_png(&g.device, &g.queue),
+                );
+            }
+            g.assert_no_errors();
+        }
+    }
+}

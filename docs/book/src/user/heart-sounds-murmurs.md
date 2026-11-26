@@ -82,8 +82,8 @@ emphasis), not the measured behaviour of a real chest piece. Radiation (to the n
 ## Valve highlights
 
 With the **Valve planes** layer visible in the 3-D view, each valve's disc flashes when its closure sound occurs: the mitral
-valve with M1, the tricuspid with T1, the aortic with A2 and the pulmonic with P2. With the **Tricuspid valve** layer shown, the tricuspid flash is on its leaflets
-instead of the flat disc. In the valve scenarios the stenotic or
+valve with M1, the tricuspid with T1, the aortic with A2 and the pulmonic with P2. With a valve's own layer shown (**Tricuspid valve**,
+**Mitral valve**, **Aortic valve** or **Pulmonary valve**), that valve's flash is on its leaflets instead of the flat disc. In the valve scenarios the stenotic or
 regurgitant valve also glows for as long as its murmur sounds (the aortic valve through the murmur of aortic stenosis, the
 mitral valve through the rumble of mitral stenosis, and so on; the septal defects, the innocent murmur and the rub belong to
 no valve and light nothing). The highlights come from the same schedule as the sound and are drawn with the same delay as the

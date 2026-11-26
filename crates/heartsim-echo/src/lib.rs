@@ -257,7 +257,7 @@ pub mod view_hints;
 pub mod views;
 
 pub use acoustic::{ACOUSTIC_FORMAT_VERSION, AcousticError, AcousticRow, AcousticTable, Sourced, Status};
-pub use anatomy::{Capsule, EchoAnatomy, EchoError, EchoWindow, LeafletValve, Posed};
+pub use anatomy::{Capsule, ECHO_CONE_VALVES, EchoAnatomy, EchoError, EchoWindow, LeafletValve, Posed};
 pub use bmode::{EchoImager, GreyImage, ImageSettings, TGC_BANDS};
 pub use designed::{DesignedParams, valve_openings};
 pub use doppler::{

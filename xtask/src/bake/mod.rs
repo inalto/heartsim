@@ -8,6 +8,7 @@
 //!   default until 0.7 and remains the fast test fixture.
 
 mod abaqus;
+mod designed;
 mod fetch;
 mod heart;
 mod md5;
@@ -59,7 +60,8 @@ pub struct BakeArgs {
     /// Triangles of the body surface after decimation.
     #[arg(long, default_value_t = 12_000)]
     pub torso_triangles: usize,
-    /// Leave out the tricuspid valve (Texas TriValve 1.1).
+    /// Leave out the valves (the Texas TriValve 1.1 tricuspid and the designed mitral, aortic and
+    /// pulmonary valves).
     #[arg(long)]
     pub no_valve: bool,
 }
@@ -78,7 +80,19 @@ pub struct ValveArgs {
     /// Write the pack here instead of over `--pack`.
     #[arg(long)]
     pub out: Option<PathBuf>,
+    /// Which valves to bake (comma-separated): `tricuspid` (Texas TriValve 1.1, brief B35) and the
+    /// designed `mitral`, `aortic`, `pulmonary` (brief B36). A valve left out keeps the pack's
+    /// copy, if it has one.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        default_value = "tricuspid,mitral,aortic,pulmonary"
+    )]
+    pub valves: Vec<String>,
 }
+
+/// The valves `bake-valve` knows, in the order the pack lists them.
+pub const VALVE_NAMES: [&str; 4] = ["tricuspid", "mitral", "aortic", "pulmonary"];
 
 /// Attribution the CC BY 4.0 licences of both sources require, written to the pack's `LICENSE`.
 pub const REAL_LICENSE: &str = "heartsim default anatomy pack — baked from open, CC BY 4.0 meshes\n\
@@ -115,13 +129,71 @@ The pack as a whole is distributed under CC BY 4.0 for the geometry derived from
 above; heartsim's own additions are MIT OR Apache-2.0.\n\
 Nothing from any proprietary program or data set was used.\n";
 
-/// The pack's `LICENSE` with the valve's attribution (brief B35).
+/// The pack's `LICENSE` with the tricuspid valve's attribution (brief B35) and the designed
+/// valves' section (brief B36), each when the pack has those valves.
 #[must_use]
-pub fn licence_with_valve() -> String {
-    format!("{REAL_LICENSE}\n{}", valve::VALVE_LICENSE)
+pub fn licence_with_valves(tricuspid: bool, designed: bool) -> String {
+    let mut s = REAL_LICENSE.to_string();
+    if tricuspid {
+        s = format!("{s}\n{}", valve::VALVE_LICENSE);
+    }
+    if designed {
+        s = format!("{s}\n{}", designed::DESIGNED_LICENSE);
+    }
+    s
 }
 
-/// `cargo xtask bake-valve`: the valve into an existing pack.
+/// The tricuspid valve (from its source) and the designed valves (from the pack) that `names`
+/// asks for, the others kept from `pack`; in [`VALVE_NAMES`] order.
+fn bake_valves(
+    pack: &AnatomyPack,
+    names: &[String],
+    source_root: &Path,
+    offline: bool,
+) -> Result<Vec<heartsim_geometry::AnimatedValve>> {
+    for n in names {
+        anyhow::ensure!(
+            VALVE_NAMES.contains(&n.as_str()),
+            "unknown valve `{n}` (known: {})",
+            VALVE_NAMES.join(", ")
+        );
+    }
+    let want = |n: &str| names.iter().any(|x| x == n);
+    let mut out = Vec::new();
+    if want("tricuspid") {
+        let t = std::time::Instant::now();
+        let baked = valve::bake_for_pack(source_root, offline, pack)?;
+        for line in &baked.report {
+            eprintln!("  {line}");
+        }
+        eprintln!("tricuspid valve baked in {:.1?}", t.elapsed());
+        out.push(baked.valve);
+    } else if let Some(v) = pack.valve("tricuspid") {
+        out.push(v.clone());
+    }
+    let designed_wanted = VALVE_NAMES[1..].iter().any(|n| want(n));
+    let designed = if designed_wanted {
+        let t = std::time::Instant::now();
+        let d = designed::bake(pack)?;
+        for line in &d.report {
+            eprintln!("  {line}");
+        }
+        eprintln!("designed valves baked in {:.1?}", t.elapsed());
+        d.valves
+    } else {
+        Vec::new()
+    };
+    for name in &VALVE_NAMES[1..] {
+        if want(name) {
+            out.extend(designed.iter().find(|v| v.name == *name).cloned());
+        } else if let Some(v) = pack.valve(name) {
+            out.push(v.clone());
+        }
+    }
+    Ok(out)
+}
+
+/// `cargo xtask bake-valve`: the valves into an existing pack.
 pub fn run_valve(args: &ValveArgs) -> Result<()> {
     let t = std::time::Instant::now();
     let mut pack =
@@ -133,25 +205,49 @@ pub fn run_valve(args: &ValveArgs) -> Result<()> {
         .filter(|f| f.as_str() != "LICENSE" && !f.starts_with("valve_"))
         .map(|f| Ok((f.clone(), std::fs::read(args.pack.join(f))?)))
         .collect::<Result<_>>()?;
-    let baked = valve::bake_for_pack(&args.source_root, args.offline, &pack)?;
-    for line in &baked.report {
-        eprintln!("  {line}");
-    }
-    pack.valves = vec![baked.valve];
-    if pack.licence == REAL_LICENSE {
-        pack.licence = licence_with_valve();
-    } else if !pack.licence.contains("TRICUSPID VALVE") {
-        pack.licence = format!("{}\n\n{}", pack.licence.trim_end(), valve::VALVE_LICENSE);
+    let old_tricuspid = std::fs::read(args.pack.join("valve_tricuspid.bin")).ok();
+    pack.valves = bake_valves(&pack, &args.valves, &args.source_root, args.offline)?;
+    let has = |n: &str| pack.valves.iter().any(|v| v.name == n);
+    let (tri, des) = (has("tricuspid"), VALVE_NAMES[1..].iter().any(|n| has(n)));
+    if pack.licence.starts_with(REAL_LICENSE) {
+        pack.licence = licence_with_valves(tri, des);
+    } else {
+        if tri && !pack.licence.contains("TRICUSPID VALVE") {
+            pack.licence = format!("{}\n\n{}", pack.licence.trim_end(), valve::VALVE_LICENSE);
+        }
+        if des && !pack.licence.contains("DESIGNED VALVES") {
+            pack.licence = format!("{}\n\n{}", pack.licence.trim_end(), designed::DESIGNED_LICENSE);
+        }
     }
     let out = args.out.clone().unwrap_or_else(|| args.pack.clone());
-    eprintln!("valve baked in {:.1?}", t.elapsed());
+    eprintln!("valves baked in {:.1?}", t.elapsed());
     report_and_verify(&mut pack, &out)?;
     for (f, bytes) in &before {
         let now = std::fs::read(out.join(f))?;
-        anyhow::ensure!(&now == bytes, "{f} changed when only the valve was added");
+        anyhow::ensure!(&now == bytes, "{f} changed when only the valves were added");
+    }
+    if let Some(old) = old_tricuspid
+        && tri
+    {
+        let now = std::fs::read(out.join("valve_tricuspid.bin"))?;
+        anyhow::ensure!(now == old, "valve_tricuspid.bin changed");
+        eprintln!("valve_tricuspid.bin is byte-identical");
+    }
+    for v in &pack.valves {
+        let f = heartsim_geometry::pack::valve_file(&v.name);
+        let bytes = std::fs::read(out.join(&f))?;
+        eprintln!("  {f}: {} bytes, {} deflated", bytes.len(), deflated_len(&bytes)?);
     }
     eprintln!("the other {} pack files are byte-identical", before.len());
     Ok(())
+}
+
+/// Size of `bytes` deflated at the default level (what the web archive adds), bytes.
+fn deflated_len(bytes: &[u8]) -> Result<usize> {
+    use std::io::Write as _;
+    let mut e = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+    e.write_all(bytes)?;
+    Ok(e.finish()?.len())
 }
 
 pub fn run(args: &BakeArgs) -> Result<()> {
@@ -339,14 +435,9 @@ fn bake_real(args: &BakeArgs) -> Result<()> {
         valves: Vec::new(),
     };
     if !args.no_valve {
-        let t = std::time::Instant::now();
-        let v = valve::bake_for_pack(&args.source_root, args.offline, &pack)?;
-        for line in &v.report {
-            eprintln!("  {line}");
-        }
-        eprintln!("valve baked in {:.1?}", t.elapsed());
-        pack.valves = vec![v.valve];
-        pack.licence = licence_with_valve();
+        let names: Vec<String> = VALVE_NAMES.iter().map(|s| (*s).to_string()).collect();
+        pack.valves = bake_valves(&pack, &names, &args.source_root, args.offline)?;
+        pack.licence = licence_with_valves(true, true);
     }
     eprintln!("total bake time {:.1?}", t0.elapsed());
     report_and_verify(&mut pack, &args.out)

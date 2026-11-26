@@ -1,7 +1,7 @@
 PackManifest(
     format_version: 4,
     name: "default",
-    source: "Rodero et al. 2021 average four-chamber heart (Zenodo 4593739) + KCL whole-torso CT model 1 (Zenodo 7253863), baked by heartsim xtask 0.23.0 (spacing 2.3 mm)",
+    source: "Rodero et al. 2021 average four-chamber heart (Zenodo 4593739) + KCL whole-torso CT model 1 (Zenodo 7253863), baked by heartsim xtask 0.25.0 (spacing 2.3 mm)",
     licence: "CC-BY-4.0 (sources) AND (MIT OR Apache-2.0) (heartsim additions)",
     frame: "millimetres; origin = ventricular centroid; +x = patient\'s left, +y = cranial, +z = anterior",
     cell_spacing_mm: 2.3,
@@ -40,8 +40,8 @@ PackManifest(
         name: "pulmonary_artery",
         file: "mesh_pulmonary_artery.glb",
         kind: Vessel,
-        vertices: 2997,
-        triangles: 6000,
+        vertices: 3189,
+        triangles: 6288,
     ), MeshEntry(
         name: "svc",
         file: "mesh_svc.glb",
@@ -74,11 +74,32 @@ PackManifest(
         triangles: 3000,
         chordae: 988,
         keyframes: 7,
+    ), ValveEntry(
+        name: "mitral",
+        file: "valve_mitral.bin",
+        vertices: 1596,
+        triangles: 2880,
+        chordae: 12,
+        keyframes: 8,
+    ), ValveEntry(
+        name: "aortic",
+        file: "valve_aortic.bin",
+        vertices: 837,
+        triangles: 1440,
+        chordae: 0,
+        keyframes: 8,
+    ), ValveEntry(
+        name: "pulmonary",
+        file: "valve_pulmonary.bin",
+        vertices: 837,
+        triangles: 1440,
+        chordae: 0,
+        keyframes: 8,
     )],
     files: {
         "LICENSE": FileEntry(
-            bytes: 3694,
-            crc32: 4288516148,
+            bytes: 5428,
+            crc32: 3762663000,
         ),
         "cells.bin": FileEntry(
             bytes: 581491,
@@ -105,12 +126,12 @@ PackManifest(
             crc32: 4266772128,
         ),
         "labels_heart.bin": FileEntry(
-            bytes: 167705,
-            crc32: 115816791,
+            bytes: 174890,
+            crc32: 1555144216,
         ),
         "labels_thorax.bin": FileEntry(
-            bytes: 367523,
-            crc32: 4215293214,
+            bytes: 368069,
+            crc32: 332193358,
         ),
         "landmarks.ron": FileEntry(
             bytes: 3614,
@@ -133,8 +154,8 @@ PackManifest(
             crc32: 2418723336,
         ),
         "mesh_pulmonary_artery.glb": FileEntry(
-            bytes: 144796,
-            crc32: 872222739,
+            bytes: 152860,
+            crc32: 2083805946,
         ),
         "mesh_pulmonary_veins.glb": FileEntry(
             bytes: 74380,
@@ -167,6 +188,18 @@ PackManifest(
         "torso.glb": FileEntry(
             bytes: 288900,
             crc32: 2071966188,
+        ),
+        "valve_aortic.bin": FileEntry(
+            bytes: 69012,
+            crc32: 3958451048,
+        ),
+        "valve_mitral.bin": FileEntry(
+            bytes: 132987,
+            crc32: 2452474462,
+        ),
+        "valve_pulmonary.bin": FileEntry(
+            bytes: 69012,
+            crc32: 1344117455,
         ),
         "valve_tricuspid.bin": FileEntry(
             bytes: 155832,

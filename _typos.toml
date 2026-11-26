@@ -36,6 +36,8 @@ extend-ignore-re = ["PNGs", "ATPase"]
 [default.extend-words]
 # the ablation catheter, on EP-lab displays
 ABL = "ABL"
+# Creative Commons "no derivatives" licence element (CC BY-ND)
+ND = "ND"
 # Medical terms and abbreviations that look like misspellings.
 laf = "laf"       # left anterior fascicle
 lpf = "lpf"       # left posterior fascicle

@@ -20,10 +20,17 @@ pub struct DesignedParams {
     pub mitral_anterior_length_mm: f32,
     /// Posterior mitral leaflet length, mm. **14.4 mm**: same table and cohort (14.4 ± 3.6 mm).
     pub mitral_posterior_length_mm: f32,
-    /// Overlap of the closed AV leaflets at their tips (the coaptation zone), subtracted from the
-    /// lengths before the closed leaflets are made to meet, mm. **Designed** (no source read for
-    /// the mitral or tricuspid coaptation length).
-    pub av_coaptation_mm: f32,
+    /// Overlap of the closed mitral leaflets beyond their meeting line (the apposed band), mm.
+    /// **8.0 mm**: the line of closure, a ridge on the atrial face of the anterior leaflet 8 to
+    /// 10 mm from its free margin, Ranganathan et al., *Circulation* 1970;41(3):459–467,
+    /// doi:10.1161/01.cir.41.3.459, p. 461 (50 autopsy valves; full text); maintainer's decision of
+    /// brief B36 (conflict C1). Where the two leaflets of one place are too short for it on this
+    /// heart's ring, less is used (the designed mesh and the cone alike).
+    pub mitral_coaptation_mm: f32,
+    /// Overlap of the closed tricuspid leaflets at their tips, subtracted from the height before
+    /// the closed leaflets of the designed cone are made to meet, mm. **Designed** (no source read
+    /// for the tricuspid coaptation length; 4.0 mm, the value both AV valves shared before B36).
+    pub tricuspid_coaptation_mm: f32,
     /// Tricuspid leaflet height (annulus to free margin), mm, one value for the three leaflets.
     /// **18.9 mm** = mean of anterior 20.71, posterior 18.88 and septal 17.22 mm: Skwarek et al.,
     /// *Folia Morphol* 2006;65(3):200–208, Results (107 formalin-fixed adult hearts; full text).
@@ -152,7 +159,8 @@ impl Default for DesignedParams {
         Self {
             mitral_anterior_length_mm: 25.1,
             mitral_posterior_length_mm: 14.4,
-            av_coaptation_mm: 4.0,
+            mitral_coaptation_mm: 8.0,
+            tricuspid_coaptation_mm: 4.0,
             tricuspid_height_mm: 18.9,
             aortic_effective_height_mm: 8.6,
             pulmonary_effective_height_mm: 8.6,

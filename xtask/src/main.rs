@@ -39,8 +39,8 @@ enum Task {
     ReleaseNotes(ReleaseNotesArgs),
     /// Build an anatomy pack (procedural by default; `--source` for an open-licence mesh).
     BakeAnatomy(bake::BakeArgs),
-    /// Bake the tricuspid valve (Texas TriValve 1.1, brief B35) into an existing pack, leaving its other files as
-    /// they are.
+    /// Bake the valves (the Texas TriValve 1.1 tricuspid, brief B35; the designed mitral, aortic and pulmonary,
+    /// brief B36) into an existing pack, leaving its other files as they are.
     BakeValve(bake::ValveArgs),
     /// Write `heartsim-assets.zip` (anatomy pack, rhythms, tutorials) for the browser build; trunk's `pre_build` hook.
     WebAssets(web::AssetsArgs),

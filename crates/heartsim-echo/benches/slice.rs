@@ -87,7 +87,7 @@ fn bench(c: &mut Criterion) {
             },
         );
     }
-    if let Some(mv) = anatomy.mesh_valve() {
+    if let Some(mv) = anatomy.mesh_valve(heartsim_ecg::Valve::Tricuspid) {
         let mut posed = heartsim_echo::PosedMeshValve::default();
         let mut o = 0u32;
         c.bench_function("measured valve: pose + triangle grid for the echo (B35)", |b| {

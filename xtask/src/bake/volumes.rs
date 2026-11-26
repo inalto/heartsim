@@ -42,6 +42,7 @@ const LV_WALL_RANGE_MM: (f32, f32) = (5.0, 13.0);
 mod rt {
     pub const AORTA: u16 = 5;
     pub const PA: u16 = 6;
+    pub const PULMONARY_PLANE: u16 = 10;
 }
 
 /// KCL torso 1 tags as verified by [`verify_kcl_tags`] (volumes and positions in the bake report).
@@ -259,6 +260,35 @@ struct Crop {
 /// distal half of the stub. The averaged SSM mesh's cut is not exactly planar, so the cap is a
 /// plug as thick as the end faces' spread.
 fn vessel_end(mesh: &TetMesh, xf: &dyn Fn(Vec3) -> Vec3, tag: u16, valve: Vec3) -> Option<Crop> {
+    let (disc, pts) = end_ring(mesh, xf, tag, valve)?;
+    let (centre, normal) = (disc.centre, disc.normal);
+    let (mut radius, mut far) = (0.0f32, f32::NEG_INFINITY);
+    for v in &pts {
+        let r = *v - centre;
+        let along = r.dot(normal);
+        far = far.max(along);
+        radius = radius.max((r - normal * along).length());
+    }
+    let area = std::f32::consts::PI * radius * radius;
+    let half = 0.5 * (CAP_PLUG_MM);
+    // the plug sits at the very end: its centre `half` inside the most distal point
+    let centre = centre + normal * (far - half);
+    Some(Crop {
+        centre,
+        normal,
+        radius,
+        half_thickness: half,
+        area_mm2: area,
+    })
+}
+
+/// The distal ring of the wall `tag` (see [`vessel_end`]): the disc fitted to it and its points.
+fn end_ring(
+    mesh: &TetMesh,
+    xf: &dyn Fn(Vec3) -> Vec3,
+    tag: u16,
+    valve: Vec3,
+) -> Option<(super::tet::FittedDisc, Vec<Vec3>)> {
     let mut other = vec![false; mesh.points.len()];
     let mut wall_c = DVec3::ZERO;
     let mut wall_n = 0usize;
@@ -305,26 +335,266 @@ fn vessel_end(mesh: &TetMesh, xf: &dyn Fn(Vec3) -> Vec3, tag: u16, valve: Vec3) 
         dir = d.normal;
         disc = Some((d, pts));
     }
-    let (disc, pts) = disc?;
-    let (centre, normal) = (disc.centre, disc.normal);
-    let (mut radius, mut far) = (0.0f32, f32::NEG_INFINITY);
-    for v in &pts {
-        let r = *v - centre;
-        let along = r.dot(normal);
-        far = far.max(along);
-        radius = radius.max((r - normal * along).length());
+    disc
+}
+
+/// Length by which the pulmonary trunk is continued beyond the dataset's crop, mm. **Designed**:
+/// the Rodero stub ends about 9 mm above the pulmonary ring, less than the height of a pulmonary
+/// cusp's commissures (about 22 mm on this ring, `docs/research/designed-valve-leaflets.md`), so
+/// the designed cusps could not stand in it (brief B36). 20 mm more leaves them room; the real
+/// trunk is longer still and divides, which is not modelled.
+pub const PA_EXTENSION_MM: f32 = 20.0;
+/// Angular bins of the continued cross-section.
+const TUBE_BINS: usize = 48;
+/// The cross-section is read from this much of the stub's end, mm.
+const TUBE_SECTION_MM: f32 = 2.0;
+/// Clearance the continuation keeps from the neighbouring vessel's wall, mm. **Designed**: more
+/// than the 1.5 mm under which the motion model takes two parts to be in contact, so the designed
+/// tube adds no contact the dataset does not have.
+const TUBE_CLEARANCE_MM: f32 = 2.0;
+/// Thinnest wall the clearance may leave, mm (two voxels of the heart box, so the lumen stays
+/// closed for a 6-connected fill).
+const TUBE_MIN_WALL_MM: f32 = 2.0;
+/// The continuation starts this far inside the stub's wall, mm, so the two overlap.
+const TUBE_OVERLAP_MM: f32 = 1.5;
+
+/// A straight continuation of a cropped vessel stub: the stub's own end cross-section (inner and
+/// outer wall radius per direction about the end's axis) carried along the end's normal. One
+/// definition for the label volume's wall ([`Self::wall_at`]) and the drawn surface
+/// ([`Self::mesh`]), so the two agree. **Designed** shape: the dataset has nothing beyond its crop.
+#[derive(Debug, Clone)]
+pub struct TubeExtension {
+    /// A point of the axis, in the plane of the stub's most distal point.
+    pub base: Vec3,
+    /// Unit direction of the continuation.
+    pub normal: Vec3,
+    u: Vec3,
+    v: Vec3,
+    inner: [f32; TUBE_BINS],
+    outer: [f32; TUBE_BINS],
+    /// Where the stub's wall ends in each bin, along `normal` from `base` (≤ 0).
+    reach: [f32; TUBE_BINS],
+    pub length_mm: f32,
+    /// The most the outer face was drawn in to keep clear of the neighbouring vessel, mm.
+    pub trimmed_mm: f32,
+}
+
+impl TubeExtension {
+    /// The continuation of the wall `tag` whose valve disc is centred on `valve`, `length_mm` long,
+    /// with points mapped through `xf` (any rigid frame).
+    fn of(
+        mesh: &TetMesh,
+        xf: &dyn Fn(Vec3) -> Vec3,
+        tag: u16,
+        valve: Vec3,
+        length_mm: f32,
+        clear_of: Option<u16>,
+    ) -> Option<Self> {
+        let (disc, pts) = end_ring(mesh, xf, tag, valve)?;
+        let n = disc.normal;
+        let far = pts
+            .iter()
+            .map(|p| (*p - disc.centre).dot(n))
+            .fold(f32::NEG_INFINITY, f32::max);
+        let base = disc.centre + n * far;
+        let u = n.any_orthonormal_vector();
+        let v = n.cross(u);
+        let mut inner = [f32::INFINITY; TUBE_BINS];
+        let mut outer = [f32::NEG_INFINITY; TUBE_BINS];
+        let mut reach = [f32::NEG_INFINITY; TUBE_BINS];
+        // per direction: where the wall ends, then the wall's two faces over its last few
+        // millimetres only (the stub bends and flares, so a longer piece would thicken the wall)
+        let polar = |p: Vec3| {
+            let d = p - base;
+            let along = d.dot(n);
+            let rad = d - n * along;
+            (Self::bin_of(rad.dot(u), rad.dot(v)).0, along, rad.length())
+        };
+        for p in &pts {
+            let (b, along, _) = polar(*p);
+            reach[b] = reach[b].max(along);
+        }
+        for p in &pts {
+            let (b, along, r) = polar(*p);
+            if along >= reach[b] - TUBE_SECTION_MM {
+                inner[b] = inner[b].min(r);
+                outer[b] = outer[b].max(r);
+            }
+        }
+        if outer.iter().all(|o| !o.is_finite()) {
+            return None;
+        }
+        // empty bins take the nearest filled bin (searching both ways round)
+        let filled: Vec<bool> = outer.iter().map(|o| o.is_finite()).collect();
+        for b in 0..TUBE_BINS {
+            if filled[b] {
+                continue;
+            }
+            let from = (1..TUBE_BINS)
+                .flat_map(|k| [(b + k) % TUBE_BINS, (b + TUBE_BINS - k) % TUBE_BINS])
+                .find(|&c| filled[c])?;
+            inner[b] = inner[from];
+            outer[b] = outer[from];
+            reach[b] = reach[from];
+        }
+        // a light circular smoothing of the radii; the start is the least of the neighbours, so it
+        // lies inside the stub's wall all round
+        // the bin `k - 1` places round from `b` (k = 0, 1, 2: before, at, after)
+        let at = |a: &[f32; TUBE_BINS], b: usize, k: usize| a[(b + TUBE_BINS + k - 1) % TUBE_BINS];
+        let (i0, o0, r0) = (inner, outer, reach);
+        for b in 0..TUBE_BINS {
+            inner[b] = (at(&i0, b, 0) + at(&i0, b, 1) + at(&i0, b, 2)) / 3.0;
+            outer[b] = (at(&o0, b, 0) + at(&o0, b, 1) + at(&o0, b, 2)) / 3.0;
+            reach[b] = at(&r0, b, 0).min(at(&r0, b, 1)).min(at(&r0, b, 2));
+            if inner[b] > outer[b] - 0.5 {
+                inner[b] = (outer[b] - 1.0).max(0.0);
+            }
+        }
+        // keep clear of the neighbouring vessel: where its wall lies beside the continuation, the
+        // outer face is drawn in so [`TUBE_CLEARANCE_MM`] stays between the two (and the inner face
+        // with it, where the wall would get thinner than [`TUBE_MIN_WALL_MM`])
+        let mut trimmed = 0.0f32;
+        if let Some(other) = clear_of {
+            let mut limit = [f32::INFINITY; TUBE_BINS];
+            for node in mesh.nodes_of_tag(other) {
+                let (b, along, r) = polar(xf(mesh.points[node as usize]));
+                if along >= r0[b].min(0.0) - TUBE_OVERLAP_MM - 1.0 && along <= length_mm + 1.0 {
+                    limit[b] = limit[b].min(r - TUBE_CLEARANCE_MM);
+                }
+            }
+            for b in 0..TUBE_BINS {
+                let l = at(&limit, b, 0).min(at(&limit, b, 1)).min(at(&limit, b, 2));
+                if l < outer[b] {
+                    trimmed = trimmed.max(outer[b] - l);
+                    outer[b] = l;
+                    inner[b] = inner[b].min(outer[b] - TUBE_MIN_WALL_MM).max(0.0);
+                }
+            }
+        }
+        Some(Self {
+            base,
+            normal: n,
+            u,
+            v,
+            inner,
+            outer,
+            reach,
+            length_mm,
+            trimmed_mm: trimmed,
+        })
     }
-    let area = std::f32::consts::PI * radius * radius;
-    let half = 0.5 * (CAP_PLUG_MM);
-    // the plug sits at the very end: its centre `half` inside the most distal point
-    let centre = centre + normal * (far - half);
-    Some(Crop {
-        centre,
-        normal,
-        radius,
-        half_thickness: half,
-        area_mm2: area,
-    })
+
+    /// Bin of the in-plane direction `(x, y)` and the fraction toward the next bin's centre.
+    fn bin_of(x: f32, y: f32) -> (usize, f32) {
+        let turn = (y.atan2(x) + std::f32::consts::PI) / std::f32::consts::TAU;
+        let f = (turn * TUBE_BINS as f32).clamp(0.0, TUBE_BINS as f32 - 1e-3);
+        (f as usize, f.fract())
+    }
+
+    /// `along`, radius and the interpolated (inner, outer, reach) of `p`.
+    fn coords(&self, p: Vec3) -> (f32, f32, [f32; 3]) {
+        let d = p - self.base;
+        let along = d.dot(self.normal);
+        let rad = d - self.normal * along;
+        let (b, f) = Self::bin_of(rad.dot(self.u), rad.dot(self.v));
+        // bin values sit at the bins' centres
+        let (b0, t) = if f >= 0.5 {
+            (b, f - 0.5)
+        } else {
+            ((b + TUBE_BINS - 1) % TUBE_BINS, f + 0.5)
+        };
+        let b1 = (b0 + 1) % TUBE_BINS;
+        let mix = |a: &[f32; TUBE_BINS]| a[b0] + (a[b1] - a[b0]) * t;
+        (
+            along,
+            rad.length(),
+            [mix(&self.inner), mix(&self.outer), mix(&self.reach)],
+        )
+    }
+
+    /// Whether `p` is in the continued wall, widened by `pad_mm` on both faces (0 for the Rodero
+    /// pulmonary trunk, whose wall is about 4.4 mm thick near its cut: several voxels, so it closes
+    /// the lumen for a 6-connected fill without widening).
+    fn wall_at(&self, p: Vec3, pad_mm: f32) -> bool {
+        let (along, r, [inner, outer, reach]) = self.coords(p);
+        along <= self.length_mm
+            && along >= reach - TUBE_OVERLAP_MM
+            && r >= inner - pad_mm
+            && r <= outer + pad_mm
+    }
+
+    /// Whether `p` is in the plug that closes the far end ([`CAP_PLUG_MM`] thick).
+    fn plug_at(&self, p: Vec3, pad_mm: f32) -> bool {
+        let (along, r, [_, outer, _]) = self.coords(p);
+        let half = 0.5 * CAP_PLUG_MM;
+        (along - (self.length_mm - half)).abs() <= half + 0.8 * pad_mm * 2.0 && r <= outer + pad_mm
+    }
+
+    /// Mean inner and outer radius, mm.
+    fn mean_radii_mm(&self) -> (f32, f32) {
+        let n = TUBE_BINS as f32;
+        (
+            self.inner.iter().sum::<f32>() / n,
+            self.outer.iter().sum::<f32>() / n,
+        )
+    }
+
+    /// Axis-aligned box of the continuation, plug included.
+    fn bounds(&self) -> (Vec3, Vec3) {
+        let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
+        for b in 0..TUBE_BINS {
+            let a = (b as f32 + 0.5) / TUBE_BINS as f32 * std::f32::consts::TAU - std::f32::consts::PI;
+            let dir = self.u * a.cos() + self.v * a.sin();
+            for along in [self.reach[b] - TUBE_OVERLAP_MM, self.length_mm + CAP_PLUG_MM] {
+                let p = self.base + self.normal * along + dir * (self.outer[b] + 1.0);
+                lo = lo.min(p);
+                hi = hi.max(p);
+            }
+        }
+        (lo, hi)
+    }
+
+    /// The drawn surface of the continuation (in the frame of `xf`): outer and inner wall from
+    /// inside the stub's end to the far end, and the end's annulus; open like the stub it continues.
+    #[must_use]
+    pub fn mesh(&self) -> heartsim_geometry::TriMesh {
+        let mut points = Vec::with_capacity(TUBE_BINS * 4);
+        for b in 0..TUBE_BINS {
+            let a = (b as f32 + 0.5) / TUBE_BINS as f32 * std::f32::consts::TAU - std::f32::consts::PI;
+            let dir = self.u * a.cos() + self.v * a.sin();
+            let start = self.base + self.normal * (self.reach[b] - TUBE_OVERLAP_MM);
+            let end = self.base + self.normal * self.length_mm;
+            points.push(start + dir * self.outer[b]);
+            points.push(end + dir * self.outer[b]);
+            points.push(start + dir * self.inner[b]);
+            points.push(end + dir * self.inner[b]);
+        }
+        let mut faces: Vec<[u32; 3]> = Vec::with_capacity(TUBE_BINS * 6);
+        for b in 0..TUBE_BINS {
+            let i = (b * 4) as u32;
+            let j = (((b + 1) % TUBE_BINS) * 4) as u32;
+            let (os_i, oe_i, is_i, ie_i) = (i, i + 1, i + 2, i + 3);
+            let (os_j, oe_j, is_j, ie_j) = (j, j + 1, j + 2, j + 3);
+            // outer wall, facing away from the axis
+            faces.push([os_i, os_j, oe_j]);
+            faces.push([os_i, oe_j, oe_i]);
+            // inner wall, facing the axis
+            faces.push([is_i, ie_j, is_j]);
+            faces.push([is_i, ie_i, ie_j]);
+            // end annulus, facing along the vessel
+            faces.push([oe_i, oe_j, ie_j]);
+            faces.push([oe_i, ie_j, ie_i]);
+        }
+        super::surface::faces_to_mesh(&points, &faces)
+    }
+}
+
+/// The designed continuation of the pulmonary trunk beyond the dataset's crop
+/// ([`PA_EXTENSION_MM`]), with the Rodero points mapped through `xf`.
+pub fn pulmonary_trunk_extension(mesh: &TetMesh, xf: &dyn Fn(Vec3) -> Vec3) -> Option<TubeExtension> {
+    let nodes = mesh.nodes_of_tag(rt::PULMONARY_PLANE);
+    let valve = nodes.iter().map(|n| xf(mesh.points[*n as usize])).sum::<Vec3>() / nodes.len().max(1) as f32;
+    TubeExtension::of(mesh, xf, rt::PA, valve, PA_EXTENSION_MM, Some(rt::AORTA))
 }
 
 /// Component marks of the heart-box flood fill.
@@ -400,6 +670,16 @@ fn bake_heart_box(
         lo = lo.min(q);
         hi = hi.max(q);
     }
+    // the pulmonary trunk is continued beyond its crop (designed): the box grows to hold it
+    let Some(trunk) = pulmonary_trunk_extension(mesh, xf) else {
+        bail!(
+            "pulmonary artery: no cut end found on the free boundary of its wall (tag {})",
+            rt::PA
+        );
+    };
+    let (trunk_lo, trunk_hi) = trunk.bounds();
+    lo = lo.min(trunk_lo);
+    hi = hi.max(trunk_hi);
     let grid = Grid::covering(lo - HEART_MARGIN_MM, hi + HEART_MARGIN_MM, HEART_VOXEL_MM);
     say(
         report,
@@ -437,10 +717,58 @@ fn bake_heart_box(
         let nodes = mesh.nodes_of_tag(tag);
         nodes.iter().map(|n| xf(mesh.points[*n as usize])).sum::<Vec3>() / nodes.len().max(1) as f32
     };
-    for (wall, valve, cap, name) in [
-        (rt::AORTA, 9u16, hc::CAP_AO, "aorta"),
-        (rt::PA, 10u16, hc::CAP_PA, "pulmonary artery"),
-    ] {
+    // the pulmonary trunk: its continuation's wall, then the plug at the continuation's far end
+    {
+        let (inner, outer) = trunk.mean_radii_mm();
+        let end = trunk.base + trunk.normal * trunk.length_mm;
+        let (b_lo, b_hi) = trunk.bounds();
+        let (mut wall, mut plug, mut taken) = (0usize, 0usize, 0usize);
+        if let Some(rg) = grid.range(b_lo, b_hi) {
+            for k in rg[2].0..=rg[2].1 {
+                for j in rg[1].0..=rg[1].1 {
+                    for i in rg[0].0..=rg[0].1 {
+                        let p = grid.centre(i, j, k);
+                        let idx = grid.idx(i, j, k);
+                        let class = if trunk.plug_at(p, 0.5 * grid.h) {
+                            hc::CAP_PA
+                        } else if trunk.wall_at(p, 0.0) {
+                            hc::PA
+                        } else {
+                            continue;
+                        };
+                        if cls[idx] == 0 {
+                            cls[idx] = class;
+                            if class == hc::PA {
+                                wall += 1;
+                            } else {
+                                plug += 1;
+                            }
+                        } else if cls[idx] != hc::PA {
+                            taken += 1;
+                        }
+                    }
+                }
+            }
+        }
+        say(
+            report,
+            format!(
+                "pulmonary artery continued {:.0} mm beyond its cut end (designed): from ({:.1}, {:.1}, {:.1}) along ({:.2}, {:.2}, {:.2}) to ({:.1}, {:.1}, {:.1}), mean radius inner {inner:.1} outer {outer:.1} mm, outer face drawn in by up to {:.1} mm to clear the aorta; {wall} wall and {plug} plug voxels, {taken} voxels already the aorta's or another part's (left as they were)",
+                trunk.length_mm,
+                trunk.base.x,
+                trunk.base.y,
+                trunk.base.z,
+                trunk.normal.x,
+                trunk.normal.y,
+                trunk.normal.z,
+                end.x,
+                end.y,
+                end.z,
+                trunk.trimmed_mm,
+            ),
+        );
+    }
+    for (wall, valve, cap, name) in [(rt::AORTA, 9u16, hc::CAP_AO, "aorta")] {
         let Some(c) = vessel_end(mesh, xf, wall, disc_centre(valve)) else {
             bail!("{name}: no cut end found on the free boundary of its wall (tag {wall})");
         };

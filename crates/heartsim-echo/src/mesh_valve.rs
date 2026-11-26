@@ -1,22 +1,26 @@
-//! The measured tricuspid valve (brief B35): the pack's [`AnimatedValve`] posed at the valve
-//! opening the schedule gives ([`crate::valve_openings`]) and carried by the deformed valve disc,
-//! for the 3-D heart and for the echo cross-section alike, so both show the same valve open or
-//! shut at the same instant.
+//! The pack's animated valves (briefs B35, B36): the measured tricuspid valve and the designed
+//! mitral, aortic and pulmonary valves, each an [`AnimatedValve`] posed at the valve opening the
+//! schedule gives ([`crate::valve_openings`]) and carried by its deformed valve disc, for the 3-D
+//! heart and for the echo cross-section alike, so both show the same valve open or shut at the
+//! same instant.
 //!
 //! * **Pose** ([`MeshValve::pose_rest`]): `opening` (`1` open … `0` shut) selects and interpolates
 //!   the keyframes (the closure `1 − opening`, piecewise linear between the two keyframes whose
 //!   closures bracket it). No clock and no engine state of its own: the opening is the one value
 //!   the heart sounds, the wall motion and the echo already share.
-//! * **Ride** ([`MeshValve::pose`]): the rest-frame shape carried by the tricuspid disc of the
+//! * **Ride** ([`MeshValve::pose`]): the rest-frame shape carried by the valve's disc of the
 //!   evaluated motion frame (its affine motion plus the rim's own, which the annulus takes in
 //!   full; see [`DiscCarrier`]), so the annulus stays on the beating disc. Without a moving frame
 //!   (wall motion off, reduced motion) the valve keeps the rest disc and still opens and shuts.
 //! * **Echo** ([`PosedMeshValve::contains`]): a rest point is leaflet when it lies within half the
-//!   designed leaflet thickness of the posed midsurface (the cross-section works in rest
-//!   coordinates, like the designed cones it replaces for this valve).
+//!   designed thickness of the posed midsurface ([`thickness_mm`]: the AV leaflets'
+//!   [`DesignedParams::av_leaflet_thickness_mm`], the semilunar cusps'
+//!   [`DesignedParams::cusp_thickness_mm`]); the cross-section works in rest coordinates, like the
+//!   designed cones these replace.
 //!
-//! It is one donor's valve fitted to this heart and moved by a load sequence replayed against the
-//! designed timing; no pathology is implied.
+//! The tricuspid valve is one donor's valve fitted to this heart; the mitral, aortic and pulmonary
+//! valves are designed shapes (`heartsim_geometry::valve_design`), not the anatomy of a person. All
+//! are moved by a shape sequence replayed against the designed timing; no pathology is implied.
 
 use crate::designed::DesignedParams;
 use crate::model::{MotionFrame, MotionModel};
@@ -28,6 +32,28 @@ use heartsim_geometry::{AnatomyPack, AnimatedValve, DiscCarrier};
 /// Cell size of the posed valve's triangle grid, mm.
 const GRID_MM: f32 = 1.5;
 
+/// The pack's name of `valve` (its file is `valve_<name>.bin`).
+#[must_use]
+pub fn pack_name(valve: Valve) -> &'static str {
+    match valve {
+        Valve::Mitral => "mitral",
+        Valve::Tricuspid => "tricuspid",
+        Valve::Aortic => "aortic",
+        Valve::Pulmonic => "pulmonary",
+    }
+}
+
+/// The drawn thickness of `valve`'s leaflets, mm: the AV leaflets'
+/// [`DesignedParams::av_leaflet_thickness_mm`], the semilunar cusps'
+/// [`DesignedParams::cusp_thickness_mm`].
+#[must_use]
+pub fn thickness_mm(valve: Valve, designed: &DesignedParams) -> f32 {
+    match valve {
+        Valve::Mitral | Valve::Tricuspid => designed.av_leaflet_thickness_mm,
+        Valve::Aortic | Valve::Pulmonic => designed.cusp_thickness_mm,
+    }
+}
+
 /// A pack valve ready to pose (see the module docs).
 #[derive(Debug, Clone)]
 pub struct MeshValve {
@@ -36,7 +62,7 @@ pub struct MeshValve {
     carrier: DiscCarrier,
     /// The disc's vertex indices in the `valve_planes` part.
     disc_vertices: Vec<u32>,
-    /// Half the designed leaflet thickness, mm.
+    /// Half the designed leaflet thickness ([`thickness_mm`]), mm.
     half_thickness_mm: f32,
     /// Bounds of every keyframe's leaflets (rest frame), widened by the half thickness.
     lo: Vec3,
@@ -48,11 +74,32 @@ impl MeshValve {
     /// no valve or the model no discs.
     #[must_use]
     pub fn tricuspid(pack: &AnatomyPack, model: &MotionModel, designed: &DesignedParams) -> Option<Self> {
-        let data = pack.valve("tricuspid")?.clone();
-        Self::new(data, Valve::Tricuspid, model, designed)
+        Self::of(pack, Valve::Tricuspid, model, designed)
     }
 
-    /// `data` on the disc of `valve_id`.
+    /// The pack's valve `valve_id` (file `valve_<`[`pack_name`]`>.bin`) on its disc of the motion
+    /// model; `None` when the pack has no such valve or the model no discs.
+    #[must_use]
+    pub fn of(
+        pack: &AnatomyPack,
+        valve_id: Valve,
+        model: &MotionModel,
+        designed: &DesignedParams,
+    ) -> Option<Self> {
+        let data = pack.valve(pack_name(valve_id))?.clone();
+        Self::new(data, valve_id, model, designed)
+    }
+
+    /// Every valve of the pack that has a disc in the model, in [`Valve::ALL`] order.
+    #[must_use]
+    pub fn all(pack: &AnatomyPack, model: &MotionModel, designed: &DesignedParams) -> Vec<Self> {
+        Valve::ALL
+            .iter()
+            .filter_map(|v| Self::of(pack, *v, model, designed))
+            .collect()
+    }
+
+    /// `data` on the disc of `valve_id`, its leaflets [`thickness_mm`] thick.
     #[must_use]
     pub fn new(
         data: AnimatedValve,
@@ -67,10 +114,11 @@ impl MeshValve {
             .iter()
             .map(|&i| rest.get(i as usize).map(|v| Vec3::from(v.position)))
             .collect::<Option<Vec<Vec3>>>()?;
-        // downstream: the coaptation point lies on the ventricular side of the annulus (the same
-        // side as the RV blood centroid the bake oriented the rim by)
+        // downstream: the coaptation point lies on the downstream side of the annulus (the side
+        // the bake oriented the rim by: the ventricle for an AV valve, the artery for a semilunar
+        // one)
         let carrier = DiscCarrier::new(&data, &disc_rest, data.coaptation_mm)?;
-        let h = designed.av_leaflet_thickness_mm * 0.5;
+        let h = thickness_mm(valve_id, designed) * 0.5;
         let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
         let mut pos = Vec::new();
         for k in 0..data.keyframe_count() {
@@ -164,9 +212,14 @@ pub struct PosedMeshValve {
     /// Per triangle, its first vertex and unit normal: a point farther than the half thickness
     /// from the plane is rejected before the closest-point test.
     planes: Vec<(Vec3, Vec3)>,
+    /// Per triangle, its bounds widened by the half thickness: a point outside is rejected first.
+    tri_boxes: Vec<(Vec3, Vec3)>,
     lo: Vec3,
     hi: Vec3,
     half_thickness_mm: f32,
+    /// Scratch kept between updates (no allocation per re-pose once warm).
+    ranges: Vec<([usize; 3], [usize; 3])>,
+    fill: Vec<u32>,
 }
 
 impl PosedMeshValve {
@@ -184,6 +237,11 @@ impl PosedMeshValve {
         self.planes.extend(tris.iter().map(|t| {
             let [a, b, c] = t.map(|i| self.positions[i as usize]);
             (a, (b - a).cross(c - a).normalize_or_zero())
+        }));
+        self.tri_boxes.clear();
+        self.tri_boxes.extend(tris.iter().map(|t| {
+            let [a, b, c] = t.map(|i| self.positions[i as usize]);
+            (a.min(b).min(c) - Vec3::splat(h), a.max(b).max(c) + Vec3::splat(h))
         }));
         let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
         for t in tris {
@@ -207,8 +265,11 @@ impl PosedMeshValve {
             };
             (c(a), c(b))
         };
-        let mut counts = vec![0u32; cells + 1];
-        let mut ranges = Vec::with_capacity(tris.len());
+        let mut counts = std::mem::take(&mut self.cell_start);
+        counts.clear();
+        counts.resize(cells + 1, 0);
+        let mut ranges = std::mem::take(&mut self.ranges);
+        ranges.clear();
         for t in tris {
             let [a, b, c] = t.map(|i| self.positions[i as usize]);
             let (r0, r1) = cell_range(
@@ -229,7 +290,9 @@ impl PosedMeshValve {
         for c in 1..counts.len() {
             counts[c] += counts[c - 1];
         }
-        let mut fill = counts.clone();
+        let mut fill = std::mem::take(&mut self.fill);
+        fill.clear();
+        fill.extend_from_slice(&counts);
         self.cell_tris.clear();
         self.cell_tris.resize(*counts.last().unwrap_or(&0) as usize, 0);
         for (ti, (r0, r1)) in ranges.iter().enumerate() {
@@ -244,6 +307,8 @@ impl PosedMeshValve {
             }
         }
         self.cell_start = counts;
+        self.ranges = ranges;
+        self.fill = fill;
     }
 
     /// The posed rest-frame positions.
@@ -273,6 +338,10 @@ impl PosedMeshValve {
         self.cell_tris[self.cell_start[c] as usize..self.cell_start[c + 1] as usize]
             .iter()
             .any(|&t| {
+                let (blo, bhi) = self.tri_boxes[t as usize];
+                if !(x.cmpge(blo).all() && x.cmple(bhi).all()) {
+                    return false;
+                }
                 let (p, n) = self.planes[t as usize];
                 // a degenerate triangle (zero normal) always goes on to the exact test
                 if (x - p).dot(n).abs() > h {

@@ -96,8 +96,10 @@ impl HeartSimApp {
             self.settings.wall_motion,
             self.settings.wall_motion_exaggeration,
         );
-        // the measured tricuspid valve's layer switch is stored with the preferences (B35)
-        h.set_tricuspid_valve_visible(self.settings.tricuspid_valve);
+        // the valve layers' switches are stored with the preferences (B35, B36)
+        for (valve, on) in valve_switches(&self.settings) {
+            h.set_valve_visible(valve, on);
+        }
     }
 
     /// After the UI: what the switch, the slider and the valve layer changed goes back to the
@@ -111,12 +113,19 @@ impl HeartSimApp {
             self.settings.wall_motion = on;
             self.settings.wall_motion_exaggeration = exaggeration;
         }
-        if let Some(on) = self
-            .heart
-            .as_ref()
-            .and_then(crate::heart_view::HeartView::tricuspid_valve_visible)
-        {
-            self.settings.tricuspid_valve = on;
+        if let Some(h) = &self.heart {
+            use heartsim_ecg::Valve;
+            let s = &mut self.settings;
+            for (valve, slot) in [
+                (Valve::Mitral, &mut s.mitral_valve),
+                (Valve::Tricuspid, &mut s.tricuspid_valve),
+                (Valve::Aortic, &mut s.aortic_valve),
+                (Valve::Pulmonic, &mut s.pulmonary_valve),
+            ] {
+                if let Some(on) = h.valve_visible(valve) {
+                    *slot = on;
+                }
+            }
         }
     }
 
@@ -146,4 +155,15 @@ impl HeartSimApp {
             .unwrap_or_default();
         self.vector.sync(dipole, &loop_mv);
     }
+}
+
+/// The stored switch of each valve layer (B35, B36), `Valve::ALL` order.
+fn valve_switches(s: &crate::settings::Settings) -> [(heartsim_ecg::Valve, bool); 4] {
+    use heartsim_ecg::Valve;
+    [
+        (Valve::Mitral, s.mitral_valve),
+        (Valve::Tricuspid, s.tricuspid_valve),
+        (Valve::Aortic, s.aortic_valve),
+        (Valve::Pulmonic, s.pulmonary_valve),
+    ]
 }

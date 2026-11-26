@@ -81,9 +81,15 @@ pub struct Settings {
     /// columns it records are the ones the full trace records; a time read from the trace is then
     /// good to 50 ms. Off by default.
     pub echo_fast_mmode: bool,
-    /// Draw the measured tricuspid valve (brief B35, the "Tricuspid valve" layer of *Layers and
-    /// view*). Off by default: it is the only valve with leaflets in the 3-D heart.
+    /// Draw the measured tricuspid valve (brief B35, the "Tricuspid valve" layer of *Anatomy and
+    /// camera*). Off by default. A settings file from 0.25.0 keeps its value.
     pub tricuspid_valve: bool,
+    /// Draw the designed mitral, aortic and pulmonary valves (brief B36, the "Mitral valve",
+    /// "Aortic valve" and "Pulmonary valve" layers). Off by default: designed shapes, not reviewed
+    /// by a clinician.
+    pub mitral_valve: bool,
+    pub aortic_valve: bool,
+    pub pulmonary_valve: bool,
 }
 
 /// The collapsible sections of the Simulator's left panel and whether each is open.
@@ -173,6 +179,9 @@ impl Default for Settings {
             simulator_sections: SimulatorSections::default(),
             echo_fast_mmode: false,
             tricuspid_valve: false,
+            mitral_valve: false,
+            aortic_valve: false,
+            pulmonary_valve: false,
         }
     }
 }
@@ -558,6 +567,9 @@ mod tests {
             },
             echo_fast_mmode: true,
             tricuspid_valve: true,
+            mitral_valve: true,
+            aortic_valve: false,
+            pulmonary_valve: true,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
@@ -582,6 +594,21 @@ mod tests {
         assert!(!old.tricuspid_valve);
         let on: Settings = ron::from_str("(tricuspid_valve: true)").expect("settings load");
         assert!(on.tricuspid_valve);
+    }
+
+    /// B36: the designed valves' layers are off by default; a 0.25.0 settings file (with
+    /// `tricuspid_valve` and without the three new fields) loads with its tricuspid value.
+    #[test]
+    fn the_designed_valve_layers_are_off_by_default_and_a_0_25_settings_file_loads() {
+        let d = Settings::default();
+        assert!(!(d.mitral_valve || d.aortic_valve || d.pulmonary_valve));
+        let old: Settings =
+            ron::from_str("(wall_motion: true, echo_fast_mmode: true, tricuspid_valve: true)")
+                .expect("0.25.0 settings");
+        assert!(old.tricuspid_valve);
+        assert!(!(old.mitral_valve || old.aortic_valve || old.pulmonary_valve));
+        let on: Settings = ron::from_str("(aortic_valve: true)").expect("settings load");
+        assert!(on.aortic_valve && !on.mitral_valve);
     }
 
     /// B30: wall motion is on at 1x by default, also for settings saved before it existed.

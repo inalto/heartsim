@@ -93,6 +93,13 @@ pub struct LeafletValve {
 }
 
 const RIM_BINS: usize = 72;
+
+/// Valves whose designed cone the echo keeps drawing even when the pack has a mesh of them (the 3-D
+/// heart still draws the mesh; B35's option (b)). Empty: brief B36 tried the pulmonary valve here
+/// when its view's slice ran over the 10 % cost gate, and the slice stayed about as slow with the
+/// cone (the extra cost there is not the pulmonary mesh's), so every mesh is drawn.
+/// `tests/designed_valves.rs` checks a listed valve's cone against its mesh.
+pub const ECHO_CONE_VALVES: [Valve; 0] = [];
 /// The subcostal window lies this far below the lowest midline sternal bone, mm. **Designed**.
 const SUBCOSTAL_BELOW_XIPHOID_MM: f32 = 35.0;
 /// The apical start pose is the candidate nearest the LV long axis among those whose start
@@ -190,11 +197,12 @@ impl LeafletValve {
 }
 
 /// The designed parts of one instant: each valve's cone posed ([`LeafletValve::pose`], in
-/// [`EchoAnatomy::valves`] order) and the measured valve posed ([`PosedMeshValve`]).
+/// [`EchoAnatomy::valves`] order; only the cones of valves without a mesh are drawn) and each
+/// mesh valve posed ([`PosedMeshValve`], in [`EchoAnatomy::mesh_valves`] order).
 #[derive(Debug, Clone, Default)]
 pub struct Posed {
     pub cones: Vec<Vec<Vec2>>,
-    pub mesh: PosedMeshValve,
+    pub meshes: Vec<PosedMeshValve>,
 }
 
 /// A tapered capsule (papillary muscle, moderator band) in rest coordinates.
@@ -232,9 +240,12 @@ pub struct EchoAnatomy {
     heart: LabelVolume,
     thorax: LabelVolume,
     valves: Vec<LeafletValve>,
-    /// The pack's measured valve (the tricuspid, brief B35), which replaces that valve's designed
-    /// cone in the labels; `None` for a pack without one.
-    mesh_valve: Option<MeshValve>,
+    /// The pack's animated valves (the measured tricuspid, brief B35; the designed mitral, aortic
+    /// and pulmonary, brief B36), in [`Valve::ALL`] order: each replaces its valve's cone in the
+    /// labels. Empty for a pack without valves.
+    mesh_valves: Vec<MeshValve>,
+    /// Per [`Valve::index`], whether that valve's cone is drawn (it has no mesh valve).
+    cone_drawn: [bool; 4],
     /// Anterolateral, posteromedial.
     papillary: [Capsule; 2],
     moderator: Capsule,
@@ -310,14 +321,22 @@ impl EchoAnatomy {
         let ao_c = blood(Label::AortaLumen)?;
         let pa_c = blood(Label::PulmonaryArteryLumen)?;
         let valves = leaflet_valves(model, &designed, [lv_c, rv_c, ao_c, pa_c])?;
-        let mesh_valve = MeshValve::tricuspid(pack, model, &designed);
+        let mesh_valves: Vec<MeshValve> = MeshValve::all(pack, model, &designed)
+            .into_iter()
+            .filter(|m| !ECHO_CONE_VALVES.contains(&m.valve_id))
+            .collect();
+        let mut cone_drawn = [true; 4];
+        for m in &mesh_valves {
+            cone_drawn[m.valve_id.index()] = false;
+        }
+        // the box of what is drawn: the cones still drawn and the mesh valves at any opening
         let (mut valves_lo, mut valves_hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
-        for v in &valves {
+        for v in valves.iter().filter(|v| cone_drawn[v.valve.index()]) {
             let r = Vec3::splat(v.bound_radius_mm());
             valves_lo = valves_lo.min(v.centre_mm - r);
             valves_hi = valves_hi.max(v.centre_mm + r);
         }
-        if let Some(m) = &mesh_valve {
+        for m in &mesh_valves {
             let (lo, hi) = m.bounds_mm();
             valves_lo = valves_lo.min(lo);
             valves_hi = valves_hi.max(hi);
@@ -335,7 +354,8 @@ impl EchoAnatomy {
             heart,
             thorax,
             valves,
-            mesh_valve,
+            mesh_valves,
+            cone_drawn,
             papillary,
             moderator,
             skin,
@@ -363,18 +383,31 @@ impl EchoAnatomy {
         &self.thorax
     }
 
-    /// The leaflets of each valve, in [`Valve::ALL`] order (the designed cones; for the valve the
-    /// pack has a measured mesh of, the cone still gives the valve's centre, axis and reach but is
-    /// not drawn: [`Self::mesh_valve`] is).
+    /// The leaflets of each valve, in [`Valve::ALL`] order (the designed cones; for a valve the
+    /// pack has a mesh of, the cone still gives the valve's centre, axis and reach but is not
+    /// drawn: [`Self::mesh_valve`] is).
     #[must_use]
     pub fn valves(&self) -> &[LeafletValve] {
         &self.valves
     }
 
-    /// The measured valve that replaces its designed cone in the labels (brief B35), if any.
+    /// The pack's animated valves that replace their cones in the labels (briefs B35, B36), in
+    /// [`Valve::ALL`] order.
     #[must_use]
-    pub fn mesh_valve(&self) -> Option<&MeshValve> {
-        self.mesh_valve.as_ref()
+    pub fn mesh_valves(&self) -> &[MeshValve] {
+        &self.mesh_valves
+    }
+
+    /// The mesh valve of `valve`, if the pack has one.
+    #[must_use]
+    pub fn mesh_valve(&self, valve: Valve) -> Option<&MeshValve> {
+        self.mesh_valves.iter().find(|m| m.valve_id == valve)
+    }
+
+    /// Whether `valve` is drawn by its designed cone (the pack has no mesh of it).
+    #[must_use]
+    pub fn cone_drawn(&self, valve: Valve) -> bool {
+        self.cone_drawn[valve.index()]
     }
 
     /// The designed parts posed at `openings` (per [`Valve::index`]): what
@@ -386,15 +419,22 @@ impl EchoAnatomy {
         p
     }
 
-    /// [`Self::pose`] into an existing value (the mesh valve is re-posed only when its opening
-    /// changed).
+    /// [`Self::pose`] into an existing value (each mesh valve's grid is rebuilt only when its own
+    /// opening changed).
     pub fn repose(&self, openings: &[f32; 4], posed: &mut Posed) {
         posed.cones.clear();
+        posed.cones.extend(self.valves.iter().map(|v| {
+            if self.cone_drawn[v.valve.index()] {
+                v.pose(openings[v.valve.index()])
+            } else {
+                Vec::new()
+            }
+        }));
         posed
-            .cones
-            .extend(self.valves.iter().map(|v| v.pose(openings[v.valve.index()])));
-        if let Some(m) = &self.mesh_valve {
-            posed.mesh.update(m, openings[m.valve_id.index()]);
+            .meshes
+            .resize_with(self.mesh_valves.len(), PosedMeshValve::default);
+        for (m, p) in self.mesh_valves.iter().zip(&mut posed.meshes) {
+            p.update(m, openings[m.valve_id.index()]);
         }
     }
 
@@ -483,19 +523,19 @@ impl EchoAnatomy {
         Some(label)
     }
 
-    /// Whether rest point `x` is in a posed leaflet: the measured valve's mesh for its valve, the
-    /// designed cones for the others (no blood or bounds check).
+    /// Whether rest point `x` is in a posed leaflet: each mesh valve's posed mesh, the designed
+    /// cones of the valves without one (no blood or bounds check).
     #[must_use]
     pub fn leaflet_at(&self, x: Vec3, posed: &Posed) -> bool {
-        let skip = self.mesh_valve.as_ref().map(|m| m.valve_id);
         for (v, segs) in self.valves.iter().zip(&posed.cones) {
-            if Some(v.valve) != skip && v.contains_posed(x, segs) {
+            if self.cone_drawn[v.valve.index()] && v.contains_posed(x, segs) {
                 return true;
             }
         }
-        self.mesh_valve
-            .as_ref()
-            .is_some_and(|m| posed.mesh.contains(m, x))
+        self.mesh_valves
+            .iter()
+            .zip(&posed.meshes)
+            .any(|(m, p)| p.contains(m, x))
     }
 
     /// The baked thorax label at `x` (already moved back by the thorax's displacement), without
@@ -751,17 +791,37 @@ impl EchoAnatomy {
 }
 
 /// Per thorax (x, y) column, the largest z of any heart-box voxel that is not outside, widened in
-/// x and y by `margin_mm`; −∞ where there is none.
+/// x and y by `margin_mm`; −∞ where there is none. The silhouette ends at the top of the heart
+/// proper: voxels above the highest one that is neither pulmonary artery nor pericardium are left
+/// out. The pulmonary trunk is continued above the heart by design (brief B36,
+/// `docs/anatomy-pack.md`), and counted here it and its pericardium raised the silhouette's top
+/// and brought the lung back over the suprasternal path.
 #[allow(clippy::cast_possible_wrap)] // grid dimensions are a few hundred
 fn heart_front(heart: &LabelVolume, thorax: &LabelVolume, margin_mm: f32) -> Vec<f32> {
     let [nx, ny] = [thorax.dims[0] as usize, thorax.dims[1] as usize];
     let mut front = vec![f32::NEG_INFINITY; nx * ny];
+    let trunk_or_sac = [
+        Label::Outside as u8,
+        Label::Pericardium as u8,
+        Label::PulmonaryArteryWall as u8,
+        Label::PulmonaryArteryLumen as u8,
+    ];
+    let top_y = (0..heart.len())
+        .filter(|&idx| !trunk_or_sac.contains(&heart.labels[idx]))
+        .map(|idx| {
+            let [i, j, k] = heart.coords(idx);
+            heart.centre(i, j, k).y
+        })
+        .fold(f32::NEG_INFINITY, f32::max);
     for idx in 0..heart.len() {
         if heart.labels[idx] == Label::Outside as u8 {
             continue;
         }
         let [i, j, k] = heart.coords(idx);
         let c = heart.centre(i, j, k);
+        if c.y > top_y {
+            continue;
+        }
         let q = (c - thorax.origin_mm) / thorax.spacing_mm;
         if q.x < 0.0 || q.y < 0.0 || q.x as usize >= nx || q.y as usize >= ny {
             continue;
@@ -927,9 +987,15 @@ fn leaflet_valves(
                 // anterior leaflet on the aortic side; solve the closed triangle in that plane
                 let ant = to2(centres[Valve::Aortic.index()]).normalize_or(Vec2::X);
                 let (ra, rp) = (at(&centred, ant), at(&centred, -ant));
-                let la = (d.mitral_anterior_length_mm - d.av_coaptation_mm).max(1.0);
-                let lp = (d.mitral_posterior_length_mm - d.av_coaptation_mm).max(1.0);
                 let dd = ra + rp;
+                // the designed overlap, or the most the two leaflets allow on this ring (the rule of
+                // the designed mitral mesh, heartsim_geometry::valve_design::mitral)
+                let c = d
+                    .mitral_coaptation_mm
+                    .min(0.5 * (d.mitral_anterior_length_mm + d.mitral_posterior_length_mm - dd) - 0.3)
+                    .max(0.5);
+                let la = (d.mitral_anterior_length_mm - c).max(1.0);
+                let lp = (d.mitral_posterior_length_mm - c).max(1.0);
                 let x = (lp * lp - la * la + dd * dd) / (2.0 * dd);
                 let h2 = lp * lp - x * x;
                 let (x, h) = if h2 > 0.0 && x > 0.0 && x < dd {
@@ -941,7 +1007,7 @@ fn leaflet_valves(
             }
             Valve::Tricuspid => {
                 let r = centred.iter().sum::<f32>() / RIM_BINS as f32;
-                let l = (d.tricuspid_height_mm - d.av_coaptation_mm).max(1.0);
+                let l = (d.tricuspid_height_mm - d.tricuspid_coaptation_mm).max(1.0);
                 (
                     Vec2::ZERO,
                     (l * l - r * r).max(0.0).sqrt(),

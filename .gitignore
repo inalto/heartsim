@@ -39,3 +39,9 @@ Thumbs.db
 
 # Tricuspid benchmark dataset (Laurence et al. 2021, 272 MB): kept locally, only the article PDF is committed
 /docs/research/tricuspid/DataInBrief_TricuspidValveBenchmark/
+
+# Publisher PDFs kept for reading only (all rights reserved): never commit
+/docs/research/aortic/j.jbiomech.2012.07.017.pdf
+/docs/research/aortic/ezx456.pdf
+/docs/research/pulmonary/ca.23959.pdf
+/docs/research/mitral/01.CIR.41.3.459.pdf

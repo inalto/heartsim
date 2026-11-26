@@ -1092,8 +1092,8 @@ pub fn bake_heart(mesh: &TetMesh, opts: HeartOptions) -> Result<BakedHeart> {
             merge(&std::iter::once(m).chain(extra).collect::<Vec<_>>())
         }
     };
-    // Only the parts of the Rodero mesh are drawn, nothing designed: the vessels stop where the
-    // dataset crops them, and the valve planes and vessel inlets are the dataset's own thin lids.
+    // Only the parts of the Rodero mesh are drawn, nothing designed but the pulmonary trunk's
+    // continuation (below): the other vessels stop where the dataset crops them, and the valve planes and vessel inlets are the dataset's own thin lids.
     // Each part is the boundary of its own tag set; the atria include their border rings (inlet
     // tag + `BORDER_OFFSET`), the collar of atrial wall round each vein mouth. Render only: the
     // cell sampling above is unchanged.
@@ -1138,7 +1138,15 @@ pub fn bake_heart(mesh: &TetMesh, opts: HeartOptions) -> Result<BakedHeart> {
         ),
     );
     add("aorta", MeshKind::Vessel, part(&[tag::AORTA]));
-    add("pulmonary_artery", MeshKind::Vessel, part(&[tag::PA]));
+    // the one designed part: the pulmonary trunk continued beyond its crop, the same tube as the
+    // label volume's (`volumes::TubeExtension`), so the designed pulmonary cusps stand inside it
+    let trunk = super::volumes::pulmonary_trunk_extension(mesh, &to_canon)
+        .context("pulmonary artery: no cut end to continue")?;
+    add(
+        "pulmonary_artery",
+        MeshKind::Vessel,
+        merge(&[part(&[tag::PA]), trunk.mesh()]),
+    );
     add("svc", MeshKind::Vessel, parts(&[tag::SVC]));
     add("ivc", MeshKind::Vessel, parts(&[tag::IVC]));
     add(

@@ -34,7 +34,7 @@ fn valve() -> &'static AnimatedValve {
 
 fn mesh() -> &'static MeshValve {
     anatomy()
-        .mesh_valve()
+        .mesh_valve(Valve::Tricuspid)
         .expect("the echo anatomy uses the measured valve")
 }
 
@@ -555,18 +555,23 @@ fn the_echo_labels_leaflet_exactly_within_the_thickness_of_the_posed_mesh() {
                 if !(x.cmpge(lo).all() && x.cmple(hi).all()) {
                     continue;
                 }
-                // only blood is overdrawn by leaflets; points the other valves' cones hold are not
-                // this valve's business
+                // only blood is overdrawn by leaflets; points the other valves hold (their meshes,
+                // or the cones of valves without one) are not this valve's business
                 let Some(base_label) = vol.get(x).and_then(Label::from_u8) else {
                     continue;
                 };
                 if !base_label.is_blood() {
                     continue;
                 }
-                let others = a
-                    .valves()
+                let others = a.valves().iter().any(|c| {
+                    c.valve != Valve::Tricuspid
+                        && a.cone_drawn(c.valve)
+                        && c.contains(x, st.openings()[c.valve.index()])
+                }) || a
+                    .mesh_valves()
                     .iter()
-                    .any(|c| c.valve != Valve::Tricuspid && c.contains(x, st.openings()[c.valve.index()]));
+                    .zip(&st.posed().meshes)
+                    .any(|(m, p)| m.valve_id != Valve::Tricuspid && p.contains(m, x));
                 if others {
                     continue;
                 }
