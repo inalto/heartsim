@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-11-26
+
 ### Added
 - Designed mitral, aortic and pulmonary valves in the 3-D heart (brief B36): *Mitral valve*, *Aortic valve* and *Pulmonary valve*
   layers (Italian *Valvola mitrale*, *Valvola aortica*, *Valvola polmonare*) in *Anatomy and camera*, off by default and saved
