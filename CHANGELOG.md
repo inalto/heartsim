@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-11-26
+
 ### Added
 - A measured tricuspid valve in the 3-D heart (brief B35): a *Tricuspid valve* layer (Italian *Valvola tricuspide*) in *Anatomy
   and camera*, off by default and saved with the preferences. It shows three leaflets and their chordae from one donor valve, Texas
