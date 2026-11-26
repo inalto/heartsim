@@ -299,6 +299,7 @@ work (MIT OR Apache-2.0).
 ## Legal
 
 Nothing in any pack may come from `epicardio/` or `epicardio-extracted/` (proprietary, git-ignored, study only).
-Only CC BY / CC0 / MIT / BSD / Apache material ships; every pack carries its `LICENSE` with the attribution its sources
+Only CC BY / CC0 / MIT / BSD / Apache material ships, or non-commercial material (CC BY-NC, CC BY-NC-SA; marked as such, and
+binding on everyone who receives the pack; none as of 0.25.0); no-derivatives material never does. Every pack carries its `LICENSE` with the attribution its sources
 require (creators, record DOI, licence link, changes made) and a row in `ASSETS-LICENSES.md`. The downloaded sources stay in
 the git-ignored `assets/anatomy-src/`; only the baked pack is committed.

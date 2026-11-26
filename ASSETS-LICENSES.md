@@ -1,7 +1,10 @@
 # Asset licences
 
 Every non-code asset shipped with heartsim is listed here with its origin and licence. Only CC BY, CC BY-SA (noted), CC0, OFL and
-public-domain material may be added. **Nothing from the Epicardio Simulation program (`epicardio/`, `epicardio-extracted/`) is
+public-domain material may be added, or, since 2026-11-26, material under a non-commercial licence (CC BY-NC, CC BY-NC-SA): heartsim
+is a non-commercial project. Such a row says **non-commercial** in its licence column, and the restriction then applies to everyone
+who receives the pack that holds the asset, whatever the licence of the code. No-derivatives (ND) material is never added. No
+non-commercial asset is shipped as of 0.25.0. **Nothing from the Epicardio Simulation program (`epicardio/`, `epicardio-extracted/`) is
 used; those folders are proprietary, git-ignored, and exist only for study.**
 
 | asset | path | origin | licence | notes |

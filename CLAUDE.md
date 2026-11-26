@@ -7,7 +7,9 @@ work packages in `docs/briefs/`.
 ## Non-negotiables
 1. **Legal**: `epicardio/` and `epicardio-extracted/` contain a proprietary third-party program and data extracted from it. They are
    git-ignored and exist only for study. Never copy meshes, textures, parameter tables, text, icons, sounds or code from them into the
-   product. Re-derive physiology parameters from the cited literature (`docs/research/`). Only CC-BY / MIT / BSD / Apache assets ship.
+   product. Re-derive physiology parameters from the cited literature (`docs/research/`). Only CC-BY / MIT / BSD / Apache assets ship,
+   or, since 2026-11-26 (heartsim is non-commercial), CC BY-NC / CC BY-NC-SA ones in any pack: each is marked **non-commercial** in
+   `ASSETS-LICENSES.md`, the pack `LICENSE` and the About credits. No-derivatives (ND) terms never ship.
 2. **Determinism**: engines in `heartsim-sim` must be deterministic for a given scenario + seed, fixed-step, free of I/O and GPU calls.
    Rendering interpolates; it never drives the simulation.
 3. **One source of truth**: beat timing comes from `heartsim_sim::TimingEngine` events; the ECG strip and the 3-D colour map are both

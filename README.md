@@ -126,6 +126,6 @@ the items on the [known-issues page](docs/book/src/known-issues.md) by someone w
 
 ## Licence
 
-Code: MIT OR Apache-2.0. Assets: see [ASSETS-LICENSES.md](ASSETS-LICENSES.md) (only CC BY / CC0 / OFL material is shipped).
+Code: MIT OR Apache-2.0. Assets: see [ASSETS-LICENSES.md](ASSETS-LICENSES.md) (only CC BY / CC0 / OFL material is shipped as of 0.25.0; non-commercial material may be added and is marked there).
 
 The tricuspid valve in the default anatomy pack is fitted from Texas TriValve 1.1 (Mathur, Meador, Malinowski, Jazwiec, Timek and Rausch, *Engineering with Computers* 2022, doi:10.1007/s00366-022-01659-w; Soft Tissue Biomechanics Laboratory, CC BY 4.0). See [docs/research/tricuspid-valve-source.md](docs/research/tricuspid-valve-source.md).
