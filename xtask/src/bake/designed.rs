@@ -278,8 +278,11 @@ mod tests {
     use super::*;
 
     /// Brief B36: the designed valves baked from the committed default pack are the committed
-    /// files, byte for byte (the generator is a pure function of the pack; the generator's own
-    /// test checks that two runs agree).
+    /// files (the generator is a pure function of the pack; the generator's own test checks that
+    /// two runs agree). Byte for byte on the platform the pack is baked on (Linux x86-64). On the
+    /// others `sin`, `cos`, `atan2` and `powf` may differ in the last bit, and the containment fit
+    /// works in discrete steps, so only the structure is compared there: the app reads the
+    /// committed files and never bakes.
     #[test]
     fn the_designed_bake_reproduces_the_committed_files() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
@@ -290,7 +293,18 @@ mod tests {
         for v in &baked.valves {
             let file = heartsim_geometry::pack::valve_file(&v.name);
             let committed = std::fs::read(dir.join(&file)).expect("committed valve");
-            assert!(v.encode() == committed, "{file} is not what the bake gives");
+            if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+                assert!(v.encode() == committed, "{file} is not what the bake gives");
+            } else {
+                let c = AnimatedValve::decode(&committed).expect("committed valve decodes");
+                assert_eq!(v.name, c.name);
+                assert_eq!(v.leaflet_names, c.leaflet_names, "{file}: leaflets");
+                assert_eq!(v.rest_mm.len(), c.rest_mm.len(), "{file}: vertices");
+                assert_eq!(v.leaflet_vertices, c.leaflet_vertices, "{file}: leaflet vertices");
+                assert_eq!(v.triangles, c.triangles, "{file}: triangles");
+                assert_eq!(v.chordae.len(), c.chordae.len(), "{file}: chordae");
+                assert_eq!(v.keyframe_count(), c.keyframe_count(), "{file}: shapes");
+            }
         }
     }
 }
