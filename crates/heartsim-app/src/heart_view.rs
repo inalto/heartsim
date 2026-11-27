@@ -529,7 +529,7 @@ impl HeartView {
             })
             .collect();
         // the pack's valves with leaflets (the measured tricuspid, B35; the designed mitral,
-        // aortic and pulmonary, B36): a layer each, off until asked for
+        // aortic and pulmonary, B36): a layer each (on at start-up, B37; the settings decide)
         let designed = DesignedParams::default();
         let valve_layers: Vec<ValveLayer> = motion
             .as_ref()
@@ -572,14 +572,18 @@ impl HeartView {
             valves: Vec::new(),
         });
         let mut panel = AnatomyPanelState::new(layers.iter().map(|l| (l.name.clone(), 1.0)));
-        // the torso: off until asked for, and translucent like the illustration when on
+        // start-up layers (B37): the valve planes and the torso off, the torso translucent like the
+        // illustration when on; the valve layers on, as the settings then set them
         if let Some(t) = panel.layers.last_mut() {
             t.visible = false;
             t.alpha = 0.2;
         }
+        if let Some(t) = panel.layers.iter_mut().find(|l| l.name == "valve_planes") {
+            t.visible = false;
+        }
         for v in &valve_layers {
             if let Some(t) = panel.layers.iter_mut().find(|l| l.name == valve_layer(v.valve)) {
-                t.visible = false;
+                t.visible = true;
             }
         }
         let n = engine.cloud().len();
@@ -1831,6 +1835,20 @@ mod tests {
             t <= 2.0,
             "the clicked cell fires first ({t} ms after the stimulus)"
         );
+    }
+
+    /// B37: a new view on the default pack starts with the valve planes and the torso hidden, and
+    /// the four valve layers shown.
+    #[test]
+    fn a_new_heart_view_starts_with_the_valves_on_and_the_planes_and_torso_off() {
+        use heartsim_ecg::Valve;
+        let heart = HeartView::from_pack(pack(), &TimingParams::default());
+        let visible = |name: &str| heart.panel.layer(name).map(|l| l.visible);
+        assert_eq!(visible("valve_planes"), Some(false));
+        assert_eq!(visible("torso"), Some(false));
+        for v in [Valve::Tricuspid, Valve::Mitral, Valve::Aortic, Valve::Pulmonic] {
+            assert_eq!(heart.valve_visible(v), Some(true), "{v:?}");
+        }
     }
 
     /// B27 part B: the default pack's valve planes split into the four valves, each where the

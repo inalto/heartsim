@@ -59,7 +59,8 @@ without the regional detail of each segment.
 ## The tricuspid valve layer
 
 The 3-D heart can show a tricuspid valve with three leaflets and their cords. Open *Anatomy and camera* in the left panel and
-tick **Tricuspid valve** in the layers list. It is off by default, and your choice is saved with your preferences.
+tick **Tricuspid valve** in the layers list. It is on when the program starts, and your choice is saved with your preferences.
+A settings file saved by an earlier version has its valve layers switched on once; after that your own choice is kept.
 
 The leaflets are one donor's valve fitted to this heart. The donor is Texas TriValve 1.1, a finite-element model of a healthy
 human tricuspid valve (Mathur et al. 2022, CC BY 4.0). Its leaflets were scaled and placed on this heart's tricuspid ring. Its
@@ -78,8 +79,8 @@ measurement of a patient's valve, and it has not been reviewed by a clinician.
 ## The mitral, aortic and pulmonary valve layers
 
 The 3-D heart can also show a mitral, an aortic and a pulmonary valve. Open *Anatomy and camera* in the left panel and tick
-**Mitral valve**, **Aortic valve** or **Pulmonary valve** in the layers list. Each is off by default, and your choice is saved with
-your preferences. A settings file from 0.25.0 still loads.
+**Mitral valve**, **Aortic valve** or **Pulmonary valve** in the layers list. Each is on when the program starts, and your choice is
+saved with your preferences. A settings file from 0.25.0 or 0.26.0 still loads; its valve layers are switched on once.
 
 These three valves are **designed shapes**, not measured ones. Heartsim generated each one by rule, from published dimensions, on
 this heart's own valve rings. They are not a person's anatomy. They were not taken from any model, mesh or image, and **no

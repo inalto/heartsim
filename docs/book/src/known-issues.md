@@ -138,7 +138,7 @@ review before they are taught as more than a schematic.
 
 * Many parameters are **designed**, not sourced (contraction timing, filling phases, the shape of the movement, the quivers,
   the respiratory shift); `crates/heartsim-echo/src/params.rs` marks each one.
-* Valve leaflets in the 3-D heart only when that valve's layer is shown (see *The tricuspid valve (B35)* and *The designed mitral,
+* Valve leaflets in the 3-D heart are shown from start-up (B37); a user who switches a valve layer off sees the flat ring again (see *The tricuspid valve (B35)* and *The designed mitral,
   aortic and pulmonary valves (B36)* below). On the Echo page the leaflets are drawn whether or not the layers are shown. The
   tricuspid leaflets are measured; the other three are designed. No papillary muscles or pericardium. No pressure, flow or Doppler.
 * The right ventricle has no closed cavity, so there is no RV volume or RVEF read-out; ischaemia reduces the left ventricle's

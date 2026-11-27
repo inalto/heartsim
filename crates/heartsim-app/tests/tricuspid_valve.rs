@@ -1,5 +1,5 @@
 //! Brief B35 at app level (no GPU): the "Tricuspid valve" layer of *Layers and view* exists in
-//! English and Italian, is off by default, and its state survives a restart (the preferences);
+//! English and Italian, is on at start-up (B37), and its state survives a restart (the preferences);
 //! a pack without the valve draws the heart as before; the valve the 3-D heart would draw is open
 //! or shut exactly as the echo cross-section's tricuspid valve at the same instant.
 #![allow(
@@ -51,28 +51,28 @@ fn start(settings: &Settings) -> HeartView {
 }
 
 #[test]
-fn the_layer_toggle_is_translated_off_by_default_and_survives_a_restart() {
+fn the_layer_toggle_is_translated_on_at_start_up_and_survives_a_restart() {
     let settings = Settings::default();
-    assert!(!settings.tricuspid_valve, "off by default");
+    assert!(settings.tricuspid_valve, "on at start-up");
     let mut h = harness(start(&settings), "en");
     h.run();
     let _ = h.get_by_label("Tricuspid valve");
-    assert_eq!(h.state().heart.tricuspid_valve_visible(), Some(false));
-    // switched on in the panel, then stored as the app does after the UI
+    assert_eq!(h.state().heart.tricuspid_valve_visible(), Some(true));
+    // switched off in the panel, then stored as the app does after the UI
     h.get_by_label("Tricuspid valve").click();
     h.run();
-    assert_eq!(h.state().heart.tricuspid_valve_visible(), Some(true));
+    assert_eq!(h.state().heart.tricuspid_valve_visible(), Some(false));
     let mut stored = settings.clone();
     stored.tricuspid_valve = h.state().heart.tricuspid_valve_visible().unwrap();
     let text = stored.to_storage_string();
     drop(h);
     // a restart: the preferences read back, a new heart view
     let back: Settings = ron::from_str(&text).expect("the stored preferences load");
-    assert!(back.tricuspid_valve);
+    assert!(!back.tricuspid_valve);
     let mut h = harness(start(&back), "it");
     h.run();
     let _ = h.get_by_label("Valvola tricuspide");
-    assert_eq!(h.state().heart.tricuspid_valve_visible(), Some(true));
+    assert_eq!(h.state().heart.tricuspid_valve_visible(), Some(false));
     i18n::set_language("en");
 }
 

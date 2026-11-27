@@ -82,15 +82,27 @@ pub struct Settings {
     /// good to 50 ms. Off by default.
     pub echo_fast_mmode: bool,
     /// Draw the measured tricuspid valve (brief B35, the "Tricuspid valve" layer of *Anatomy and
-    /// camera*). Off by default. A settings file from 0.25.0 keeps its value.
+    /// camera*). On at start-up (B37). A stored `false` is kept once the migration has run.
     pub tricuspid_valve: bool,
-    /// Draw the designed mitral, aortic and pulmonary valves (brief B36, the "Mitral valve",
-    /// "Aortic valve" and "Pulmonary valve" layers). Off by default: designed shapes, not reviewed
-    /// by a clinician.
+    /// Draw the designed mitral valve (brief B36, the "Mitral valve" layer). On at start-up (B37).
+    /// These are designed shapes, not reviewed by a clinician.
     pub mitral_valve: bool,
+    /// Draw the designed aortic valve (brief B36, the "Aortic valve" layer). On at start-up (B37).
     pub aortic_valve: bool,
+    /// Draw the designed pulmonary valve (brief B36, the "Pulmonary valve" layer). On at start-up (B37).
     pub pulmonary_valve: bool,
+    /// The version of the start-up layer defaults that this file was saved under (B37). Missing
+    /// from settings stored before B37, so it reads `0` there (a field default, not the struct's),
+    /// and [`Settings::load`] then switches the four valve layers on once and stores
+    /// [`LAYER_DEFAULTS`]. From then on the stored valve switches are the user's own choices and are
+    /// respected as they are.
+    #[serde(default)]
+    pub layer_defaults: u32,
 }
+
+/// The current start-up layer defaults (B37): the four valve layers on. A settings file with a
+/// smaller [`Settings::layer_defaults`] gets them switched on once when it is loaded.
+pub const LAYER_DEFAULTS: u32 = 1;
 
 /// The collapsible sections of the Simulator's left panel and whether each is open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,10 +190,11 @@ impl Default for Settings {
             wall_motion_exaggeration: 1.0,
             simulator_sections: SimulatorSections::default(),
             echo_fast_mmode: false,
-            tricuspid_valve: false,
-            mitral_valve: false,
-            aortic_valve: false,
-            pulmonary_valve: false,
+            tricuspid_valve: true,
+            mitral_valve: true,
+            aortic_valve: true,
+            pulmonary_valve: true,
+            layer_defaults: LAYER_DEFAULTS,
         }
     }
 }
@@ -193,7 +206,22 @@ impl Settings {
         storage
             .and_then(|s| s.get_string(STORAGE_KEY))
             .and_then(|raw| ron::from_str(&raw).ok())
-            .unwrap_or_default()
+            .map_or_else(Self::default, Self::migrate_layer_defaults)
+    }
+
+    /// Applies the start-up layer defaults (B37) to settings stored under an older set: the four
+    /// valve layers are switched on once, and the file is marked with [`LAYER_DEFAULTS`]. Settings
+    /// already at [`LAYER_DEFAULTS`] are returned unchanged.
+    #[must_use]
+    pub fn migrate_layer_defaults(mut self) -> Self {
+        if self.layer_defaults < LAYER_DEFAULTS {
+            self.tricuspid_valve = true;
+            self.mitral_valve = true;
+            self.aortic_valve = true;
+            self.pulmonary_valve = true;
+            self.layer_defaults = LAYER_DEFAULTS;
+        }
+        self
     }
 
     /// The text written to eframe storage.
@@ -570,9 +598,11 @@ mod tests {
             mitral_valve: true,
             aortic_valve: false,
             pulmonary_valve: true,
+            layer_defaults: LAYER_DEFAULTS,
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);
+        assert_eq!(back.layer_defaults, LAYER_DEFAULTS);
     }
 
     #[test]
@@ -586,29 +616,47 @@ mod tests {
         assert!(off.torso_image_opacity.abs() < f32::EPSILON);
     }
 
-    /// B35: the measured valve's layer is off by default, also for settings saved before it existed.
+    /// B37: all four valve layers are on at start-up, and a new settings file is marked as such.
     #[test]
-    fn the_tricuspid_valve_layer_is_off_by_default_and_older_settings_load_without_it() {
-        assert!(!Settings::default().tricuspid_valve);
-        let old: Settings = ron::from_str("(wall_motion: true)").expect("settings load");
-        assert!(!old.tricuspid_valve);
-        let on: Settings = ron::from_str("(tricuspid_valve: true)").expect("settings load");
-        assert!(on.tricuspid_valve);
+    fn all_four_valve_layers_are_on_by_default() {
+        let d = Settings::default();
+        assert!(d.tricuspid_valve && d.mitral_valve && d.aortic_valve && d.pulmonary_valve);
+        assert_eq!(d.layer_defaults, LAYER_DEFAULTS);
     }
 
-    /// B36: the designed valves' layers are off by default; a 0.25.0 settings file (with
-    /// `tricuspid_valve` and without the three new fields) loads with its tricuspid value.
+    /// B37: settings stored before B37 hold an explicit `false` for the valves they knew. The
+    /// migration that `load` runs switches all four on once and marks the file.
     #[test]
-    fn the_designed_valve_layers_are_off_by_default_and_a_0_25_settings_file_loads() {
-        let d = Settings::default();
-        assert!(!(d.mitral_valve || d.aortic_valve || d.pulmonary_valve));
+    fn a_settings_file_from_before_b37_gets_the_valves_on_once() {
         let old: Settings =
-            ron::from_str("(wall_motion: true, echo_fast_mmode: true, tricuspid_valve: true)")
-                .expect("0.25.0 settings");
-        assert!(old.tricuspid_valve);
-        assert!(!(old.mitral_valve || old.aortic_valve || old.pulmonary_valve));
-        let on: Settings = ron::from_str("(aortic_valve: true)").expect("settings load");
-        assert!(on.aortic_valve && !on.mitral_valve);
+            ron::from_str("(tricuspid_valve: false, mitral_valve: false)").expect("old settings");
+        assert_eq!(
+            old.layer_defaults, 0,
+            "a missing field reads 0, not the struct default"
+        );
+        let migrated = old.migrate_layer_defaults();
+        assert!(migrated.tricuspid_valve && migrated.mitral_valve);
+        assert!(migrated.aortic_valve && migrated.pulmonary_valve);
+        assert_eq!(migrated.layer_defaults, LAYER_DEFAULTS);
+    }
+
+    /// B37: after the migration the user's own choices are stored and respected, not switched on
+    /// again at the next start.
+    #[test]
+    fn a_marked_settings_file_keeps_the_users_valve_choices() {
+        let kept = ron::from_str::<Settings>(&format!(
+            "(layer_defaults: {LAYER_DEFAULTS}, aortic_valve: false)"
+        ))
+        .expect("settings load")
+        .migrate_layer_defaults();
+        assert!(!kept.aortic_valve, "the user's off stays off");
+        assert!(kept.tricuspid_valve && kept.mitral_valve && kept.pulmonary_valve);
+        // a 0.25.0 file with its tricuspid valve off (the three designed valves missing) is migrated too
+        let v025 =
+            ron::from_str::<Settings>("(wall_motion: true, echo_fast_mmode: true, tricuspid_valve: false)")
+                .expect("0.25.0 settings")
+                .migrate_layer_defaults();
+        assert!(v025.tricuspid_valve && v025.mitral_valve && v025.aortic_valve && v025.pulmonary_valve);
     }
 
     /// B30: wall motion is on at 1x by default, also for settings saved before it existed.

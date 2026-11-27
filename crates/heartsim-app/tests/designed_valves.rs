@@ -1,7 +1,7 @@
 //! Brief B36 at app level (no GPU): the "Mitral valve", "Aortic valve" and "Pulmonary valve"
-//! layers of *Anatomy and camera* exist beside "Tricuspid valve" in English and Italian, are off
-//! by default and survive a restart (the preferences); a 0.25.0 settings file loads with its
-//! tricuspid choice; the hint under the toggles says which valve is measured and which designed;
+//! layers of *Anatomy and camera* exist beside "Tricuspid valve" in English and Italian, are on
+//! at start-up (B37) and survive a restart (the preferences); a 0.25.0 settings file gets them on
+//! once; the hint under the toggles says which valve is measured and which designed;
 //! and each valve the 3-D heart would draw has the echo's opening at the same instant.
 #![allow(
     clippy::float_cmp,
@@ -79,7 +79,7 @@ const IT: [(Valve, &str); 4] = [
 ];
 
 #[test]
-fn the_four_toggles_are_translated_off_by_default_and_survive_a_restart() {
+fn the_four_toggles_are_translated_on_at_start_up_and_survive_a_restart() {
     let settings = Settings::default();
     let mut h = harness(start(&settings), "en");
     h.run();
@@ -87,14 +87,14 @@ fn the_four_toggles_are_translated_off_by_default_and_survive_a_restart() {
         let _ = h.get_by_label(label);
         assert_eq!(
             h.state().heart.valve_visible(v),
-            Some(false),
-            "{v:?} off by default"
+            Some(true),
+            "{v:?} on at start-up"
         );
     }
     // the hint under the toggles
     let _ = h.get_by_label_contains("one donor's measured valve");
     let _ = h.get_by_label_contains("designed shapes");
-    // the mitral and the pulmonary switched on, then stored as the app does after the UI
+    // the mitral and the pulmonary switched off, then stored as the app does after the UI
     h.get_by_label("Mitral valve").click();
     h.get_by_label("Pulmonary valve").click();
     h.run();
@@ -107,12 +107,12 @@ fn the_four_toggles_are_translated_off_by_default_and_survive_a_restart() {
     drop(h);
     // a restart: the preferences read back, a new heart view, in Italian
     let back: Settings = ron::from_str(&text).expect("the stored preferences load");
-    assert!(back.mitral_valve && back.pulmonary_valve && !back.aortic_valve && !back.tricuspid_valve);
+    assert!(!back.mitral_valve && !back.pulmonary_valve && back.aortic_valve && back.tricuspid_valve);
     let mut h = harness(start(&back), "it");
     h.run();
     for (v, label) in IT {
         let _ = h.get_by_label(label);
-        let want = matches!(v, Valve::Mitral | Valve::Pulmonic);
+        let want = matches!(v, Valve::Aortic | Valve::Tricuspid);
         assert_eq!(
             h.state().heart.valve_visible(v),
             Some(want),
@@ -124,14 +124,16 @@ fn the_four_toggles_are_translated_off_by_default_and_survive_a_restart() {
 }
 
 #[test]
-fn a_settings_file_from_0_25_0_loads_with_its_tricuspid_choice() {
-    // the fields a 0.25.0 file stores about the valves: the tricuspid switch only
-    let old: Settings = ron::from_str("(wall_motion: true, echo_fast_mmode: false, tricuspid_valve: true)")
-        .expect("a 0.25.0 settings file loads");
+fn a_settings_file_from_0_25_0_gets_the_valves_on_once() {
+    // a 0.25.0 file stores the tricuspid switch (off) and none of the designed valves; the
+    // migration `Settings::load` runs switches all four on
+    let old =
+        ron::from_str::<Settings>("(wall_motion: true, echo_fast_mmode: false, tricuspid_valve: false)")
+            .expect("a 0.25.0 settings file loads")
+            .migrate_layer_defaults();
     let heart = start(&old);
-    assert_eq!(heart.valve_visible(Valve::Tricuspid), Some(true));
-    for v in [Valve::Mitral, Valve::Aortic, Valve::Pulmonic] {
-        assert_eq!(heart.valve_visible(v), Some(false), "{v:?}");
+    for v in [Valve::Tricuspid, Valve::Mitral, Valve::Aortic, Valve::Pulmonic] {
+        assert_eq!(heart.valve_visible(v), Some(true), "{v:?}");
     }
 }
 
