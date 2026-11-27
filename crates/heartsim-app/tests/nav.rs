@@ -37,11 +37,12 @@ fn harness(width: f32) -> Harness<'static, Model> {
 }
 
 #[test]
-fn at_1520_all_fifteen_pages_are_tabs_and_a_click_switches_page() {
-    // fifteen English tabs need about 1420 px (fourteen fitted in 1380): below that, group menus
+fn at_1700_all_fifteen_pages_are_tabs_and_a_click_switches_page() {
+    // fifteen English tabs with their 10-point side padding (`nav::TAB_BUTTON_PADDING`) need about
+    // 1600 px in this harness: below that, group menus
     assert_eq!(Tab::ALL.len(), 15);
     assert_eq!(Group::ALL.len(), 4);
-    let mut h = harness(1520.0);
+    let mut h = harness(1700.0);
     h.run();
     assert!(matches!(
         h.state().style,

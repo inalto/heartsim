@@ -140,18 +140,30 @@ mod native {
             if self.dismissed {
                 return;
             }
-            egui::Panel::top("update_notice").show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(t!("update-available", version = release.version.as_str()));
-                    if ui.button(t!("update-install")).clicked() {
-                        self.updater = Some(Updater::new());
-                    }
-                    ui.hyperlink_to(t!("update-download"), &release.html_url);
-                    if ui.small_button(t!("update-dismiss")).clicked() {
-                        self.dismissed = true;
-                    }
+            // an accent-tinted band with the version in bold and the accent ("primary") button, so a
+            // new release is not mistaken for one more row of ordinary controls
+            let palette = heartsim_ui::Palette::of(ui);
+            egui::Panel::top("update_notice")
+                .frame(
+                    egui::Frame::side_top_panel(ui.style())
+                        .fill(palette.accent_soft)
+                        .inner_margin(egui::Margin::symmetric(12, 8)),
+                )
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            egui::RichText::new(t!("update-available", version = release.version.as_str()))
+                                .strong(),
+                        );
+                        if heartsim_ui::primary_button(ui, t!("update-install")).clicked() {
+                            self.updater = Some(Updater::new());
+                        }
+                        ui.hyperlink_to(t!("update-download"), &release.html_url);
+                        if ui.small_button(t!("update-dismiss")).clicked() {
+                            self.dismissed = true;
+                        }
+                    });
                 });
-            });
         }
     }
 

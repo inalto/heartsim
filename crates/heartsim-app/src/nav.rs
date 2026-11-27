@@ -210,7 +210,7 @@ fn group_button_label(group: Group, current: Tab) -> String {
 #[must_use]
 pub fn choose_style(ui: &Ui, available: f32) -> BarStyle {
     let spacing = ui.spacing().item_spacing.x;
-    let pad = ui.spacing().button_padding.x * 2.0;
+    let pad = TAB_BUTTON_PADDING.x * 2.0;
     let tabs: f32 = Tab::ALL
         .iter()
         .map(|t| text_width(ui, &t.title(), &TextStyle::Button) + pad)
@@ -260,8 +260,18 @@ pub fn page_bar(ui: &mut Ui, current: &mut Tab, available: f32) -> BarStyle {
     style
 }
 
+/// Padding inside the page tabs of the bar, points: roomier than the global
+/// [`heartsim_ui::theme::BUTTON_PADDING`] (8 × 4), so the page names do not touch the edge of the
+/// selected tab's pill and each tab is an easier target. [`choose_style`] measures with it.
+pub const TAB_BUTTON_PADDING: egui::Vec2 = egui::Vec2::new(10.0, 6.0);
+
 fn tab_button(ui: &mut Ui, current: &mut Tab, tab: Tab) {
-    let mut response = ui.add(egui::Button::selectable(*current == tab, tab.title()));
+    let mut response = ui
+        .scope(|ui| {
+            ui.spacing_mut().button_padding = TAB_BUTTON_PADDING;
+            ui.add(egui::Button::selectable(*current == tab, tab.title()))
+        })
+        .inner;
     if let Some(key) = tab.shortcut() {
         response = response.on_hover_text(t!("nav-shortcut", key = key));
     }

@@ -16,6 +16,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - At start-up the 3-D heart shows the four valve layers (*Tricuspid valve*, *Mitral valve*, *Aortic valve*, *Pulmonary valve*)
   and hides *Valve planes* and the torso (brief B37). Existing installations get the valve layers switched on once, when they
   first run this version; after that the stored choice is kept.
+- The new-release bar stands out: an accent-tinted band with the version in bold and *Update now…* as the accent button.
+- The page tabs of the top bar have more padding (10 × 6 points instead of 8 × 4).
 
 ## [0.26.0] — 2026-11-26
 
