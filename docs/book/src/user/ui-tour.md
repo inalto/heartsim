@@ -191,7 +191,7 @@ see which leads change; the detector explains what was misplaced.
 
 The [Rhythm Quiz](quizzes.md#rhythm-quiz) shows a strip and asks which rhythm it is; the [Interval Drill](quizzes.md#interval-drill)
 asks you to measure PR, QRS and QT with the calipers and grades the answer. The [Tutorials](tutorials.md) tab holds the ten
-guided lessons and the three patient cases. The [EP Lab](ep-lab.md) is the catheter laboratory: electrograms, programmed
+guided lessons and the nine patient cases. The [EP Lab](ep-lab.md) is the catheter laboratory: electrograms, programmed
 stimulation and ablation.
 
 ![The Tutorials tab](../images/tutorials.png)

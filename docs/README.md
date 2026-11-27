@@ -17,6 +17,7 @@
 | [research/anatomy-meshes.md](research/anatomy-meshes.md) | Open heart and torso mesh sources for the anatomy pack: licence table, rejected candidates, posing plan, attribution text (Phase 1 of the real-mesh bake) | anatomy implementers |
 | [research/echo-calculators.md](research/echo-calculators.md) | The echo calculators (B29): per calculator, the primary publication read, the table and page, the review status (verified or formula only) and what could not be confirmed | reviewers, calculator authors |
 | [research/tricuspid-valve-source.md](research/tricuspid-valve-source.md) | The measured tricuspid valve (B35): the donor (Texas TriValve 1.1), its commit and licence check, the files used, the verified source facts, the rejected sources and the fit numbers | geometry/anatomy implementers, reviewers |
+| [research/patient-cases.md](research/patient-cases.md) | Patient cases (B44 part A): clinical event to engine action table, what the engine cannot show, ten ranked candidate cases with sources and licences, the six recommended | content authors, reviewers |
 | [research/rust-stack.md](research/rust-stack.md) | Crate-by-crate evaluation of rendering, GUI, compute, audio, packaging, CI | implementers |
 
 Legal note: heartsim is an independent implementation built from the published literature. It contains no code, data or assets from any

@@ -1,0 +1,192 @@
+// heartsim patient case: acquired long QT interval and torsades de pointes. Original text by the heartsim
+// authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_long_qt_torsades",
+    title: "A faint after three days of vomiting",
+    summary: "An older woman with a stomach bug and a slow pulse faints on the ward. Read the repolarisation, name the rhythm that follows and the reason it keeps coming back.",
+    patient: "74-year-old woman, three days of vomiting and poor drinking, takes a water tablet for ankle swelling, palpitations then one fainting episode at the bedside.",
+    references: [
+        "Dzebu AS et al. A scary tale of a twisted storm: torsades de pointes in acquired long QT syndrome. Cureus 2025. doi:10.7759/cureus.86577 (open access, CC BY 4.0; used for the clinical pattern only).",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126. doi:10.1093/eurheartj/ehac262 (contents and figure titles read only; the wording on QT-prolonging drugs was not read).",
+    ],
+    stages: [
+        Stage(
+            title: "The ECG on the ward",
+            markdown: r#"
+**Mrs Lindqvist** has been vomiting for three days and has barely drunk. She takes a diuretic. Her
+pulse is slow, about 45 per minute and regular, and her blood potassium comes back at **2.6 mmol/L**
+(normal is about 3.5 to 5).
+
+The simulator shows a slow sinus rhythm and then adds the effect of **low potassium**. The change
+builds up over about a minute of simulated time, so it runs at double speed for a minute; wait for it
+before you read the T waves.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_brady_45")),
+                Ui(FocusPanel(TwelveLead)),
+                Sim(Drug(name: "hypokalaemia", dose: 1.0)),
+                Ui(SetSpeed(2.0)),
+                Ui(WaitForEvent(ElapsedMs(60000.0))),
+                Ui(SetSpeed(1.0)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What happened to the T waves and the repolarisation?",
+                    choices: [
+                        "Tall, narrow, peaked T waves and a short QT interval",
+                        "Low, flat T waves, a small U wave after them, and a long QT(U) interval",
+                        "ST elevation in all leads",
+                        "A wide QRS that merges with the T wave",
+                    ],
+                    answer: 1,
+                    explanation: "Low potassium slows the end of repolarisation. The T wave flattens, a U wave appears after it, and the QT interval, which in effect includes the U wave, becomes long. Peaked T waves and a short QT are the pattern of high potassium.",
+                ),
+                Question(
+                    prompt: "Which cause best fits the history and the ECG?",
+                    choices: [
+                        "Raised potassium from kidney failure",
+                        "Raised calcium",
+                        "A digoxin effect",
+                        "Low potassium from vomiting and a diuretic",
+                    ],
+                    answer: 3,
+                    explanation: "Vomiting and a diuretic both lose potassium, and the blood result agrees. The ECG pattern fits low potassium.",
+                ),
+                Question(
+                    prompt: "Why is a slow heart rate a danger when the QT interval is long?",
+                    choices: [
+                        "Slow rates and pauses lengthen the QT interval further and favour an early extra beat that can start torsades",
+                        "Slow rates shorten the QT interval",
+                        "A slow rate makes the T wave taller",
+                        "It is not a danger; only fast rates matter",
+                    ],
+                    answer: 0,
+                    explanation: "Torsades from a long QT typically begins after a pause: the beat after the pause has an even longer QT, and an extra beat landing on its T wave can start the arrhythmia. Speeding up the heart shortens the QT.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The faint",
+            markdown: r#"
+At the bedside she gasps, goes grey and slumps. The monitor shows a run of a different rhythm.
+
+The simulator cannot make this happen from the previous strip, so it now **loads a torsades
+rhythm**: a long QT interval with beats that come in pairs, a short-long-short sequence, and then a
+fast rhythm whose complexes twist around the baseline. This rhythm starts after five seconds.
+"#,
+            actions: [
+                Ui(LoadScenario("torsades")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(12000.0))),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the fast rhythm in which the complexes twist around the baseline?",
+                    choices: [
+                        "Atrial flutter with 2:1 conduction",
+                        "Monomorphic ventricular tachycardia",
+                        "Complete heart block",
+                        "Torsades de pointes, a polymorphic ventricular tachycardia",
+                    ],
+                    answer: 3,
+                    explanation: "The QRS shape and polarity change from beat to beat at about 200 per minute, and the QT interval is long between the runs. That combination is torsades de pointes.",
+                ),
+                Question(
+                    prompt: "What typically starts torsades in this setting?",
+                    choices: [
+                        "A premature beat, a long pause, then another premature beat on the T wave",
+                        "A gradual rise of the sinus rate",
+                        "A sudden narrow-complex tachycardia",
+                        "An unrelated artefact",
+                    ],
+                    answer: 0,
+                    explanation: "A short interval (the premature beat), a long one (the pause that follows) and a short one again (a beat close to the peak of the next T wave): the short-long-short sequence.",
+                ),
+                Question(
+                    prompt: "Which of these should be avoided in a patient with torsades from a long QT?",
+                    choices: [
+                        "Stopping the drug that caused it",
+                        "Correcting potassium",
+                        "A drug that further lengthens the QT interval",
+                        "Raising the heart rate to prevent pauses",
+                    ],
+                    answer: 2,
+                    explanation: "Anything that lengthens the QT further feeds the arrhythmia. The simulator models amiodarone that way (it lengthens repolarisation). Whether a particular drug is acceptable in a particular patient is a specialist decision.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The shock",
+            markdown: r#"
+The run does not stop and she has no pulse. The simulator loads the torsades rhythm again, waits ten
+seconds and delivers an **unsynchronised shock of 150 J**.
+
+A simulated shock can fail: its outcome is drawn from a seeded random generator. In our test run the
+first shock stopped the run and the underlying rhythm of paired beats returned. Then, because the long
+QT interval is still there, the simulator brings torsades back about eight seconds later. Stay on this
+page to see it. Look at the strip to see what happened in yours.
+"#,
+            actions: [
+                Ui(LoadScenario("torsades")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(10000.0))),
+                Sim(Shock(joules: 150.0, synchronised: false)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Why is a polymorphic ventricular tachycardia shocked without synchronisation?",
+                    choices: [
+                        "So that the shock can be given at a lower energy",
+                        "Because the QRS changes shape from beat to beat, so the machine has no reliable R wave to synchronise to",
+                        "Because synchronised shocks are only for atrial rhythms",
+                        "Because torsades is always harmless",
+                    ],
+                    answer: 1,
+                    explanation: "A synchronised shock needs a stable R wave. Polymorphic VT, like fibrillation, does not give one, and the simulator's defibrillator does not fire in synchronised mode in these rhythms.",
+                ),
+                Question(
+                    prompt: "Torsades comes back a few seconds after a successful shock. Why?",
+                    choices: [
+                        "The shock was too weak",
+                        "The defibrillator is faulty",
+                        "A new infarct has formed",
+                        "The long QT interval and the low potassium are still there",
+                    ],
+                    answer: 3,
+                    explanation: "A shock ends one episode. It does not shorten the QT interval or restore potassium, so the same trigger can start the arrhythmia again. The cause has to be corrected.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Treat the cause",
+            markdown: r#"
+Potassium is replaced into the vein and magnesium is given, and the diuretic is stopped. (Magnesium
+and potassium replacement are not in the simulator's drug table; they are told here, not shown.) By
+the next morning she is in sinus rhythm at about 70 per minute, the T waves are upright and normal
+again, the U wave has gone and the QT interval is normal.
+
+The simulator now loads **normal sinus rhythm**.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which set of measures addresses the cause of her torsades?",
+                    choices: [
+                        "Beta-blocker, anticoagulant and exercise",
+                        "A further QT-prolonging drug to calm the rhythm",
+                        "Stop the drug that contributed, correct the potassium and magnesium, and avoid slow rates and pauses",
+                        "Nothing, because the shock cured her",
+                    ],
+                    answer: 2,
+                    explanation: "Acquired long QT is treated by removing its causes: QT-prolonging drugs are stopped, potassium and magnesium are corrected, and a slow rate or pauses are avoided. If a slow rhythm is the cause, pacing is considered. The specific doses are for the treating team and are not taught here.",
+                ),
+            ],
+        ),
+    ],
+)

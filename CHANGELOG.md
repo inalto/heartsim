@@ -4,6 +4,14 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Added
+- Six new patient cases (brief B44), nine in all: a regular wide-complex tachycardia, an anterior infarct with ventricular
+  fibrillation and defibrillation, acquired long QT with torsades, atrial flutter with 2:1 conduction, a pacemaker that
+  fails, and pericarditis against infarction (`assets/cases/case_*.ron`, English only). Where the simulator cannot show a step
+  the text tells it. No clinician has reviewed them; the statements to check are listed in the known issues.
+- `heartsim-cli validate-cases` also checks that the right answer is not in the same place in more than half of a case's
+  questions (the three first cases are exempt). The patient cases are listed in the user book's *Tutorials* page.
+
 ### Changed
 - At start-up the 3-D heart shows the four valve layers (*Tricuspid valve*, *Mitral valve*, *Aortic valve*, *Pulmonary valve*)
   and hides *Valve planes* and the torso (brief B37). Existing installations get the valve layers switched on once, when they

@@ -1,0 +1,194 @@
+// heartsim patient case: a pacemaker that stops working. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_pacemaker_malfunction",
+    title: "Dizzy weeks after a pacemaker",
+    summary: "A woman who depends on her pacemaker becomes dizzy. Tell a working device from a failing one, and learn the three ways a pacing spike can go wrong.",
+    patient: "79-year-old woman, pacemaker fitted six weeks ago for complete heart block, new dizziness and one near-faint at the kitchen table.",
+    references: [
+        "Cacciapuoti F et al. When pacing fails after generator replacement: a stepwise diagnostic approach to a reversible lead-header interface problem. Reports (MDPI) 2026;9(2):137. doi:10.3390/reports9020137 (open access, CC BY 4.0; used for the clinical pattern only: syncope, complete heart block with a slow escape, loss of capture, a reversible lead problem. The paper does not describe the pacing spikes; their appearance here comes from the simulator's scenario descriptions).",
+    ],
+    stages: [
+        Stage(
+            title: "A working pacemaker",
+            markdown: r#"
+**Mrs Vasquez** has complete heart block, so her ventricles beat only when her pacemaker tells them
+to. At the clinic you first look at a normal tracing of her device: a single-chamber ventricular
+pacemaker (VVI) set to 60 beats per minute. Each beat starts with a thin vertical **pacing spike**.
+The small P waves of her own sinus rhythm march along at a different rate.
+"#,
+            actions: [
+                Ui(LoadScenario("paced_vvi")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What does this tracing show?",
+                    choices: [
+                        "A ventricular escape rhythm with no device",
+                        "Ventricular pacing at 60 per minute, each spike followed by a wide QRS, with P waves unrelated to the QRS",
+                        "Left bundle-branch block with a P wave before every QRS",
+                        "Atrial fibrillation",
+                    ],
+                    answer: 1,
+                    explanation: "Every QRS has a spike in front of it and a wide shape, and the P waves have nothing to do with the QRS complexes: the atria are not sensed or paced in this mode, so the chambers beat independently.",
+                ),
+                Question(
+                    prompt: "Why are the paced QRS complexes wide?",
+                    choices: [
+                        "The pacing spike itself is wide",
+                        "The patient has low potassium",
+                        "The lead sits at the right ventricular apex, so the ventricles are activated slowly from the bottom up, like a bundle-branch block",
+                        "The device is failing",
+                    ],
+                    answer: 2,
+                    explanation: "A paced beat spreads from muscle to muscle from the tip of the lead, not along the fast conduction system. That gives a wide QRS that looks like left bundle-branch block, with a T wave pointing the other way.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The dizzy spell",
+            markdown: r#"
+Today the ECG at the time of her dizziness looks different. For the first few seconds it looks as
+before, then the spikes carry on but **most of them are not followed by a QRS complex**. The only
+beats are a few wide, slow beats at about 30 per minute.
+
+(The simulator loads a device whose threshold, the energy needed to make the heart muscle respond,
+rises past the device's output after about eight seconds.)
+"#,
+            actions: [
+                Ui(LoadScenario("paced_loss_of_capture")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(14000.0))),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the problem?",
+                    choices: [
+                        "Undersensing: the device does not see her own beats",
+                        "Oversensing: the device sees signals that are not beats",
+                        "A normal paced rhythm",
+                        "Failure to capture: spikes are delivered but the ventricle does not respond",
+                    ],
+                    answer: 3,
+                    explanation: "The spikes are on time, but there is no QRS after most of them, although the muscle is not refractory. The device is discharging but the heart is not responding.",
+                ),
+                Question(
+                    prompt: "Why is this especially dangerous for Mrs Vasquez?",
+                    choices: [
+                        "She depends on the pacemaker, so with no capture only a slow escape rhythm remains, and that can cause dizziness or fainting",
+                        "Any failure to capture causes ventricular fibrillation",
+                        "It makes the sinus node stop",
+                        "It is not dangerous because her own heart beats normally",
+                    ],
+                    answer: 0,
+                    explanation: "With complete heart block her own sinus rhythm cannot reach the ventricles. When pacing fails, the ventricles rely on a slow escape rhythm, here about 30 per minute, which may be too slow to maintain the circulation.",
+                ),
+                Question(
+                    prompt: "Which of these can cause loss of capture?",
+                    choices: [
+                        "A battery that is too full",
+                        "Her sinus rate being too fast",
+                        "A rise of the capture threshold at the lead tip, a lead that has moved or is not seated properly, or a metabolic disturbance such as high potassium",
+                        "Sleeping on the left side",
+                    ],
+                    answer: 2,
+                    explanation: "The threshold can rise as scar forms around the lead tip in the weeks after implantation, and a lead that has shifted or is poorly seated in the generator gives a similar picture. The case report this page draws on describes syncope after a device procedure caused by a reversible lead problem. Devices are interrogated to measure the threshold and the lead impedance.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Spikes where they do not belong",
+            markdown: r#"
+A different patient's device has a different fault. His own heart works (sinus rhythm at 75 with a
+normal QRS) but the pacing spikes come at **a fixed rate of their own, whatever his beats are doing**.
+Some are followed by a wide paced beat, some land just after his own narrow QRS and are followed by
+nothing, and some land on the T wave.
+"#,
+            actions: [
+                Ui(LoadScenario("paced_undersensing")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What kind of fault is this?",
+                    choices: [
+                        "Undersensing: the device does not see his own beats, so it paces regardless and competes with them",
+                        "Failure to capture",
+                        "Oversensing of the T wave",
+                        "A normal device in a patient with a fast rhythm",
+                    ],
+                    answer: 0,
+                    explanation: "A device that fails to see intrinsic beats cannot be inhibited by them, so it paces at the programmed rate. Causes include a sensitivity setting that is too insensitive and a small signal at the lead tip.",
+                ),
+                Question(
+                    prompt: "A spike falls just after one of his own QRS complexes and is followed by no beat. Is that loss of capture?",
+                    choices: [
+                        "Yes, the threshold has risen",
+                        "Yes, the lead has fractured",
+                        "No, the battery is empty",
+                        "No: the muscle is still refractory from his own beat, so a spike cannot capture it",
+                    ],
+                    answer: 3,
+                    explanation: "A spike delivered while the ventricle is refractory cannot make it respond. This is functional non-capture, and it does not mean the lead or the threshold is at fault. A spike on a T wave is a different worry: it can start a dangerous arrhythmia.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Too few spikes",
+            markdown: r#"
+A third patient has complete heart block and a device set to 60. His tracing shows a **spike
+about every 1.3 seconds**, around 46 per minute, with a wide paced QRS after each spike. Nothing is
+missing after the spikes, but they are too far apart.
+"#,
+            actions: [
+                Ui(LoadScenario("paced_t_wave_oversensing")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "The device is set to 60 but paces at about 46. What is the most likely explanation?",
+                    choices: [
+                        "The device battery is nearly empty",
+                        "Oversensing: the device counts each paced T wave as a beat and restarts its timer",
+                        "Loss of capture",
+                        "His sinus node is slowing",
+                    ],
+                    answer: 1,
+                    explanation: "If the device is set to be very sensitive, it treats the T wave as a heartbeat and waits another full interval before pacing. The spikes are spaced longer than programmed, and each is followed by a QRS.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "After the device check",
+            markdown: r#"
+Mrs Vasquez's device is interrogated and the problem is found and corrected. (The simulator has no
+way to reprogram a device during a case, so this is told, not shown.) The simulator now loads a
+**dual-chamber pacemaker (DDD)** for a normal tracing: each sinus P wave is sensed and a
+spike follows it after a set delay, and each spike is followed by a QRS.
+"#,
+            actions: [
+                Ui(LoadScenario("paced_ddd")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which finding on the tracing shows that capture is restored?",
+                    choices: [
+                        "The spikes are thin",
+                        "The heart rate is below 60",
+                        "Every spike is followed by a QRS complex, and the paced rate follows the programmed rhythm",
+                        "There are no P waves",
+                    ],
+                    answer: 2,
+                    explanation: "A spike followed by a depolarisation on every beat is capture. In this mode the device also follows her P waves, so the atria and ventricles beat in step again.",
+                ),
+            ],
+        ),
+    ],
+)

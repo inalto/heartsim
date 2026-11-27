@@ -141,7 +141,7 @@ fn every_page_changes_the_simulation_and_names_a_known_rhythm() {
 }
 
 #[test]
-fn three_cases_with_five_questions_each_validate() {
+fn the_cases_with_five_questions_each_validate() {
     let dir = assets().join("cases");
     let o = cli(&["validate-cases", dir.to_str().unwrap()]);
     let out = text(&o);
@@ -152,7 +152,7 @@ fn three_cases_with_five_questions_each_validate() {
         .filter(|p| p.extension().is_some_and(|x| x == "ron"))
         .map(|p| Case::from_ron(&std::fs::read_to_string(p).unwrap()).unwrap())
         .collect();
-    assert!(cases.len() >= 3, "only {} cases", cases.len());
+    assert!(cases.len() >= 9, "only {} cases", cases.len());
     for c in &cases {
         assert!(
             c.question_count() >= 5,
@@ -169,6 +169,65 @@ fn three_cases_with_five_questions_each_validate() {
             c.id
         );
     }
+}
+
+/// Brief B44: the right answer is not in one place in more than half of a case's questions. The
+/// three first cases predate the rule and are exempt (they keep every answer in the first place).
+#[test]
+fn right_answers_do_not_always_sit_in_the_same_place() {
+    let exempt = [
+        "case_chest_pain_inferior_stemi",
+        "case_palpitations_wpw",
+        "case_syncope_heart_block",
+    ];
+    let dir = assets().join("cases");
+    let mut checked = 0;
+    for p in std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().path()) {
+        if p.extension().is_none_or(|x| x != "ron") {
+            continue;
+        }
+        let c = Case::from_ron(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        let answers: Vec<usize> = c
+            .stages
+            .iter()
+            .flat_map(|s| &s.questions)
+            .map(|q| q.answer)
+            .collect();
+        let most = (0..5)
+            .map(|i| answers.iter().filter(|a| **a == i).count())
+            .max()
+            .unwrap();
+        if exempt.contains(&c.id.as_str()) {
+            assert_eq!(most, answers.len(), "{} no longer needs its exemption", c.id);
+        } else {
+            checked += 1;
+            assert!(
+                most * 2 <= answers.len(),
+                "{}: one position holds {most} of {} right answers",
+                c.id,
+                answers.len()
+            );
+        }
+    }
+    assert!(checked >= 6, "only {checked} cases were checked");
+}
+
+#[test]
+fn a_case_with_every_answer_in_the_same_place_fails() {
+    let dir = fresh_dir("samepos");
+    let q = r#"Question(prompt: "?", choices: ["a", "b", "c"], answer: 1, explanation: "e")"#;
+    let case = format!(
+        r#"Case(format_version: 1, id: "samepos", title: "T", summary: "s", patient: "p", references: ["r"],
+        stages: [Stage(title: "a", markdown: "m", actions: [Ui(LoadScenario("lbbb"))],
+            questions: [{q}, {q}, {q}, {q}, {q}])])"#
+    );
+    let cases = dir.join("cases");
+    std::fs::create_dir_all(&cases).unwrap();
+    std::fs::write(cases.join("samepos.ron"), case).unwrap();
+    let o = cli(&["validate-cases", cases.to_str().unwrap()]);
+    assert!(!o.status.success());
+    assert!(text(&o).contains("5 of 5 questions"), "{}", text(&o));
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]

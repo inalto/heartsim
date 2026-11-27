@@ -1,0 +1,199 @@
+// heartsim patient case: a regular wide-complex tachycardia. Original text by the heartsim authors,
+// MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_wide_complex_tachycardia",
+    title: "A fast, wide rhythm in an older man",
+    summary: "An older man with a heart-attack scar and sudden palpitations has a fast, regular rhythm with wide complexes. Decide what it is, why the easy guess is dangerous, and what to do when he worsens.",
+    patient: "71-year-old retired bus driver, anterior heart attack nine years ago, sudden palpitations and breathlessness for 30 minutes, now in the emergency department.",
+    references: [
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720. doi:10.1093/eurheartj/ehz467 (running text on wide-complex tachycardia read; tables not read).",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126. doi:10.1093/eurheartj/ehac262 (contents and figure titles read only).",
+        "Prasitlumkum N et al. An endless riddle of wide complex tachycardia: VT or SVT? Cureus 2026. doi:10.7759/cureus.109414 (open access, CC BY 4.0; used for the clinical pattern only).",
+    ],
+    stages: [
+        Stage(
+            title: "The first strip",
+            markdown: r#"
+**Mr Okafor** is pale and uncomfortable but talking. His blood pressure is 104/68 mmHg and his pulse
+is fast and regular. The monitor shows the rhythm below. He has had no chest pain, and he had a heart
+attack in the front of the heart nine years ago.
+
+Read the strip before you decide anything.
+"#,
+            actions: [
+                Ui(LoadScenario("vt_monomorphic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which description fits the rhythm?",
+                    choices: [
+                        "A regular, narrow-complex tachycardia",
+                        "A regular, wide-complex tachycardia at about 150 beats per minute",
+                        "An irregularly irregular narrow-complex tachycardia",
+                        "Sinus rhythm with a bundle-branch block",
+                    ],
+                    answer: 1,
+                    explanation: "The beats are evenly spaced, the QRS complexes are broad and bizarre, and the rate is about 150 per minute. Broad complexes mean the ventricles are being activated by a slow route, either from a ventricular focus or through a bundle branch that is blocked.",
+                ),
+                Question(
+                    prompt: "The origin of a regular wide-complex tachycardia is not clear. What is the safest working diagnosis?",
+                    choices: [
+                        "Supraventricular tachycardia with aberrant conduction",
+                        "Sinus tachycardia from anxiety",
+                        "Ventricular tachycardia",
+                        "Atrial flutter with a bundle-branch block",
+                    ],
+                    answer: 2,
+                    explanation: "The ESC supraventricular tachycardia guideline advises treating a wide-complex tachycardia of unclear origin as ventricular tachycardia. Treating a ventricular rhythm as if it were supraventricular is the more dangerous mistake.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Hunting for the P waves",
+            markdown: r#"
+The same rhythm continues. Look at lead II again and follow the small P waves: they keep their own
+steady rhythm, about half as fast as the QRS complexes, and they fall at a different place against the
+QRS every time. Some are lost inside a QRS or a T wave.
+"#,
+            actions: [
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "The atria beat at their own rate, unrelated to the QRS complexes. What is this finding called and what does it favour?",
+                    choices: [
+                        "Retrograde conduction, which favours an accessory pathway",
+                        "First-degree AV block, which favours sinus rhythm",
+                        "A pacemaker artefact, which favours a device problem",
+                        "AV dissociation, which favours ventricular tachycardia",
+                    ],
+                    answer: 3,
+                    explanation: "When the ventricles are driven from below, the sinus node carries on and the atria and ventricles beat independently. Seeing P waves that march through the QRS complexes is good evidence for VT. Finding them is hard at fast rates, so their absence proves nothing.",
+                ),
+                Question(
+                    prompt: "Which fact from Mr Okafor's history makes ventricular tachycardia more likely?",
+                    choices: [
+                        "He has had fast palpitations since childhood that stop suddenly",
+                        "A heart attack nine years ago, which leaves a scar in the ventricle",
+                        "He drinks two cups of coffee a day",
+                        "His blood pressure is normal",
+                    ],
+                    answer: 1,
+                    explanation: "A scar from an old infarct is a classic substrate for re-entry inside the ventricle, so structural heart disease raises the odds of VT. A normal blood pressure does not exclude VT, and long-standing short episodes that stop abruptly point to supraventricular re-entry.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The look-alike: aberrancy",
+            markdown: r#"
+A colleague shows you a different, younger patient for comparison. His rhythm starts as ordinary sinus
+rhythm at about 80 per minute with narrow QRS complexes. After six seconds the sinus rate rises to
+about 140 and the QRS complexes become wide, with the right-bundle-branch shape (best seen in V1: a
+small r, a dip, then a tall second R'). The rate is the only thing that changed. When the rate falls
+again, the QRS becomes narrow again.
+
+(The simulator now loads this second rhythm, and switches to lead V1.)
+"#,
+            actions: [
+                Ui(LoadScenario("rate_dependent_rbbb")),
+                Ui(FocusPanel(TwelveLead)),
+                Ui(SelectLead(V1)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What explains the wide QRS in the second patient?",
+                    choices: [
+                        "The right bundle branch has not recovered in time at the fast rate, so conduction is aberrant",
+                        "A ventricular focus has taken over from the sinus node",
+                        "A new infarct has damaged the ventricle during the recording",
+                        "The electrodes have moved",
+                    ],
+                    answer: 0,
+                    explanation: "A bundle branch has a refractory period. When the rate rises, the right bundle branch, which usually recovers last, may still be refractory when the next impulse arrives, and the ventricles are activated through the other branch. A P wave still comes before each QRS, which shows the rhythm is supraventricular.",
+                ),
+                Question(
+                    prompt: "Mr Okafor's rhythm could in theory also be an SVT with aberrancy. Why is it unsafe to give an AV-nodal calcium-channel blocker such as verapamil as a trial?",
+                    choices: [
+                        "It is not available in the emergency department",
+                        "It always causes complete heart block",
+                        "If the rhythm is really VT, the drug can make the patient much worse and has been reported to cause collapse",
+                        "It would turn the rhythm into sinus tachycardia",
+                    ],
+                    answer: 2,
+                    explanation: "The case report that this case draws on describes empirical verapamil as dangerous when VT is possible. A calcium-channel blocker slows the AV node, which is not part of a ventricular circuit, and it can lower the blood pressure.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "He gets worse",
+            markdown: r#"
+Back to Mr Okafor. While you are working, he becomes drowsy and clammy, and his blood pressure falls to
+84/50 mmHg. The wide tachycardia is still going. The simulator loads his rhythm again, waits about
+seven seconds and delivers a **synchronised shock of 100 J**.
+
+A simulated shock can fail: its outcome is drawn from a seeded random generator. In our test run it
+ended the tachycardia on the first shock. Look at the strip to see what happened in yours; the next
+page starts from the rhythm after the shock whatever you saw.
+"#,
+            actions: [
+                Ui(LoadScenario("vt_monomorphic")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(7000.0))),
+                Sim(Shock(joules: 100.0, synchronised: true)),
+            ],
+            questions: [
+                Question(
+                    prompt: "He has a pulse but is hypotensive and drowsy. What is the right treatment?",
+                    choices: [
+                        "Synchronised electrical cardioversion",
+                        "Adenosine as a diagnostic test",
+                        "A further oral drug and observation",
+                        "An unsynchronised shock only if the pulse is lost",
+                    ],
+                    answer: 0,
+                    explanation: "An unstable patient with a tachycardia and a pulse is cardioverted. The ESC supraventricular tachycardia guideline says that a patient who is unstable with a wide-complex tachycardia is cardioverted. Drug choices for a stable patient are for a specialist and are not taught here.",
+                ),
+                Question(
+                    prompt: "Why is the shock synchronised?",
+                    choices: [
+                        "So that the patient feels nothing",
+                        "So that the shock needs less energy in every rhythm",
+                        "So that the defibrillator charges faster",
+                        "So that it is delivered with the QRS, not on the T wave, where a shock could start ventricular fibrillation",
+                    ],
+                    answer: 3,
+                    explanation: "The machine waits for an R wave and fires just after it. A shock delivered on the vulnerable T wave can start ventricular fibrillation. The simulator does the same, which is why a synchronised shock never fires in fibrillation, where there is no R wave.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "After the shock",
+            markdown: r#"
+Whatever the strip showed, the simulator now loads **sinus rhythm at 72 per minute**. His blood
+pressure is back to 122/76 mmHg and he feels well.
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "The tachycardia has stopped. Which statement is correct?",
+                    choices: [
+                        "The cause is cured and monitoring can stop",
+                        "The scar that probably started it is still there, so the rhythm can return and its cause needs a proper work-up",
+                        "It cannot have been VT, because VT does not stop with a shock",
+                        "He must now take a calcium-channel blocker for life",
+                    ],
+                    answer: 1,
+                    explanation: "Cardioversion ends the rhythm but does not remove its substrate. Prevention of recurrence, and whether he needs a device, are decisions for a specialist after evaluation of the underlying heart disease. This case does not teach them.",
+                ),
+            ],
+        ),
+    ],
+)

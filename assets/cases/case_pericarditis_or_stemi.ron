@@ -1,0 +1,173 @@
+// heartsim patient case: diffuse ST elevation, pericarditis against infarction. Original text by the
+// heartsim authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_pericarditis_or_stemi",
+    title: "Sharp chest pain after a cold",
+    summary: "A young woman with chest pain has ST elevation on her ECG. Decide whether it is a blocked artery or something else, and learn what separates the two.",
+    patient: "27-year-old graduate student, sharp central chest pain for two days, worse on deep breathing and lying flat, easier leaning forward, a feverish cold ten days ago, no other illness.",
+    references: [
+        "Adler Y et al. 2015 ESC Guidelines for the diagnosis and management of pericardial diseases. Eur Heart J 2015;36:2921-2964. doi:10.1093/eurheartj/ehv318 (running text on the diagnostic criteria, the ECG description and first-line drugs read; the class and level of recommendation were not read).",
+    ],
+    stages: [
+        Stage(
+            title: "The ECG",
+            markdown: r#"
+**Miss Tanaka** looks unwell but not shocked. Her temperature is 37.9 C, her pulse is 78 and regular,
+and her blood pressure is 118/72 mmHg. She says the pain is sharp, catches when she breathes in, is
+worse lying flat and eases when she leans forward. Her 12-lead ECG is shown.
+"#,
+            actions: [
+                Ui(LoadScenario("pericarditis")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which description fits the ST segments?",
+                    choices: [
+                        "Elevation in one territory with reciprocal depression opposite",
+                        "Elevation in most leads (I, II, aVF and V2 to V6) with depression in aVR, in no single coronary territory",
+                        "Depression in all leads",
+                        "Q waves with inverted T waves in the chest leads",
+                    ],
+                    answer: 1,
+                    explanation: "The injury current of an inflamed pericardium is not limited to one artery's territory, so the ST segment is raised in most leads and lowered in aVR, which looks at the heart from the opposite side.",
+                ),
+                Question(
+                    prompt: "Which feature of her pain favours pericarditis over a heart attack?",
+                    choices: [
+                        "Crushing pain brought on by exertion",
+                        "Pain with sweating and nausea",
+                        "Sharp pain that is worse on breathing in and lying flat and eases on leaning forward",
+                        "Pain spreading to the jaw",
+                    ],
+                    answer: 2,
+                    explanation: "Pericardial pain is typically sharp, pleuritic and positional. The other three descriptions are the usual story of myocardial ischaemia.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The comparison",
+            markdown: r#"
+For comparison the simulator now shows an **acute anterior infarct** from another patient.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_anterior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "How does this tracing differ from Miss Tanaka's?",
+                    choices: [
+                        "It has no ST elevation",
+                        "It has ST elevation in every lead",
+                        "It has Q waves and T inversion only",
+                        "The elevation sits in one territory (V1 to V6, I and aVL) with reciprocal ST depression in III and aVF",
+                    ],
+                    answer: 3,
+                    explanation: "An occluded coronary artery raises the ST segment in the leads that face its territory and lowers it in the opposite leads. Pericarditis does not respect a territory and has no reciprocal depression apart from aVR.",
+                ),
+                Question(
+                    prompt: "Why would the team still treat uncertain ST elevation as a possible acute coronary syndrome until that is excluded?",
+                    choices: [
+                        "Because pericarditis is always fatal",
+                        "Because a missed infarct costs heart muscle, so it must be excluded first",
+                        "Because the ECG cannot be repeated",
+                        "Because all chest pain is an infarct",
+                    ],
+                    answer: 1,
+                    explanation: "The consequence of missing an infarct is much worse than that of looking for it, and early changes of the two conditions can overlap. The decision rests on the whole picture: history, examination, serial ECGs and tests.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Listening",
+            markdown: r#"
+Back to Miss Tanaka. With the stethoscope at the left sternal edge you hear a **scratchy, to-and-fro
+sound** that is not the same as a murmur. The simulator shows it in the heart-sound lane under the strip
+(the rub is a synthesised model, not a recording): three short scratchy sounds per cycle, one with the
+atrial beat, one with ventricular contraction and one in early diastole.
+
+One more finding that the simulator does **not** draw: in real pericarditis the PR segment is often
+depressed in many leads.
+"#,
+            actions: [
+                Ui(LoadScenario("pericarditis")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(HeartSoundLane(true)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What is the scratchy, to-and-fro sound?",
+                    choices: [
+                        "A pericardial friction rub",
+                        "A third heart sound",
+                        "The murmur of a stiff aortic valve",
+                        "A valve click",
+                    ],
+                    answer: 0,
+                    explanation: "The roughened layers of the pericardium rub on each other with each heartbeat. A rub is a sign of pericarditis and counts towards the diagnosis.",
+                ),
+                Question(
+                    prompt: "Which further ECG change is described in pericarditis in many leads (the simulator does not draw it)?",
+                    choices: [
+                        "A delta wave",
+                        "A long QT interval",
+                        "Depression of the PR segment",
+                        "Deep Q waves",
+                    ],
+                    answer: 2,
+                    explanation: "Inflammation of the atrial surface of the pericardium pulls the PR segment down in many leads. This is told here, not shown.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Making the diagnosis",
+            markdown: r#"
+The ECG, the rub and the story are all typical. An ultrasound scan of the heart (echocardiography) is
+done to look for fluid around the heart. The simulator's Echo page is a model of a normal heart and
+cannot show a pericardial effusion, so the result is told, not shown: a small amount of fluid, with no
+effect on the filling of the heart.
+"#,
+            actions: [
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "The ESC guideline names four findings for the diagnosis of acute pericarditis: pericarditic chest pain, a rub, typical ECG changes and a pericardial effusion. How many are needed?",
+                    choices: [
+                        "One",
+                        "All four",
+                        "Three",
+                        "Two",
+                    ],
+                    answer: 3,
+                    explanation: "At least two of the four are required for the diagnosis. Miss Tanaka has all four.",
+                ),
+                Question(
+                    prompt: "Which test finds a pericardial effusion?",
+                    choices: [
+                        "Echocardiography",
+                        "A blood test for potassium",
+                        "A resting ECG alone",
+                        "A treadmill test",
+                    ],
+                    answer: 0,
+                    explanation: "An ultrasound scan shows fluid between the heart and the pericardium directly. The ECG can change with a large effusion, but it is not a reliable way to find one.",
+                ),
+                Question(
+                    prompt: "What first-line drug treatment does the guideline name for a first episode of acute pericarditis?",
+                    choices: [
+                        "A beta-blocker and a statin",
+                        "Antibiotics for every patient",
+                        "An anti-inflammatory drug (aspirin or an NSAID) together with colchicine",
+                        "Thrombolysis",
+                    ],
+                    answer: 2,
+                    explanation: "The ESC guideline text names aspirin or a non-steroidal anti-inflammatory drug, with low-dose colchicine. Doses and the choice of drug depend on the patient and are for the treating team; they are not taught here.",
+                ),
+            ],
+        ),
+    ],
+)

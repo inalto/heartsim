@@ -307,6 +307,41 @@ pub(crate) fn run_tutorials(target: &str, assets_arg: Option<&Path>) -> Result<(
 
 /// `heartsim-cli validate-cases`: load every `*.ron` in `dir` (a sibling `scenarios/` folder holds
 /// the rhythms), check the editorial rules and run every stage's actions. Fails if any case does.
+/// The three first cases (brief B18) keep every right answer in the first place. They predate the
+/// rule that the right answer's position must vary (brief B44) and are left as they are.
+pub(crate) const ANSWER_POSITION_EXEMPT: [&str; 3] = [
+    "case_chest_pain_inferior_stemi",
+    "case_palpitations_wpw",
+    "case_syncope_heart_block",
+];
+
+/// Brief B44: the right answer must not sit at the same position in more than half of a case's
+/// questions, or a learner could pass by always choosing the same place.
+pub(crate) fn answer_position_problems(c: &Case) -> Vec<String> {
+    let mut counts = [0usize; 5];
+    let mut total = 0usize;
+    for q in c.stages.iter().flat_map(|s| &s.questions) {
+        if let Some(n) = counts.get_mut(q.answer) {
+            *n += 1;
+        }
+        total += 1;
+    }
+    let (place, most) = counts
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, n)| **n)
+        .map_or((0, 0), |(i, n)| (i, *n));
+    if most * 2 > total {
+        vec![format!(
+            "{}: the right answer is choice {} in {most} of {total} questions (at most half)",
+            c.id,
+            place + 1
+        )]
+    } else {
+        Vec::new()
+    }
+}
+
 pub(crate) fn validate_cases(dir: &Path) -> Result<()> {
     let assets = assets_root(dir.parent())?;
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
@@ -335,6 +370,9 @@ pub(crate) fn validate_cases(dir: &Path) -> Result<()> {
                     problems.push(format!("duplicate id `{}`", c.id));
                 }
                 problems.extend(c.content_problems());
+                if !ANSWER_POSITION_EXEMPT.contains(&c.id.as_str()) {
+                    problems.extend(answer_position_problems(&c));
+                }
                 let mut host = Headless::new(&assets);
                 for (i, s) in c.stages.iter().enumerate() {
                     problems.extend(host.run_steps(&format!("{} stage {}", c.id, i + 1), s.actions.clone()));

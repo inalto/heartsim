@@ -57,7 +57,7 @@ from any other simulator.
   (diagnostic 0.05–150 Hz, monitor 0.5–40 Hz) and artefacts (baseline wander, respiration, mains hum, muscle) that never touch
   the measurements.
 * **Teaching tools.** Axis trainer and axis quiz, rhythm quiz with explanations, interval drill graded with calipers,
-  electrode-misplacement exercises with a detector, twelve tutorials (105 pages) and three scripted patient cases with multiple-choice
+  electrode-misplacement exercises with a detector, twelve tutorials (105 pages) and nine scripted patient cases with multiple-choice
   questions, a monitor beep.
 * **Learning auscultation.** A Sound Trainer that loops 22 single findings with a listen counter and switches contrast pairs
   at the same point of the cycle; an auscultation quiz that asks what you hear before what it is; two heart-sound tutorials

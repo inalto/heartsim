@@ -1,0 +1,217 @@
+// heartsim patient case: anterior ST-elevation infarction with ventricular fibrillation. Original text by
+// the heartsim authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_anterior_stemi_arrest",
+    title: "Crushing pain, then a collapse",
+    summary: "A man in his sixties arrives with severe chest pain. Read the first ECG, meet the rhythm that can follow, and follow the heart to the next day.",
+    patient: "63-year-old man, a lorry-yard manager, one hour of crushing central chest pain with sweating, ex-smoker, no known heart disease.",
+    references: [
+        "Savas G et al. R-on-T-triggered ventricular fibrillation during acute anterior ST-elevation myocardial infarction. Eur Heart J Case Rep 2026;10(5). doi:10.1093/ehjcr/ytag342 (open access, CC BY 4.0; used for the clinical pattern only).",
+        "Zeppenfeld K et al. 2022 ESC Guidelines for the management of patients with ventricular arrhythmias and the prevention of sudden cardiac death. Eur Heart J 2022;43:3997-4126. doi:10.1093/eurheartj/ehac262 (contents and figure titles read only).",
+    ],
+    stages: [
+        Stage(
+            title: "The first ECG",
+            markdown: r#"
+**Mr Haddad** is grey, sweating and clutching his chest. His pulse is 78 and regular and his blood
+pressure is 134/86 mmHg. The 12-lead ECG shows sinus rhythm with marked **ST-segment elevation across
+the chest leads and in leads I and aVL**, and ST depression in III and aVF.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_anterior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which territory does this pattern fit?",
+                    choices: [
+                        "Inferior wall",
+                        "Anterior wall, septum and apex",
+                        "Posterior wall only",
+                        "No territory: it is diffuse",
+                    ],
+                    answer: 1,
+                    explanation: "ST elevation in V1 to V6 with I and aVL looks at the front of the left ventricle, the septum and the apex. Inferior elevation would be in II, III and aVF.",
+                ),
+                Question(
+                    prompt: "Which artery is the most likely culprit?",
+                    choices: [
+                        "The right coronary artery",
+                        "The left circumflex artery",
+                        "The left anterior descending artery, probably proximal",
+                        "The posterior descending artery",
+                    ],
+                    answer: 2,
+                    explanation: "The left anterior descending artery supplies the anterior wall and septum. Elevation that reaches I and aVL suggests the blockage lies before the first diagonal branch, which means a large area at risk.",
+                ),
+                Question(
+                    prompt: "What is the ST depression in III and aVF?",
+                    choices: [
+                        "A second infarct in the inferior wall",
+                        "Digoxin effect",
+                        "A sign of pericarditis",
+                        "A reciprocal change, the mirror image of the anterior injury",
+                    ],
+                    answer: 3,
+                    explanation: "Leads on the opposite side of the heart see the injury current with the opposite sign. Reciprocal depression supports a true infarct and, here, a proximal occlusion. Pericarditis does not give reciprocal depression, apart from aVR.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The collapse",
+            markdown: r#"
+While he waits for the catheter laboratory, the monitor shows ventricular ectopic beats. One of them
+falls on the **T wave** of the preceding beat. In published cases an ectopic beat at that moment has
+started ventricular fibrillation, and Mr Haddad slumps, unresponsive.
+
+The simulator cannot turn this infarct rhythm into fibrillation by itself, so it now **loads the arrest
+rhythm** instead: a few seconds of sinus rhythm, and then fibrillation. The ST elevation of the
+infarct is not drawn on this strip; the infarct is still there in the story.
+"#,
+            actions: [
+                Ui(LoadScenario("vf_coarse")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(5000.0))),
+            ],
+            questions: [
+                Question(
+                    prompt: "What does the strip show now?",
+                    choices: [
+                        "Ventricular fibrillation: chaotic deflections with no QRS complexes",
+                        "A baseline wander artefact from a loose lead",
+                        "Torsades de pointes",
+                        "Complete heart block",
+                    ],
+                    answer: 0,
+                    explanation: "There are no recognisable P waves, QRS complexes or T waves, only irregular deflections. A patient in VF is unconscious and has no pulse; a loose lead would leave the patient awake. Check the patient first, then the leads.",
+                ),
+                Question(
+                    prompt: "Ventricular arrhythmias are common in the first hours of an acute infarct. What does that mean for the care of this patient?",
+                    choices: [
+                        "Reperfusion should wait until the rhythm is stable",
+                        "He should be monitored continuously with a defibrillator at hand, and reperfusion is not delayed",
+                        "Monitoring can stop once the ECG is recorded",
+                        "Adenosine should be given to prevent them",
+                    ],
+                    answer: 1,
+                    explanation: "The early arrhythmias are a reason for monitoring and for a defibrillator within reach. They do not change the need to open the artery as soon as possible. Neither adenosine nor stopping monitoring prevents them.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The shock",
+            markdown: r#"
+He is not breathing and has no pulse. Chest compressions are started (the simulator has no
+compressions), and the defibrillator is charged. The simulator now delivers an **unsynchronised shock
+of 200 J** to the fibrillating heart.
+
+A simulated shock can fail: its outcome is drawn from a seeded random generator. In our test run the
+first shock restored a regular rhythm. Look at the strip to see what happened in yours; the next page
+starts from the rhythm after the shock whatever you saw.
+"#,
+            actions: [
+                Sim(Shock(joules: 200.0, synchronised: false)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which kind of shock is right for ventricular fibrillation?",
+                    choices: [
+                        "A synchronised shock at a low energy",
+                        "A synchronised shock at maximum energy",
+                        "An unsynchronised shock, given as soon as the defibrillator is ready",
+                        "No shock until a pulse check",
+                    ],
+                    answer: 2,
+                    explanation: "VF has no R wave to synchronise to, so the shock is unsynchronised and is given as early as possible.",
+                ),
+                Question(
+                    prompt: "What would the simulator's defibrillator do if it were left in synchronised mode during VF?",
+                    choices: [
+                        "Fire at once, at the lowest energy",
+                        "Fire on the next chaotic deflection",
+                        "Charge but never fire, because it waits for an R wave that does not exist",
+                        "Switch to unsynchronised mode by itself",
+                    ],
+                    answer: 2,
+                    explanation: "A defibrillator in synchronised mode is designed to fire only on an R wave, and the simulator's does the same.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Back to the infarct",
+            markdown: r#"
+Whatever the strip showed, the simulator now loads the **infarct rhythm again**: sinus at about 78 per
+minute and the same ST elevation as in the first ECG. The artery has not opened; only the arrhythmia
+has been dealt with. Mr Haddad is breathing and his pulse is back.
+"#,
+            actions: [
+                Ui(LoadScenario("stemi_anterior")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Sinus rhythm is back after the shock. What does the ST elevation that is still present tell you?",
+                    choices: [
+                        "The shock caused it",
+                        "It means nothing now that the rhythm is normal",
+                        "That the infarct is old",
+                        "That the artery is still blocked and he still needs reperfusion",
+                    ],
+                    answer: 3,
+                    explanation: "The shock treats the rhythm, not the cause. The occluded artery is still injuring the muscle and the ST segments stay raised until the artery is opened.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "After reperfusion",
+            markdown: r#"
+The artery is opened in the catheter laboratory. In the simulator the **stenosis of the left anterior
+descending artery is removed**. After a short time the ST segments settle towards the baseline.
+"#,
+            actions: [
+                Sim(Stenosis(branch: "LAD", severity: 0.0)),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What does the settling of the ST segments suggest?",
+                    choices: [
+                        "Successful reperfusion of the infarct-related artery",
+                        "That no muscle was lost",
+                        "A new infarct in another territory",
+                        "That the ECG leads were reversed",
+                    ],
+                    answer: 0,
+                    explanation: "ST resolution is a marker of reperfusion. It does not prove that no muscle was lost, and the heart is still at risk of arrhythmia for some time.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "The next day",
+            markdown: r#"
+The following morning his rhythm is regular and he is pain-free. The ST elevation has gone, but the
+ECG has changed again: the simulator now shows the **evolved infarct** pattern, with **Q or QS
+complexes and inverted T waves over the front of the heart** (V1 to V4, and aVL).
+"#,
+            actions: [
+                Ui(LoadScenario("mi_anterior_evolved")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What do the new Q waves in V1 to V4 represent?",
+                    choices: [
+                        "Pericarditis",
+                        "A region of muscle that no longer produces electrical forces, so the leads over it see the opposite wall",
+                        "Reperfusion injury of the right ventricle",
+                        "Lead misplacement",
+                    ],
+                    answer: 1,
+                    explanation: "Dead or stunned tissue gives no forces, so a lead over it looks through the hole at the activation of the far wall and records a negative deflection. Q waves usually persist, while the ST segment and T wave change over hours and days.",
+                ),
+            ],
+        ),
+    ],
+)

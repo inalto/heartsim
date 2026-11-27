@@ -77,6 +77,50 @@ and for AV block in inferior infarction, the 48-hour rule and the 120–200 J en
 nitrates in right-ventricular infarction, the ST-elevation thresholds for STEMI, and the sentence on reciprocal changes in
 III and aVF.
 
+The six cases of brief B44 (`assets/cases/case_wide_complex_tachycardia.ron`, `case_anterior_stemi_arrest.ron`,
+`case_long_qt_torsades.ron`, `case_flutter_2to1.ron`, `case_pacemaker_malfunction.ron`, `case_pericarditis_or_stemi.ron`) were
+written from the research note `docs/research/patient-cases.md`. The tables with the class and level of every guideline
+recommendation could not be read, so **no class or level is stated or checked**, and no guideline dose is given. **No clinician
+has reviewed these cases.** A clinician should check, by case and stage:
+
+* *Wide-complex tachycardia, stage 1.* That a wide-complex tachycardia of unclear origin is treated as VT (ESC SVT guideline
+  running text); stage 2: that AV dissociation and a scar from an old infarct favour VT; stage 3: that the AV-nodal drug
+  warning (verapamil) is worded safely (from a case report, not from a guideline table); stage 4: that synchronised
+  cardioversion is the answer for an unstable patient with a pulse, and the reason given for synchronisation (the T-wave
+  vulnerable period); stage 5: the sentence on recurrence and work-up. The 100 J energy is the simulator's own value. In
+  stage 3 the wide QRS of the aberrancy rhythm is clearest in V1 and subtle in lead II; its width was not measured.
+* *Anterior STEMI and arrest, stage 1.* The territory and artery wording and the sentence that elevation reaching I and aVL
+  suggests a proximal occlusion (taken from the scenario notes; the ACS guideline was not read for this case). Stage 2: that
+  early ventricular arrhythmias are a reason for monitoring and do not delay reperfusion (the research's wording; not from a
+  read guideline), and that an R-on-T ectopic beat has started VF (a case report). Stage 3: that VF is shocked
+  unsynchronised, and that the simulator's synchronised mode refuses to fire in VF. Stages 4 to 6: ST resolution as a
+  marker of reperfusion; the meaning of Q waves.
+* *Long QT and torsades, stage 1.* The low-potassium ECG description (low T, U wave, long QT(U)) and the 2.6 mmol/L value
+  (the simulator's drug dose is about 2.5). Stage 2: the short-long-short start, the statement that QT-lengthening drugs
+  should be avoided (the ESC 2022 section on QT-prolonging drugs and the AHA/ACCF 2010 statement were **not read**), and the
+  remark about amiodarone. Stage 3: unsynchronised shock for polymorphic VT (teaching material only, see the existing item on
+  synchronised cardioversion in polymorphic VT). Stage 4: potassium and magnesium correction and the mention of pacing, from
+  the case report's pattern; no doses.
+* *Flutter 2:1, stage 1.* That a fixed rate near 150 suggests flutter and the 250 to 350 atrial rate (secondary sources).
+  Stage 2: that adenosine does not interrupt flutter (ESC SVT guideline running text) and the warning of chest tightness.
+  Stage 3: the effect of AV-nodal slowing on the ratio (the scenario files, not a guideline), told with `flutter_4to1`
+  because the drug takes two minutes. Stage 4: the baseline difference between variable flutter and AF. Stage 5: that
+  stroke risk with flutter is like AF and the team considers anticoagulation (told; the ESC and ACC/AHA AF guidelines were
+  **not read**). Stage 6: the cavotricuspid isthmus ablation sentence.
+* *Pacemaker malfunction, stages 1 to 5.* All device statements (why the paced QRS is wide, loss of capture, undersensing,
+  functional non-capture, T-wave oversensing, the causes listed) come from the simulator's scenario notes and general
+  device teaching; the NBG code paper and the pacing text books were **not read**, and the one paper read (a case report on
+  a lead problem after a generator change) does not describe pacing spikes. The line that devices are interrogated for
+  threshold and impedance is general knowledge. The case does not say what to reprogram.
+* *Pericarditis or STEMI, stages 1 to 5.* The description of the ECG, the sentence that uncertain ST elevation is treated as
+  possible ACS until excluded (scenario notes), the PR-segment depression (told, the simulator does not draw it: the
+  strip does not show it), the rub description, the two-of-four diagnostic rule and aspirin or an NSAID with low-dose colchicine
+  (ESC 2015 running text; class and level not read), and the echo statement (the simulator cannot show an effusion).
+* *All six.* The invented patients, their ages, vital signs and laboratory values are made up to read plausibly and were not
+  checked against any source. The simulated shocks succeed on the first try with the shipped scenario seeds in our headless
+  run, but a shock outcome is drawn from a seeded generator and the stage texts say so; the next stage loads the rhythm
+  that follows whatever happened.
+
 ### The echo calculators
 
 The 49 verified calculators, among them the 16 guideline decision tools, were copied from the guideline tables and figures by

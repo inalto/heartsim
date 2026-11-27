@@ -1,0 +1,214 @@
+// heartsim patient case: atrial flutter with 2:1 conduction behind a "sinus tachycardia". Original text by
+// the heartsim authors, MIT OR Apache-2.0 (see ASSETS-LICENSES.md). Format: see crates/heartsim-core/src/case.rs.
+Case(
+    format_version: 1,
+    id: "case_flutter_2to1",
+    title: "A pulse stuck at 150",
+    summary: "A woman short of breath has a regular narrow tachycardia that does not budge. Find what is hiding in the ST segments, unmask it, and decide what the drug did and did not do.",
+    patient: "66-year-old retired teacher, two days of breathlessness and a pounding heart, mild high blood pressure, otherwise well, pulse 150 and regular.",
+    references: [
+        "Brugada J et al. 2019 ESC Guidelines for the management of patients with supraventricular tachycardia. Eur Heart J 2020;41:655-720. doi:10.1093/eurheartj/ehz467 (running text on adenosine and macro-re-entrant atrial tachycardia read; tables not read).",
+    ],
+    stages: [
+        Stage(
+            title: "Sinus tachycardia?",
+            markdown: r#"
+**Mrs Papadakis** feels breathless and her heart is pounding. Her pulse is 150 and perfectly regular,
+her blood pressure is 124/80 mmHg and she looks comfortable at rest. A colleague says it is probably a
+sinus tachycardia from anxiety. You are asked to look again at the strip: the QRS complexes are narrow
+and regular, and between them the baseline never quite goes flat.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_2to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Which finding argues against an ordinary sinus tachycardia?",
+                    choices: [
+                        "The QRS complexes are narrow",
+                        "The rhythm is regular",
+                        "The rate stays fixed at exactly 150 however she rests",
+                        "She is breathless",
+                    ],
+                    answer: 2,
+                    explanation: "Sinus tachycardia speeds up and slows down with demand and rarely sits at one exact rate. A regular narrow tachycardia that stays near 150 should raise the question of atrial flutter with 2:1 conduction. Narrow and regular fits both.",
+                ),
+                Question(
+                    prompt: "In typical flutter the atria beat at about how many beats per minute?",
+                    choices: [
+                        "About 100",
+                        "About 300",
+                        "About 600",
+                        "About 150",
+                    ],
+                    answer: 1,
+                    explanation: "The flutter circuit turns about 300 times a minute (the usual range is 250 to 350). The AV node cannot follow that, and conducting every second wave gives the ventricular rate of about 150.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Unmasking the waves",
+            markdown: r#"
+You warn her that she will feel a brief tightness in the chest. After about eight seconds the
+simulator gives **adenosine** as a rapid bolus into a vein (the simulator's dose is the standard one in
+its drug table).
+
+For several seconds the ventricles stop. The strip then shows a regular, saw-toothed baseline of
+flutter waves with no QRS complexes. After the pause the QRS complexes return.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_2to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Drug(name: "adenosine", dose: 1.0)),
+            ],
+            questions: [
+                Question(
+                    prompt: "What does the strip show during the pause?",
+                    choices: [
+                        "Sinus rhythm at 70 per minute",
+                        "Asystole with a flat line",
+                        "Ventricular tachycardia",
+                        "Regular flutter waves about 300 per minute that the QRS complexes had been hiding",
+                    ],
+                    answer: 3,
+                    explanation: "Adenosine blocks the AV node for a few seconds. With no QRS complexes to hide them, the flutter waves are plain to see. The atria were never in sinus rhythm.",
+                ),
+                Question(
+                    prompt: "Did adenosine treat the flutter?",
+                    choices: [
+                        "Yes: it ended the circuit and restored sinus rhythm",
+                        "Yes, but only for the duration of the pause",
+                        "It slowed the circuit permanently",
+                        "No: it blocked the AV node briefly and revealed the flutter, but the atrial circuit kept turning",
+                    ],
+                    answer: 3,
+                    explanation: "The ESC supraventricular tachycardia guideline text says adenosine does not interrupt macro-re-entrant atrial tachycardias such as flutter. It is a diagnostic aid here: the circuit lies in the atrium and does not need the AV node.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Fewer waves get through",
+            markdown: r#"
+A drug that slows the AV node (a calcium-channel blocker, for example) would let fewer flutter waves
+through to the ventricles. The simulator takes about two minutes of simulated time to show such a
+drug at work, so this page loads a patient whose flutter is conducted **one wave in four** to show
+what a slower ventricular response looks like. The atria still beat about 300 times a minute.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_4to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "A drug that slows the AV node is given for atrial flutter. What changes?",
+                    choices: [
+                        "The flutter circuit stops",
+                        "The ventricular rate falls because fewer flutter waves are conducted; the atrial rate is unchanged",
+                        "The atrial rate halves",
+                        "Nothing, because the AV node is not involved",
+                    ],
+                    answer: 1,
+                    explanation: "Slowing the AV node changes the ratio of atrial waves to QRS complexes, for example from 2:1 to 4:1. The atrium continues to flutter. Slowing the rate relieves symptoms but does not restore sinus rhythm.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "A look-alike",
+            markdown: r#"
+Another patient's flutter is conducted in a changing ratio, so that the pulse is **irregular**. At a
+glance this looks like atrial fibrillation.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_variable")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+            ],
+            questions: [
+                Question(
+                    prompt: "How can flutter with variable block be told from atrial fibrillation?",
+                    choices: [
+                        "Flutter is always regular",
+                        "AF always has a faster rate",
+                        "In flutter the waves on the baseline are the same size and shape and keep a fixed spacing; in AF they vary",
+                        "Only a blood test can tell them apart",
+                    ],
+                    answer: 2,
+                    explanation: "The ventricular rhythm is irregular in both. The baseline is the clue: flutter waves are uniform and evenly spaced, while the fibrillation waves of AF vary in size, shape and timing.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Restoring sinus rhythm",
+            markdown: r#"
+Mrs Papadakis stays short of breath and the team decides to restore sinus rhythm. After sedation, the
+simulator loads her rhythm again, waits eight seconds and delivers a **synchronised shock of 100 J**.
+
+A simulated shock can fail: its outcome is drawn from a seeded random generator. In our test run the
+first shock ended the flutter and the sinus node took over at about 70 per minute. Look at the strip
+to see what happened in yours; the next page starts from sinus rhythm whatever you saw.
+"#,
+            actions: [
+                Ui(LoadScenario("flutter_2to1")),
+                Ui(FocusPanel(Simulator)),
+                Ui(SelectLead(II)),
+                Ui(WaitForEvent(ElapsedMs(8000.0))),
+                Sim(Shock(joules: 100.0, synchronised: true)),
+            ],
+            questions: [
+                Question(
+                    prompt: "The shock is synchronised. What does the defibrillator wait for before it fires?",
+                    choices: [
+                        "An R wave, so the shock is not delivered on the T wave",
+                        "A flutter wave",
+                        "The end of the T wave",
+                        "A pause in the rhythm",
+                    ],
+                    answer: 0,
+                    explanation: "A synchronised shock is timed to the R wave, where the ventricles are least vulnerable. Flutter and supraventricular tachycardias are organised enough to give a clear R wave to sync on.",
+                ),
+                Question(
+                    prompt: "Why should the team think about stroke prevention around cardioversion of atrial flutter?",
+                    choices: [
+                        "It makes the shock work better",
+                        "Flutter causes high blood pressure",
+                        "Because it is a rule for every shock",
+                        "Because atria that are not contracting effectively can form clots, so flutter carries a stroke risk like atrial fibrillation",
+                    ],
+                    answer: 3,
+                    explanation: "This is told here and not shown, because the simulator has no clot or anticoagulant. Decisions about anticoagulation are made by the treating team. The simulator does not teach them.",
+                ),
+            ],
+        ),
+        Stage(
+            title: "Afterwards",
+            markdown: r#"
+The simulator loads **normal sinus rhythm**. She feels much better. Her doctor explains that
+typical flutter is a large circuit in the right atrium that runs through a narrow strip of tissue, and
+that the rhythm can come back. (A catheter treatment for this exists; the simulator's Template rhythms
+cannot show it. Ablation appears only in the EP lab scenarios.)
+"#,
+            actions: [
+                Ui(LoadScenario("sinus_normal")),
+                Ui(FocusPanel(TwelveLead)),
+            ],
+            questions: [
+                Question(
+                    prompt: "Why can a catheter treatment cure typical flutter?",
+                    choices: [
+                        "It slows the sinus node",
+                        "It breaks the large right-atrial circuit at a narrow strip of tissue that every turn must pass",
+                        "It removes the AV node",
+                        "It lowers blood pressure",
+                    ],
+                    answer: 1,
+                    explanation: "The common type of flutter is a macro-re-entry around the tricuspid valve that passes through a narrow isthmus. A line of ablation across it breaks the circuit. This is told here, not shown.",
+                ),
+            ],
+        ),
+    ],
+)
