@@ -12,7 +12,11 @@ use std::path::PathBuf;
 /// # Errors
 /// Only if serialisation itself fails.
 pub fn to_ron(s: &Tier0Scenario) -> Result<String, ron::Error> {
-    let pretty = || ron::ser::PrettyConfig::default().struct_names(true).new_line("\n");
+    let pretty = || {
+        ron::ser::PrettyConfig::default()
+            .struct_names(true)
+            .new_line("\n")
+    };
     let body = s.scenario.to_ron()?;
     let body = body.trim_end();
     let body = body.strip_suffix(')').unwrap_or(body).trim_end();

@@ -439,7 +439,12 @@ impl Scenario {
     }
 
     pub fn to_ron(&self) -> Result<String, ron::Error> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true).new_line("\n"))
+        ron::ser::to_string_pretty(
+            self,
+            ron::ser::PrettyConfig::default()
+                .struct_names(true)
+                .new_line("\n"),
+        )
     }
 
     pub fn from_ron(text: &str) -> Result<Self, ScenarioError> {

@@ -70,7 +70,12 @@ impl Case {
     /// # Errors
     /// Only if serialisation itself fails.
     pub fn to_ron(&self) -> Result<String, ron::Error> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true).new_line("\n"))
+        ron::ser::to_string_pretty(
+            self,
+            ron::ser::PrettyConfig::default()
+                .struct_names(true)
+                .new_line("\n"),
+        )
     }
 
     /// Total number of questions in all stages.
