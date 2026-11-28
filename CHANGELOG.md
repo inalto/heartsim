@@ -4,6 +4,11 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+### Fixed
+- A `.hs` case file, a library `index.ron` and a saved rhythm are written with LF line ends on Windows too. 0.27.0 on Windows
+  wrote CR LF there, so the same case had other bytes and another SHA-256 than on Linux and macOS; such files stay valid and
+  open everywhere.
+
 ## [0.27.0] — 2026-11-28
 
 ### Added

@@ -143,7 +143,7 @@ impl Manifest {
     /// # Errors
     /// Only if serialisation itself fails.
     pub fn to_ron(&self) -> Result<String, ron::Error> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true))
+        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true).new_line("\n"))
     }
 
     /// The field rules of a version-1 manifest (kind and version are checked before).

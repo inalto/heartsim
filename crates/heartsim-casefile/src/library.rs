@@ -244,7 +244,7 @@ impl CaseIndex {
     /// # Errors
     /// Only if serialisation itself fails.
     pub fn to_ron(&self) -> Result<String, IndexError> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true))
+        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default().struct_names(true).new_line("\n"))
             .map_err(|e| IndexError::Write(e.to_string()))
     }
 }
