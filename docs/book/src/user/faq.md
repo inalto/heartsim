@@ -11,6 +11,11 @@ printer uses in the export window.
 **The strip on screen is not 25 mm/s against a ruler.**
 Screens differ in pixel density. Adjust the *Screen scale* (in pt/mm) in the strip's *Display* popup until ten small squares measure 1 cm.
 
+**How do I zoom the heart or stretch the ECG in time?**
+Mouse wheel, Ctrl + wheel (⌘ on a Mac), or a two-finger pinch (touch screen or trackpad), over the 3-D view or over the strip. On the strip
+this changes the paper speed it is drawn at; *Reset zoom* in the *Paper speed* box or choosing a speed goes back. See
+[Zooming](ui-tour.md#zooming-the-3-d-views-and-the-strip).
+
 **The heart is a grey sphere, or the window does not open.**
 heartsim could not load the heart model or find a GPU. Reinstall from the release page; on Linux without a GPU install Mesa's
 Vulkan driver (`mesa-vulkan-drivers`). Start heartsim from a terminal with `RUST_LOG=warn` to see the reason.

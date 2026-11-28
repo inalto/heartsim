@@ -26,11 +26,28 @@ Echo page's probe and image controls share one row layout: label, slider and val
 accent always marks an action you can take now. Explanations that run to a few sentences sit behind **More**, and the helper
 text under a control is set at a size you can read.
 
+## Zooming the 3-D views and the strip
+
+Every 3-D view (the Simulator, the Electrodes tab and the Echo page) and every ECG strip zooms with the same gestures:
+
+| Gesture | Over a 3-D view | Over an ECG strip |
+|---|---|---|
+| Mouse wheel | Zooms the camera in and out. | Zooms the time axis (about 10 % a notch), on the Simulator, 12-Lead, Heart Vector and Echo strips. A strip inside a scrolling area would keep scrolling instead; none of the app's strips is. |
+| Ctrl + wheel (⌘ + wheel on a Mac) | Zooms the camera. | Zooms the time axis. |
+| Two-finger pinch on a touch screen, pinch on a trackpad | Zooms the camera; two fingers never rotate the heart or drag an electrode or a probe handle. | Zooms the time axis. |
+
+Zooming the strip changes the paper speed it is drawn at, exactly as if you had chosen that speed: the 1 mm squares keep their
+size and stand for another time, so a caliper reading is still true. The *Paper speed* box then shows the speed in use (for example
+*37.5 mm/s*) and offers *Reset zoom*; choosing a preset speed also goes back to it. Running, the newest sample stays at the right
+edge. Paused, the sample under the pointer (or between your fingers) stays under it, and calipers stay on the samples they were
+placed on. The zoom is a matter of drawing only: PNG, PDF, CSV and the interval drill keep the speed you chose in the box, and
+the zoom is not remembered after you close heartsim.
+
 ## Simulator
 
 ![Simulator tab with sinus rhythm](../images/simulator-sinus.png)
 
-* **Centre: the 3-D heart.** Drag to rotate, scroll to zoom. The colour is the membrane voltage of each region (blue at
+* **Centre: the 3-D heart.** Drag to rotate; zoom with the mouse wheel, a two-finger pinch or a trackpad pinch (every 3-D view works this way, see [Zooming](#zooming-the-3-d-views-and-the-strip) below). The colour is the membrane voltage of each region (blue at
   rest, red when depolarised); the panel on the left switches to *activation time* or *APD* maps, changes the colour range
   and offers a colour-blind-safe palette. *Click on the heart* stimulates there; shift-click ablates.
 * **The heart moves.** The left panel's *Wall motion* section (closed at first) has a switch, an *Exaggeration* slider and a read-out card (LVEF, volumes,
@@ -50,7 +67,7 @@ text under a control is set at a size you can read.
   a word, so it reads without colour) and a small torso schematic with the limb leads at their angles; the legend under
   the circle is the colour key. The *Measurements* card holds the interval read-out (HR, RR, rhythm regularity, PR, QRS,
   QT, QTc).
-* **Bottom: the strip.** One row of controls sits above it: the lead buttons, paper speed (12.5–200 mm/s), gain (5/10/20 mm/mV),
+* **Bottom: the strip.** One row of controls sits above it: the lead buttons, paper speed (12.5–200 mm/s, and any speed in between or beyond while you zoom, see below), gain (5/10/20 mm/mV),
   scrolling paper or a monitor-style sweep bar, *Clear calipers*, the *Scrub back* slider while paused, and a **Display** button.
   *Display* opens a popup with monitor colours, grid, wave letters (P, R, T), PR/RR brackets, the screen scale in points per
   millimetre (hold a ruler to the screen and adjust it until 10 small squares measure 1 cm), the filter and the artefacts.

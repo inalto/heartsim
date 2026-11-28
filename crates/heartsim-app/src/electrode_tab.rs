@@ -519,7 +519,12 @@ impl ElectrodeTab {
                 }
             }
         }
-        if pressed && let Some(o) = origin.filter(|o| rect.contains(*o)) {
+        // two fingers are a pinch zoom of the view: they grab no electrode
+        let pinching = heartsim_ui::viewport::pinching(ui);
+        if pressed
+            && !pinching
+            && let Some(o) = origin.filter(|o| rect.contains(*o))
+        {
             self.dragging = screen
                 .iter()
                 .map(|(c, s)| (*c, s.distance(o)))
@@ -530,7 +535,7 @@ impl ElectrodeTab {
                 self.editor.selected = self.dragging;
             }
         }
-        if !down {
+        if !down || pinching {
             self.dragging = None;
         }
         let response = Viewport3d::ui_with_orbit(ui, size, self.dragging.is_none());

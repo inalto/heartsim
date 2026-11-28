@@ -32,6 +32,7 @@ pub mod twelve_lead;
 pub mod vector_view;
 pub mod viewport;
 pub mod widgets;
+pub mod zoom;
 
 /// Below this window width (logical points) the app uses its compact layouts: one pane at a time,
 /// the strip toolbar folded behind its Display menu.
@@ -65,7 +66,7 @@ pub use torso_schematic::torso_schematic;
 pub use transport::{SPEED_RANGE, TransportResponse, transport_controls};
 pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};
 pub use vector_view::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};
-pub use viewport::{Viewport3d, ViewportResources};
+pub use viewport::{Viewport3d, ViewportResources, ZoomInput, zoom_input};
 pub use widgets::{
     PRIMARY_CLASS, collapsible_section, helper_text, info_disclosure, primary_button, segmented, slider_row,
     status_row,

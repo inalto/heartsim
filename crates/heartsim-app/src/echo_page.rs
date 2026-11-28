@@ -1514,7 +1514,9 @@ impl EchoPage {
                 i.pointer.delta(),
             )
         });
-        if pressed {
+        // two fingers are a pinch zoom of the view: they grab no handle
+        let pinching = heartsim_ui::viewport::pinching(ui);
+        if pressed && !pinching {
             self.press_grabbed = false;
             if let (Some(h), Some(o)) = (&handles, origin.filter(|o| rect.contains(*o))) {
                 let candidates = [
@@ -1535,7 +1537,7 @@ impl EchoPage {
                 self.probe_touched |= self.press_grabbed;
             }
         }
-        if !down {
+        if !down || pinching {
             self.drag = None;
         }
         if let (Some(drag), Some(h), Some(p), Some(camera)) =

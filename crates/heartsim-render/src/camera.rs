@@ -171,6 +171,15 @@ impl OrbitCamera {
         self.distance = (self.distance * (1.0 - scroll * 0.1)).clamp(self.min_distance, self.max_distance);
     }
 
+    /// Zoom by a multiplicative `factor` (a pinch or a trackpad magnify gesture: above 1 spreads
+    /// the fingers and brings the heart closer): the distance is divided by it, within the same
+    /// limits as [`Self::zoom`]. A factor that is not a positive finite number is ignored.
+    pub fn zoom_by(&mut self, factor: f32) {
+        if factor.is_finite() && factor > 0.0 {
+            self.distance = (self.distance / factor).clamp(self.min_distance, self.max_distance);
+        }
+    }
+
     /// Aim at the box `(lo, hi)` from a distance that shows all of it, and scale the clip planes
     /// and zoom limits to the scene so millimetre-sized anatomy and unit test spheres both work.
     pub fn frame(&mut self, lo: Vec3, hi: Vec3) {
@@ -256,6 +265,31 @@ mod tests {
             (v.z + 5.0).abs() < 1e-5,
             "target is 5 units in front of the camera (−Z)"
         );
+    }
+
+    #[test]
+    fn zoom_by_divides_the_distance_and_respects_the_limits() {
+        let mut c = OrbitCamera::default();
+        let d = c.distance;
+        c.zoom_by(1.0);
+        assert!((c.distance - d).abs() < 1e-6, "a factor of 1 is a no-op");
+        c.zoom_by(2.0);
+        assert!((c.distance - d / 2.0).abs() < 1e-6, "twice as close");
+        c.zoom_by(1e6);
+        assert!(
+            (c.distance - c.min_distance).abs() < 1e-6,
+            "clamped at the near limit"
+        );
+        c.zoom_by(1e-6);
+        assert!(
+            (c.distance - c.max_distance).abs() < 1e-3,
+            "clamped at the far limit"
+        );
+        let before = c.distance;
+        c.zoom_by(f32::NAN);
+        c.zoom_by(0.0);
+        c.zoom_by(-2.0);
+        assert!((c.distance - before).abs() < 1e-6, "nonsense factors are ignored");
     }
 
     #[test]

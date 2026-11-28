@@ -5,6 +5,12 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- Pinch zoom in every 3-D view, on a touch screen and on a laptop trackpad (brief B38); the mouse wheel zooms as before, and
+  two fingers no longer rotate the heart or drag an electrode or a probe handle.
+- Time zoom of the ECG strips: the wheel over a strip, Ctrl/⌘ + wheel and a pinch change the paper speed the strip is drawn at
+  (6.25 to 400 mm/s), keeping the sample under the pointer while paused. The *Paper speed* box shows the speed in use and gains
+  *Reset zoom*; choosing a speed resets it. Exports and the interval drill keep the chosen speed. Not seen on a real touch
+  screen or trackpad (see the known issues).
 - Six new patient cases (brief B44), nine in all: a regular wide-complex tachycardia, an anterior infarct with ventricular
   fibrillation and defibrillation, acquired long QT with torsades, atrial flutter with 2:1 conduction, a pacemaker that
   fails, and pericarditis against infarction (`assets/cases/case_*.ron`, English only). Where the simulator cannot show a step

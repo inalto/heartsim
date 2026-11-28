@@ -10,6 +10,7 @@ use crate::pcg_lane::{
 use crate::strip::{GAINS_MM_MV, SPEEDS_MM_S, StripStyle, StripTrace, StripWindow, SweepMode, draw_strip};
 use crate::t;
 use crate::twelve_lead::{LeadOrder, TwelveLeadLayout, cell_is_annotated, intervals_fit_cells, page_cells};
+use crate::zoom::{clamp_time_zoom, head_keeping, rebase_caliper_ms, sample_pos_at_x, strip_zoom_factor};
 use egui::{Rect, Ui};
 use heartsim_core::Lead;
 use heartsim_ecg::artefact::INTENSITY_RANGE;
@@ -42,7 +43,18 @@ pub const ANALYSIS_PERIOD_MS: f64 = 250.0;
     reason = "independent display switches of the Display popup"
 )]
 pub struct EcgView {
+    /// The paper style the learner chose: `style.mm_per_s` is the preset speed, which the exports,
+    /// the printed page and the interval drill keep using. What the strips are drawn at is
+    /// [`Self::effective_style`].
     pub style: StripStyle,
+    /// Time zoom of the strips (1 = the chosen paper speed), a drawing matter only: the strips
+    /// are drawn at `style.mm_per_s × time_zoom`. Not persisted. See [`Self::time_zoom`].
+    time_zoom: f32,
+    /// Whether a strip takes the plain mouse wheel as time zoom. True where the strips sit
+    /// outside any scroll area (every strip of the app today: the Simulator, Echo and Heart Vector
+    /// bottom strips and the 12-lead page); a host that puts a strip inside a scroll area sets it
+    /// false so the wheel keeps scrolling there (pinch and Ctrl/⌘ + wheel still zoom).
+    pub plain_wheel_zoom: bool,
     pub playback: Playback,
     pub order: LeadOrder,
     /// Draw P/R/T letters.
@@ -109,6 +121,8 @@ impl Default for EcgView {
     fn default() -> Self {
         Self {
             style: StripStyle::default(),
+            time_zoom: 1.0,
+            plain_wheel_zoom: true,
             playback: Playback::default(),
             order: LeadOrder::Standard,
             show_waves: true,
@@ -168,6 +182,45 @@ impl EcgView {
     /// Pause, or resume from "now".
     pub fn toggle_pause(&mut self) {
         self.playback.toggle();
+    }
+
+    /// Time zoom of the strips: 1 draws them at the chosen paper speed, 2 at twice that speed.
+    /// Always within the range that keeps the effective speed between 6.25 and 400 mm/s.
+    #[must_use]
+    pub fn time_zoom(&self) -> f32 {
+        clamp_time_zoom(self.style.mm_per_s, self.time_zoom)
+    }
+
+    /// Sets the time zoom (clamped, see [`Self::time_zoom`]).
+    pub fn set_time_zoom(&mut self, zoom: f32) {
+        self.time_zoom = clamp_time_zoom(self.style.mm_per_s, zoom);
+    }
+
+    /// Chooses a preset paper speed. A preset is a fresh start: the time zoom goes back to 1.
+    pub fn set_paper_speed(&mut self, mm_per_s: f32) {
+        self.style.mm_per_s = mm_per_s;
+        self.time_zoom = 1.0;
+    }
+
+    /// Back to the chosen paper speed.
+    pub fn reset_time_zoom(&mut self) {
+        self.time_zoom = 1.0;
+    }
+
+    /// The paper speed the strips are drawn at, mm/s: the preset times the time zoom.
+    #[must_use]
+    pub fn effective_mm_per_s(&self) -> f32 {
+        self.style.mm_per_s * self.time_zoom()
+    }
+
+    /// [`Self::style`] at the effective paper speed: what every on-screen strip, its grid, its
+    /// calipers and the heart-sound lane are drawn with. The exports use [`Self::style`] instead.
+    #[must_use]
+    pub fn effective_style(&self) -> StripStyle {
+        StripStyle {
+            mm_per_s: self.effective_mm_per_s(),
+            ..self.style
+        }
     }
 
     /// How far the scrub cursor is behind the newest sample, ms (0 when live). The 3-D view
@@ -320,15 +373,31 @@ impl EcgView {
 
     /// Paper speed, gain, Scroll / Sweep, Clear calipers and, while paused, the scrub slider.
     fn trace_controls(&mut self, ui: &mut Ui, rings: &[LeadRing]) {
+        let zoomed = (self.time_zoom() - 1.0).abs() > 1e-3;
+        let speed_text = if zoomed {
+            speed_label(self.effective_mm_per_s())
+        } else {
+            speed_label(self.style.mm_per_s)
+        };
         let speed = egui::ComboBox::from_id_salt("ecg_speed")
-            .selected_text(format!("{} mm/s", self.style.mm_per_s))
+            .selected_text(speed_text)
             .show_ui(ui, |ui| {
                 for s in SPEEDS_MM_S {
-                    ui.selectable_value(&mut self.style.mm_per_s, s, format!("{s} mm/s"));
+                    let chosen = !zoomed && (self.style.mm_per_s - s).abs() < 1e-3;
+                    if ui.selectable_label(chosen, speed_label(s)).clicked() {
+                        self.set_paper_speed(s);
+                    }
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(zoomed, egui::Button::new(t!("ecg-speed-reset")))
+                    .clicked()
+                {
+                    self.reset_time_zoom();
                 }
             });
         name_combo(&speed.response, &t!("ecg-speed"));
-        speed.response.on_hover_text(t!("ecg-speed"));
+        speed.response.on_hover_text(t!("ecg-speed-hint"));
         let gain = egui::ComboBox::from_id_salt("ecg_gain")
             .selected_text(format!("{} mm/mV", self.style.mm_per_mv))
             .show_ui(ui, |ui| {
@@ -653,6 +722,7 @@ impl EcgView {
         let lane = sounds
             .filter(|_| self.show_heart_sounds)
             .and_then(|l| Some((l, l.factor(rings.first()?)?)));
+        let region = rect;
         let (rect, lane_rect) = match lane {
             Some(_) => {
                 let h = lane_height(rect.height());
@@ -661,15 +731,16 @@ impl EcgView {
             }
             None => (rect, None),
         };
-        let win = self.ecg_strip(ui, rect, rings, lead);
+        let win = self.ecg_strip(ui, rect, region, rings, lead);
+        let style = self.effective_style();
         let factor = pcg_factor(rings);
         if let Some(p) = self.playhead {
-            draw_playhead(ui, &win, p, factor, &self.style);
+            draw_playhead(ui, &win, p, factor, &style);
         }
         if let (Some((lane, factor)), Some(lane_rect)) = (lane, lane_rect) {
             let id = ui.scope_id().with("ecg_view_sounds");
             let lane_win = win.rescaled(lane_rect, factor);
-            draw_pcg_lane(ui, id, &lane_win, &lane, &self.style, &lane_title(self.listening));
+            draw_pcg_lane(ui, id, &lane_win, &lane, &style, &lane_title(self.listening));
             if let Some(tag) = &self.sound_tag {
                 crate::clip_view::draw_altered_tag(ui, lane_rect, tag);
             }
@@ -681,9 +752,9 @@ impl EcgView {
                 &mut self.strip_calipers,
                 &mut self.playback,
             );
-            draw_caliper_lines(ui, &lane_win, &self.strip_calipers, &self.style);
+            draw_caliper_lines(ui, &lane_win, &self.strip_calipers, &style);
             if let Some(p) = self.playhead {
-                draw_playhead(ui, &lane_win, p, 1, &self.style);
+                draw_playhead(ui, &lane_win, p, 1, &style);
             }
             let calipers = self.strip_calipers.clone();
             self.lane_button(ui, &lane_win, &lane, &calipers);
@@ -761,8 +832,21 @@ impl EcgView {
         }
     }
 
-    fn ecg_strip(&mut self, ui: &mut Ui, rect: Rect, rings: &[LeadRing], lead: Lead) -> StripWindow {
+    /// One strip in `rect`. `region` is where the zoom gestures count: `rect` plus the heart-sound
+    /// lane under it.
+    fn ecg_strip(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        region: Rect,
+        rings: &[LeadRing],
+        lead: Lead,
+    ) -> StripWindow {
         let id = ui.scope_id().with("ecg_view_strip");
+        if let Some(change) = self.apply_time_zoom(ui, region, &[(rect, 0)], rings) {
+            change.rebase(&mut self.strip_calipers, rect, 0);
+        }
+        let style = self.effective_style();
         let head = self.head(rings);
         let rings = self.display.rings(rings);
         let ring = &rings[lead as usize];
@@ -771,12 +855,66 @@ impl EcgView {
             id,
             rect,
             ring,
-            &self.style,
+            &style,
             &self.trace(lead, lead.label(), false, head, Annotate::ALL),
         );
         strip_interact(ui, id, &win, ring, &mut self.strip_calipers, &mut self.playback);
-        draw_calipers(ui, &win, ring, false, &self.strip_calipers, &self.style);
+        draw_calipers(ui, &win, ring, false, &self.strip_calipers, &style);
         win
+    }
+
+    /// Reads the time-zoom gestures over `region` and applies them: the zoom factor changes (within
+    /// its limits) and, while paused in scroll mode, the scrub offset moves so that the sample under
+    /// the pointer (or between the two fingers) stays under it. Running, the newest sample stays at
+    /// the right edge and the sweep page is recomputed from the new speed, by construction.
+    /// `cells` are the strip rectangles of the view with the number of columns drawn before the
+    /// head (0 for a strip; see `page_cells`). Returns what changed so the calipers can follow.
+    fn apply_time_zoom(
+        &mut self,
+        ui: &mut Ui,
+        region: Rect,
+        cells: &[(Rect, u64)],
+        rings: &[LeadRing],
+    ) -> Option<ZoomChange> {
+        let (factor, anchor_x) = strip_zoom_factor(ui, region, self.plain_wheel_zoom)?;
+        let old = self.effective_style();
+        let before = self.time_zoom();
+        self.time_zoom = clamp_time_zoom(self.style.mm_per_s, before * factor);
+        if (self.time_zoom - before).abs() < 1e-6 {
+            return None;
+        }
+        let new = self.effective_style();
+        let fs = fs_of(rings);
+        let old_head = self.head(rings);
+        let mut change = ZoomChange {
+            old,
+            new,
+            fs,
+            old_head,
+            new_head: old_head,
+            rebase: false,
+        };
+        if !self.playback.is_paused() || new.mode != SweepMode::Scroll {
+            return Some(change);
+        }
+        let (rect, cols) = cells
+            .iter()
+            .copied()
+            .find(|(r, _)| anchor_x >= r.left() && anchor_x <= r.right())
+            .or_else(|| cells.last().copied())?;
+        let old_win = change.window(rect, cols, &old, old_head);
+        let pos = sample_pos_at_x(&old_win, anchor_x);
+        let probe = StripWindow::new(rect, &new, fs, 0);
+        let want_head = head_keeping(&probe, pos, anchor_x) + (cols * probe.visible_samples) as f64;
+        let back_ms = (old_head as f64 - want_head) * 1000.0 / f64::from(fs.max(1.0));
+        let max = rings
+            .first()
+            .map_or(0.0, |r| Playback::max_scrub_ms(r, probe.visible_samples));
+        self.playback
+            .set_scrub_ms(self.playback.scrub_ms() + back_ms, max);
+        change.new_head = self.head(rings);
+        change.rebase = true;
+        Some(change)
     }
 
     /// The 12-lead page in `rect`, each cell with its own calipers. Returns the cell windows.
@@ -806,16 +944,17 @@ impl EcgView {
             .filter(|_| self.show_heart_sounds)
             .and_then(|l| Some((l, l.factor(rings.first()?)?)));
         let Some((lane, factor)) = lane else {
-            return self.page_cells(ui, rect, rings, layout);
+            return self.page_cells(ui, rect, rect, rings, layout);
         };
         let h = lane_height(rect.height() * 0.6);
         let (top, lane_rect) = rect.split_top_bottom_at_y(rect.bottom() - h);
-        let wins = self.page_cells(ui, top, rings, layout);
+        let wins = self.page_cells(ui, top, rect, rings, layout);
+        let style = self.effective_style();
         let head = self.head(rings);
-        let probe = StripWindow::new(lane_rect, &self.style, fs_of(rings), head);
+        let probe = StripWindow::new(lane_rect, &style, fs_of(rings), head);
         let lane_win = probe.rescaled(lane_rect, factor);
         let id = ui.scope_id().with("ecg_view_page_sounds");
-        draw_pcg_lane(ui, id, &lane_win, &lane, &self.style, &lane_title(self.listening));
+        draw_pcg_lane(ui, id, &lane_win, &lane, &style, &lane_title(self.listening));
         if let Some(tag) = &self.sound_tag {
             crate::clip_view::draw_altered_tag(ui, lane_rect, tag);
         }
@@ -827,22 +966,25 @@ impl EcgView {
             _ => &mut self.page_sound_calipers,
         };
         strip_interact(ui, id, &lane_win, lane.ring, calipers, &mut self.playback);
-        draw_caliper_lines(ui, &lane_win, calipers, &self.style);
+        draw_caliper_lines(ui, &lane_win, calipers, &style);
         let calipers = calipers.clone();
         if let Some(p) = self.playhead {
-            draw_playhead(ui, &lane_win, p, 1, &self.style);
+            draw_playhead(ui, &lane_win, p, 1, &style);
             if let Some(w) = wins.last().filter(|w| spans(w)) {
-                draw_playhead(ui, w, p, factor, &self.style);
+                draw_playhead(ui, w, p, factor, &style);
             }
         }
         self.lane_button(ui, &lane_win, &lane, &calipers);
         wins
     }
 
+    /// The page's cells in `rect`; `region` (`rect` plus the heart-sound lane) is where the zoom
+    /// gestures count.
     fn page_cells(
         &mut self,
         ui: &mut Ui,
         rect: Rect,
+        region: Rect,
         rings: &[LeadRing],
         layout: TwelveLeadLayout,
     ) -> Vec<StripWindow> {
@@ -852,18 +994,30 @@ impl EcgView {
             self.page_layout = Some(layout);
         }
         self.page_rect = Some(rect);
+        let zoom_cells: Vec<(Rect, u64)> = cells
+            .iter()
+            .map(|c| (c.rect, c.columns_before_head as u64))
+            .collect();
+        if let Some(change) = self.apply_time_zoom(ui, region, &zoom_cells, rings) {
+            for (set, (r, cols)) in self.page_calipers.iter_mut().zip(&zoom_cells) {
+                change.rebase(set, *r, *cols);
+            }
+            // the lane under the page spans the page's width
+            change.rebase(&mut self.page_sound_calipers, region, 0);
+        }
+        let style = self.effective_style();
         let head = self.head(rings);
         let rings = self.display.rings(rings);
         let base = ui.scope_id().with("ecg_view_page");
         let intervals_fit = intervals_fit_cells(
             self.annotations.as_ref().and_then(|a| a.analysis.rr_ms),
-            self.style.mm_per_s * self.style.px_per_mm,
+            style.mm_per_s * style.px_per_mm,
         );
         let mut wins = Vec::with_capacity(cells.len());
         for (i, cell) in cells.iter().enumerate() {
             let ring = &rings[cell.lead as usize];
             let id = base.with(i);
-            let probe = StripWindow::new(cell.rect, &self.style, ring.sample_rate_hz, head);
+            let probe = StripWindow::new(cell.rect, &style, ring.sample_rate_hz, head);
             let cell_head = head.saturating_sub(cell.columns_before_head as u64 * probe.visible_samples);
             // Wave letters and interval read-outs crowd a 12-lead page: the clinical grid carries
             // them on its rhythm strip only; the other layouts draw them in every cell, and
@@ -874,9 +1028,9 @@ impl EcgView {
                     && (layout == TwelveLeadLayout::Clinical || intervals_fit),
             };
             let trace = self.trace(cell.lead, cell.lead.label(), cell.invert, cell_head, annotate);
-            let win = draw_strip(ui, id, cell.rect, ring, &self.style, &trace);
+            let win = draw_strip(ui, id, cell.rect, ring, &style, &trace);
             strip_interact(ui, id, &win, ring, &mut self.page_calipers[i], &mut self.playback);
-            draw_calipers(ui, &win, ring, cell.invert, &self.page_calipers[i], &self.style);
+            draw_calipers(ui, &win, ring, cell.invert, &self.page_calipers[i], &style);
             wins.push(win);
         }
         wins
@@ -944,6 +1098,52 @@ impl EcgView {
     pub fn strip_calipers_mut(&mut self) -> &mut CaliperSet {
         &mut self.strip_calipers
     }
+}
+
+/// What one time-zoom step changed: the strip styles before and after, and the heads (one past
+/// the newest sample shown) before and after, so each caliper set can stay on its samples.
+struct ZoomChange {
+    old: StripStyle,
+    new: StripStyle,
+    fs: f32,
+    old_head: u64,
+    new_head: u64,
+    /// Paused in scroll mode: the head moved with the zoom and calipers follow their samples.
+    /// Running, the calipers keep their interval and their place from the left edge.
+    rebase: bool,
+}
+
+impl ZoomChange {
+    /// The window of the cell `rect` (`cols` columns before the head) drawn with `style`.
+    fn window(&self, rect: Rect, cols: u64, style: &StripStyle, head: u64) -> StripWindow {
+        let probe = StripWindow::new(rect, style, self.fs, head);
+        StripWindow::new(
+            rect,
+            style,
+            self.fs,
+            head.saturating_sub(cols * probe.visible_samples),
+        )
+    }
+
+    /// Moves the lines of `set` so each stays on the sample it was on (paused scroll mode only).
+    fn rebase(&self, set: &mut CaliperSet, rect: Rect, cols: u64) {
+        if !self.rebase {
+            return;
+        }
+        let old = self.window(rect, cols, &self.old, self.old_head);
+        let new = self.window(rect, cols, &self.new, self.new_head);
+        for c in &mut set.pairs {
+            c.a_ms = rebase_caliper_ms(c.a_ms, &old, &new);
+            c.b_ms = rebase_caliper_ms(c.b_ms, &old, &new);
+        }
+    }
+}
+
+/// A paper speed for the combo: "25 mm/s", "37.5 mm/s", "6.25 mm/s" (at most two decimals).
+fn speed_label(mm_per_s: f32) -> String {
+    let text = format!("{mm_per_s:.2}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    format!("{text} mm/s")
 }
 
 /// The display filter's name with its band, as in the radio list and on the Display button.
