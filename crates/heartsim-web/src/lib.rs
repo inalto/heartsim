@@ -16,6 +16,9 @@
 //!   Cases page opens one with the browser's file picker or a drop on the page, saves one as a
 //!   download (`rfd`'s web backend, inside `heartsim-app`'s `case_io`), and keeps My cases in
 //!   `localStorage`.
+//! * **Online case libraries** (B43): the Cases page's "Browse the online library" and "Import" go
+//!   through the page's `fetch` ([`fetch`] on `wasm32`, injected like the sound), by default to
+//!   `../cases/`, the library published next to the app on the same site.
 //!
 //! The pure part ([`archive`]) builds and is tested on every target; the browser glue exists only
 //! when compiled for `wasm32`.
@@ -24,6 +27,8 @@ pub mod archive;
 
 #[cfg(target_arch = "wasm32")]
 mod audio;
+#[cfg(target_arch = "wasm32")]
+mod fetch;
 #[cfg(target_arch = "wasm32")]
 mod web;
 #[cfg(target_arch = "wasm32")]

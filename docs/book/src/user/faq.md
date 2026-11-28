@@ -36,7 +36,9 @@ wfdb.plot_wfdb(record)
 ```
 
 **Does heartsim send any data over the network?**
-No. It needs no account and makes no network connections.
+No data of yours. It needs no account and sends no telemetry. The desktop app asks GitHub once at start whether a newer release
+exists (switch it off in Settings; see [Update check](install.md#update-check)), and the Cases page goes to the network only when
+you press **Browse the online library** or **Import** (see the [privacy note](cases.md#privacy)).
 
 **Where do I report a mistake in a rhythm?**
 Open an issue on [GitHub](https://github.com/inalto/heartsim/issues) with the scenario name and, ideally, a share bundle

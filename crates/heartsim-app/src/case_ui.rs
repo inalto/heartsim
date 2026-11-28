@@ -1,5 +1,6 @@
 //! Scripted patient cases (brief B18) and their page (brief B41): the built-in cases, the user's
-//! own case files ("My cases", see [`crate::case_io`]) and a minimal player.
+//! own case files ("My cases", see [`crate::case_io`]), the online library (brief B43, see
+//! [`crate::case_online`]) and a minimal player.
 //!
 //! A case (`assets/cases/<id>.ron`, format in `heartsim_core::case`) is played stage by stage: the
 //! reader shows the vignette, the stage's simulator actions run through the same
@@ -9,7 +10,9 @@
 
 use crate::case_edit::Draft;
 use crate::case_edit_ui::{Editor, EditorAction, editor_ui};
+use crate::case_fetch::{CaseFetch, FetchError};
 use crate::case_io::{CaseFileIo, CaseStore, IoEvent, NoIo, StorageStore};
+use crate::case_online::{ImportError, OnlineLibrary, verify_download};
 use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
@@ -220,6 +223,8 @@ pub struct Cases {
     confirm_replace: Option<EditStart>,
     /// The user was asked whether to discard the draft.
     confirm_discard: bool,
+    /// The Online section (B43): the transport, the library address and the last list read.
+    online: OnlineLibrary,
 }
 
 impl std::fmt::Debug for Cases {
@@ -289,6 +294,7 @@ impl Cases {
             pending_draft: None,
             confirm_replace: None,
             confirm_discard: false,
+            online: OnlineLibrary::default(),
         }
     }
 
@@ -310,7 +316,9 @@ impl Cases {
                 .and_then(|s| s.get_string(crate::case_io::STORAGE_KEY))
                 .as_deref(),
         ));
-        Self::with_io(library, Box::new(crate::case_io::DialogIo::default()), store)
+        let mut c = Self::with_io(library, Box::new(crate::case_io::DialogIo::default()), store);
+        c.online = OnlineLibrary::platform();
+        c
     }
 
     /// The installed cases.
@@ -745,6 +753,96 @@ impl Cases {
         self.status.as_ref().map(|s| (s.ok, s.text.as_str()))
     }
 
+    // ---- the online library (B43) ---------------------------------------------------------------
+
+    /// Use `fetch` for the Online section, with `default_base` as the library of an empty address
+    /// field (the browser build's `fetch` and `../cases/`; tests use
+    /// [`crate::case_fetch::MemoryFetch`]). The address field is kept.
+    pub fn set_online(&mut self, fetch: Box<dyn CaseFetch>, default_base: Option<&str>) {
+        let address = self.online.address().to_owned();
+        self.online = OnlineLibrary::new(fetch, default_base);
+        self.online.set_address(&address);
+    }
+
+    /// The Online section's state.
+    #[must_use]
+    pub fn online(&self) -> &OnlineLibrary {
+        &self.online
+    }
+
+    /// The Online section's state, to drive it without the page.
+    pub fn online_mut(&mut self) -> &mut OnlineLibrary {
+        &mut self.online
+    }
+
+    /// Take the Online section's answer, if one arrived: a list is shown; a downloaded case is
+    /// checked against its entry (exact length, SHA-256, the case-file reader, the id) and, only
+    /// then, opened into My cases with [`Self::open_bytes`], marked "from <host>". A case of My
+    /// cases with the same id and another file is replaced only when the user asked for the
+    /// update. Call once per frame. Returns `true` when a case was imported.
+    pub fn poll_online(&mut self, scenarios: &mut ScenarioLibrary) -> bool {
+        let Some(arrived) = self.online.poll() else {
+            return false;
+        };
+        let entry = arrived.entry;
+        let result = arrived
+            .result
+            .map_err(|e| match e {
+                FetchError::TooLarge { .. } => ImportError::WrongLength {
+                    listed: entry.size_bytes,
+                    got: None,
+                },
+                other => ImportError::Fetch(other),
+            })
+            .and_then(|bytes| verify_download(&entry, &bytes).map(|_| bytes));
+        let result = result.and_then(|bytes| {
+            let sha = heartsim_casefile::sha256_hex(&bytes);
+            if let Some(u) = self.user.iter().find(|u| u.package.manifest.id == entry.id) {
+                if u.sha256 == sha {
+                    return Ok((None, t!("online-already", title = u.package.case.title.as_str())));
+                }
+                if !arrived.update {
+                    return Err(ImportError::DifferentCase {
+                        title: u.package.case.title.clone(),
+                    });
+                }
+            }
+            let before = self.status.clone();
+            let provenance = OnlineLibrary::provenance(&arrived.base);
+            match self.open_bytes(&bytes, &provenance, scenarios) {
+                Ok(i) => {
+                    // the message goes to the Online section; a warning (not kept) stays on top
+                    if self.status.as_ref().is_some_and(|s| s.ok) {
+                        self.status = before;
+                    }
+                    let title = self.user[i].package.case.title.clone();
+                    Ok((
+                        Some(i),
+                        t!(
+                            "online-done",
+                            title = title.as_str(),
+                            source = provenance.as_str()
+                        ),
+                    ))
+                }
+                Err(e) => {
+                    self.status = before;
+                    Err(ImportError::Open(e))
+                }
+            }
+        });
+        match result {
+            Ok((index, text)) => {
+                self.online.finish_import(&entry.title, Ok(text));
+                index.is_some()
+            }
+            Err(e) => {
+                self.online.finish_import(&entry.title, Err(e));
+                false
+            }
+        }
+    }
+
     // ---- the case editor (B42) -----------------------------------------------------------------
 
     /// `true` while the page shows the editor in place of the list.
@@ -891,7 +989,8 @@ impl Cases {
     }
 
     /// The Cases page (B41): Open case file…, then the built-in cases, My cases and the online
-    /// library's slot, each case a card with Start and Save as… (and Remove for a user case).
+    /// library (B43, [`crate::case_online`]), each case a card with Start and Save as… (and Remove
+    /// for a user case).
     /// `primary_allowed`: whether one Start may be the page's primary button.
     pub fn library_ui(&mut self, ui: &mut egui::Ui, primary_allowed: bool) -> PageOutcome {
         let mut outcome = PageOutcome::default();
@@ -960,7 +1059,9 @@ impl Cases {
 
         ui.add_space(6.0);
         cards::subheading(ui, t!("cases-online"));
-        heartsim_ui::helper_text(ui, t!("cases-online-later"));
+        if let Some(a) = self.online.ui(ui, &self.user) {
+            self.online.act(a);
+        }
 
         match action {
             Some(CardAction::Start(r)) => {

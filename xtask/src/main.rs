@@ -1,5 +1,6 @@
 //! `cargo xtask <task>` — project automation that would otherwise live in shell scripts.
 mod bake;
+mod case_library;
 mod icons;
 mod release;
 mod web;
@@ -46,6 +47,9 @@ enum Task {
     WebAssets(web::AssetsArgs),
     /// Fail if the `trunk build` output (wasm + asset archive) is over the 25 MiB budget.
     WebBudget(web::BudgetArgs),
+    /// Write the online case library (brief B43): every `assets/cases/*.ron` packed as `<id>.hs` and the
+    /// catalogue `index.ron`, deterministically, into `--out` (the Pages workflow: `docs/book/book/cases`).
+    CaseLibrary(case_library::CaseLibraryArgs),
 }
 
 #[derive(Args, Debug)]
@@ -173,5 +177,6 @@ fn main() -> Result<()> {
         Task::BakeValve(args) => bake::run_valve(&args),
         Task::WebAssets(args) => web::assets(&repo_root(), &args),
         Task::WebBudget(args) => web::budget(&repo_root(), &args),
+        Task::CaseLibrary(args) => case_library::run(&repo_root(), &args).map(drop),
     }
 }

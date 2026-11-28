@@ -166,6 +166,11 @@ impl WebApp {
         sound: bool,
     ) -> Self {
         let mut inner = HeartSimApp::with_assets(cc, assets);
+        // the online case library (B43): the page's fetch, the library next to the app
+        inner.set_case_fetch(
+            Box::new(crate::fetch::WebFetch::default()),
+            heartsim_app::case_online::WEB_DEFAULT_LIBRARY,
+        );
         inner.set_heart_sound_output(
             audio.factory(),
             heartsim_app::heart_sound_player::HeartSoundStatus::Unsupported,

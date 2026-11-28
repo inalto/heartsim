@@ -16,7 +16,8 @@ file is responsible for keeping it that way.
 
 * **Built-in**: the cases that come with heartsim.
 * **My cases**: case files you opened, or built-in cases you saved as a file. They stay there between sessions (see below).
-* **Online**: a place for a library of cases to import from the web; it is not there yet.
+* **Online**: cases to import from a library on the web, heartsim's own or another one (see
+  [Importing from an online library](#importing-from-an-online-library)).
 
 Each case is a card with its title, the patient line and a summary, the number of stages and questions, and your best score in this
 session (scores are not kept after you close heartsim). A case from a file also shows its authors, its licence (or "not stated")
@@ -102,6 +103,50 @@ refuses is named on the page with the reason, for example "Could not open notes.
 
 A case that brings its own rhythms adds them to the rhythm picker for the session, under the heading **From cases**. These rhythms
 never appear in the Rhythm Quiz, the Interval Drill or the Auscultation Quiz, which keep to the built-in library.
+
+## Importing from an online library
+
+A case library is a list of case files on a web server: heartsim's own is published with this guide, and a school or a teacher can
+publish one the same way (the format and how to host one are in the "Libraries" chapter of `docs/case-file.md` in the repository).
+
+* **Browse the online library** under **Online** downloads the library's list and shows its cases: title, summary, language,
+  authors, licence and size. If the list has entries that break a rule of the format, the page says how many were ignored.
+* **Import** downloads that case, checks it and adds it to **My cases**, where its card says where it came from ("from
+  inalto.github.io"). From then on it is a case like any file you opened: it stays between sessions, **Start**, **Save as…** and
+  **Remove** work as for the others.
+* A case already in My cases shows **Imported**. If My cases has a *different* file with the same case id (an older version, or a
+  file someone gave you), the button reads **Update…** and asks before it replaces yours; heartsim never replaces it silently.
+* A case that needs a newer heartsim shows **Needs a newer heartsim** and cannot be imported.
+* **Cancel** stops a download that is running; nothing is added. Only one download runs at a time.
+
+Every downloaded file is checked before anything is shown: it must have exactly the size and the SHA-256 the list gives, pass the
+same checks as a file opened from disk, and hold the case the list names. A file that fails is named with the reason, for example
+"the file's SHA-256 is not the one the library lists" or "the library lists the case `…` but the file holds `…`", and nothing of it
+is kept.
+
+**What the checksum does and does not do.** The SHA-256 in the list protects against a damaged or swapped file, *given an honest
+list*. It does not make a library trustworthy: the list is trusted exactly as much as the website it comes from. A case from
+someone else's library is teaching text nobody at heartsim has reviewed, like any case file you are given.
+
+### Another library
+
+Type its address in **Library address**, for example `https://example.org/heartsim-cases/`, and press **Browse the online
+library**; leave the field empty for heartsim's own library. The address is remembered in the settings. Only `https://` addresses
+are accepted (and `http://localhost` or `http://127.0.0.1`, for testing a library on your own computer).
+
+* **Desktop**: any https library works.
+* **Browser**: heartsim's own library is on the same site as the browser version, so it always works. Another site must allow web
+  pages of other sites to read its files (the `Access-Control-Allow-Origin` header of CORS; GitHub Pages and
+  `raw.githubusercontent.com` do). When it does not, the page says "this server does not allow the web version to read it, or it
+  cannot be reached": use the desktop version, or download the `.hs` file with your browser and open it with **Open case file…**.
+
+### Privacy
+
+Nothing is requested when heartsim starts or while you use the Cases page: only **Browse the online library** (one request for
+the list) and **Import** (one request for that file) go to the network, and only to the library address shown. On the desktop the
+request carries `User-Agent: heartsim/<version>` and nothing else: no cookies, no account, no identifier. In the browser, the
+browser sends its usual headers and no cookies (heartsim asks it to omit them). The library's web server sees your IP address, as
+for any web page.
 
 ## Saving a case file
 

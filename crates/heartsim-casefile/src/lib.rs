@@ -22,7 +22,12 @@
 //! (fixed entry order, the 1980 zip epoch as every timestamp, fixed permissions, deflate), so the
 //! SHA-256 of a file ([`sha256_hex`]) identifies it.
 //!
-//! Pure: no file system, no clock, no GUI; builds for `wasm32-unknown-unknown`.
+//! **Libraries.** [`library`] is the catalogue of an online case library (brief B43): the index
+//! types, their strict reader and the rules of a library address.
+//!
+//! Pure: no file system, no clock, no GUI, no network; builds for `wasm32-unknown-unknown`.
+
+pub mod library;
 
 use heartsim_core::case::Case;
 use heartsim_ecg::Tier0Scenario;

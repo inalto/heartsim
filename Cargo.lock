@@ -6119,6 +6119,7 @@ dependencies = [
  "clap",
  "flate2",
  "glam",
+ "heartsim-casefile",
  "heartsim-core",
  "heartsim-echo",
  "heartsim-geometry",

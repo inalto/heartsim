@@ -350,6 +350,8 @@ impl HeartSimApp {
         } else {
             let mut c = crate::case_ui::Cases::with_platform(case_library, cc.storage);
             c.load_store(&mut library);
+            // the address only; nothing is requested until the user asks (B43)
+            c.online_mut().set_address(&settings.case_library_address);
             c
         };
 

@@ -30,7 +30,8 @@ heartsim-calc      echo and haemodynamics calculators (B29): Calculator descript
 heartsim-echo      the beating heart (B30): a kinematic model of wall motion in cardiac coordinates, timed by the engine's
                    events and the valve schedule; LVEF, volume, MAPSE and TAPSE read-outs; pure (core, geometry, sim, ecg)
 heartsim-casefile  the patient case file `.hs` (B41): a zip of manifest + case + bundled rhythms; strict reader for untrusted
-                   files (named limits, counted inflation, allowed names only), deterministic writer, SHA-256; pure (core,
+                   files (named limits, counted inflation, allowed names only), deterministic writer, SHA-256; the online
+                   library index `index.ron` and the library-address rules (`library`, B43); pure (core,
                    ecg, ron, zip, sha2), builds for wasm32, beside `echo` in the order (below `render`; `app` and `cli` use it)
 heartsim-render    wgpu: offscreen scene (colour+depth), per-vertex scalar buffer + LUT textures, clip planes, picking rays, glyphs,
                    lines (vector arrow, catheters), offscreen capture to PNG
@@ -40,8 +41,11 @@ heartsim-io        exports and imports (B20): EcgRecord excerpt, 12-lead PDF (pr
                    CSV, WFDB format 16, scenario RON, deterministic share-bundle zip; CSV/WFDB/zip import for review
 heartsim-app       eframe app: model (clock, engine, synth/forward, rings), settings, persistence, audio (kira), exports, tutorials,
                    the Cases page with `case_io` (rfd dialogs on desktop and web, dropped files, My cases on disk or in localStorage)
+                   and the online library (`case_online`, B43) over the `case_fetch::CaseFetch` trait: `ureq` on a thread on the
+                   desktop (feature `online-cases`), the page's `fetch` injected by `heartsim-web`, `MemoryFetch` in tests
 heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets, openCARP bridge
-xtask              ci, asset pipeline (decimate meshes, bake hoods/fibres/W matrix), release checks
+xtask              ci, asset pipeline (decimate meshes, bake hoods/fibres/W matrix), release checks, the online case library
+                   (`case-library`, B43, run by the Pages workflow into `/cases/`)
 ```
 Dependency direction is strictly downward in this list.
 
@@ -214,6 +218,10 @@ scenario picker, presets. Keyboard: space pause, ←/→ scrub, 1–9 views. i18
   `case.ron` and optional `scenarios/<id>.ron`, read by `heartsim_casefile::CasePackage::read` under fixed limits (2 MiB file,
   16 entries, 1 MiB per entry and 4 MiB in all, counted while inflating; only these names). Format, security rules and version
   policy: `docs/case-file.md`. My cases: `<user data dir>/cases/<id>.hs` on the desktop, eframe storage key `my_cases` in the browser.
+  An **online case library** (B43) is `<base>/index.ron` (`heartsim_casefile::library::CaseIndex`) plus `<base>/<file>.hs`; the
+  official one is written by `cargo xtask case-library` into the Pages site's `/cases/`. Requests only on the user's click; the
+  index's SHA-256 is checked, then the file goes through the same reader. Format and trust model: `docs/case-file.md`, "Libraries".
+* Settings also hold the Cases page's library address (`case_library_address`, empty for the official library).
 * Settings: `directories` config dir, `settings.ron`.
 
 ## 8. Testing strategy

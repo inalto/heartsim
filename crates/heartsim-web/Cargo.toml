@@ -31,6 +31,8 @@ web-sys = { workspace = true, features = [
     # heart sounds through Web Audio (B26)
     "AudioContext", "BaseAudioContext", "AudioNode", "AudioDestinationNode", "AudioParam", "GainNode",
     "AudioBuffer", "AudioBufferSourceNode", "AudioScheduledSourceNode",
+    # online case libraries (B43): fetch with an AbortController, no credentials
+    "AbortController", "AbortSignal", "RequestInit", "RequestMode", "RequestCredentials", "Headers", "Url",
 ] }
 
 [lints]

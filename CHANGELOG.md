@@ -5,6 +5,17 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- Online case libraries (brief B43): the Cases page's **Online** section lists the cases of a library on the web and imports
+  one into My cases with a click, on the desktop and in the browser. A library is plain static files, `index.ron` (documented
+  in the "Libraries" chapter of `docs/case-file.md`) and one `.hs` per case, so anyone can host one; a **Library address**
+  field (kept in the settings; https only, or `http://localhost` for testing) picks another library than heartsim's own. The
+  index is read strictly (256 KiB, 500 entries, bounded strings, bad entries dropped and counted, a newer version refused);
+  a download must have the listed size and SHA-256, pass the same reader as a file from disk and hold the listed case; a
+  different file under an id already in My cases is offered as an update, never replaced silently. One request at a time with
+  Cancel, nothing requested at start. Desktop: `ureq` (new feature `online-cases`, on by default). Browser: `fetch` with an
+  `AbortController`, default library `../cases/`. `cargo xtask case-library` writes the official library deterministically
+  and the Pages workflow publishes it at `https://inalto.github.io/heartsim/cases/`. Strings in English, Italian, German,
+  French and Spanish. Never run against a real server or in a real browser (see the known issues).
 - A case editor on the Cases page (brief B42): **New case** and **Edit a copy** (on every card) open a form for the file
   details, the stages (add, duplicate, delete, move), the vignette with a live preview, the actions as one RON row each
   (helpers for Load rhythm, Show panel, Select lead, Wait and an example of every other kind), and the questions (three to
@@ -14,7 +25,7 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   the file. The draft is kept for the session and the page says "not saved" while it has unsaved changes (the program does not
   ask before it closes). Strings in English, Italian, German, French and Spanish. Not seen on a real screen (see the known issues).
 - Patient cases get their own page, **Cases**, in the Learn group after Tutorials (brief B41; no number key, so no shortcut
-  moved). It lists the built-in cases, **My cases** and a slot for an online library; each card shows the counts, the best
+  moved). It lists the built-in cases, **My cases** and the online library (B43); each card shows the counts, the best
   score of the session, and for a file its authors, licence and origin, with Start, Save as… and (for My cases) Remove. The
   Tutorials page no longer lists the cases and links to the new page.
 - Case files, `name.hs` (brief B41): a case and the rhythms it needs in one zip, documented in `docs/case-file.md`. A new pure

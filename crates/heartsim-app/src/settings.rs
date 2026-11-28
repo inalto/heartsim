@@ -98,6 +98,10 @@ pub struct Settings {
     /// respected as they are.
     #[serde(default)]
     pub layer_defaults: u32,
+    /// The "Library address" of the Cases page's Online section (B43): empty for the heartsim
+    /// library, else an `https://` address (or `http://localhost`, for testing). Only stored: a
+    /// request is made when the user presses "Browse the online library".
+    pub case_library_address: String,
 }
 
 /// The current start-up layer defaults (B37): the four valve layers on. A settings file with a
@@ -195,6 +199,7 @@ impl Default for Settings {
             aortic_valve: true,
             pulmonary_valve: true,
             layer_defaults: LAYER_DEFAULTS,
+            case_library_address: String::new(),
         }
     }
 }
@@ -599,6 +604,7 @@ mod tests {
             aortic_valve: false,
             pulmonary_valve: true,
             layer_defaults: LAYER_DEFAULTS,
+            case_library_address: "https://school.example/cases/".into(),
         };
         let back: Settings = ron::from_str(&s.to_storage_string()).expect("valid RON");
         assert_eq!(back, s);

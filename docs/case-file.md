@@ -1,7 +1,7 @@
 # The heartsim case file (`.hs`)
 
 A case file carries one patient case and the rhythms it needs, so a teacher can hand a case to a student as one file. The
-application opens and saves it on the Cases page (desktop and browser, see the user guide's
+application opens and saves it on the Cases page and imports it from an online library ([Libraries](#libraries)) (desktop and browser, see the user guide's
 [Patient cases](book/src/user/cases.md)); `heartsim-cli case pack | unpack | check` makes, takes apart and checks one. Both use
 the crate `crates/heartsim-casefile` (brief B41): the strict reader `CasePackage::read` and the deterministic writer
 `CasePackage::write`. This document is the format; the crate is the reference implementation, and every limit below is a
@@ -193,6 +193,132 @@ load it from the case with `Ui(LoadScenario("my_rhythm"))`. `case check` prints 
 application would refuse the file), then the editorial rules of the shipped cases (`Case::content_problems`: references, at least
 five questions, three to five choices each, an explanation) and a headless run of every stage as warnings.
 
+## Libraries
+
+A **case library** is a directory of case files served over HTTPS with a catalogue beside them (brief B43). The Cases page lists
+a library's cases and imports one with a click, on the desktop and in the browser; anyone can host one, since it is plain static
+files. The pure part (the index types, the reader, the address rules) is `heartsim_casefile::library`; every limit below is a
+`pub const` there with a test in `crates/heartsim-casefile/tests/library.rs`.
+
+```
+<base>/index.ron            the catalogue
+<base>/<file>.hs            one case file per entry
+```
+
+### The index
+
+`index.ron`, RON with struct names (`cargo xtask case-library` writes it pretty-printed):
+
+```ron
+CaseIndex(
+    format_version: 1,                          // of the index; a newer one is refused with "update heartsim"
+    title: "heartsim case library",             // at most 200 characters
+    updated: "2026-11-27",                      // ISO date, informational, optional
+    cases: [
+        CaseEntry(
+            id: "case_syncope_heart_block",     // [a-z0-9_]{1,64}; the file's manifest id must equal it
+            title: "Collapse in the supermarket",   // at most 200 characters, not empty
+            summary: "…",                       // at most 1000 characters, optional
+            language: "en",                     // BCP 47 tag
+            authors: ["heartsim authors"],      // at most 32, each at most 200 characters, optional
+            licence: "MIT OR Apache-2.0",       // at most 200 characters, optional
+            file: "case_syncope_heart_block.hs",    // a bare file name: [A-Za-z0-9._-], ends in .hs, no "/", no "..", no scheme
+            size_bytes: 3839,                   // exact; at most the case-file limit (2 MiB)
+            sha256: "be00f9da…62a3",            // 64 lower-case hex characters
+            case_format_version: 1,             // heartsim_core::case::CASE_FORMAT_VERSION of the case inside
+            min_app_version: Some("0.27.0"),    // optional, MAJOR.MINOR.PATCH
+        ),
+    ],
+)
+```
+
+**Client rules** (the index is untrusted input):
+
+| rule | constant | on breach |
+|---|---|---|
+| index at most 256 KiB, read through a bounded reader (`take`) | `MAX_INDEX_BYTES` | index refused |
+| at most 500 entries | `MAX_INDEX_ENTRIES` | index refused |
+| `format_version` read first; newer than 1 | `INDEX_FORMAT_VERSION` | index refused, "update heartsim" |
+| strict types, no unknown field (within version 1) | | index refused |
+| library title at most 200 characters | `MAX_INDEX_TITLE_CHARS` | index refused |
+| entry: id, `file` name, digest, `size_bytes` (1 to `MAX_FILE_BYTES`), text bounds (`MAX_SUMMARY_CHARS` …), `min_app_version` syntax | `check_entry` | entry dropped and counted ("3 entries ignored") |
+| a second entry with an earlier entry's id | | entry dropped and counted |
+
+An entry whose `case_format_version` or `min_app_version` is newer than the running build is listed with "Needs a newer
+heartsim" and cannot be imported.
+
+**Downloading a case.** The URL is the library's base joined with the entry's bare file name (`LibraryBase::join`), never a URL
+taken from the index, so a download never leaves the library directory. The body is read with a cap of `size_bytes`, must have
+exactly `size_bytes` bytes and the listed SHA-256, then goes through `CasePackage::read` (and the rhythm check of
+`CasePackage::resolve`), and the package's id must equal the entry's id. Only then is it added to My cases, marked "from
+<host>". Each failure has its own message, and none adds anything. A case already in My cases with the same digest is shown as
+imported; a different digest under the same id is offered as an update that the user confirms, never replaced silently.
+
+**Addresses.** `https://host[:port]/path/` (no user name, query, fragment, `.` or `..` segment or `%` escape); `http://` only for
+`localhost` and `127.0.0.1`, for testing. On the desktop a redirect of an https request must stay https; an http (localhost)
+request follows none. The browser build's default is the relative `../cases/`, resolved by the browser against the page.
+
+**Transport.** One request at a time, with Cancel. Desktop (`ureq`, cargo feature `online-cases`): a 5 s connect and a 20 s total
+timeout, `User-Agent: heartsim/<version>` and no other header, no cookies. Browser (`fetch` in `heartsim-web`): no header added,
+`credentials: "omit"`, an `AbortController` for Cancel. Nothing is requested at start: only "Browse the online library" and
+"Import" make a request.
+
+### The trust model
+
+The SHA-256 in the index protects against a damaged or swapped case file **given an honest index**; it does not make a library
+trustworthy. The index is trusted exactly as much as the HTTPS origin it came from: whoever controls that site (or its account,
+or its DNS and certificate) controls which files are listed and what their digests are. Version 1 has no signatures. Every imported
+file still goes through the same strict reader as a file opened from disk, and the index cannot relax any limit of the case file.
+
+A version 2 could add a detached signature of the index (for example `index.ron.minisig`, Ed25519 with minisign or signify) and let
+the user pin a library's public key the first time they add it, so a compromised web host could no longer list a file the
+maintainer did not sign; or a signature inside each case file's manifest, so a file keeps its author's signature when it is passed
+on. Either needs key management (publishing, rotating, revoking keys) that version 1 leaves out.
+
+### The official library
+
+`cargo xtask case-library --out <dir>` packs every `assets/cases/*.ron` with `CasePackage::write`, checks that each case resolves
+against `assets/scenarios/`, writes `index.ron`, deletes `.hs` files of an earlier run that the index no longer lists, and reads
+the result back as a client would (every file through `CasePackage::read`, size and digest against the index). It is
+deterministic: every manifest has `created: "2026-11-27"` and `generator: "heartsim case-library"` (fixed, with no clock and no
+version number, so a file's digest changes only when its case changes, and a user who imported it is offered an update only
+then), authors `heartsim authors`, licence `MIT OR Apache-2.0`; the index's `updated` is the `--updated` argument (empty without
+it). Two runs with the same arguments write the same bytes (a test in `xtask/src/case_library.rs`).
+
+`.github/workflows/docs.yml` runs it into `docs/book/book/cases/` (with `--updated` set to the date of the commit) before the
+Pages upload, so the library is published with GitHub Pages next to the guide (the site root) and the browser app (`/app/`):
+
+| | address |
+|---|---|
+| guide | `https://inalto.github.io/heartsim/` |
+| browser app | `https://inalto.github.io/heartsim/app/` |
+| case library | `https://inalto.github.io/heartsim/cases/` (`case_online::DEFAULT_LIBRARY_URL`; `../cases/` from the browser app) |
+
+### Hosting a library
+
+**On GitHub Pages** (the simplest; Pages sends `Access-Control-Allow-Origin: *`, so the browser version can read it too):
+
+1. Make each case file: in heartsim, **Save as…** on the Cases page, or `heartsim-cli case pack my_case.ron -o my_case.hs
+   --author "…" --licence "CC-BY-4.0"`. Check it with `heartsim-cli case check my_case.hs`.
+2. Write `index.ron` as above. `heartsim-cli case pack` prints each file's size in bytes and its SHA-256; or, from a shell,
+   `stat -c %s my_case.hs` and `sha256sum my_case.hs`. A library of cases in the `assets/cases/` layout can reuse
+   `cargo xtask case-library --cases <dir> --out <dir>` from a heartsim checkout.
+3. Put `index.ron` and the `.hs` files in one folder of a repository, for example `docs/cases/`, and commit them.
+4. In the repository's **Settings → Pages**, publish the branch and folder (for example `main`, `/docs`). The library's address is
+   then `https://<user>.github.io/<repository>/cases/`.
+5. In heartsim, type that address in **Library address** and press **Browse the online library**.
+
+**From a repository's raw files**: `https://raw.githubusercontent.com/<user>/<repository>/<branch>/<folder>/` serves the same
+files with `Access-Control-Allow-Origin: *`; no Pages setup is needed. Pin a tag or a commit instead of a branch if the address
+should not change under the readers.
+
+**From any web server** (a school's): serve the folder over HTTPS with the files as they are (any `Content-Type`). For the browser
+version, add the header `Access-Control-Allow-Origin: *` (or the origin of the heartsim site) to the responses; without it the
+browser refuses to hand the files to the page, and the page says so. The desktop version does not need it.
+
+**Updating a case**: replace its `.hs` file and update `size_bytes` and `sha256` in the index; users who imported the old one see
+**Update…**. Keep the `id`: an entry with a new id is a new case.
+
 ## Where the code is
 
 * `crates/heartsim-casefile`: the format (pure: `heartsim-core`, `heartsim-ecg`, `ron`, `serde`, `zip`, `sha2`, `thiserror`; no
@@ -201,5 +327,9 @@ five questions, three to five choices each, an explanation) and a headless run o
 * `crates/heartsim-app/src/case_ui.rs`: the Cases page, `Cases::open_bytes` (open a package from any source, with a provenance
   label), Save as…, Remove.
 * `crates/heartsim-cli/src/casefile.rs`: `case pack | unpack | check`.
+* `crates/heartsim-casefile/src/library.rs`: the library index, its reader and the address rules (B43).
+* `crates/heartsim-app/src/case_fetch.rs`: the `CaseFetch` trait, the desktop `ureq` transport, `MemoryFetch` for tests;
+  `crates/heartsim-app/src/case_online.rs`: the Online section; `crates/heartsim-web/src/fetch.rs`: the browser `fetch`
+  transport; `xtask/src/case_library.rs`: `cargo xtask case-library`.
 * `crates/heartsim-app/src/case_edit.rs`, `case_edit_ui.rs`: the case editor (brief B42), which writes these files from a form; see
   "Writing a case" in the user book (`docs/book/src/user/cases.md`).

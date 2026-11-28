@@ -23,6 +23,14 @@ impl HeartSimApp {
         if self.cases.poll_io(&mut self.library) {
             self.tab = Tab::Cases;
         }
+        // the online library (B43): an answer that arrived, and a repaint while one is awaited
+        self.cases.poll_online(&mut self.library);
+        if self.cases.online().busy() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        if let Some(address) = self.cases.online_mut().take_address_change() {
+            self.settings.case_library_address = address;
+        }
         if let Some(text) = self.cases.take_storage_text() {
             self.case_storage_text = Some(text);
         }
@@ -37,7 +45,16 @@ impl HeartSimApp {
         }
     }
 
-    /// The Cases page: the built-in cases, My cases and the online slot (the reader opens on the
+    /// Use `fetch` for the Cases page's online library (brief B43), with `default_base` as the
+    /// library of an empty address field: the browser build's `fetch` transport and `../cases/`
+    /// (the desktop has its own `ureq` one with the `online-cases` feature). Nothing is requested.
+    pub fn set_case_fetch(&mut self, fetch: Box<dyn crate::case_fetch::CaseFetch>, default_base: &str) {
+        if self.tour.is_none() {
+            self.cases.set_online(fetch, Some(default_base));
+        }
+    }
+
+    /// The Cases page: the built-in cases, My cases and the online library (the reader opens on the
     /// right, as for tutorials), or the case editor (B42), which scrolls its form under a header
     /// that stays in view and so needs no scroll area around it.
     pub(super) fn cases_tab(&mut self, ui: &mut egui::Ui) {

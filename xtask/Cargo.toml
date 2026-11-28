@@ -11,6 +11,8 @@ publish = false
 heartsim-geometry.workspace = true
 heartsim-echo.workspace = true
 heartsim-core.workspace = true
+# the online case library (B43) is packed with the application's own case-file writer
+heartsim-casefile.workspace = true
 anyhow.workspace = true
 glam.workspace = true
 flate2.workspace = true

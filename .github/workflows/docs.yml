@@ -1,8 +1,10 @@
 name: Docs
 
-# Builds the mdBook guide (docs/book) and, on master, the browser version of the app (crates/heartsim-web),
-# and publishes both to GitHub Pages: the guide at the site root, the app under /app/. A Pages site has one
-# source, so one workflow deploys both. Pull requests build the guide only (web.yml checks the app there).
+# Builds the mdBook guide (docs/book) and, on master, the browser version of the app (crates/heartsim-web)
+# and the online case library (brief B43), and publishes them to GitHub Pages: the guide at the site root,
+# the app under /app/, the case library under /cases/ (index.ron and one .hs per case, written by
+# `cargo xtask case-library`). A Pages site has one source, so one workflow deploys all three. Pull requests
+# build the guide only (web.yml checks the app there).
 # Pages must be enabled once in the repository settings with source "GitHub Actions".
 
 on:
@@ -81,6 +83,13 @@ jobs:
           cp -r crates/heartsim-web/dist docs/book/book/app
           test -f docs/book/book/app/index.html
           test -f docs/book/book/app/heartsim-assets.zip
+      - name: Put the case library under /cases/
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          test ! -e docs/book/book/cases
+          cargo xtask case-library --out docs/book/book/cases --updated "$(git log -1 --format=%cs)"
+          test -f docs/book/book/cases/index.ron
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/book/book
