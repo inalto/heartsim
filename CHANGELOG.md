@@ -4,6 +4,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-11-28
+
 ### Added
 - A wiki page for the `.hs` patient case file (`docs/wiki/Case-file-format.md`): the format for teachers and library
   hosts, with every field, the limits, online libraries, the command line and a worked example checked with the CLI.

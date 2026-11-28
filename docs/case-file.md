@@ -53,7 +53,7 @@ CaseFile(
     authors: ["heartsim authors"],     // free text, may be empty
     licence: "MIT OR Apache-2.0",      // SPDX id or free text; shown on the card; empty = "not stated"
     created: "2026-11-27",             // ISO date, informational
-    generator: "heartsim 0.26.0",
+    generator: "heartsim 0.27.0",
     scenarios: [],                     // ids of the bundled scenarios; must match the scenarios/ entries exactly
 )
 ```
@@ -144,16 +144,16 @@ written as the text they were read from.
 
 ## A worked example made with the CLI
 
-Pack a shipped case as a teacher would, check it, and take it apart again (output of heartsim 0.26.0 in this repository; `--created` fixes the date, so the SHA-256 is the same on every run):
+Pack a shipped case as a teacher would, check it, and take it apart again (output of heartsim 0.27.0 in this repository; `--created` fixes the date, so the SHA-256 is the same on every run):
 
 ```text
 $ heartsim-cli case pack assets/cases/case_syncope_heart_block.ron -o syncope.hs \
       --author "heartsim authors" --licence "MIT OR Apache-2.0" --created 2026-11-27
-syncope.hs: case_syncope_heart_block (4 stages, 8 questions, 0 bundled rhythms), 3839 bytes, sha256 be00f9daa5fc2a8b0075d8f2e7058620a9152518ac392fb5253c2b5a397662a3
+syncope.hs: case_syncope_heart_block (4 stages, 8 questions, 0 bundled rhythms), 3839 bytes, sha256 5e3c7f14f875f0183e6d25cf8a0a8d1f8e14ef0c6db23d284e5775cf02a90a59
 
 $ heartsim-cli case check syncope.hs
 syncope.hs: OK, case file version 1: case_syncope_heart_block "Collapse in the supermarket" (en), 4 stages, 8 questions, 0 bundled rhythms
-  authors: heartsim authors; licence: MIT OR Apache-2.0; created 2026-11-27; made by heartsim 0.26.0; sha256 be00f9daa5fc2a8b0075d8f2e7058620a9152518ac392fb5253c2b5a397662a3
+  authors: heartsim authors; licence: MIT OR Apache-2.0; created 2026-11-27; made by heartsim 0.27.0; sha256 5e3c7f14f875f0183e6d25cf8a0a8d1f8e14ef0c6db23d284e5775cf02a90a59
 0 warnings
 
 $ heartsim-cli case unpack syncope.hs -o syncope
@@ -173,7 +173,7 @@ CaseFile(
     ],
     licence: "MIT OR Apache-2.0",
     created: "2026-11-27",
-    generator: "heartsim 0.26.0",
+    generator: "heartsim 0.27.0",
     scenarios: [],
 )
 
@@ -224,7 +224,7 @@ CaseIndex(
             licence: "MIT OR Apache-2.0",       // at most 200 characters, optional
             file: "case_syncope_heart_block.hs",    // a bare file name: [A-Za-z0-9._-], ends in .hs, no "/", no "..", no scheme
             size_bytes: 3839,                   // exact; at most the case-file limit (2 MiB)
-            sha256: "be00f9da…62a3",            // 64 lower-case hex characters
+            sha256: "5e3c7f14…0a59",            // 64 lower-case hex characters
             case_format_version: 1,             // heartsim_core::case::CASE_FORMAT_VERSION of the case inside
             min_app_version: Some("0.27.0"),    // optional, MAJOR.MINOR.PATCH
         ),

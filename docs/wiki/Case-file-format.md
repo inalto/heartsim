@@ -4,7 +4,7 @@ A `.hs` file is one heartsim patient case in one file: the story, its questions,
 does not already have. A teacher writes a case, saves it, and hands the file to students; they open it on the **Cases** page of
 the desktop or the browser version.
 
-This page describes version 1 of the format, as heartsim 0.26.0 and later read and write it. The reference implementation is
+This page describes version 1 of the format, as heartsim 0.27.0 and later read and write it. The reference implementation is
 the crate `crates/heartsim-casefile`; the developer document with every rule's constant and test is
 [`docs/case-file.md`](../case-file.md).
 
@@ -86,7 +86,7 @@ CaseFile(
     authors: ["heartsim authors"],
     licence: "MIT OR Apache-2.0",
     created: "2026-11-27",
-    generator: "heartsim 0.26.0",
+    generator: "heartsim 0.27.0",
     scenarios: [],
 )
 ```
@@ -304,7 +304,7 @@ CaseIndex(
             licence: "MIT OR Apache-2.0",
             file: "case_syncope_heart_block.hs",
             size_bytes: 3839,
-            sha256: "be00f9daa5fc2a8b0075d8f2e7058620a9152518ac392fb5253c2b5a397662a3",
+            sha256: "5e3c7f14f875f0183e6d25cf8a0a8d1f8e14ef0c6db23d284e5775cf02a90a59",
             case_format_version: 1,
             min_app_version: Some("0.27.0"),
         ),
