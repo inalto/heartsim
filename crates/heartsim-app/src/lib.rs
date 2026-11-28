@@ -9,6 +9,8 @@ pub mod assets;
 pub mod audio_out;
 pub mod auscultation_quiz;
 pub mod axis_quiz;
+pub mod case_edit;
+pub mod case_edit_ui;
 pub mod case_io;
 pub mod case_ui;
 pub mod disclaimer;

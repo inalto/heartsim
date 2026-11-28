@@ -30,6 +30,9 @@ pub struct ScenarioLibrary {
     /// Ids of the entries that came from an opened case file (B41) for this session: listed under
     /// their own heading in the picker and never drawn by a quiz or drill.
     from_cases: std::collections::BTreeSet<String>,
+    /// Ids of the entries the user added for this session (a scenario file run, the Simulator's
+    /// "add to library", B42): not the build's own, so the case editor may bundle them.
+    custom: std::collections::BTreeSet<String>,
 }
 
 impl ScenarioLibrary {
@@ -59,6 +62,7 @@ impl ScenarioLibrary {
         Ok(Self {
             entries,
             from_cases: std::collections::BTreeSet::new(),
+            custom: std::collections::BTreeSet::new(),
         })
     }
 
@@ -77,6 +81,7 @@ impl ScenarioLibrary {
         Self {
             entries,
             from_cases: std::collections::BTreeSet::new(),
+            custom: std::collections::BTreeSet::new(),
         }
     }
 
@@ -128,7 +133,38 @@ impl ScenarioLibrary {
     /// file may load it but never replace it.
     #[must_use]
     pub fn is_builtin(&self, id: &str) -> bool {
-        !self.from_cases.contains(id) && self.index_of(id).is_some()
+        !self.from_cases.contains(id) && !self.custom.contains(id) && self.index_of(id).is_some()
+    }
+
+    /// Record that the entry `id`, which the caller has just pushed to [`Self::entries`], was
+    /// added by the user for this session (B42), so a case file may bundle it
+    /// ([`Self::is_bundleable`]). Never call it for a rhythm of the build.
+    pub fn mark_custom(&mut self, id: &str) {
+        if self.index_of(id).is_some() {
+            self.custom.insert(id.to_owned());
+        }
+    }
+
+    /// Whether the rhythm `id` exists but is not the build's own (it came from an opened case file
+    /// or was added for this session): the case editor offers to bundle it into the case file.
+    #[must_use]
+    pub fn is_bundleable(&self, id: &str) -> bool {
+        self.index_of(id).is_some() && !self.is_builtin(id)
+    }
+
+    /// Whether opening a case file that bundles `s` would change a rhythm the user added in this
+    /// session under the same id (compared as the text a scenario file is written as): such a file
+    /// is refused, so nothing of the user's is replaced without a word.
+    #[must_use]
+    pub fn would_replace_session_rhythm(&self, s: &Tier0Scenario) -> bool {
+        let id = &s.scenario.id;
+        if !self.custom.contains(id) || self.from_cases.contains(id) {
+            return false;
+        }
+        let text = |x: &Tier0Scenario| crate::scenario_file::to_ron(x).ok();
+        self.index_of(id)
+            .and_then(|i| self.entries.get(i))
+            .is_some_and(|mine| text(mine) != text(s))
     }
 
     /// Add a rhythm bundled in a case file for the session (B41), or replace the one an earlier
@@ -396,6 +432,27 @@ mod tests {
         let groups = picker_groups(&lib);
         assert_eq!(groups.last().unwrap().1, [i]);
         assert!(groups.last().unwrap().0.is_some());
+    }
+
+    #[test]
+    fn a_case_file_may_not_change_a_rhythm_added_in_this_session() {
+        let mut lib = library();
+        let mut mine = lib.entries[lib.index_of("sinus_normal").unwrap()].clone();
+        mine.scenario.id = "my_rhythm".into();
+        lib.entries.push(mine.clone());
+        lib.mark_custom("my_rhythm");
+        assert!(
+            !lib.would_replace_session_rhythm(&mine),
+            "the same rhythm is no change"
+        );
+        let mut other = mine.clone();
+        other.scenario.title = "Something else".into();
+        assert!(lib.would_replace_session_rhythm(&other));
+        let builtin = lib.entries[lib.index_of("sinus_normal").unwrap()].clone();
+        assert!(
+            !lib.would_replace_session_rhythm(&builtin),
+            "built-in ids are another rule"
+        );
     }
 
     #[test]

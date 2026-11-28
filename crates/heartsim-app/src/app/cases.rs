@@ -38,11 +38,19 @@ impl HeartSimApp {
     }
 
     /// The Cases page: the built-in cases, My cases and the online slot (the reader opens on the
-    /// right, as for tutorials).
+    /// right, as for tutorials), or the case editor (B42), which scrolls its form under a header
+    /// that stays in view and so needs no scroll area around it.
     pub(super) fn cases_tab(&mut self, ui: &mut egui::Ui) {
+        if self.cases.is_editing() {
+            let outcome = self.cases.page_ui(ui, true, &self.library);
+            if outcome.started {
+                self.tutorials.close();
+            }
+            return;
+        }
         egui::CentralPanel::default().show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                let outcome = self.cases.library_ui(ui, true);
+                let outcome = self.cases.page_ui(ui, true, &self.library);
                 if outcome.started {
                     self.tutorials.close();
                 }

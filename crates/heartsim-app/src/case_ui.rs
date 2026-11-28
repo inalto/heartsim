@@ -7,6 +7,8 @@
 //! first answer counts for the score; the explanation is shown either way. Independent of the GPU
 //! and of [`crate::HeartSimApp`], like [`crate::tutorial_ui`].
 
+use crate::case_edit::Draft;
+use crate::case_edit_ui::{Editor, EditorAction, editor_ui};
 use crate::case_io::{CaseFileIo, CaseStore, IoEvent, NoIo, StorageStore};
 use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
@@ -88,12 +90,23 @@ impl CaseLibrary {
     }
 }
 
-/// Which case: one of the build's own (index into [`CaseLibrary::cases`]) or one of My cases
-/// (index into [`Cases::user`]).
+/// Which case: one of the build's own (index into [`CaseLibrary::cases`]), one of My cases
+/// (index into [`Cases::user`]) or the draft of the case editor played with "Try it" (B42; the
+/// reader plays a snapshot of the draft, so the draft can be edited meanwhile without surprises).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaseRef {
     Builtin(usize),
     User(usize),
+    Draft,
+}
+
+/// What opens the case editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditStart {
+    /// An empty case.
+    New,
+    /// A copy of this case; the case itself is never changed.
+    Copy(CaseRef),
 }
 
 /// A case of My cases: opened from a file (or saved from a built-in one) by the user.
@@ -115,6 +128,8 @@ pub enum OpenError {
     File(CaseFileError),
     /// It bundles a rhythm under an id another opened case file uses for a different rhythm.
     RhythmInUse { id: String, case: String },
+    /// It bundles a rhythm under the id of a different rhythm the user added in this session.
+    SessionRhythm { id: String },
 }
 
 impl std::fmt::Display for OpenError {
@@ -124,6 +139,7 @@ impl std::fmt::Display for OpenError {
             Self::RhythmInUse { id, case } => {
                 f.write_str(&t!("cases-rhythm-in-use", id = id.as_str(), case = case.as_str()))
             }
+            Self::SessionRhythm { id } => f.write_str(&t!("cases-rhythm-session", id = id.as_str())),
         }
     }
 }
@@ -187,8 +203,23 @@ pub struct Cases {
     status: Option<Status>,
     /// A user case waiting for the user to confirm its removal.
     confirm_remove: Option<usize>,
-    /// Bytes handed to the save dialog for a built-in case: they join My cases once written.
+    /// Bytes handed to the save dialog for a built-in case or for the draft: they join My cases
+    /// once written.
     pending_save: Option<Vec<u8>>,
+    /// The draft the case editor (B42) holds, kept for the session (also while the page shows the
+    /// list or another page is open).
+    editor: Option<Editor>,
+    /// `true` while the page shows the editor in place of the list.
+    editing: bool,
+    /// The case the reader plays for "Try it": a snapshot of the draft.
+    trial: Option<Case>,
+    /// What the draft was when Save as… was clicked: it counts as saved once the dialog reports the
+    /// file written.
+    pending_draft: Option<Draft>,
+    /// An edit waiting for the user to confirm replacing the unsaved draft.
+    confirm_replace: Option<EditStart>,
+    /// The user was asked whether to discard the draft.
+    confirm_discard: bool,
 }
 
 impl std::fmt::Debug for Cases {
@@ -203,16 +234,22 @@ impl std::fmt::Debug for Cases {
 
 /// The case `r` names, from the two lists (a free function so the reader can borrow the
 /// markdown cache at the same time).
-fn case_in<'a>(library: &'a CaseLibrary, user: &'a [UserCase], r: CaseRef) -> Option<&'a Case> {
+fn case_in<'a>(
+    library: &'a CaseLibrary,
+    user: &'a [UserCase],
+    trial: Option<&'a Case>,
+    r: CaseRef,
+) -> Option<&'a Case> {
     match r {
         CaseRef::Builtin(i) => library.cases.get(i),
         CaseRef::User(i) => user.get(i).map(|u| &u.package.case),
+        CaseRef::Draft => trial,
     }
 }
 
 /// The title shown for `r`: a user case with the id of a built-in one gets "(file)".
-fn display_title(library: &CaseLibrary, user: &[UserCase], r: CaseRef) -> String {
-    let Some(c) = case_in(library, user, r) else {
+fn display_title(library: &CaseLibrary, user: &[UserCase], trial: Option<&Case>, r: CaseRef) -> String {
+    let Some(c) = case_in(library, user, trial, r) else {
         return String::new();
     };
     match r {
@@ -246,6 +283,12 @@ impl Cases {
             status: None,
             confirm_remove: None,
             pending_save: None,
+            editor: None,
+            editing: false,
+            trial: None,
+            pending_draft: None,
+            confirm_replace: None,
+            confirm_discard: false,
         }
     }
 
@@ -285,11 +328,13 @@ impl Cases {
     /// The key of the best score of `r`: the id for a built-in case, `file:<id>` for a user case.
     #[must_use]
     pub fn score_key(&self, r: CaseRef) -> Option<String> {
-        let c = case_in(&self.library, &self.user, r)?;
-        Some(match r {
-            CaseRef::Builtin(_) => c.id.clone(),
-            CaseRef::User(_) => format!("file:{}", c.id),
-        })
+        let c = case_in(&self.library, &self.user, self.trial.as_ref(), r)?;
+        match r {
+            CaseRef::Builtin(_) => Some(c.id.clone()),
+            CaseRef::User(_) => Some(format!("file:{}", c.id)),
+            // a trial of the draft keeps no score
+            CaseRef::Draft => None,
+        }
     }
 
     /// The best score of `r` this session, `(correct, of)`.
@@ -322,12 +367,22 @@ impl Cases {
 
     /// Open case `r` at its first stage.
     pub fn start(&mut self, r: CaseRef) {
-        let Some(first) = case_in(&self.library, &self.user, r).and_then(|c| c.stages.first()) else {
+        if r != CaseRef::Draft {
+            self.trial = None;
+        }
+        self.start_at(r, 0);
+    }
+
+    /// Open case `r` at stage `stage` (0-based; the editor's "Try it" starts at the selected one).
+    fn start_at(&mut self, r: CaseRef, stage: usize) {
+        let Some(first) =
+            case_in(&self.library, &self.user, self.trial.as_ref(), r).and_then(|c| c.stages.get(stage))
+        else {
             return;
         };
         self.session = Some(Session {
             case: r,
-            stage: 0,
+            stage,
             question: 0,
             run: PageRun::from_steps(first.actions.clone()),
             chosen: None,
@@ -337,15 +392,17 @@ impl Cases {
         });
     }
 
-    /// Close the reader (the best score of a finished case is kept).
+    /// Close the reader (the best score of a finished case is kept). When it played the draft of
+    /// the case editor, the page shows the editor again.
     pub fn close(&mut self) {
         self.session = None;
+        self.trial = None;
     }
 
     /// The case open in the reader.
     fn open_case(&self) -> Option<&Case> {
         let s = self.session.as_ref()?;
-        case_in(&self.library, &self.user, s.case)
+        case_in(&self.library, &self.user, self.trial.as_ref(), s.case)
     }
 
     /// Answer the current question with `choice` (only the first answer of a question counts).
@@ -389,7 +446,7 @@ impl Cases {
         }
         let key = self.session.as_ref().and_then(|s| self.score_key(s.case));
         let Some(s) = &mut self.session else { return };
-        let Some(case) = case_in(&self.library, &self.user, s.case) else {
+        let Some(case) = case_in(&self.library, &self.user, self.trial.as_ref(), s.case) else {
             return;
         };
         s.chosen = None;
@@ -452,7 +509,7 @@ impl Cases {
         let result = self.open_bytes_inner(bytes, provenance, scenarios, true);
         match &result {
             Ok(i) => {
-                let title = display_title(&self.library, &self.user, CaseRef::User(*i));
+                let title = display_title(&self.library, &self.user, self.trial.as_ref(), CaseRef::User(*i));
                 let opened = t!("cases-opened", title = title.as_str());
                 self.status = Some(match self.status.take() {
                     Some(Status { ok: false, text: why }) => Status {
@@ -496,6 +553,11 @@ impl Cases {
                     case: other.package.case.title.clone(),
                 });
             }
+        }
+        if let Some(s) = parsed.iter().find(|s| scenarios.would_replace_session_rhythm(s)) {
+            return Err(OpenError::SessionRhythm {
+                id: s.scenario.id.clone(),
+            });
         }
         for s in parsed {
             let sid = s.scenario.id.clone();
@@ -561,10 +623,19 @@ impl Cases {
                     }
                 }
                 self.status = Some(Status { ok: true, text });
+                if let Some(saved) = self.pending_draft.take()
+                    && let Some(ed) = &mut self.editor
+                {
+                    ed.mark_saved(saved);
+                }
             }
-            IoEvent::Cancelled => self.pending_save = None,
+            IoEvent::Cancelled => {
+                self.pending_save = None;
+                self.pending_draft = None;
+            }
             IoEvent::Failed(e) => {
                 self.pending_save = None;
+                self.pending_draft = None;
                 self.status = Some(Status { ok: false, text: e });
             }
         }
@@ -591,6 +662,7 @@ impl Cases {
                     .ok_or(CaseFileError::MissingEntry(heartsim_casefile::CASE_NAME))?;
                 Ok((u.package.file_name(), u.bytes.clone()))
             }
+            CaseRef::Draft => Err(CaseFileError::MissingEntry(heartsim_casefile::CASE_NAME)),
             CaseRef::Builtin(i) => {
                 let c = self
                     .library
@@ -673,6 +745,151 @@ impl Cases {
         self.status.as_ref().map(|s| (s.ok, s.text.as_str()))
     }
 
+    // ---- the case editor (B42) -----------------------------------------------------------------
+
+    /// `true` while the page shows the editor in place of the list.
+    #[must_use]
+    pub fn is_editing(&self) -> bool {
+        self.editing
+    }
+
+    /// The draft the editor holds, if any (it is kept for the session, also while the list shows).
+    #[must_use]
+    pub fn draft(&self) -> Option<&Draft> {
+        self.editor.as_ref().map(|e| &e.draft)
+    }
+
+    /// The draft for changing it without the page (tests, scripted use).
+    pub fn draft_mut(&mut self) -> Option<&mut Draft> {
+        self.editor.as_mut().map(|e| &mut e.draft)
+    }
+
+    /// `true` when there is a draft with changes that are not saved.
+    #[must_use]
+    pub fn draft_is_unsaved(&self) -> bool {
+        self.editor.as_ref().is_some_and(Editor::is_dirty)
+    }
+
+    /// Open the editor on a new case or on a copy of case `r`. When the editor holds a draft with
+    /// unsaved changes nothing is replaced yet: the page asks first.
+    pub fn begin_edit(&mut self, start: EditStart) {
+        if self.draft_is_unsaved() {
+            self.confirm_replace = Some(start);
+        } else {
+            self.force_edit(start);
+        }
+    }
+
+    /// Open the editor on `start`, dropping the draft it holds.
+    fn force_edit(&mut self, start: EditStart) {
+        self.confirm_replace = None;
+        self.confirm_discard = false;
+        let draft = match start {
+            EditStart::New => Some(Draft::new()),
+            EditStart::Copy(CaseRef::Builtin(i)) => self.library.cases.get(i).map(|c| {
+                let manifest = Manifest::for_case(
+                    c,
+                    vec![BUILTIN_AUTHORS.to_owned()],
+                    BUILTIN_LICENCE,
+                    &crate::case_io::today_iso(),
+                    &crate::version_line(),
+                );
+                let p = CasePackage::new(manifest, c.clone(), Vec::new());
+                Draft::from_package(
+                    &p,
+                    Some((
+                        &Draft::copy_id(&c.id),
+                        &t!("ced-copy-title", title = c.title.as_str()),
+                    )),
+                )
+            }),
+            EditStart::Copy(CaseRef::User(i)) => {
+                self.user.get(i).map(|u| Draft::from_package(&u.package, None))
+            }
+            EditStart::Copy(CaseRef::Draft) => None,
+        };
+        if let Some(d) = draft {
+            self.editor = Some(Editor::new(d));
+            self.editing = true;
+            self.session = None;
+            self.trial = None;
+        }
+    }
+
+    /// Leave the editor for the list; the draft stays.
+    pub fn leave_editor(&mut self) {
+        self.editing = false;
+    }
+
+    /// Drop the draft.
+    pub fn discard_draft(&mut self) {
+        self.editor = None;
+        self.editing = false;
+        self.confirm_discard = false;
+        self.pending_draft = None;
+    }
+
+    /// Play the draft in the reader from stage `stage`: a snapshot of it, so the draft is not
+    /// touched and closing the reader returns to the editor.
+    pub fn try_draft(&mut self, stage: usize) {
+        let Some(ed) = &self.editor else { return };
+        self.trial = Some(ed.draft.to_case());
+        self.start_at(CaseRef::Draft, stage);
+    }
+
+    /// Start Save as… for the draft. The checks the editor shows (`Draft::can_save`) have been made
+    /// by the button; the writer reads the file back, so a refusal is shown on the page.
+    pub fn save_draft(&mut self) {
+        let Some(ed) = &self.editor else { return };
+        let draft = ed.draft.clone();
+        let package = draft.to_package(&crate::case_io::today_iso(), &crate::version_line());
+        match package.write() {
+            Ok(bytes) => {
+                self.pending_save = Some(bytes.clone());
+                self.pending_draft = Some(draft);
+                self.io.save(&package.file_name(), bytes);
+            }
+            Err(e) => {
+                self.status = Some(Status {
+                    ok: false,
+                    text: e.to_string(),
+                });
+            }
+        }
+    }
+
+    /// The Cases page: the editor while one is open, else the list ([`Self::library_ui`]).
+    /// `scenarios` is the session's rhythm library (the editor's rhythm picker and its checks).
+    pub fn page_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        primary_allowed: bool,
+        scenarios: &ScenarioLibrary,
+    ) -> PageOutcome {
+        if !(self.editing && self.editor.is_some()) {
+            return self.library_ui(ui, primary_allowed);
+        }
+        let busy = self.io.busy();
+        let Some(mut ed) = self.editor.take() else {
+            return PageOutcome::default();
+        };
+        let status = self.status.as_ref().map(|s| (s.ok, s.text.as_str()));
+        let action = editor_ui(ui, &mut ed, scenarios, &mut self.markdown, busy, status);
+        let stage = ed.selected;
+        self.editor = Some(ed);
+        let mut outcome = PageOutcome::default();
+        match action {
+            Some(EditorAction::Back) => self.leave_editor(),
+            Some(EditorAction::TryIt) => {
+                self.try_draft(stage);
+                outcome.started = self.is_open();
+            }
+            Some(EditorAction::Save) => self.save_draft(),
+            None => {}
+        }
+        outcome
+    }
+
     /// The Cases page (B41): Open case file…, then the built-in cases, My cases and the online
     /// library's slot, each case a card with Start and Save as… (and Remove for a user case).
     /// `primary_allowed`: whether one Start may be the page's primary button.
@@ -682,6 +899,7 @@ impl Cases {
         ui.label(t!("case-intro"));
         heartsim_ui::helper_text(ui, t!("cases-trust"));
         let busy = self.io.busy();
+        let mut action = None;
         ui.horizontal_wrapped(|ui| {
             let r = ui
                 .add_enabled(!busy, egui::Button::new(t!("cases-open-file")))
@@ -692,8 +910,18 @@ impl Cases {
             if busy {
                 ui.spinner();
             }
+            if ui
+                .button(t!("ced-new"))
+                .on_hover_text(t!("ced-new-hint"))
+                .clicked()
+            {
+                action = Some(CardAction::Edit(EditStart::New));
+            }
             heartsim_ui::helper_text(ui, t!("cases-drop-hint"));
         });
+        if let Some(a) = self.draft_ui(ui) {
+            action = Some(a);
+        }
         if let Some(s) = &self.status {
             if s.ok {
                 cards::result_box(ui, true, s.text.as_str());
@@ -701,7 +929,6 @@ impl Cases {
                 ui.colored_label(ui.visuals().error_fg_color, s.text.as_str());
             }
         }
-        let mut action = None;
         // the one primary button of the page: the first built-in case not finished yet
         let primary = primary_allowed
             .then(|| (0..self.library.cases.len()).find(|&i| self.best(CaseRef::Builtin(i)).is_none()))
@@ -747,15 +974,70 @@ impl Cases {
                 self.remove_user(i);
             }
             Some(CardAction::KeepIt) => self.confirm_remove = None,
+            Some(CardAction::Edit(start)) => self.begin_edit(start),
+            Some(CardAction::Resume) => {
+                self.editing = true;
+                self.confirm_replace = None;
+            }
+            Some(CardAction::AskDiscard) => self.confirm_discard = true,
+            Some(CardAction::Discard) => self.discard_draft(),
+            Some(CardAction::KeepDraft) => {
+                self.confirm_discard = false;
+                self.confirm_replace = None;
+            }
+            Some(CardAction::ReplaceDraft(start)) => self.force_edit(start),
             None => {}
         }
         outcome
     }
 
+    /// The draft of the editor on the list: continue or discard it, and the confirmation of a
+    /// replacement the user asked for.
+    fn draft_ui(&self, ui: &mut egui::Ui) -> Option<CardAction> {
+        let ed = self.editor.as_ref()?;
+        let mut action = None;
+        ui.group(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.strong(t!("ced-draft-card", title = ed.display_title()));
+                if ed.is_dirty() {
+                    cards::pill(ui, t!("ced-not-saved"));
+                }
+            });
+            ui.horizontal_wrapped(|ui| {
+                if ui.button(t!("ced-continue")).clicked() {
+                    action = Some(CardAction::Resume);
+                }
+                if self.confirm_discard {
+                    ui.label(t!("ced-discard-confirm"));
+                    if ui.button(t!("ced-discard-yes")).clicked() {
+                        action = Some(CardAction::Discard);
+                    }
+                    if ui.button(t!("ced-discard-no")).clicked() {
+                        action = Some(CardAction::KeepDraft);
+                    }
+                } else if ui.button(t!("ced-discard")).clicked() {
+                    action = Some(CardAction::AskDiscard);
+                }
+            });
+            if let Some(start) = self.confirm_replace {
+                ui.label(t!("ced-replace-confirm"));
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(t!("ced-replace-yes")).clicked() {
+                        action = Some(CardAction::ReplaceDraft(start));
+                    }
+                    if ui.button(t!("ced-replace-no")).clicked() {
+                        action = Some(CardAction::KeepDraft);
+                    }
+                });
+            }
+        });
+        action
+    }
+
     /// One case card; returns what was clicked.
     fn card(&self, ui: &mut egui::Ui, r: CaseRef, primary: bool, busy: bool) -> Option<CardAction> {
-        let c = case_in(&self.library, &self.user, r)?;
-        let title = display_title(&self.library, &self.user, r);
+        let c = case_in(&self.library, &self.user, self.trial.as_ref(), r)?;
+        let title = display_title(&self.library, &self.user, self.trial.as_ref(), r);
         let mut action = None;
         ui.group(|ui| {
             ui.horizontal(|ui| {
@@ -816,6 +1098,13 @@ impl Cases {
                 if save.clicked() {
                     action = Some(CardAction::Save(r));
                 }
+                if ui
+                    .button(t!("ced-edit-copy"))
+                    .on_hover_text(t!("ced-edit-copy-hint", title = title.as_str()))
+                    .clicked()
+                {
+                    action = Some(CardAction::Edit(EditStart::Copy(r)));
+                }
                 if let CaseRef::User(i) = r {
                     if self.confirm_remove == Some(i) {
                         ui.label(t!("cases-remove-confirm", title = title.as_str()));
@@ -847,6 +1136,15 @@ enum CardAction {
     AskRemove(usize),
     Remove(usize),
     KeepIt,
+    /// Open the editor (B42).
+    Edit(EditStart),
+    /// Back to the editor with the draft it holds.
+    Resume,
+    AskDiscard,
+    Discard,
+    /// Keep the draft: answers either confirmation.
+    KeepDraft,
+    ReplaceDraft(EditStart),
 }
 
 impl Cases {
@@ -856,10 +1154,10 @@ impl Cases {
         let (stage_i, question_i, chosen, finished) = (s.stage, s.question, s.chosen, s.finished);
         let (correct, answered) = (s.correct, s.answered);
         let running = !s.run.is_finished();
-        let Some(case) = case_in(&self.library, &self.user, s.case) else {
+        let Some(case) = case_in(&self.library, &self.user, self.trial.as_ref(), s.case) else {
             return;
         };
-        let title = display_title(&self.library, &self.user, s.case);
+        let title = display_title(&self.library, &self.user, self.trial.as_ref(), s.case);
         let total = case.question_count();
         let stage = &case.stages[stage_i];
         let mut close = false;

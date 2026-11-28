@@ -102,7 +102,9 @@ pub fn add_to_library(library: &mut ScenarioLibrary, s: Tier0Scenario) -> usize 
         library.entries[i] = s;
         i
     } else {
+        let id = s.scenario.id.clone();
         library.entries.push(s);
+        library.mark_custom(&id);
         library.len() - 1
     }
 }

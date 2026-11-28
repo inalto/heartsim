@@ -5,6 +5,14 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- A case editor on the Cases page (brief B42): **New case** and **Edit a copy** (on every card) open a form for the file
+  details, the stages (add, duplicate, delete, move), the vignette with a live preview, the actions as one RON row each
+  (helpers for Load rhythm, Show panel, Select lead, Wait and an example of every other kind), and the questions (three to
+  five choices, a radio for the right one, an explanation). A problems panel stays in view: the rules of the case file and
+  an action row that does not parse stop **Save as…**; the editorial rules are advice. **Try it** plays the draft from the
+  selected stage in the normal reader. A rhythm from another case file or added in the session is offered for bundling into
+  the file. The draft is kept for the session and the page says "not saved" while it has unsaved changes (the program does not
+  ask before it closes). Strings in English, Italian, German, French and Spanish. Not seen on a real screen (see the known issues).
 - Patient cases get their own page, **Cases**, in the Learn group after Tutorials (brief B41; no number key, so no shortcut
   moved). It lists the built-in cases, **My cases** and a slot for an online library; each card shows the counts, the best
   score of the session, and for a file its authors, licence and origin, with Start, Save as… and (for My cases) Remove. The

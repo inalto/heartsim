@@ -201,3 +201,5 @@ five questions, three to five choices each, an explanation) and a headless run o
 * `crates/heartsim-app/src/case_ui.rs`: the Cases page, `Cases::open_bytes` (open a package from any source, with a provenance
   label), Save as…, Remove.
 * `crates/heartsim-cli/src/casefile.rs`: `case pack | unpack | check`.
+* `crates/heartsim-app/src/case_edit.rs`, `case_edit_ui.rs`: the case editor (brief B42), which writes these files from a form; see
+  "Writing a case" in the user book (`docs/book/src/user/cases.md`).

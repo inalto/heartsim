@@ -25,6 +25,68 @@ as for tutorials. **Save as…** writes the case as a file. A case under My case
 
 A file whose case has the same id as a built-in case is listed under My cases with "(file)" after its title, and keeps its own score.
 
+## Writing a case
+
+**New case** on the Cases page opens the case editor in place of the list; **Edit a copy** on any card opens a copy of that case
+(the case in the list is never changed; a copy of a built-in case gets the id `<id>_copy` and the title "Copy of …"). You need no
+text editor and no knowledge of the file format for the story and the questions. The draft is kept in memory while heartsim
+runs, also when you leave the page (the list then shows "Draft in progress" with **Continue editing** and **Discard draft**), but
+it is not written anywhere until you save it. heartsim does not ask before it closes: the editor and the list say **not saved**
+next to the draft's title while it has changes you have not saved.
+
+The page has a header (title, **Back to cases**, **Try it**, **Save as…**), the **problems panel** under it, and the form. The
+header and the panel stay in view while the form scrolls. On a narrow window the stage list stacks above the selected stage and
+the preview of the text goes under it.
+
+**A worked example, from an empty form to a file.**
+
+1. Press **New case**. Type the **Title**, say "Chest pain at the fair". The **Case id** follows the title
+   (`chest_pain_at_the_fair`): lower-case letters, digits and `_`, at most 64. Type in the id field to set it yourself;
+   **From the title** gives the automatic id back. The id names the file and keys the score.
+2. Fill the **Summary** (one or two sentences, without the diagnosis), the **Patient** line, the **Language**, the **Authors**
+   (one per line), the **Licence** (pick an SPDX id from the list or type your own text; leave it empty for "not stated") and the
+   **References**, one per line.
+3. In **Stage 1** give a title and write the **Vignette** in Markdown: what the clinician knows and sees. The preview beside it
+   is what the reader shows.
+4. Add the **Actions**: **Load rhythm** inserts a row for the rhythm you pick, **Show panel** and **Select lead** insert theirs,
+   **Add a wait** inserts a pause of the given seconds, and **Other action** lists every other kind with a ready example.
+5. Add **Questions**: the question text, three to five choices (**Add choice**, **Remove**), the radio button of the right
+   one, and an explanation. Questions and stages can be moved up and down, duplicated (stages) and deleted.
+6. Add stages with **Add stage** the same way. The case should load a rhythm in its first stage.
+7. Press **Try it**: the reader plays the draft from the selected stage; closing it brings you back to the editor with the draft
+   as it was. Nothing is saved and no score is kept.
+8. When the problems panel shows no **Must fix** line, **Save as…** is on. It writes the `.hs` file and adds the case to My cases.
+
+**The action syntax.** One action per row, written as in the case files and parsed as you type; a row that does not parse is
+shown in red with the reason, and so is a `LoadScenario` of a rhythm that does not exist. Examples:
+
+* `Ui(LoadScenario("stemi_inferior"))`: load a rhythm by its id;
+* `Ui(FocusPanel(TwelveLead))`: bring a page forward; `Ui(SelectLead(II))`: lead of the single-lead strip;
+* `Ui(WaitForEvent(ElapsedMs(3000.0)))`: hold the next rows for 3 s of simulated time; `Ui(WaitForEvent(Qrs))`: until the next QRS;
+* `Ui(SetSpeed(0.5))`, `Ui(Pause)`, `Ui(Resume)`, `Ui(CameraPreset(Lao))`, `Ui(SetQrsAxis(60.0))`, `Ui(StartReentry("af_persistent"))`;
+* `Sim(Block(region: AvNodeCompact, blocked: true))`, `Sim(Shock(joules: 200.0, synchronised: true))`, `Sim(Drug(name: "adenosine", dose: 1.0))`:
+  an intervention, the same syntax as the scenario timeline editor.
+
+The **Other action** list has one example of each kind of row (every example is checked by a test to parse); insert it and edit
+the values.
+
+**Rhythms that are not built in.** If a stage loads a rhythm that came from another case file or that you added in this session
+(Simulator, add to library), the page offers **Bundle**: the rhythm travels inside the file. Until you bundle it the problems panel
+lists it and Save as… stays off, because the file would not open on other computers. Bundled rhythms are listed in the file
+details with **Remove**. A built-in rhythm can never be bundled.
+
+**The problems panel.** Lines marked **Must fix** stop Save as…: no stage, an answer outside its choices, a row that does not
+parse, a rhythm that does not exist or is not bundled, an id that breaks the rule, a text longer than the file format allows
+(a title, licence or author over 200 characters, more than 32 authors, a case text over 1 MiB). Lines marked **Advice** are the
+editorial rules of the shipped cases and do not stop you, since your own case may be shorter: a title, summary and patient line;
+references; a first stage that loads a rhythm; text in every stage; at least five questions, each with three to five different
+choices and an explanation; an author and a licence. A line that names a stage jumps to it when clicked. The advice lines are in
+English.
+
+**Cases are synthetic, and sources are cited, not copied.** Invent the patient; never write a real person's record. Name the
+guidelines, textbooks and papers the statements were checked against under **References**, and put the teaching in your own
+words. Do not paste text from a copyrighted source, and use a licence you are entitled to give.
+
 ## Opening a case file
 
 A case file has the extension `.hs` (for example `syncope.hs`). To open one:
