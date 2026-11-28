@@ -18,6 +18,7 @@ use crate::scenarios::{ScenarioLibrary, Timeline, scenario_picker};
 use crate::snapshot_ring::SnapshotRing;
 use crate::vector_overlay::VectorOverlay;
 
+mod cases;
 mod echo_tab;
 #[cfg(feature = "export")]
 mod exports;
@@ -109,6 +110,10 @@ pub struct HeartSimApp {
     tutorials: crate::tutorial_ui::Tutorials,
     /// Scripted patient cases (B18), played in the same reader panel as the tutorials.
     cases: crate::case_ui::Cases,
+    /// `.hs` files dropped on the window, read for the Cases page (B41).
+    case_drops: crate::case_io::DropReader,
+    /// My cases' storage text not yet written to eframe storage (browser; see `app/cases.rs`).
+    case_storage_text: Option<String>,
     timeline_tab: tutorials::TimelineTab,
     /// Export / Import window and the recording under review (B20).
     #[cfg(feature = "export")]
@@ -334,6 +339,20 @@ impl HeartSimApp {
             auscultation_quiz.restore_score(&score);
         }
 
+        let mut library = assets.map_or_else(ScenarioLibrary::load_default, ScenarioLibrary::from_bundle);
+        let case_library = assets.map_or_else(
+            crate::case_ui::CaseLibrary::load_default,
+            crate::case_ui::CaseLibrary::from_bundle,
+        );
+        // My cases (B41) and the file dialogs; the documentation tour shows the built-in cases only
+        let cases = if tour.is_some() {
+            crate::case_ui::Cases::new(case_library)
+        } else {
+            let mut c = crate::case_ui::Cases::with_platform(case_library, cc.storage);
+            c.load_store(&mut library);
+            c
+        };
+
         Self {
             clock: SimClock::new(Millis(1.0)),
             engine: TimingEngine::new(TimingParams::default()),
@@ -364,7 +383,7 @@ impl HeartSimApp {
             pacing: pacing::Pacing::default(),
             therapy: therapy::Therapy::default(),
             electrodes,
-            library: assets.map_or_else(ScenarioLibrary::load_default, ScenarioLibrary::from_bundle),
+            library,
             adjust_baseline: AdjustBaseline::default(),
             simulator_view: crate::simulator_layout::SimulatorView::default(),
             scenario: None,
@@ -381,10 +400,9 @@ impl HeartSimApp {
             v_beat_ms: None,
             tour,
             tutorials: Self::load_tutorials(cc, assets),
-            cases: assets.map_or_else(
-                crate::case_ui::Cases::load_default,
-                crate::case_ui::Cases::from_bundle,
-            ),
+            cases,
+            case_drops: crate::case_io::DropReader::default(),
+            case_storage_text: None,
             timeline_tab: tutorials::TimelineTab::default(),
             #[cfg(feature = "export")]
             exports: crate::export_panel::ExportPanel::default(),
@@ -929,7 +947,7 @@ impl HeartSimApp {
     }
 
     /// The top bar: the product and its version on the left, then the pages as tabs in four groups
-    /// (Explore, Practise, Learn, Tools) or, when the window is too narrow for fifteen tabs, as four group
+    /// (Explore, Practise, Learn, Tools) or, when the window is too narrow for sixteen tabs, as four group
     /// menus (see [`nav::page_bar`]); on a phone-narrow window only the name of the open page. On the
     /// right a button cycling the theme (system monitor, sun, moon) and a hamburger menu (painted
     /// three lines) with every page (the current one marked, with its number-key shortcut), the
@@ -1111,6 +1129,7 @@ impl eframe::App for HeartSimApp {
         heartsim_ui::theme::apply_to_context(&ctx);
         #[cfg(feature = "export")]
         self.exports_frame(&ctx);
+        self.cases_frame(&ctx, frame);
         // the documentation tour runs unattended and never shows the first-run dialog
         let needs_disclaimer = !self.settings.disclaimer_accepted && self.tour.is_none();
         if !needs_disclaimer {
@@ -1263,6 +1282,7 @@ impl eframe::App for HeartSimApp {
             Tab::SoundTrainer => self.sound_trainer_tab(ui),
             Tab::AuscultationQuiz => self.auscultation_quiz_tab(ui),
             Tab::Tutorials => self.tutorials_tab(ui),
+            Tab::Cases => self.cases_tab(ui),
             Tab::EpLab => self.ep_lab_tab(ui),
             Tab::Help => Self::help_tab(ui),
             Tab::EchoCalculators => {
@@ -1290,6 +1310,13 @@ impl eframe::App for HeartSimApp {
         storage.set_string(crate::echo_calc::STORAGE_KEY, self.echo_calc.storage_string());
         storage.set_string(crate::echo_views::STORAGE_KEY, self.echo.quiz_string());
         storage.set_string(crate::settings::STORAGE_KEY, self.settings.to_storage_string());
+        if let Some(text) = self
+            .cases
+            .take_storage_text()
+            .or_else(|| self.case_storage_text.take())
+        {
+            storage.set_string(crate::case_io::STORAGE_KEY, text);
+        }
     }
 }
 

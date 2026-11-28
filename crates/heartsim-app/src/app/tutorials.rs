@@ -203,17 +203,12 @@ impl HeartSimApp {
                 if self.timeline_tab.open {
                     self.timeline_editor_ui(ui);
                 } else {
-                    self.tutorials.library_ui(ui);
+                    // the patient cases have their own page (B41): one line here leads to it
+                    if crate::tutorial_ui::list_page(ui, &mut self.tutorials) {
+                        self.tab = Tab::Cases;
+                    }
                     if self.tutorials.is_open() {
                         self.cases.close();
-                    }
-                    ui.add_space(12.0);
-                    ui.separator();
-                    // one primary button on the page: the tutorial list has it unless all are done
-                    let tutorial_primary = self.tutorials.primary_card().is_some();
-                    self.cases.library_ui(ui, !tutorial_primary);
-                    if self.cases.is_open() {
-                        self.tutorials.close();
                     }
                 }
             });

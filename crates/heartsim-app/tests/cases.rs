@@ -4,7 +4,7 @@
 use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use heartsim_app::case_ui::{CaseLibrary, Cases};
+use heartsim_app::case_ui::{CaseLibrary, CaseRef, Cases};
 use heartsim_app::tutorial::{TutorialHost, UiAction};
 use heartsim_core::Action;
 use std::path::{Path, PathBuf};
@@ -76,7 +76,7 @@ fn button(h: &mut Harness<'_, Model>, label: &str) {
 }
 
 #[test]
-fn the_three_cases_are_listed_and_playable() {
+fn the_first_case_is_listed_and_playable() {
     let mut h = harness();
     frames(&mut h);
     assert!(h.state().cases.library.cases.len() >= 3);
@@ -84,7 +84,7 @@ fn the_three_cases_are_listed_and_playable() {
     let total = case.question_count();
 
     button(&mut h, &format!("Start {}", case.title));
-    assert_eq!(h.state().cases.position(), Some((0, 0)));
+    assert_eq!(h.state().cases.position(), Some((CaseRef::Builtin(0), 0)));
     assert!(
         matches!(h.state().host.ui.first(), Some(UiAction::LoadScenario(_))),
         "the first stage opens a rhythm"
@@ -149,7 +149,12 @@ fn the_case_list_has_one_primary_button_and_none_when_the_page_has_one() {
     let mut none = Harness::builder()
         .with_context_setup(heartsim_ui::theme::apply_to_context)
         .with_size(egui::vec2(900.0, 1000.0))
-        .build_ui_state(|ui, c: &mut Cases| c.library_ui(ui, false), Cases::new(library));
+        .build_ui_state(
+            |ui, c: &mut Cases| {
+                c.library_ui(ui, false);
+            },
+            Cases::new(library),
+        );
     none.run();
     let n = none
         .query_all(By::new())

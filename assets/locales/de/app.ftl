@@ -20,3 +20,5 @@ interval-zoom-fit-hint = Zurück zur Papiergeschwindigkeit der Aufgabe, vom Anfa
 interval-zoom-limit = Der Streifen ist am Limit (25 bis 400 mm/s).
 interval-scale = 1 mm = { $ms } ms · { $speed } mm/s
 interval-pan-hint = Welcher Teil der Aufnahme sichtbar ist; ziehen, um sich darin zu bewegen.
+
+tab-cases = Fälle

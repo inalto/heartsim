@@ -53,6 +53,15 @@ are the export date and the document ID is a hash of the content.
 The running scenario in the format of `assets/scenarios/`: the common fields plus the `timing` and `morphology` sections.
 `Tier0Scenario::from_ron` reads it back to the same values (a unit test round-trips the whole library).
 
+## Case file (`.hs`)
+
+A patient case and the rhythms it needs in one deterministic zip (brief B41): `heartsim-case.ron` (the manifest, first),
+`case.ron`, optional `scenarios/<id>.ron` and a `README.txt`, with the share bundle's fixed order, 1980 timestamps and
+permissions. It is not an export of `heartsim-io` but its own crate, `heartsim-casefile`, which builds for the browser too; the
+reader treats every file as untrusted (size, entry and inflation limits, only the listed names). The format, the limits, the
+security rules and the version policy are in
+[docs/case-file.md](https://github.com/inalto/heartsim/blob/master/docs/case-file.md).
+
 ## Share bundle
 
 A zip of all the files above plus `README.txt`, with fixed entry order, timestamps (1980-01-01, the zip epoch) and

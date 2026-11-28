@@ -9,6 +9,7 @@
 | [ROADMAP.md](ROADMAP.md) | Milestones M0–M8 with exit criteria and the dependency order of the briefs | planners |
 | [anatomy-pack.md](anatomy-pack.md) | Anatomy pack format (4: optional animated valve files), coordinate frame, the procedural default pack, and how to bake one from the open Strocchi/Rodero meshes (download, licence, attribution) | geometry/sim implementers |
 | [web.md](web.md) | The browser (WebAssembly) build: how to build and serve it, what it drops, the WebGL2 fallback, size budget, smoke test and browser test matrix | implementers, testers |
+| [case-file.md](case-file.md) | The patient case file (`.hs`): container, entries, manifest, the reader's limits and security rules, the deterministic writer, version policy, a worked example with `heartsim-cli case` | content authors, implementers, reviewers |
 | [tutorials.md](tutorials.md) | Tutorial file format (pages, actions, checks), modes, progress, the scenario timeline editor | educators, content authors |
 | [validation-bridge.md](validation-bridge.md) | Exporting to openCARP, importing solver results, comparison reports and the Niederer slab: what they do, what was not checked against a real solver | researchers, sim implementers |
 | [briefs/](briefs/) | One self-contained implementation brief per work package, with recommended model (Opus / Sonnet / Haiku) | subagents |

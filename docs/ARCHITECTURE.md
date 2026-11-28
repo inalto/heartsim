@@ -29,13 +29,17 @@ heartsim-calc      echo and haemodynamics calculators (B29): Calculator descript
                    status; no dependencies, beside `ecg` in the order (only `app` and `cli` use it)
 heartsim-echo      the beating heart (B30): a kinematic model of wall motion in cardiac coordinates, timed by the engine's
                    events and the valve schedule; LVEF, volume, MAPSE and TAPSE read-outs; pure (core, geometry, sim, ecg)
+heartsim-casefile  the patient case file `.hs` (B41): a zip of manifest + case + bundled rhythms; strict reader for untrusted
+                   files (named limits, counted inflation, allowed names only), deterministic writer, SHA-256; pure (core,
+                   ecg, ron, zip, sha2), builds for wasm32, beside `echo` in the order (below `render`; `app` and `cli` use it)
 heartsim-render    wgpu: offscreen scene (colour+depth), per-vertex scalar buffer + LUT textures, clip planes, picking rays, glyphs,
                    lines (vector arrow, catheters), offscreen capture to PNG
 heartsim-ui        egui widgets: ecg_strip (painter), twelve-lead page, Viewport3d (egui_wgpu callback), Cabrera wheel, calipers,
                    parameter panels, ladder diagram, scenario browser, quiz views; egui_tiles layout; Fluent i18n
 heartsim-io        exports and imports (B20): EcgRecord excerpt, 12-lead PDF (printpdf), page/strip PNG (ui's CPU rasteriser),
                    CSV, WFDB format 16, scenario RON, deterministic share-bundle zip; CSV/WFDB/zip import for review
-heartsim-app       eframe app: model (clock, engine, synth/forward, rings), settings, persistence, audio (kira), exports, tutorials
+heartsim-app       eframe app: model (clock, engine, synth/forward, rings), settings, persistence, audio (kira), exports, tutorials,
+                   the Cases page with `case_io` (rfd dialogs on desktop and web, dropped files, My cases on disk or in localStorage)
 heartsim-cli       headless: `run` a scenario and write the app's exports byte for byte, benchmark, validate presets, openCARP bridge
 xtask              ci, asset pipeline (decimate meshes, bake hoods/fibres/W matrix), release checks
 ```
@@ -205,6 +209,11 @@ scenario picker, presets. Keyboard: space pause, ←/→ scrub, 1–9 views. i18
   Built by `cargo xtask bake-anatomy` (procedural by default; `--source` for the Strocchi/Rodero cohort, CC BY) —
   see `docs/anatomy-pack.md` and brief B2.
 * Exports: CSV (`t_ms, I..V6`), WFDB (header + 16-bit), PNG, PDF (printpdf), RON.
+* `assets/cases/*.ron` — `core::case::Case` (versioned). A case travels as a **case file** `name.hs`
+  (`application/vnd.heartsim.case+zip`, brief B41): a deterministic zip of `heartsim-case.ron` (manifest, first entry),
+  `case.ron` and optional `scenarios/<id>.ron`, read by `heartsim_casefile::CasePackage::read` under fixed limits (2 MiB file,
+  16 entries, 1 MiB per entry and 4 MiB in all, counted while inflating; only these names). Format, security rules and version
+  policy: `docs/case-file.md`. My cases: `<user data dir>/cases/<id>.hs` on the desktop, eframe storage key `my_cases` in the browser.
 * Settings: `directories` config dir, `settings.ron`.
 
 ## 8. Testing strategy

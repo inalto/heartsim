@@ -19,6 +19,7 @@ heartsim-ecg = { workspace = true, features = ["parallel"] }
 heartsim-io.workspace = true
 heartsim-calc.workspace = true
 heartsim-echo.workspace = true
+heartsim-casefile.workspace = true
 heartsim-ui.workspace = true
 anyhow.workspace = true
 clap.workspace = true

@@ -27,6 +27,9 @@ pub fn default_scenario_dir() -> Option<PathBuf> {
 #[derive(Debug, Clone, Default)]
 pub struct ScenarioLibrary {
     pub entries: Vec<Tier0Scenario>,
+    /// Ids of the entries that came from an opened case file (B41) for this session: listed under
+    /// their own heading in the picker and never drawn by a quiz or drill.
+    from_cases: std::collections::BTreeSet<String>,
 }
 
 impl ScenarioLibrary {
@@ -53,7 +56,10 @@ impl ScenarioLibrary {
             })
             .collect();
         entries.sort_by(|a, b| a.scenario.title.cmp(&b.scenario.title));
-        Ok(Self { entries })
+        Ok(Self {
+            entries,
+            from_cases: std::collections::BTreeSet::new(),
+        })
     }
 
     /// Every `scenarios/*.ron` of a downloaded bundle; same rules as [`Self::load_dir`].
@@ -68,7 +74,10 @@ impl ScenarioLibrary {
             })
             .collect();
         entries.sort_by(|a, b| a.scenario.title.cmp(&b.scenario.title));
-        Self { entries }
+        Self {
+            entries,
+            from_cases: std::collections::BTreeSet::new(),
+        }
     }
 
     /// The default library, or an empty one when none is installed (always empty without the
@@ -107,15 +116,53 @@ impl ScenarioLibrary {
         self.entries.iter().position(|e| e.scenario.id == id)
     }
 
+    /// Whether entry `i` came from an opened case file ([`Self::add_from_case`]).
+    #[must_use]
+    pub fn is_from_case(&self, i: usize) -> bool {
+        self.entries
+            .get(i)
+            .is_some_and(|e| self.from_cases.contains(&e.scenario.id))
+    }
+
+    /// Whether `id` is a rhythm of the build's own library (not one a case file brought): a case
+    /// file may load it but never replace it.
+    #[must_use]
+    pub fn is_builtin(&self, id: &str) -> bool {
+        !self.from_cases.contains(id) && self.index_of(id).is_some()
+    }
+
+    /// Add a rhythm bundled in a case file for the session (B41), or replace the one an earlier
+    /// case file brought under the same id; indices of the other entries do not move. Returns its
+    /// index.
+    ///
+    /// # Errors
+    /// When the id is a built-in rhythm's (the case-file reader refuses such files first).
+    pub fn add_from_case(&mut self, s: Tier0Scenario) -> Result<usize, String> {
+        let id = s.scenario.id.clone();
+        if self.is_builtin(&id) {
+            return Err(format!("`{id}` is a built-in rhythm"));
+        }
+        if let Some(i) = self.index_of(&id) {
+            self.entries[i] = s;
+            Ok(i)
+        } else {
+            self.entries.push(s);
+            self.from_cases.insert(id);
+            Ok(self.entries.len() - 1)
+        }
+    }
+
     /// Whether entry `i` may be drawn by the ECG quizzes and drills (the Rhythm Quiz and the
     /// Interval Drill): every scenario except the auscultation cases of brief B27
     /// ([`heartsim_core::Scenario::is_auscultation_case`]), whose ordinary sinus strip would be a
-    /// wrong question. The one rule every pool uses.
+    /// wrong question, and the rhythms of opened case files (B41), which nobody at heartsim
+    /// reviewed. The one rule every pool uses.
     #[must_use]
     pub fn in_ecg_quiz_pool(&self, i: usize) -> bool {
         self.entries
             .get(i)
             .is_some_and(|e| !e.scenario.is_auscultation_case())
+            && !self.is_from_case(i)
     }
 
     /// The indices the ECG quizzes and drills draw from, in library order.
@@ -132,7 +179,7 @@ impl ScenarioLibrary {
     #[must_use]
     pub fn auscultation_pool(&self) -> Vec<usize> {
         (0..self.entries.len())
-            .filter(|&i| self.entries[i].scenario.is_auscultation_case())
+            .filter(|&i| self.entries[i].scenario.is_auscultation_case() && !self.is_from_case(i))
             .collect()
     }
 }
@@ -170,14 +217,20 @@ impl Timeline {
 }
 
 /// The picker's groups in display order: the rhythms (no heading), then the auscultation cases
-/// under their own heading when there are any. Each group keeps the library's title order.
+/// under their own heading when there are any, then the rhythms opened case files brought ("From
+/// cases", B41). Each group keeps the library's order.
 #[must_use]
 pub fn picker_groups(library: &ScenarioLibrary) -> Vec<(Option<String>, Vec<usize>)> {
+    let (from_cases, own): (Vec<usize>, Vec<usize>) =
+        (0..library.len()).partition(|&i| library.is_from_case(i));
     let (rhythms, sounds): (Vec<usize>, Vec<usize>) =
-        (0..library.len()).partition(|&i| library.in_ecg_quiz_pool(i));
+        own.into_iter().partition(|&i| library.in_ecg_quiz_pool(i));
     let mut out = vec![(None, rhythms)];
     if !sounds.is_empty() {
         out.push((Some(t!("scenario-group-sounds")), sounds));
+    }
+    if !from_cases.is_empty() {
+        out.push((Some(t!("scenario-group-cases")), from_cases));
     }
     out
 }
@@ -323,6 +376,26 @@ mod tests {
         assert_eq!(groups[0].1, pool);
         assert!(groups[0].0.is_none() && groups[1].0.is_some());
         assert_eq!(groups[1].1.len(), cases.len());
+    }
+
+    #[test]
+    fn rhythms_from_case_files_join_the_picker_but_never_a_quiz_pool() {
+        let mut lib = library();
+        let ecg = lib.ecg_quiz_pool();
+        let sounds = lib.auscultation_pool();
+        let mut s = lib.entries[lib.index_of("sinus_normal").unwrap()].clone();
+        assert!(lib.add_from_case(s.clone()).is_err(), "a built-in id is refused");
+        s.scenario.id = "from_a_file".into();
+        let i = lib.add_from_case(s.clone()).unwrap();
+        assert_eq!(i, lib.len() - 1);
+        assert!(lib.is_from_case(i) && !lib.is_builtin("from_a_file"));
+        // the same id again replaces it in place
+        assert_eq!(lib.add_from_case(s).unwrap(), i);
+        assert_eq!(lib.ecg_quiz_pool(), ecg);
+        assert_eq!(lib.auscultation_pool(), sounds);
+        let groups = picker_groups(&lib);
+        assert_eq!(groups.last().unwrap().1, [i]);
+        assert!(groups.last().unwrap().0.is_some());
     }
 
     #[test]

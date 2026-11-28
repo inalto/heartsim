@@ -21,6 +21,7 @@ heartsim-sim = { path = "crates/heartsim-sim", version = "0.26.0", default-featu
 heartsim-ecg = { path = "crates/heartsim-ecg", version = "0.26.0", default-features = false }
 heartsim-calc = { path = "crates/heartsim-calc", version = "0.26.0" }
 heartsim-echo = { path = "crates/heartsim-echo", version = "0.26.0" }
+heartsim-casefile = { path = "crates/heartsim-casefile", version = "0.26.0" }
 heartsim-render = { path = "crates/heartsim-render", version = "0.26.0", default-features = false }
 heartsim-ui = { path = "crates/heartsim-ui", version = "0.26.0" }
 heartsim-io = { path = "crates/heartsim-io", version = "0.26.0" }
@@ -37,7 +38,9 @@ egui_tiles = "0.18.0"
 egui-notify = "0.24.0"
 # Markdown for tutorial pages; no image loading or regex (pages are text only)
 egui_commonmark = { version = "0.26.0", default-features = false, features = ["pulldown_cmark"] }
-rfd = "0.17.2"
+# File dialogs for case files (B41): native dialogs on the desktop, a file picker and a download in the browser. Linux
+# uses the XDG desktop portal (libdbus loaded at run time, zenity as its fallback): no GTK, nothing to link at build time.
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 
 # --- math / geometry / simulation ---------------------------------------------
 glam = { version = "0.34.1", features = ["bytemuck", "serde"] }

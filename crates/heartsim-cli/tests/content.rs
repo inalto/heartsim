@@ -268,3 +268,99 @@ fn broken_tutorials_and_cases_fail() {
     assert!(text(&o).contains("1 questions (need"), "{}", text(&o));
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// B41: every shipped case packs into a `.hs` file that `case check` accepts with no warning, and
+/// `case unpack` writes back the manifest, the case and nothing else. A file with a rhythm the
+/// build lacks, or a bundled rhythm with a built-in id, is refused.
+#[test]
+fn shipped_cases_pack_check_and_unpack() {
+    let dir = fresh_dir("casefile");
+    let mut cases: Vec<PathBuf> = std::fs::read_dir(assets().join("cases"))
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "ron"))
+        .collect();
+    cases.sort();
+    assert!(cases.len() >= 9);
+    for case in &cases {
+        let stem = case.file_stem().unwrap().to_string_lossy().into_owned();
+        let hs = dir.join(format!("{stem}.hs"));
+        let o = cli(&[
+            "case",
+            "pack",
+            case.to_str().unwrap(),
+            "-o",
+            hs.to_str().unwrap(),
+            "--author",
+            "heartsim authors",
+            "--licence",
+            "MIT OR Apache-2.0",
+            "--created",
+            "2026-11-27",
+        ]);
+        assert!(o.status.success(), "{stem}: {}", text(&o));
+        let again = dir.join(format!("{stem}-again.hs"));
+        let o2 = cli(&[
+            "case",
+            "pack",
+            case.to_str().unwrap(),
+            "-o",
+            again.to_str().unwrap(),
+            "--author",
+            "heartsim authors",
+            "--licence",
+            "MIT OR Apache-2.0",
+            "--created",
+            "2026-11-27",
+        ]);
+        assert!(o2.status.success());
+        assert_eq!(
+            std::fs::read(&hs).unwrap(),
+            std::fs::read(&again).unwrap(),
+            "{stem}: deterministic"
+        );
+        let o = cli(&["case", "check", hs.to_str().unwrap()]);
+        assert!(o.status.success(), "{stem}: {}", text(&o));
+        assert!(text(&o).contains("\n0 warnings"), "{stem}: {}", text(&o));
+    }
+    let first = cases[0].file_stem().unwrap().to_string_lossy().into_owned();
+    let out = dir.join("unpacked");
+    let o = cli(&[
+        "case",
+        "unpack",
+        dir.join(format!("{first}.hs")).to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    assert!(o.status.success(), "{}", text(&o));
+    let mut names: Vec<String> = std::fs::read_dir(&out)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["case.ron", "heartsim-case.ron", "scenarios"]);
+    let back = Case::from_ron(&std::fs::read_to_string(out.join("case.ron")).unwrap()).unwrap();
+    assert_eq!(
+        back,
+        Case::from_ron(&std::fs::read_to_string(&cases[0]).unwrap()).unwrap()
+    );
+
+    // a bundled rhythm with a built-in id is refused by pack
+    let o = cli(&[
+        "case",
+        "pack",
+        cases[0].to_str().unwrap(),
+        "--scenario",
+        assets().join("scenarios/lbbb.ron").to_str().unwrap(),
+        "-o",
+        dir.join("clash.hs").to_str().unwrap(),
+    ]);
+    assert!(!o.status.success());
+    assert!(text(&o).contains("built-in rhythm"), "{}", text(&o));
+    // garbage is refused by check
+    std::fs::write(dir.join("bad.hs"), b"not a zip").unwrap();
+    let o = cli(&["case", "check", dir.join("bad.hs").to_str().unwrap()]);
+    assert!(!o.status.success());
+    assert!(text(&o).contains("refused"), "{}", text(&o));
+    std::fs::remove_dir_all(&dir).unwrap();
+}

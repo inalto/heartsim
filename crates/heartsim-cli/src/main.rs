@@ -1,5 +1,6 @@
 mod bridge;
 mod calc;
+mod casefile;
 mod content;
 mod echo;
 
@@ -16,6 +17,53 @@ use std::path::{Path, PathBuf};
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
+}
+
+/// `heartsim-cli case …`.
+#[derive(Subcommand, Debug)]
+enum CaseCmd {
+    /// Pack a case (`assets/cases`-style RON) and the rhythms it needs that are not built in into one
+    /// `.hs` file. The writer is deterministic: the same inputs (and `--created`) give the same bytes.
+    Pack {
+        /// The case file (`Case( … )`).
+        case: PathBuf,
+        /// A rhythm to bundle (a scenario file); repeat for several.
+        #[arg(long = "scenario")]
+        scenarios: Vec<PathBuf>,
+        /// The case file to write, e.g. `my_case.hs`.
+        #[arg(short, long)]
+        out: PathBuf,
+        /// An author for the manifest; repeat for several.
+        #[arg(long = "author")]
+        authors: Vec<String>,
+        /// Licence of the case text (SPDX id or free text), shown on the case's card.
+        #[arg(long, default_value = "")]
+        licence: String,
+        /// BCP 47 language tag of the case text.
+        #[arg(long, default_value = "en")]
+        language: String,
+        /// Date for the manifest (default: today).
+        #[arg(long)]
+        created: Option<String>,
+        /// The `assets/` directory whose rhythms are built in (default: `$HEARTSIM_ASSETS`, `./assets`).
+        #[arg(long)]
+        assets: Option<PathBuf>,
+    },
+    /// Write the manifest, the case and the bundled rhythms of a `.hs` file into a directory (only the
+    /// allowed names; nothing else is ever written).
+    Unpack {
+        file: PathBuf,
+        #[arg(short, long)]
+        out: PathBuf,
+    },
+    /// The reader's verdict on a `.hs` file (fails if the application would refuse it), then the
+    /// editorial rules of the shipped cases and a headless run of every stage, as warnings.
+    Check {
+        file: PathBuf,
+        /// The `assets/` directory whose rhythms are built in.
+        #[arg(long)]
+        assets: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -92,6 +140,12 @@ enum Cmd {
     ValidateCases {
         /// Case directory (a sibling `scenarios/` folder holds the rhythms).
         dir: PathBuf,
+    },
+    /// Case files (`.hs`, brief B41; the format is in docs/case-file.md): `case pack`, `case unpack`,
+    /// `case check`.
+    Case {
+        #[command(subcommand)]
+        cmd: CaseCmd,
     },
     /// Run a scenario headless and write the same exports as the app's Export window: 12-lead PDF,
     /// page and strip PNGs, CSV, WFDB (.hea + .dat), scenario RON and the share bundle zip.
@@ -596,6 +650,29 @@ fn main() -> Result<()> {
         Cmd::ValidateScenarios { dir } => validate_scenarios(&dir)?,
         Cmd::RunTutorial { tutorial, assets } => content::run_tutorials(&tutorial, assets.as_deref())?,
         Cmd::ValidateCases { dir } => content::validate_cases(&dir)?,
+        Cmd::Case { cmd } => match cmd {
+            CaseCmd::Pack {
+                case,
+                scenarios,
+                out,
+                authors,
+                licence,
+                language,
+                created,
+                assets,
+            } => casefile::pack(&casefile::PackArgs {
+                case,
+                scenarios,
+                out,
+                authors,
+                licence,
+                language,
+                created,
+                assets,
+            })?,
+            CaseCmd::Unpack { file, out } => casefile::unpack(&file, &out)?,
+            CaseCmd::Check { file, assets } => casefile::check(&file, assets.as_deref())?,
+        },
         Cmd::ExportOpencarp {
             scenario,
             out,

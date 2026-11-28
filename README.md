@@ -58,7 +58,7 @@ from any other simulator.
   the measurements.
 * **Teaching tools.** Axis trainer and axis quiz, rhythm quiz with explanations, interval drill graded with calipers,
   electrode-misplacement exercises with a detector, twelve tutorials (105 pages) and nine scripted patient cases with multiple-choice
-  questions, a monitor beep.
+  questions on their own Cases page, which also opens and saves case files (`.hs`) a teacher can hand out, a monitor beep.
 * **Learning auscultation.** A Sound Trainer that loops 22 single findings with a listen counter and switches contrast pairs
   at the same point of the cycle; an auscultation quiz that asks what you hear before what it is; two heart-sound tutorials
   with a sound check; a breath-hold to study the S2 split beat after beat; an optional small-speaker mode (labelled as

@@ -10,9 +10,12 @@
 //! * **Sound** (B26) goes through Web Audio ([`audio`] on `wasm32`): the same heart-sound player as
 //!   the desktop, a sink that schedules `AudioBuffer`s on the context clock, started by the
 //!   learner's first click.
-//! * **No files.** No export / import window, PDF, PNG or CSV files, saved scenario files or
-//!   electrode-placement files; settings (quiz score, tutorial progress) live in `localStorage`
-//!   through eframe's storage.
+//! * **Files only for patient cases.** No export / import window, PDF, PNG or CSV files, saved
+//!   scenario files or electrode-placement files; settings (quiz score, tutorial progress) live in
+//!   `localStorage` through eframe's storage. Case files (`.hs`, brief B41) are the exception: the
+//!   Cases page opens one with the browser's file picker or a drop on the page, saves one as a
+//!   download (`rfd`'s web backend, inside `heartsim-app`'s `case_io`), and keeps My cases in
+//!   `localStorage`.
 //!
 //! The pure part ([`archive`]) builds and is tested on every target; the browser glue exists only
 //! when compiled for `wasm32`.

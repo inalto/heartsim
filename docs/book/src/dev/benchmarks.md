@@ -12,7 +12,7 @@ the whole test suite and `cargo deny check` (licences and advisories). Run it be
 The GUI crates take several minutes to build from cold; while iterating on physiology, test the pure crates first:
 
 ```bash
-cargo test -p heartsim-core -p heartsim-geometry -p heartsim-sim -p heartsim-ecg -p heartsim-calc -p heartsim-echo
+cargo test -p heartsim-core -p heartsim-geometry -p heartsim-sim -p heartsim-ecg -p heartsim-calc -p heartsim-echo -p heartsim-casefile
 ```
 
 ## Golden snapshots

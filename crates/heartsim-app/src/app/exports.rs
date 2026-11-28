@@ -24,8 +24,14 @@ impl HeartSimApp {
         if self.exports.review.is_some() && !self.ecg.is_paused() {
             self.end_review();
         }
-        let dropped: Option<PathBuf> =
-            ctx.input(|i| i.raw.dropped_files.first().map(|f| f.path().to_path_buf()));
+        // a dropped case file (`.hs`) goes to the Cases page instead (`app/cases.rs`)
+        let dropped: Option<PathBuf> = ctx.input(|i| {
+            i.raw
+                .dropped_files
+                .iter()
+                .map(|f| f.path().to_path_buf())
+                .find(|p| !p.to_str().is_some_and(crate::case_io::is_case_file_name))
+        });
         if let Some(p) = dropped {
             self.exports.open = true;
             self.import(&p);

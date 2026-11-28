@@ -11,6 +11,7 @@
 //! covered by `heartsim-ecg/tests/reentry.rs`).
 
 use anyhow::{Context, Result, bail};
+use heartsim_casefile::CasePackage;
 use heartsim_core::case::Case;
 use heartsim_core::tutorial::{PageRun, Step, Tutorial, TutorialHost, UiAction, WaitEvent};
 use heartsim_core::{Action, Millis, TimedAction};
@@ -53,11 +54,14 @@ struct Headless {
     /// `true` after `StartReentry`: the rhythm is a tissue model this run does not step.
     reentry: bool,
     errors: Vec<String>,
+    /// Rhythms bundled in a case file (B41), looked up before the library.
+    bundled: Vec<Tier0Scenario>,
 }
 
 impl Headless {
     fn new(assets: &Path) -> Self {
         Self {
+            bundled: Vec::new(),
             assets: assets.to_path_buf(),
             engine: TimingEngine::new(TimingParams::default()),
             synth: GaussianSynth::textbook(),
@@ -139,6 +143,9 @@ impl Headless {
     }
 
     fn scenario(&self, id: &str) -> Result<Tier0Scenario> {
+        if let Some(s) = self.bundled.iter().find(|s| s.scenario.id == id) {
+            return Ok(s.clone());
+        }
         let path = self.assets.join("scenarios").join(format!("{id}.ron"));
         let text = std::fs::read_to_string(&path).with_context(|| format!("no scenario `{id}`"))?;
         Tier0Scenario::from_ron(&text).map_err(|e| anyhow::anyhow!("{id}: {e}"))
@@ -399,4 +406,66 @@ pub(crate) fn validate_cases(dir: &Path) -> Result<()> {
         bail!("{failed} of {} cases failed validation", files.len());
     }
     Ok(())
+}
+
+/// The rhythm ids of the installed library (`assets/scenarios/*.ron` file stems).
+pub(crate) fn library_ids(assets: &Path) -> Result<Vec<String>> {
+    let dir = assets.join("scenarios");
+    let mut ids: Vec<String> = std::fs::read_dir(&dir)
+        .with_context(|| format!("reading {}", dir.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "ron"))
+        .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+        .collect();
+    ids.sort();
+    Ok(ids)
+}
+
+/// Run the stages `stages` (all when `None`) of a case file's case headlessly, its bundled rhythms
+/// first in the lookup, as `validate-cases` runs a shipped case. Returns the problems.
+pub(crate) fn run_package(p: &CasePackage, assets: &Path, stages: Option<usize>) -> Result<Vec<String>> {
+    let mut host = Headless::new(assets);
+    host.bundled = p.tier0_scenarios().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let c = &p.case;
+    let mut problems = Vec::new();
+    for (i, s) in c.stages.iter().enumerate().take(stages.unwrap_or(usize::MAX)) {
+        problems.extend(host.run_steps(&format!("{} stage {}", c.id, i + 1), s.actions.clone()));
+    }
+    Ok(problems)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heartsim_casefile::Manifest;
+    use heartsim_core::tutorial::{Step, UiAction};
+
+    /// B41: a case that loads a rhythm bundled in its file plays its first stage through the same
+    /// host as `validate-cases`, and the shipped cases pack and pass the reader.
+    #[test]
+    fn a_case_with_a_bundled_rhythm_plays_its_first_stage() {
+        let assets = assets_root(None).unwrap();
+        let text = std::fs::read_to_string(assets.join("cases/case_syncope_heart_block.ron")).unwrap();
+        let mut case = Case::from_ron(&text).unwrap();
+        let rhythm = std::fs::read_to_string(assets.join("scenarios/bifascicular.ron"))
+            .unwrap()
+            .replacen("id: \"bifascicular\"", "id: \"teacher_bifascicular\"", 1);
+        case.stages[0].actions[0] = Step::Ui(UiAction::LoadScenario("teacher_bifascicular".into()));
+        let manifest = Manifest::for_case(&case, vec![], "", "", "test");
+        let p = CasePackage::new(manifest, case, vec![("teacher_bifascicular".into(), rhythm)]);
+        let bytes = p.write().unwrap();
+        let ids = library_ids(&assets).unwrap();
+        let back = CasePackage::read_for(&bytes, |id| ids.iter().any(|i| i == id)).unwrap();
+        assert!(!ids.iter().any(|i| i == "teacher_bifascicular"));
+        let problems = run_package(&back, &assets, Some(1)).unwrap();
+        assert!(problems.is_empty(), "{problems:?}");
+        // the same stage without the bundled rhythm fails in the headless host
+        let mut bare = back.clone();
+        bare.scenarios.clear();
+        let problems = run_package(&bare, &assets, Some(1)).unwrap();
+        assert!(
+            problems.iter().any(|p| p.contains("teacher_bifascicular")),
+            "{problems:?}"
+        );
+    }
 }

@@ -5,6 +5,19 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- Patient cases get their own page, **Cases**, in the Learn group after Tutorials (brief B41; no number key, so no shortcut
+  moved). It lists the built-in cases, **My cases** and a slot for an online library; each card shows the counts, the best
+  score of the session, and for a file its authors, licence and origin, with Start, Save as… and (for My cases) Remove. The
+  Tutorials page no longer lists the cases and links to the new page.
+- Case files, `name.hs` (brief B41): a case and the rhythms it needs in one zip, documented in `docs/case-file.md`. A new pure
+  crate, `heartsim-casefile`, reads them strictly (2 MiB per file, 16 entries, 1 MiB per entry and 4 MiB in all counted while
+  inflating, only the documented names, no encryption, a newer version refused with a message) and writes them
+  deterministically, so a SHA-256 identifies a file. Open a file with **Open case file…** or by dropping it on the window, on
+  the desktop and in the browser (file picker, download; `rfd` 0.17 on both); save any case, built-in ones as templates, with
+  **Save as…**. My cases stay in `<user data dir>/cases/` on the desktop and in the browser's storage (at most 1 MiB). A
+  case's bundled rhythms join the rhythm picker under *From cases* for the session and never enter a quiz. The dialogs and
+  the browser picker were not seen on a real screen or in a real browser (see the known issues).
+- `heartsim-cli case pack | unpack | check` for case files; `validate-cases` is unchanged.
 - Caliper handles, pointer shapes and a zoom for the interval drill (brief B39). Every caliper line now has a tab at the top
   and at the bottom of the strip and a pair has a grip on its read-out bar; lines and tabs are easy to grab (6 points
   either side of a line, at least 24 x 24 points on a tab, 44 x 44 under a finger) and the pointer shows resize arrows,
@@ -24,7 +37,7 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
   fails, and pericarditis against infarction (`assets/cases/case_*.ron`, English only). Where the simulator cannot show a step
   the text tells it. No clinician has reviewed them; the statements to check are listed in the known issues.
 - `heartsim-cli validate-cases` also checks that the right answer is not in the same place in more than half of a case's
-  questions (the three first cases are exempt). The patient cases are listed in the user book's *Tutorials* page.
+  questions (the three first cases are exempt). The patient cases are listed in the user book's *Patient cases* page.
 
 ### Fixed
 - In the rhythm quiz the trace sometimes did not start at the left of the strip (brief B40). The quiz drew its finished

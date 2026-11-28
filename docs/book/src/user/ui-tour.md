@@ -1,14 +1,14 @@
 # A tour of the window
 
-The window has a one-line **top bar**: the program name and version, then the fifteen pages as **tabs** in four groups, and on
+The window has a one-line **top bar**: the program name and version, then the sixteen pages as **tabs** in four groups, and on
 the right a button that cycles the theme and the **hamburger menu** (three lines). The groups are *Explore* (Simulator, 12-Lead ECG,
 Heart Vector, Echo, Electrodes, EP Lab), *Practise* (Axis Trainer, Axis Quiz, Rhythm Quiz, Interval Drill, Sound Trainer, Auscultation Quiz),
-*Learn* (Tutorials, Help) and *Tools* ([Echo calculators](echo-calculators.md)).
-The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for fifteen tabs
-(below about 1420 px in English) the bar shows four group buttons instead (*Explore*, *Practise*, *Learn*, *Tools*): the group of the open page carries its name, and a
+*Learn* (Tutorials, [Cases](cases.md), Help) and *Tools* ([Echo calculators](echo-calculators.md)).
+The open page is the filled tab; hover a tab to see its number-key shortcut. When the window is too narrow for sixteen tabs
+(below about 1480 px in English; the bar measures the names, so the width differs by language) the bar shows four group buttons instead (*Explore*, *Practise*, *Learn*, *Tools*): the group of the open page carries its name, and a
 click lists the pages of that group. On a phone-narrow window the bar shows only the name of the open page, and the hamburger
-menu is the way to the other pages. The hamburger menu always lists the fifteen pages (the open one marked, each with its
-number-key shortcut where it has one; the Sound Trainer, the Auscultation Quiz, the Echo calculators and Echo have none), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
+menu is the way to the other pages. The hamburger menu always lists the sixteen pages (the open one marked, each with its
+number-key shortcut where it has one; the Sound Trainer, the Auscultation Quiz, the Echo calculators, Echo and Cases have none), then *Export / Import*, *Settings* and *About*, and at the bottom **Theme**: system, light or dark.
 
 Below the bar, on the pages that run the simulation, is the **rhythm bar**. Its one row holds the rhythm picker (a fixed width: a long name is cut short with an ellipsis, and the full name shows on
 hover), *Restart*, *About this rhythm* (hover it for the description, click it for the full explanation), *Run / Pause* with a
@@ -204,11 +204,11 @@ mark in the quizzes and drills. The ECG paper and the 3-D colour maps keep their
 Move the ten electrodes on the torso, try the preset misplacements (limb-cable reversals, chest leads one space too high) and
 see which leads change; the detector explains what was misplaced.
 
-## Rhythm Quiz, Interval Drill, Tutorials and EP Lab
+## Rhythm Quiz, Interval Drill, Tutorials, Cases and EP Lab
 
 The [Rhythm Quiz](quizzes.md#rhythm-quiz) shows a strip and asks which rhythm it is; the [Interval Drill](quizzes.md#interval-drill)
-asks you to measure PR, QRS and QT with the calipers and grades the answer. The [Tutorials](tutorials.md) tab holds the ten
-guided lessons and the nine patient cases. The [EP Lab](ep-lab.md) is the catheter laboratory: electrograms, programmed
+asks you to measure PR, QRS and QT with the calipers and grades the answer. The [Tutorials](tutorials.md) tab holds the guided
+lessons; the nine patient cases moved to their own page, [Cases](cases.md), which also opens and saves case files (`.hs`). The [EP Lab](ep-lab.md) is the catheter laboratory: electrograms, programmed
 stimulation and ablation.
 
 ![The Tutorials tab](../images/tutorials.png)

@@ -34,6 +34,7 @@ works from a sub-path such as `https://<user>.github.io/heartsim/` and from any 
 | "Save PNG" of the 12-lead page, "Save/Load placement", "Save scenario" in the timeline editor | hidden | plain files in the working directory |
 | Asset discovery on disk (`$HEARTSIM_ASSETS`, next to the executable, per-user data directory) | replaced by the downloaded archive | `native` feature off |
 | Tutorial progress file | `localStorage` through eframe's storage | `native` feature off |
+| Case files (`.hs`, brief B41): the desktop's file dialogs and the `<user data dir>/cases/` folder | **kept**: "Open case file…" opens the browser's file picker and "Save as…" offers a download (both `rfd`'s web backend, a small overlay panel, driven by `wasm_bindgen_futures::spawn_local`); a `.hs` dropped on the page is read with `DroppedFile::bytes_async`. My cases live in `localStorage` (eframe storage key `my_cases`, base64, at most 1 MiB in all; the page says when a file does not fit) | the only files the browser build reads or writes; never seen in a real browser yet (see the known issues) |
 | rayon (Tier 1 batches, Tier 2 slabs, forward-matrix gathers, scalar mapping) | single thread (`parallel` off) | no threads without COOP/COEP and `wasm-bindgen-rayon`; results are identical, only slower |
 | Screenshot tour (`HEARTSIM_SCREENSHOT_DIR`) | inert | no environment |
 | `--version`, logging to the terminal | none; panics and `log` output go to the browser console | |

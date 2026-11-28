@@ -1,6 +1,6 @@
 //! Page navigation: the pages, their four groups and the one-line page bar in the top bar.
 //!
-//! The bar adapts to the width it is given and never wraps: with room for all fifteen pages they are
+//! The bar adapts to the width it is given and never wraps: with room for all sixteen pages they are
 //! tabs, grouped with a small caption (or just a separator when the captions would not fit); with
 //! less, four group buttons whose menus list the pages (the group of the open page shows its name);
 //! the phone-narrow layout is left to the caller (title and hamburger only).
@@ -9,7 +9,7 @@ use eframe::egui::{self, Color32, RichText, TextStyle, Ui};
 use heartsim_ui::t;
 
 /// The top-level pages, one tab each. The order of [`Tab::ALL`] is the order of the number-key
-/// shortcuts (1–9, 0; the last five pages have none), not of the bar.
+/// shortcuts (1–9, 0; the last six pages have none), not of the bar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Simulator,
@@ -31,6 +31,8 @@ pub enum Tab {
     EchoCalculators,
     /// The probe on the figure and the anatomical cross-section it cuts (B31).
     Echo,
+    /// Patient cases: the built-in ones, the user's case files, opening and saving `.hs` files (B41).
+    Cases,
 }
 
 /// The four groups of pages in the bar: see, practise, learn, and the tools.
@@ -70,7 +72,7 @@ impl Group {
                 Tab::SoundTrainer,
                 Tab::AuscultationQuiz,
             ],
-            Group::Learn => &[Tab::Tutorials, Tab::Help],
+            Group::Learn => &[Tab::Tutorials, Tab::Cases, Tab::Help],
             Group::Tools => &[Tab::EchoCalculators],
         }
     }
@@ -89,7 +91,7 @@ impl Group {
 
 impl Tab {
     /// Every page in shortcut order (see [`Tab::shortcut`]).
-    pub const ALL: [Tab; 15] = [
+    pub const ALL: [Tab; 16] = [
         Tab::Simulator,
         Tab::TwelveLead,
         Tab::HeartVector,
@@ -105,6 +107,7 @@ impl Tab {
         Tab::AuscultationQuiz,
         Tab::EchoCalculators,
         Tab::Echo,
+        Tab::Cases,
     ];
 
     /// The page's name, as in the bar and the menus.
@@ -126,6 +129,7 @@ impl Tab {
             Tab::AuscultationQuiz => t!("tab-auscultation-quiz"),
             Tab::EchoCalculators => t!("tab-echo-calculators"),
             Tab::Echo => t!("tab-echo"),
+            Tab::Cases => t!("tab-cases"),
         }
     }
 
@@ -138,8 +142,8 @@ impl Tab {
             .unwrap_or(Group::Explore)
     }
 
-    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to fifteenth pages (Help,
-    /// the Sound Trainer, the auscultation quiz, the echo calculators and Echo) have none.
+    /// The number key that opens the page: `1`–`9`, then `0`; the eleventh to sixteenth pages (Help,
+    /// the Sound Trainer, the auscultation quiz, the echo calculators, Echo and Cases) have none.
     #[must_use]
     pub fn shortcut(self) -> Option<&'static str> {
         const LABELS: [&str; 10] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];

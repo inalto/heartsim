@@ -1,4 +1,4 @@
-//! The top bar's page navigation: with room, all fifteen pages are tabs; with less, four group
+//! The top bar's page navigation: with room, all sixteen pages are tabs; with less, four group
 //! menus (Explore, Practise, Learn, Tools); always one line high, and every page is reachable in at
 //! most two clicks.
 
@@ -36,13 +36,17 @@ fn harness(width: f32) -> Harness<'static, Model> {
         )
 }
 
+/// A width at which the measured tab bar fits in this harness (which does not apply the app's
+/// theme, so its text widths are not the real ones).
+const WIDE: f32 = 1800.0;
+
 #[test]
-fn at_1700_all_fifteen_pages_are_tabs_and_a_click_switches_page() {
-    // fifteen English tabs with their 10-point side padding (`nav::TAB_BUTTON_PADDING`) need about
-    // 1600 px in this harness: below that, group menus
-    assert_eq!(Tab::ALL.len(), 15);
+fn at_1800_all_sixteen_pages_are_tabs_and_a_click_switches_page() {
+    // sixteen English tabs with their 10-point side padding (`nav::TAB_BUTTON_PADDING`) fit at
+    // `WIDE` in this harness (`choose_style` measures them; below the measured width, group menus)
+    assert_eq!(Tab::ALL.len(), 16);
     assert_eq!(Group::ALL.len(), 4);
-    let mut h = harness(1700.0);
+    let mut h = harness(WIDE);
     h.run();
     assert!(matches!(
         h.state().style,
@@ -60,6 +64,9 @@ fn at_1700_all_fifteen_pages_are_tabs_and_a_click_switches_page() {
     h.get_by_label("Echo calculators").click();
     h.run();
     assert_eq!(h.state().tab, Tab::EchoCalculators);
+    h.get_by_label("Cases").click();
+    h.run();
+    assert_eq!(h.state().tab, Tab::Cases);
 }
 
 #[test]
@@ -171,6 +178,7 @@ fn the_shortcuts_are_unchanged() {
             None,
             None,
             None,
+            None,
             None
         ]
     );
@@ -196,7 +204,7 @@ fn the_echo_page_is_in_explore_right_after_heart_vector_in_both_languages() {
     assert_eq!(explore[i + 1], Tab::Echo, "Echo follows Heart Vector");
     // nothing else moved: the other groups are as they were
     assert_eq!(Group::Tools.tabs(), [Tab::EchoCalculators]);
-    assert_eq!(Group::Learn.tabs(), [Tab::Tutorials, Tab::Help]);
+    assert_eq!(Group::Learn.tabs(), [Tab::Tutorials, Tab::Cases, Tab::Help]);
     i18n::set_language("en");
     assert_eq!(Tab::Echo.title(), "Echo");
     i18n::set_language("it");
@@ -208,7 +216,7 @@ fn the_echo_page_is_in_explore_right_after_heart_vector_in_both_languages() {
 fn the_echo_page_is_a_tab_at_the_wide_width_and_a_menu_entry_when_narrow() {
     for lang in ["en", "it"] {
         i18n::set_language(lang);
-        let mut h = harness(1700.0);
+        let mut h = harness(WIDE);
         h.run();
         h.get_by_label(&Tab::Echo.title()).click();
         h.run();
@@ -240,4 +248,25 @@ fn the_group_buttons_have_their_own_roomier_padding() {
             "{g:?} {r:?}"
         );
     }
+}
+
+/// B41: the patient cases have their own page, in Learn right after Tutorials, appended to the
+/// shortcut order so no number key moved; it has none.
+#[test]
+fn the_cases_page_is_in_learn_after_tutorials_and_has_no_number_key() {
+    assert_eq!(Tab::Cases.group(), Group::Learn);
+    assert_eq!(Group::Learn.tabs()[1], Tab::Cases);
+    assert_eq!(Tab::ALL.last(), Some(&Tab::Cases));
+    assert_eq!(Tab::Cases.shortcut(), None);
+    for (lang, name) in [
+        ("en", "Cases"),
+        ("it", "Casi"),
+        ("de", "Fälle"),
+        ("fr", "Cas"),
+        ("es", "Casos"),
+    ] {
+        i18n::set_language(lang);
+        assert_eq!(Tab::Cases.title(), name, "{lang}");
+    }
+    i18n::set_language("en");
 }

@@ -46,6 +46,7 @@ heartsim-echo.workspace = true
 heartsim-render.workspace = true
 heartsim-ui.workspace = true
 heartsim-calc.workspace = true
+heartsim-casefile.workspace = true
 heartsim-io = { workspace = true, optional = true }
 eframe.workspace = true
 egui.workspace = true
@@ -66,10 +67,19 @@ ureq = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+# Case files (B41): open / save dialogs on both targets, My cases in browser storage as base64.
+rfd.workspace = true
+base64.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# drives rfd's async dialogs on a short-lived thread (case files, B41)
+pollster.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # `std::time::Instant` is unavailable in the browser: the re-entry frame budget reads `Date.now()`.
 js-sys.workspace = true
+# rfd's dialogs and dropped files are read asynchronously in the browser (case files, B41)
+wasm-bindgen-futures.workspace = true
 
 [dev-dependencies]
 egui_kittest.workspace = true

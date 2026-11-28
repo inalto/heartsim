@@ -17,6 +17,7 @@
 - [Re-entry presets: AF, flutter, VT, VF](user/reentry.md)
 - [The EP lab](user/ep-lab.md)
 - [Tutorials](user/tutorials.md)
+- [Patient cases](user/cases.md)
 - [Quizzes](user/quizzes.md)
 - [Learning auscultation](user/auscultation.md)
 - [Echo calculators](user/echo-calculators.md)

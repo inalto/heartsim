@@ -20,3 +20,5 @@ interval-zoom-fit-hint = Retour à la vitesse de papier de la question, depuis l
 interval-zoom-limit = La bande est déjà à sa limite (de 25 à 400 mm/s).
 interval-scale = 1 mm = { $ms } ms · { $speed } mm/s
 interval-pan-hint = Quelle partie de l'enregistrement est visible ; faites glisser pour vous y déplacer.
+
+tab-cases = Cas

@@ -20,3 +20,5 @@ interval-zoom-fit-hint = Vuelve a la velocidad de papel de la pregunta, desde el
 interval-zoom-limit = La tira ya está en su límite (de 25 a 400 mm/s).
 interval-scale = 1 mm = { $ms } ms · { $speed } mm/s
 interval-pan-hint = Qué parte de la grabación se ve; arrastra para moverte por ella.
+
+tab-cases = Casos

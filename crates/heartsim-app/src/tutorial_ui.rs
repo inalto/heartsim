@@ -615,3 +615,20 @@ fn card_button(ui: &mut egui::Ui, primary: bool, text: String) -> egui::Response
         ui.button(text)
     }
 }
+
+/// The Tutorials page's list (the app's Tutorials tab and its tests draw the same): the tutorial
+/// cards, then one line that leads to the Cases page, where the patient cases moved (B41). Returns
+/// `true` when that link was clicked.
+pub fn list_page(ui: &mut egui::Ui, tutorials: &mut Tutorials) -> bool {
+    tutorials.library_ui(ui);
+    ui.add_space(12.0);
+    ui.separator();
+    let mut go = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(t!("tut-cases-moved"));
+        if ui.link(t!("tut-cases-link")).clicked() {
+            go = true;
+        }
+    });
+    go
+}
