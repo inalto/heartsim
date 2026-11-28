@@ -1,7 +1,7 @@
 //! All twelve leads on one page, either stacked in a single column (one row per lead, the
 //! teaching view) or in the clinical 3 × 4 grid with a lead II rhythm strip underneath.
 
-use crate::strip::{StripStyle, ecg_strip};
+use crate::strip::{StripStyle, ecg_record_strip, ecg_strip};
 use crate::t;
 use egui::{Rect, Ui, Vec2};
 use heartsim_core::Lead;
@@ -196,6 +196,29 @@ pub fn twelve_lead_page(
     ui.allocate_rect(rect, egui::Sense::hover());
 }
 
+/// [`twelve_lead_page`] for a finished recording: every cell, the narrow ones and the full-width
+/// rhythm strip, shows the record from absolute sample `first` at its own left edge, so all cells
+/// share one time origin (the beat under the left edge is the same in every lead) and a record
+/// shorter than a cell leaves empty paper on its right. The live page's right-aligned window would
+/// show the tail of the record in each cell and a blank left part on a wide one.
+pub fn twelve_lead_record_page(
+    ui: &mut Ui,
+    rect: Rect,
+    rings: &[LeadRing],
+    style: &StripStyle,
+    layout: TwelveLeadLayout,
+    first: u64,
+) {
+    let (cols, rows, cells) = layout_cells(layout);
+    let cell = Vec2::new(rect.width() / cols as f32, rect.height() / rows as f32);
+    for (lead, c, r, span) in cells {
+        let min = rect.min + Vec2::new(c as f32 * cell.x, r as f32 * cell.y);
+        let cell_rect = Rect::from_min_size(min, Vec2::new(cell.x * span as f32, cell.y)).shrink(1.0);
+        ecg_record_strip(ui, cell_rect, &rings[lead as usize], style, lead.label(), first);
+    }
+    ui.allocate_rect(rect, egui::Sense::hover());
+}
+
 /// Paint the given leads as one column of rows in `rect` (used by the axis trainer and quiz).
 pub fn lead_column(ui: &mut Ui, rect: Rect, rings: &[LeadRing], style: &StripStyle, leads: &[Lead]) {
     let row_h = rect.height() / leads.len().max(1) as f32;
@@ -203,6 +226,24 @@ pub fn lead_column(ui: &mut Ui, rect: Rect, rings: &[LeadRing], style: &StripSty
         let min = rect.min + Vec2::new(0.0, i as f32 * row_h);
         let r = Rect::from_min_size(min, Vec2::new(rect.width(), row_h)).shrink(1.0);
         ecg_strip(ui, r, &rings[*lead as usize], style, lead.label());
+    }
+    ui.allocate_rect(rect, egui::Sense::hover());
+}
+
+/// [`lead_column`] for a finished recording: sample `first` at the left edge of every row.
+pub fn record_column(
+    ui: &mut Ui,
+    rect: Rect,
+    rings: &[LeadRing],
+    style: &StripStyle,
+    leads: &[Lead],
+    first: u64,
+) {
+    let row_h = rect.height() / leads.len().max(1) as f32;
+    for (i, lead) in leads.iter().enumerate() {
+        let min = rect.min + Vec2::new(0.0, i as f32 * row_h);
+        let r = Rect::from_min_size(min, Vec2::new(rect.width(), row_h)).shrink(1.0);
+        ecg_record_strip(ui, r, &rings[*lead as usize], style, lead.label(), first);
     }
     ui.allocate_rect(rect, egui::Sense::hover());
 }

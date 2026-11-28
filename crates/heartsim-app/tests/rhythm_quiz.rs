@@ -140,3 +140,62 @@ fn the_rhythm_quiz_has_one_primary_action_at_a_time() {
     h.run();
     assert_eq!(primary_names(&h), ["Next question"]);
 }
+
+/// B40: a finished recording starts at the left edge of the strip, whatever the paper speed and
+/// the width of the window (it was right-aligned like live paper, leaving the left empty).
+#[test]
+fn a_recorded_strip_starts_at_the_left_edge() {
+    let library =
+        ScenarioLibrary::load_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios"))
+            .unwrap();
+    let mut quiz = RhythmQuiz::new(5);
+    quiz.next_question(&library);
+    for mm_per_s in [12.5, 25.0, 50.0] {
+        for width in [400.0_f32, 750.0, 1200.0, 2400.0] {
+            let style = StripStyle {
+                mm_per_s,
+                ..StripStyle::default()
+            };
+            let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
+            let win = quiz.strip_window(rect, &style).expect("a recording");
+            let x = win
+                .x_of_sample(0)
+                .unwrap_or_else(|| panic!("{mm_per_s} mm/s, {width} pt: sample 0 is not on screen"));
+            assert!(
+                (x - win.rect.left()).abs() <= win.px_per_sample,
+                "{mm_per_s} mm/s, {width} pt: sample 0 drawn at x = {x}, strip starts at {}",
+                win.rect.left()
+            );
+        }
+    }
+}
+
+/// B40: nothing is carried from one question to the next; each recording starts at the left.
+#[test]
+fn the_second_question_also_starts_at_the_left_in_both_layouts() {
+    let library =
+        ScenarioLibrary::load_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/scenarios"))
+            .unwrap();
+    let mut quiz = RhythmQuiz::new(11);
+    let style = StripStyle::default();
+    // a narrow cell of the 12-lead page and the full strip of the two-lead layout
+    for width in [300.0_f32, 1200.0] {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 300.0));
+        let mut lens = Vec::new();
+        for _ in 0..3 {
+            quiz.next_question(&library);
+            let win = quiz.strip_window(rect, &style).unwrap();
+            let x = win.x_of_sample(0).expect("sample 0 on screen");
+            assert!(
+                (x - win.rect.left()).abs() <= win.px_per_sample,
+                "{width} pt: x = {x}"
+            );
+            assert_eq!(win.sample_at_x(win.rect.left() + 0.01), Some(0));
+            lens.push(quiz.rings()[0].pushed());
+        }
+        assert!(
+            lens.iter().all(|&n| n == lens[0]),
+            "same length every question: {lens:?}"
+        );
+    }
+}

@@ -13,17 +13,30 @@ use heartsim_core::{LEAD_COUNT, Lead};
 use heartsim_ecg::{LeadRing, Tier0Scenario};
 use heartsim_ui::cards::AnswerState;
 use heartsim_ui::t;
-use heartsim_ui::{StripStyle, TwelveLeadLayout, cards, lead_column, twelve_lead_page};
+use heartsim_ui::{StripStyle, TwelveLeadLayout, cards, record_column, twelve_lead_record_page};
 
 /// Choices per question.
 /// Height of the strip on a phone-narrow window, points: lead II and V1 with room for the beats.
 pub const NARROW_STRIP_PX: f32 = 240.0;
 
 pub const OPTIONS: usize = 4;
-/// Length of the recording, s; the first [`SETTLE_S`] are dropped so rate-dependent rhythms
-/// (Wenckebach cycles, re-entry started by a timed premature beat) have settled.
-pub const RECORD_S: f64 = 14.0;
+/// Seconds of the quiz recording that are kept and shown, from the left edge of the strip: a
+/// finished recording is drawn like a printout, its first sample at the left (B40), so what is
+/// recorded decides how much of a wide strip is covered. The widest strip worth covering is
+/// about 1900 pt at the slowest paper, 12.5 mm/s × 3 pt/mm: 50 s. Recording that much costs
+/// 43 ms on average (154 ms worst of the 69 quiz scenarios, dev profile, 54 s recorded) against
+/// 12 ms (40 ms) for the 14 s of before, once per question and nothing during drawing, so the
+/// quiz keeps it all rather than leaving the paper empty to the right at slow speeds. At 25 mm/s
+/// that is a 3750-pt strip. The trace is the same as a shorter recording, which it extends.
+pub const KEPT_S: f64 = 50.0;
+/// Seconds recorded and dropped before the strip starts, so rate-dependent rhythms (Wenckebach
+/// cycles, re-entry started by a timed premature beat) have settled.
 pub const SETTLE_S: f64 = 4.0;
+/// Seconds of the recording the interval drill keeps: it has a fixed 50 mm/s (150 pt/s), so 10 s
+/// are 1500 pt, wider than any usual window; on a wider one the paper stays empty to the right.
+/// Kept short on purpose: the questions are drawn from this window and a longer one would
+/// change which scenarios give a fair reference.
+pub const DRILL_KEPT_S: f64 = 10.0;
 /// Sampling rate of the quiz strip, Hz (the simulator's rate).
 pub const RATE_HZ: f32 = 500.0;
 
@@ -94,16 +107,26 @@ pub fn make_question(library: &ScenarioLibrary, rng: &mut u64, previous: Option<
     Some(Question { answer, options })
 }
 
-/// Record `scenario` for [`RECORD_S`] seconds, drop the first [`SETTLE_S`] and return the twelve
-/// strip rings at [`RATE_HZ`]. Shared by the rhythm quiz and the interval drill.
+/// [`record_strip_for`] with the quiz's [`KEPT_S`].
 ///
 /// # Errors
 /// The scenario's morphology overrides name an unknown wave.
 pub fn record_strip(scenario: &Tier0Scenario) -> Result<Vec<LeadRing>, String> {
-    let rec = scenario.record(RECORD_S).map_err(|e| e.to_string())?;
+    record_strip_for(scenario, KEPT_S)
+}
+
+/// Record `scenario` for [`SETTLE_S`] + `kept_s` seconds, drop the first [`SETTLE_S`] and return
+/// the twelve strip rings at [`RATE_HZ`], sample 0 being the first kept. The same scenario gives
+/// the same first seconds whatever `kept_s` is. Draw the rings with the record window
+/// ([`heartsim_ui::StripWindow::record`]), never the live one.
+///
+/// # Errors
+/// The scenario's morphology overrides name an unknown wave.
+pub fn record_strip_for(scenario: &Tier0Scenario, kept_s: f64) -> Result<Vec<LeadRing>, String> {
+    let rec = scenario.record(SETTLE_S + kept_s).map_err(|e| e.to_string())?;
     let step = (1000.0 / f64::from(RATE_HZ) / heartsim_ecg::scenario::STEP_MS).round() as usize;
     let skip = (SETTLE_S * 1000.0 / heartsim_ecg::scenario::STEP_MS) as usize;
-    let kept = (RECORD_S - SETTLE_S) * f64::from(RATE_HZ);
+    let kept = kept_s * f64::from(RATE_HZ);
     Ok(rec
         .leads
         .iter()
@@ -411,6 +434,21 @@ impl RhythmQuiz {
         open
     }
 
+    /// The window a row of the strip is drawn with when the strip has `rect` (the recording from
+    /// its first sample at the left edge; `rect` is shrunk by the 1-point gutter the rows have),
+    /// for tests and for anything that has to agree with the drawing.
+    #[must_use]
+    pub fn strip_window(&self, rect: egui::Rect, style: &StripStyle) -> Option<heartsim_ui::StripWindow> {
+        let ring = self.rings.first()?;
+        Some(heartsim_ui::StripWindow::record(
+            rect.shrink(1.0),
+            style,
+            ring.sample_rate_hz,
+            0,
+            ring.pushed(),
+        ))
+    }
+
     /// The strip: lead II and V1, or all twelve leads.
     fn strip_ui(&self, ui: &mut egui::Ui, style: &StripStyle) {
         if self.rings.len() < LEAD_COUNT {
@@ -418,10 +456,10 @@ impl RhythmQuiz {
         }
         let rect = egui::Rect::from_min_size(ui.cursor().min, ui.available_size());
         if self.twelve_lead {
-            twelve_lead_page(ui, rect, &self.rings, style, TwelveLeadLayout::Clinical);
+            twelve_lead_record_page(ui, rect, &self.rings, style, TwelveLeadLayout::Clinical, 0);
             ui.allocate_rect(rect, egui::Sense::hover());
         } else {
-            lead_column(ui, rect, &self.rings, style, &[Lead::II, Lead::V1]);
+            record_column(ui, rect, &self.rings, style, &[Lead::II, Lead::V1], 0);
         }
     }
 }
@@ -485,10 +523,29 @@ mod tests {
                 .index_of(id)
                 .unwrap_or_else(|| panic!("{id} is not in the library"));
             let rec = lib.entries[i]
-                .record(RECORD_S)
+                .record(SETTLE_S + KEPT_S)
                 .unwrap_or_else(|e| panic!("{id}: {e}"));
             assert_eq!(rec.leads.len(), LEAD_COUNT);
         }
+    }
+
+    #[test]
+    fn a_longer_recording_extends_the_shorter_one_and_costs_little() {
+        let lib = library();
+        let id = lib.ecg_quiz_pool()[0];
+        let short = record_strip_for(&lib.entries[id], DRILL_KEPT_S).unwrap();
+        let t = std::time::Instant::now();
+        let long = record_strip(&lib.entries[id]).unwrap();
+        let took = t.elapsed();
+        assert_eq!(short[0].pushed(), (DRILL_KEPT_S * f64::from(RATE_HZ)) as u64);
+        assert_eq!(long[0].pushed(), (KEPT_S * f64::from(RATE_HZ)) as u64);
+        let (mut a, mut b) = (Vec::new(), Vec::new());
+        for lead in 0..LEAD_COUNT {
+            short[lead].range(0, short[lead].pushed(), &mut a);
+            long[lead].range(0, short[lead].pushed(), &mut b);
+            assert_eq!(a, b, "lead {lead}: the first {DRILL_KEPT_S} s are the same");
+        }
+        assert!(took.as_secs_f64() < 2.0, "recording {KEPT_S} s took {took:?}");
     }
 
     #[test]
@@ -602,13 +659,12 @@ mod tests {
     }
 
     #[test]
-    fn answering_scores_once_and_records_a_ten_second_strip() {
+    fn answering_scores_once_and_records_the_whole_strip() {
         let lib = library();
         let mut quiz = RhythmQuiz::new(3);
         quiz.next_question(&lib);
         assert_eq!(quiz.rings().len(), LEAD_COUNT);
-        let ten_s = (10.0 * RATE_HZ) as usize;
-        assert_eq!(quiz.rings()[0].len(), ten_s);
+        assert_eq!(quiz.rings()[0].len(), (KEPT_S * f64::from(RATE_HZ)) as usize);
         let answer = quiz.question.as_ref().unwrap().answer;
         quiz.answer(answer);
         quiz.answer(answer);

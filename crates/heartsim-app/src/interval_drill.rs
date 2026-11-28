@@ -14,14 +14,14 @@
 //! starts, so a tolerance of that size separates a careful measurement from a wrong one.
 
 use crate::narrow::{Narrow, Pane, PaneSpec, Side};
-use crate::rhythm_quiz::record_strip;
+use crate::rhythm_quiz::{DRILL_KEPT_S, record_strip_for};
 use crate::scenarios::ScenarioLibrary;
 use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
 use heartsim_ecg::{Analysis, Analyzer, LeadRing, Regularity, SignalQuality, Tier0Scenario};
 use heartsim_ui::annotations::EcgAnnotations;
 use heartsim_ui::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
-use heartsim_ui::strip::{StripStyle, StripTrace, SweepMode, draw_strip};
+use heartsim_ui::strip::{StripStyle, StripTrace, SweepMode, draw_record_strip};
 use heartsim_ui::{cards, t};
 
 /// Paper speed of the drill strip, mm/s: 1 mm is 20 ms.
@@ -211,7 +211,9 @@ impl IntervalDrill {
             let scenario = pool[below(&mut self.rng, pool.len())];
             let interval = Interval::ALL[below(&mut self.rng, Interval::ALL.len())];
             let entry = &library.entries[scenario];
-            let Ok(rings) = record_strip(entry) else { continue };
+            let Ok(rings) = record_strip_for(entry, DRILL_KEPT_S) else {
+                continue;
+            };
             let head = rings[0].pushed();
             let annotations = EcgAnnotations::compute(&self.analyzer, &rings, head);
             if let Some(truth_ms) = reference_ms(entry, &annotations.analysis, interval) {
@@ -493,7 +495,8 @@ impl IntervalDrill {
             show_waves: revealed,
             show_intervals: revealed,
         };
-        let win = draw_strip(ui, id, rect, ring, &style, &trace);
+        // a finished recording: its first sample at the left edge (B39 pans `first`)
+        let win = draw_record_strip(ui, id, rect, ring, &style, &trace, 0);
         strip_interact(ui, id, &win, ring, &mut self.calipers, &mut self.playback);
         draw_calipers(ui, &win, ring, false, &self.calipers, &style);
         ui.allocate_rect(rect, egui::Sense::hover());

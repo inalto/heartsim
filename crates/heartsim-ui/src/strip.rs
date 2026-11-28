@@ -5,6 +5,13 @@
 //! `k / fs` seconds. A [`StripWindow`] maps sample indices to screen x for the two display modes
 //! (scrolling paper and monitor sweep bar), so the trace, wave labels, calipers and scrubbing all
 //! share one mapping and can never disagree.
+//!
+//! A *live* strip is paper that moves (scroll, sweep): the newest sample is at the right edge or at
+//! the bar. A *recorded* strip, a finished recording such as the rhythm quiz's, is a printout laid
+//! on the table: its first visible sample is at the left edge ([`StripWindow::record`]), and when
+//! the recording is shorter than the strip the paper to the right of its end stays empty. Never
+//! draw a recording with the live window: that puts its end at the right edge and leaves the left
+//! of a wide strip blank, as if the trace did not start.
 
 use crate::annotations::LeadMarks;
 use crate::t;
@@ -143,6 +150,9 @@ pub struct StripWindow {
     pub visible_samples: u64,
     /// Vertical screen points per millivolt (gain × calibration).
     pub px_per_mv: f32,
+    /// `Some(first)`: a finished recording, shown from absolute sample `first` at the left edge
+    /// (see [`Self::record`]); `mode` and the live alignment do not apply. `None`: live paper.
+    pub record_from: Option<u64>,
 }
 
 impl StripWindow {
@@ -157,7 +167,28 @@ impl StripWindow {
             px_per_sample,
             visible_samples: (rect.width().max(0.0) / px_per_sample).floor() as u64,
             px_per_mv: style.mm_per_mv * style.px_per_mm,
+            record_from: None,
         }
+    }
+
+    /// The window of a finished recording of `len` samples (absolute indices `0 .. len`): the
+    /// visible part starts at sample `first` on the strip's left edge and runs right, so a record
+    /// shorter than the strip leaves empty paper on the right and a longer one shows
+    /// [`Self::visible_samples`] of it. `first` is clamped so that panning to the end keeps the
+    /// strip full ([`Self::max_record_first`]). The strip itself is never shifted or padded.
+    #[must_use]
+    pub fn record(rect: Rect, style: &StripStyle, sample_rate_hz: f32, first: u64, len: u64) -> Self {
+        let mut w = Self::new(rect, style, sample_rate_hz, len);
+        w.mode = SweepMode::Scroll;
+        w.record_from = Some(first.min(w.max_record_first()));
+        w
+    }
+
+    /// Largest `first` that still fills the strip (0 when the record is shorter than the strip):
+    /// the pan limit of a recorded strip.
+    #[must_use]
+    pub fn max_record_first(&self) -> u64 {
+        self.head.saturating_sub(self.visible_samples)
     }
 
     /// The same window for a signal sampled `factor` times faster (the heart-sound lane under the
@@ -175,6 +206,7 @@ impl StripWindow {
             px_per_sample: self.px_per_sample / factor as f32,
             visible_samples: self.visible_samples * factor,
             px_per_mv: self.px_per_mv,
+            record_from: self.record_from.map(|f| f * factor),
         }
     }
 
@@ -202,9 +234,14 @@ impl StripWindow {
         (self.visible_samples / 40).max(1)
     }
 
-    /// Screen x of the sweep bar (sweep mode) or the right edge (scroll mode).
+    /// Screen x of the sweep bar (sweep mode), the right edge (scroll mode) or the end of the
+    /// drawn part of a recording.
     #[must_use]
     pub fn head_x(&self) -> f32 {
+        if let Some(first) = self.record_from {
+            let shown = self.head.saturating_sub(first).min(self.visible_samples);
+            return self.rect.left() + shown as f32 * self.px_per_sample;
+        }
         match self.mode {
             SweepMode::Scroll => self.rect.right(),
             SweepMode::Sweep => {
@@ -219,7 +256,13 @@ impl StripWindow {
         let mut out = [(0, 0, 0.0); 2];
         let mut len = 0;
         let n = self.visible_samples;
-        if n > 0 {
+        if let Some(first) = self.record_from {
+            let end = self.head.min(first.saturating_add(n));
+            if n > 0 && first < end {
+                out[0] = (first, end, self.rect.left());
+                len = 1;
+            }
+        } else if n > 0 {
             match self.mode {
                 SweepMode::Scroll => {
                     let start = self.head.saturating_sub(n);
@@ -295,6 +338,28 @@ pub struct StripTrace<'a> {
     pub show_intervals: bool,
 }
 
+/// Draw one lead of a finished recording into `rect`: sample `first` at the left edge, see
+/// [`StripWindow::record`]. Returns the number of seconds visible.
+pub fn ecg_record_strip(
+    ui: &mut Ui,
+    rect: Rect,
+    ring: &LeadRing,
+    style: &StripStyle,
+    label: &str,
+    first: u64,
+) -> f32 {
+    let id = ui.scope_id().with(("ecg_record_strip", label));
+    let trace = StripTrace {
+        label,
+        invert: false,
+        head: ring.pushed(),
+        marks: None,
+        show_waves: false,
+        show_intervals: false,
+    };
+    draw_record_strip(ui, id, rect, ring, style, &trace, first).seconds_visible()
+}
+
 /// Draw one lead into `rect`. The newest sample is at the right edge ("scrolling" mode).
 /// Returns the number of seconds visible.
 pub fn ecg_strip(ui: &mut Ui, rect: Rect, ring: &LeadRing, style: &StripStyle, label: &str) -> f32 {
@@ -324,12 +389,40 @@ pub fn draw_strip(
     style: &StripStyle,
     trace: &StripTrace<'_>,
 ) -> StripWindow {
+    let win = StripWindow::new(rect, style, ring.sample_rate_hz, trace.head);
+    paint_strip(ui, id, ring, style, trace, win)
+}
+
+/// [`draw_strip`] for a finished recording: `trace.head` is the record's length and sample
+/// `first` is drawn at the left edge ([`StripWindow::record`]). Returns the window used.
+pub fn draw_record_strip(
+    ui: &Ui,
+    id: Id,
+    rect: Rect,
+    ring: &LeadRing,
+    style: &StripStyle,
+    trace: &StripTrace<'_>,
+    first: u64,
+) -> StripWindow {
+    let win = StripWindow::record(rect, style, ring.sample_rate_hz, first, trace.head);
+    paint_strip(ui, id, ring, style, trace, win)
+}
+
+/// Paint the strip described by `win` (the window also fixes the rect).
+fn paint_strip(
+    ui: &Ui,
+    id: Id,
+    ring: &LeadRing,
+    style: &StripStyle,
+    trace: &StripTrace<'_>,
+    win: StripWindow,
+) -> StripWindow {
+    let rect = win.rect;
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, style.paper);
     if style.show_grid {
         painter.add(grid_shape(ui, id, rect, style));
     }
-    let win = StripWindow::new(rect, style, ring.sample_rate_hz, trace.head);
     let sign = if trace.invert { -1.0 } else { 1.0 };
     let stroke = Stroke::new(style.trace_width, style.trace);
 
@@ -792,5 +885,105 @@ mod tests {
         for (a, b, _) in w.segments() {
             assert!(a < b && b <= head);
         }
+    }
+
+    fn record_win(mm_per_s: f32, width: f32, first: u64, len: u64) -> StripWindow {
+        let style = StripStyle {
+            mm_per_s,
+            ..StripStyle::default()
+        };
+        let rect = Rect::from_min_size(Pos2::new(20.0, 5.0), Vec2::new(width, 100.0));
+        StripWindow::record(rect, &style, 500.0, first, len)
+    }
+
+    #[test]
+    fn a_recording_starts_at_the_left_edge_at_every_speed_and_width() {
+        for mm_per_s in [12.5, 25.0, 50.0] {
+            for width in [400.0, 750.0, 1200.0, 2400.0] {
+                let w = record_win(mm_per_s, width, 0, 5_000);
+                let x = w.x_of_sample(0).unwrap();
+                assert!(
+                    (x - w.rect.left()).abs() <= w.px_per_sample,
+                    "{mm_per_s} mm/s, {width} pt: sample 0 at {x}"
+                );
+                for (s, e, x0) in w.segments() {
+                    assert!(x0 >= w.rect.left() - 1e-3);
+                    assert!(x0 + (e - s) as f32 * w.px_per_sample <= w.rect.right() + 1e-3);
+                    assert!(e <= 5_000);
+                }
+                assert_eq!(w.sample_at_x(w.rect.left() + 0.01), Some(0));
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_recording_leaves_the_paper_to_its_right_empty() {
+        // 10 s at 25 mm/s × 3 pt/mm is 750 pt; the strip is 1200 pt
+        let w = record_win(25.0, 1200.0, 0, 5_000);
+        assert_eq!(w.sample_at_x(w.rect.left() + 760.0), None);
+        assert_eq!(w.x_of_sample(5_000), None);
+        assert!(
+            (w.head_x() - (w.rect.left() + 750.0)).abs() < 1e-2,
+            "{}",
+            w.head_x()
+        );
+        let last = w.x_of_sample(4_999).unwrap();
+        assert!((last - (w.rect.left() + 750.0 - 0.5 * w.px_per_sample)).abs() < 1e-2);
+    }
+
+    #[test]
+    fn a_long_recording_shows_visible_samples_from_first() {
+        let w = record_win(25.0, 750.0, 0, 20_000);
+        assert_eq!(w.visible_samples, 5_000);
+        assert_eq!(w.x_of_sample(4_999).map(|x| x < w.rect.right()), Some(true));
+        assert_eq!(
+            w.x_of_sample(5_000),
+            None,
+            "the next sample is past the right edge"
+        );
+        let p = record_win(25.0, 750.0, 1_000, 20_000);
+        assert!((p.x_of_sample(1_000).unwrap() - (p.rect.left() + 0.5 * p.px_per_sample)).abs() < 1e-3);
+        assert_eq!(p.x_of_sample(999), None);
+        // panning past the end keeps the strip full
+        let end = record_win(25.0, 750.0, 99_999, 20_000);
+        assert_eq!(end.record_from, Some(20_000 - 5_000));
+        assert!(end.x_of_sample(19_999).is_some());
+        // a short record cannot be panned at all
+        assert_eq!(record_win(25.0, 1200.0, 300, 5_000).record_from, Some(0));
+    }
+
+    #[test]
+    fn the_record_window_round_trips_and_keeps_the_caliper_scale() {
+        let w = record_win(50.0, 1200.0, 250, 9_000);
+        for abs in [250, 251, 700, 1_999] {
+            let x = w.x_of_sample(abs).unwrap();
+            assert_eq!(w.sample_at_x(x), Some(abs));
+        }
+        // 100 ms from the left edge is 50 samples after `first`
+        let x = w.x_from_left_ms(100.0);
+        assert_eq!(w.sample_at_x(x + 0.01), Some(250 + 50));
+        assert!((w.ms_from_left(x) - 100.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_rescaled_record_window_keeps_the_same_left_edge_and_time() {
+        let w = record_win(25.0, 750.0, 500, 20_000);
+        let fast = w.rescaled(w.rect, 8);
+        assert_eq!(fast.record_from, Some(4_000));
+        let a = w.x_of_sample(600).unwrap();
+        let b = fast.x_of_sample(600 * 8 + 4).unwrap();
+        assert!((a - b).abs() <= w.px_per_sample, "{a} vs {b}");
+    }
+
+    #[test]
+    fn a_record_window_ignores_the_sweep_mode_of_the_style() {
+        let style = StripStyle {
+            mode: SweepMode::Sweep,
+            ..StripStyle::default()
+        };
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(750.0, 100.0));
+        let w = StripWindow::record(rect, &style, 500.0, 0, 2_000);
+        assert_eq!(w.mode, SweepMode::Scroll);
+        assert_eq!(w.segments().count(), 1);
     }
 }

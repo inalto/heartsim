@@ -18,6 +18,14 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 - `heartsim-cli validate-cases` also checks that the right answer is not in the same place in more than half of a case's
   questions (the three first cases are exempt). The patient cases are listed in the user book's *Tutorials* page.
 
+### Fixed
+- In the rhythm quiz the trace sometimes did not start at the left of the strip (brief B40). The quiz drew its finished
+  recording with the live strips' window, which puts the newest sample at the right edge, so on a strip wider than the
+  10 s recording (a wide window, or 12.5 mm/s) the left part stayed empty. A recording is now drawn like a printout, its
+  first sample at the left edge, in the two-lead strip and in the 12-lead layout; the interval drill had the same fault on
+  very wide windows and is fixed too. The quiz now records 50 s instead of 10 s, so a slow paper speed fills a wide
+  strip; the first 10 s are unchanged. The live strips are as before.
+
 ### Changed
 - At start-up the 3-D heart shows the four valve layers (*Tricuspid valve*, *Mitral valve*, *Aortic valve*, *Pulmonary valve*)
   and hides *Valve planes* and the torso (brief B37). Existing installations get the valve layers switched on once, when they

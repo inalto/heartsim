@@ -59,12 +59,17 @@ pub use ischaemia_panel::{
 pub use orientation::{GizmoCorner, orientation_gizmo};
 pub use pacer_panel::{PaceMark, PaceMarks, PacerPanelResponse, PacerPanelState, lead_glyphs, pacer_panel};
 pub use pcg_lane::{HeartSoundStatus, LaneRequest, PcgLane};
-pub use strip::{StripStyle, StripWindow, SweepMode, draw_strip, ecg_strip};
+pub use strip::{
+    StripStyle, StripWindow, SweepMode, draw_record_strip, draw_strip, ecg_record_strip, ecg_strip,
+};
 pub use theme::Palette;
 pub use timeline_editor::TimelineEditor;
 pub use torso_schematic::torso_schematic;
 pub use transport::{SPEED_RANGE, TransportResponse, transport_controls};
-pub use twelve_lead::{LeadOrder, TwelveLeadLayout, lead_column, page_cells, twelve_lead_page};
+pub use twelve_lead::{
+    LeadOrder, TwelveLeadLayout, lead_column, page_cells, record_column, twelve_lead_page,
+    twelve_lead_record_page,
+};
 pub use vector_view::{VectorPlane, VectorViewStyle, full_scale_mv, vector_plane};
 pub use viewport::{Viewport3d, ViewportResources, ZoomInput, zoom_input};
 pub use widgets::{
