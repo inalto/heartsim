@@ -5,6 +5,8 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- A wiki page for the `.hs` patient case file (`docs/wiki/Case-file-format.md`): the format for teachers and library
+  hosts, with every field, the limits, online libraries, the command line and a worked example checked with the CLI.
 - Online case libraries (brief B43): the Cases page's **Online** section lists the cases of a library on the web and imports
   one into My cases with a click, on the desktop and in the browser. A library is plain static files, `index.ron` (documented
   in the "Libraries" chapter of `docs/case-file.md`) and one `.hs` per case, so anyone can host one; a **Library address**
