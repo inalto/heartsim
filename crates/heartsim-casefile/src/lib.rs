@@ -594,6 +594,8 @@ impl CasePackage {
         let opts = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated)
             .last_modified_time(zip::DateTime::default())
+            // the zip crate records the host system ("made by" DOS on Windows) unless told
+            .system(zip::System::Unix)
             .unix_permissions(0o644);
         for (name, bytes) in &entries {
             zip.start_file(name.as_str(), opts).map_err(|e| werr(&e))?;
