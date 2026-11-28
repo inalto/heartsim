@@ -2,7 +2,10 @@
 //! strip with the calipers and enter the result; answers within a tolerance count.
 //!
 //! The strip is a Tier-0 recording of a scenario of the library (the same recording the rhythm quiz
-//! uses), shown in lead II at 50 mm/s so that 1 mm is 20 ms. The reference value is the
+//! uses), shown in lead II at 50 mm/s so that 1 mm is 20 ms. The strip can be zoomed (25 to
+//! 400 mm/s) and panned to place a caliper line precisely; the calipers are stored in
+//! milliseconds from the start of the record, so a line stays on its sample through both, and
+//! the reading, the grading and the tolerances never depend on the zoom. The reference value is the
 //! simulator's own measurement of that strip ([`heartsim_ecg::Analyzer`]), and a question is only
 //! asked when that measurement is trustworthy: a regular rhythm, a clean signal, and a value inside
 //! the scenario's textbook range (`expected`). After the answer the strip shows the waves the
@@ -20,12 +23,22 @@ use eframe::egui;
 use heartsim_core::{LEAD_COUNT, Lead};
 use heartsim_ecg::{Analysis, Analyzer, LeadRing, Regularity, SignalQuality, Tier0Scenario};
 use heartsim_ui::annotations::EcgAnnotations;
-use heartsim_ui::calipers::{CaliperSet, Playback, draw_calipers, strip_interact};
+use heartsim_ui::calipers::{CaliperSet, draw_calipers, record_interact};
 use heartsim_ui::strip::{StripStyle, StripTrace, SweepMode, draw_record_strip};
+use heartsim_ui::zoom::strip_zoom_factor;
 use heartsim_ui::{cards, t};
 
 /// Paper speed of the drill strip, mm/s: 1 mm is 20 ms.
 pub const DRILL_SPEED_MM_S: f32 = 50.0;
+/// Slowest and fastest effective paper speed of the drill strip when zoomed, mm/s.
+pub const DRILL_MIN_MM_S: f32 = 25.0;
+pub const DRILL_MAX_MM_S: f32 = 400.0;
+/// What one press of a zoom button or key does to the paper speed.
+pub const ZOOM_STEP: f32 = 2.0;
+/// Height of the position bar under the strip, screen points.
+const POSITION_BAR_H: f32 = 8.0;
+/// Room the page keeps above and below the strip for the zoom row and the position bar.
+const STRIP_CHROME_H: f32 = 56.0;
 /// Strips tried before a question gives up (some rhythms have no measurable PR or a ragged QT).
 const MAX_TRIES: usize = 24;
 /// Smallest and largest height of the drill strip, screen points. The strip takes the height the
@@ -152,9 +165,16 @@ pub struct IntervalDrill {
     pub question: Option<IntervalQuestion>,
     rings: Vec<LeadRing>,
     annotations: Option<EcgAnnotations>,
-    /// The calipers on the strip (ms from its left edge).
+    /// The calipers on the strip, in ms from the **start of the record** (not from the strip's
+    /// left edge): they stay on their samples while the strip is zoomed and panned.
     pub calipers: CaliperSet,
-    playback: Playback,
+    /// Time zoom of the strip: the paper speed is `DRILL_SPEED_MM_S × zoom`, within
+    /// [`DRILL_MIN_MM_S`]..=[`DRILL_MAX_MM_S`]. 1 = the speed of the question.
+    zoom: f32,
+    /// First sample of the record at the strip's left edge (the pan).
+    first: u64,
+    /// Strip width and points per millimetre of the last frame: the zoom anchors on them.
+    geometry: (f32, f32),
     /// The measurement typed or copied from the calipers, ms.
     pub entry_ms: f64,
     /// The graded answer; `Some` = revealed.
@@ -181,7 +201,9 @@ impl IntervalDrill {
             rings: Vec::new(),
             annotations: None,
             calipers: CaliperSet::default(),
-            playback: Playback::default(),
+            zoom: 1.0,
+            first: 0,
+            geometry: (1000.0, StripStyle::default().px_per_mm),
             entry_ms: 0.0,
             grade: None,
             asked: 0,
@@ -199,6 +221,7 @@ impl IntervalDrill {
         self.rings.clear();
         self.annotations = None;
         self.calipers.reset();
+        self.zoom_fit();
         self.entry_ms = 0.0;
         self.failed = false;
         // never an auscultation case: its strip is ordinary sinus rhythm (one rule for every pool)
@@ -259,6 +282,78 @@ impl IntervalDrill {
         &self.rings
     }
 
+    /// Effective paper speed of the strip, mm/s.
+    #[must_use]
+    pub fn speed_mm_s(&self) -> f32 {
+        DRILL_SPEED_MM_S * self.zoom
+    }
+
+    /// First sample of the record at the strip's left edge.
+    #[must_use]
+    pub fn first_sample(&self) -> u64 {
+        self.first
+    }
+
+    /// Tell the drill how wide the strip is and how many points a millimetre is (done every frame
+    /// by the page; the zoom keeps the sample under the anchor with them).
+    pub fn set_geometry(&mut self, width_px: f32, px_per_mm: f32) {
+        if width_px > 0.0 && px_per_mm > 0.0 {
+            self.geometry = (width_px, px_per_mm);
+        }
+    }
+
+    /// Samples across the strip at paper speed `speed_mm_s`.
+    fn visible_at(&self, speed_mm_s: f32, fs: f32) -> u64 {
+        let px_per_sample = speed_mm_s * self.geometry.1 / fs.max(1.0);
+        (self.geometry.0 / px_per_sample).floor() as u64
+    }
+
+    /// Longest `first` that still fills the strip at `speed_mm_s`.
+    fn max_first_at(&self, speed_mm_s: f32) -> u64 {
+        self.rings.first().map_or(0, |r| {
+            r.pushed()
+                .saturating_sub(self.visible_at(speed_mm_s, r.sample_rate_hz))
+        })
+    }
+
+    /// Multiply the paper speed by `factor` (clamped to 25–400 mm/s) keeping the sample at
+    /// `anchor` (0 = left edge, 1 = right edge of the strip) where it is, and clamp the pan to
+    /// the record.
+    pub fn zoom_by(&mut self, factor: f32, anchor: f32) {
+        let Some(fs) = self.rings.first().map(|r| r.sample_rate_hz) else {
+            return;
+        };
+        let anchor = anchor.clamp(0.0, 1.0);
+        let old_speed = self.speed_mm_s();
+        let new_speed = (old_speed * factor).clamp(DRILL_MIN_MM_S, DRILL_MAX_MM_S);
+        if !factor.is_finite() || factor <= 0.0 {
+            return;
+        }
+        let pos = self.first as f64 + f64::from(anchor) * self.visible_at(old_speed, fs) as f64;
+        let first = pos - f64::from(anchor) * self.visible_at(new_speed, fs) as f64;
+        self.zoom = new_speed / DRILL_SPEED_MM_S;
+        self.first = (first.round().max(0.0) as u64).min(self.max_first_at(new_speed));
+    }
+
+    /// Back to the question's paper speed, from the start of the record.
+    pub fn zoom_fit(&mut self) {
+        self.zoom = 1.0;
+        self.first = 0;
+    }
+
+    /// Move the pan by `samples` (positive = later in the record), clamped to the record.
+    pub fn pan_by(&mut self, samples: f64) {
+        let max = self.max_first_at(self.speed_mm_s());
+        self.first = ((self.first as f64 + samples).round().max(0.0) as u64).min(max);
+    }
+
+    /// Caliper coordinate (ms from the start of the record) of the strip's left edge.
+    fn first_ms(&self) -> f32 {
+        self.rings
+            .first()
+            .map_or(0.0, |r| self.first as f32 * 1000.0 / r.sample_rate_hz)
+    }
+
     /// The first caliper pair's interval, ms.
     #[must_use]
     pub fn caliper_ms(&self) -> Option<f64> {
@@ -279,7 +374,7 @@ impl IntervalDrill {
             centre: "",
             // on a phone the strip keeps a useful height on top and the controls scroll below it
             narrow: Narrow::Stacked {
-                centre_height: STRIP_MIN_HEIGHT,
+                centre_height: STRIP_MIN_HEIGHT + STRIP_CHROME_H,
             },
         };
         crate::narrow::panes(ui, &spec, |ui, pane| match pane {
@@ -354,7 +449,8 @@ impl IntervalDrill {
 
         ui.horizontal_wrapped(|ui| {
             if ui.button(t!("interval-calipers-place")).clicked() && self.calipers.pairs.is_empty() {
-                self.calipers.add_pair(100.0, 300.0);
+                let at = self.first_ms();
+                self.calipers.add_pair(at + 100.0, at + 300.0);
             }
             if ui.button(t!("interval-calipers-clear")).clicked() {
                 self.calipers.reset();
@@ -470,16 +566,26 @@ impl IntervalDrill {
         if self.rings.len() < LEAD_COUNT {
             return;
         }
-        let style = StripStyle {
-            mm_per_s: DRILL_SPEED_MM_S,
+        let base = StripStyle {
             mode: SweepMode::Scroll,
             ..*style
         };
-        let size = egui::vec2(
-            ui.available_width(),
-            ui.available_height().clamp(STRIP_MIN_HEIGHT, STRIP_MAX_HEIGHT),
-        );
-        let rect = egui::Rect::from_min_size(ui.cursor().min, size);
+        self.zoom_row(ui);
+        let style = StripStyle {
+            mm_per_s: self.speed_mm_s(),
+            ..base
+        };
+        let width = ui.available_width();
+        let height = (ui.available_height() - POSITION_BAR_H - ui.spacing().item_spacing.y)
+            .clamp(STRIP_MIN_HEIGHT, STRIP_MAX_HEIGHT);
+        let rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(width, height));
+        self.set_geometry(width, style.px_per_mm);
+        self.gestures(ui, rect);
+        // the gestures may have changed the speed: draw at the one they chose
+        let style = StripStyle {
+            mm_per_s: self.speed_mm_s(),
+            ..style
+        };
         let revealed = self.grade.is_some();
         let ring = &self.rings[Lead::II as usize];
         let id = ui.scope_id().with("interval_drill_strip");
@@ -495,11 +601,134 @@ impl IntervalDrill {
             show_waves: revealed,
             show_intervals: revealed,
         };
-        // a finished recording: its first sample at the left edge (B39 pans `first`)
-        let win = draw_record_strip(ui, id, rect, ring, &style, &trace, 0);
-        strip_interact(ui, id, &win, ring, &mut self.calipers, &mut self.playback);
+        // a finished recording: sample `first` at the left edge
+        let win = draw_record_strip(ui, id, rect, ring, &style, &trace, self.first);
+        let resp = record_interact(ui, id, &win, ring, &mut self.calipers, &mut self.first);
         draw_calipers(ui, &win, ring, false, &self.calipers, &style);
-        ui.allocate_rect(rect, egui::Sense::hover());
+        let bar = egui::Rect::from_min_size(
+            egui::pos2(rect.left(), rect.bottom() + ui.spacing().item_spacing.y),
+            egui::vec2(width, POSITION_BAR_H),
+        );
+        ui.allocate_rect(rect.union(bar), egui::Sense::hover());
+        self.position_bar(ui, bar, &win);
+        if resp.has_focus() {
+            self.zoom_keys(ui);
+        }
+    }
+
+    /// The zoom buttons and the scale in words.
+    fn zoom_row(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            let step = |ui: &mut egui::Ui, label: String, hint: String, enabled: bool| {
+                ui.add_enabled(enabled, egui::Button::new(label))
+                    .on_hover_text(hint)
+                    .on_disabled_hover_text(t!("interval-zoom-limit"))
+                    .clicked()
+            };
+            if step(
+                ui,
+                t!("interval-zoom-out"),
+                t!("interval-zoom-out-hint"),
+                self.speed_mm_s() > DRILL_MIN_MM_S + 1e-3,
+            ) {
+                self.zoom_by(1.0 / ZOOM_STEP, 0.5);
+            }
+            if step(
+                ui,
+                t!("interval-zoom-in"),
+                t!("interval-zoom-in-hint"),
+                self.speed_mm_s() < DRILL_MAX_MM_S - 1e-3,
+            ) {
+                self.zoom_by(ZOOM_STEP, 0.5);
+            }
+            if ui
+                .button(t!("interval-zoom-fit"))
+                .on_hover_text(t!("interval-zoom-fit-hint"))
+                .clicked()
+            {
+                self.zoom_fit();
+            }
+            let speed = self.speed_mm_s();
+            ui.label(t!(
+                "interval-scale",
+                ms = format_ms_per_mm(speed),
+                speed = format!("{speed:.0}")
+            ));
+        });
+    }
+
+    /// Pinch, Ctrl/⌘ + wheel and the plain wheel zoom about the pointer; a horizontal wheel or a
+    /// two-finger swipe pans. The strip sits in no scroll area, so the plain wheel is its own.
+    fn gestures(&mut self, ui: &mut egui::Ui, rect: egui::Rect) {
+        if let Some((factor, x)) = strip_zoom_factor(ui, rect, true) {
+            self.zoom_by(factor, (x - rect.left()) / rect.width().max(1.0));
+        }
+        if ui.rect_contains_pointer(rect) {
+            let dx = ui.input(|i| i.smooth_scroll_delta.x);
+            if dx != 0.0 {
+                ui.input_mut(|i| i.smooth_scroll_delta.x = 0.0);
+                let px_per_sample = self.speed_mm_s() * self.geometry.1 / self.rings[0].sample_rate_hz;
+                self.pan_by(-f64::from(dx / px_per_sample));
+            }
+        }
+    }
+
+    /// `+`/`=` zoom in, `-` zoom out, `0` fit, while the strip has the keyboard focus.
+    fn zoom_keys(&mut self, ui: &egui::Ui) {
+        use egui::Key;
+        let (plus, minus, zero) = ui.input(|i| {
+            (
+                i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals),
+                i.key_pressed(Key::Minus),
+                i.key_pressed(Key::Num0),
+            )
+        });
+        if plus {
+            self.zoom_by(ZOOM_STEP, 0.5);
+        }
+        if minus {
+            self.zoom_by(1.0 / ZOOM_STEP, 0.5);
+        }
+        if zero {
+            self.zoom_fit();
+        }
+    }
+
+    /// The thin bar under the strip: which part of the record is in view; drag it to pan.
+    fn position_bar(&mut self, ui: &mut egui::Ui, bar: egui::Rect, win: &heartsim_ui::strip::StripWindow) {
+        let len = win.head.max(1) as f32;
+        let from = bar.left() + bar.width() * self.first as f32 / len;
+        let to = bar.left() + bar.width() * (self.first + win.visible_samples).min(win.head) as f32 / len;
+        let id = ui.scope_id().with("interval_drill_position");
+        let resp = ui
+            .interact(bar, id, egui::Sense::click_and_drag())
+            .on_hover_text(t!("interval-pan-hint"));
+        if (resp.dragged() || resp.clicked())
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let centre = (p.x - bar.left()) / bar.width().max(1.0) * len;
+            let first = centre - win.visible_samples as f32 / 2.0;
+            self.first = (first.round().max(0.0) as u64).min(win.max_record_first());
+        }
+        let v = ui.visuals();
+        let (track, thumb) = (v.extreme_bg_color, v.widgets.active.bg_fill);
+        let p = ui.painter();
+        p.rect_filled(bar, 3.0, track);
+        p.rect_filled(
+            egui::Rect::from_x_y_ranges(from..=to.max(from + 4.0), bar.y_range()),
+            3.0,
+            thumb,
+        );
+    }
+}
+
+/// Milliseconds one millimetre of paper stands for at `speed_mm_s`, as the page words it.
+fn format_ms_per_mm(speed_mm_s: f32) -> String {
+    let ms = 1000.0 / speed_mm_s;
+    if (ms - ms.round()).abs() < 0.05 {
+        format!("{ms:.0}")
+    } else {
+        format!("{ms:.1}")
     }
 }
 
@@ -615,5 +844,154 @@ mod tests {
         assert_eq!(d.caliper_ms(), None);
         d.calipers.add_pair(120.0, 280.0);
         assert!((d.caliper_ms().unwrap() - 160.0).abs() < 1e-6);
+    }
+
+    /// The window the strip would be drawn with, on a strip as wide as the drill was told.
+    fn window_of(d: &IntervalDrill) -> heartsim_ui::strip::StripWindow {
+        let style = StripStyle {
+            mm_per_s: d.speed_mm_s(),
+            ..StripStyle::default()
+        };
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(d.geometry.0, 240.0));
+        heartsim_ui::strip::StripWindow::record(
+            rect,
+            &style,
+            RATE_HZ,
+            d.first_sample(),
+            d.rings()[0].pushed(),
+        )
+    }
+
+    fn asked(seed: u64) -> IntervalDrill {
+        let mut d = IntervalDrill::new(seed);
+        d.next_question(&library());
+        d.set_geometry(1000.0, StripStyle::default().px_per_mm);
+        d
+    }
+
+    #[test]
+    fn zoom_in_out_and_fit_stay_within_25_to_400_mm_per_s() {
+        let mut d = asked(3);
+        assert!((d.speed_mm_s() - 50.0).abs() < 1e-4);
+        d.zoom_by(ZOOM_STEP, 0.5);
+        assert!((d.speed_mm_s() - 100.0).abs() < 1e-3);
+        for _ in 0..10 {
+            d.zoom_by(ZOOM_STEP, 0.5);
+        }
+        assert!(
+            (d.speed_mm_s() - DRILL_MAX_MM_S).abs() < 1e-3,
+            "{}",
+            d.speed_mm_s()
+        );
+        for _ in 0..10 {
+            d.zoom_by(1.0 / ZOOM_STEP, 0.5);
+        }
+        assert!(
+            (d.speed_mm_s() - DRILL_MIN_MM_S).abs() < 1e-3,
+            "{}",
+            d.speed_mm_s()
+        );
+        d.zoom_by(f32::NAN, 0.5);
+        assert!(
+            (d.speed_mm_s() - DRILL_MIN_MM_S).abs() < 1e-3,
+            "NaN changes nothing"
+        );
+        d.zoom_by(8.0, 0.5);
+        d.pan_by(100.0);
+        d.zoom_fit();
+        assert!((d.speed_mm_s() - DRILL_SPEED_MM_S).abs() < 1e-4);
+        assert_eq!(d.first_sample(), 0);
+    }
+
+    #[test]
+    fn zooming_keeps_the_sample_under_the_anchor_and_the_pan_inside_the_record() {
+        let mut d = asked(3);
+        d.zoom_by(4.0, 0.5);
+        d.pan_by(700.0);
+        for anchor in [0.0_f32, 0.25, 0.8] {
+            let before = window_of(&d);
+            let x = before.rect.left() + anchor * before.rect.width();
+            let s0 = before.sample_at_x(x).unwrap();
+            d.zoom_by(0.5, anchor);
+            let after = window_of(&d);
+            let s1 = after
+                .sample_at_x(after.rect.left() + anchor * after.rect.width())
+                .unwrap();
+            assert!(s0.abs_diff(s1) <= 2, "anchor {anchor}: {s0} became {s1}");
+            d.zoom_by(2.0, anchor);
+        }
+        d.pan_by(-1e9);
+        assert_eq!(d.first_sample(), 0);
+        d.pan_by(1e9);
+        let w = window_of(&d);
+        assert_eq!(d.first_sample(), w.max_record_first());
+        assert!(
+            w.sample_at_x(w.rect.right() - 0.5).is_some(),
+            "still a full strip"
+        );
+    }
+
+    #[test]
+    fn a_caliper_pair_stays_on_its_samples_through_zoom_pan_and_fit() {
+        let mut d = asked(5);
+        // two samples, in ms from the start of the record
+        let (sa, sb) = (800_u64, 1_100_u64);
+        let ms = |s: u64| s as f32 * 1000.0 / RATE_HZ;
+        d.calipers.add_pair(ms(sa), ms(sb));
+        let reading = d.caliper_ms().unwrap();
+        let on = |d: &IntervalDrill, s: u64, ms: f32| {
+            let w = window_of(d);
+            w.x_of_sample(s).map(|x| (x, w.x_of_caliper_ms(ms)))
+        };
+        let check = |d: &IntervalDrill, label: &str| {
+            for (s, c) in [(sa, d.calipers.pairs[0].a_ms), (sb, d.calipers.pairs[0].b_ms)] {
+                if let Some((x_sample, x_line)) = on(d, s, c) {
+                    let px = window_of(d).px_per_sample;
+                    assert!(
+                        (x_sample - x_line).abs() <= px,
+                        "{label}: sample {s} at {x_sample}, line at {x_line}"
+                    );
+                }
+            }
+            assert!(
+                (d.caliper_ms().unwrap() - reading).abs() < 1e-9,
+                "{label}: reading unchanged"
+            );
+        };
+        check(&d, "start");
+        d.zoom_by(4.0, 0.3);
+        check(&d, "zoom in");
+        d.pan_by(250.0);
+        check(&d, "pan");
+        // at 4x the pair is on screen after panning to it
+        d.pan_by(-1e9);
+        d.pan_by(sa as f64 - 100.0);
+        assert!(
+            on(&d, sa, d.calipers.pairs[0].a_ms).is_some(),
+            "the first sample is in view"
+        );
+        check(&d, "panned onto it");
+        d.zoom_fit();
+        check(&d, "fit");
+    }
+
+    #[test]
+    fn the_next_question_resets_the_zoom_and_the_pan() {
+        let lib = library();
+        let mut d = asked(7);
+        d.zoom_by(8.0, 0.5);
+        d.pan_by(900.0);
+        assert!(d.first_sample() > 0 && d.speed_mm_s() > 100.0);
+        d.next_question(&lib);
+        assert!((d.speed_mm_s() - DRILL_SPEED_MM_S).abs() < 1e-4);
+        assert_eq!(d.first_sample(), 0);
+    }
+
+    #[test]
+    fn the_scale_in_words_follows_the_paper_speed() {
+        assert_eq!(format_ms_per_mm(50.0), "20");
+        assert_eq!(format_ms_per_mm(25.0), "40");
+        assert_eq!(format_ms_per_mm(400.0), "2.5");
+        assert_eq!(format_ms_per_mm(100.0), "10");
     }
 }

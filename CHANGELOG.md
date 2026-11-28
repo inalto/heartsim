@@ -5,6 +5,14 @@ All notable changes to heartsim are documented here. Format: Keep a Changelog; v
 ## [Unreleased]
 
 ### Added
+- Caliper handles, pointer shapes and a zoom for the interval drill (brief B39). Every caliper line now has a tab at the top
+  and at the bottom of the strip and a pair has a grip on its read-out bar; lines and tabs are easy to grab (6 points
+  either side of a line, at least 24 x 24 points on a tab, 44 x 44 under a finger) and the pointer shows resize arrows,
+  an open hand over the grip and a closed hand while a pair moves. Two fingers on a strip no longer drag a line or scrub.
+  `[` and `]` select the previous and the next line. The interval drill's strip zooms from 25 to 400 mm/s (buttons,
+  Ctrl/⌘ + wheel, the wheel, a pinch, `+` `-` `0`), pans along the recording (a drag, a horizontal wheel, a position bar),
+  says the scale in words and keeps the calipers on their samples; a new question resets both. Not seen on a real screen
+  (see the known issues).
 - Pinch zoom in every 3-D view, on a touch screen and on a laptop trackpad (brief B38); the mouse wheel zooms as before, and
   two fingers no longer rotate the heart or drag an electrode or a probe handle.
 - Time zoom of the ECG strips: the wheel over a strip, Ctrl/⌘ + wheel and a pinch change the paper speed the strip is drawn at

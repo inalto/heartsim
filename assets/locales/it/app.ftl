@@ -389,7 +389,7 @@ interval-def-qt = Intervallo QT: dall'inizio del complesso QRS alla fine dell'on
 interval-calipers-place = Posiziona calibri
 interval-calipers-clear = Rimuovi calibri
 interval-calipers-use = Usa la misura dei calibri
-interval-calipers-hint = Trascina le due linee all'inizio e alla fine dell'intervallo; Maiusc+clic sulla striscia aggiunge un'altra coppia.
+interval-calipers-hint = Trascina una linea dalla sua linguetta, o la banda dalla sua presa, all'inizio e alla fine dell'intervallo; Maiusc+clic sulla striscia aggiunge un'altra coppia. Ingrandisci per posizionare una linea con precisione e trascina la carta per spostarti. Tasti: frecce Sinistra e Destra spostano una linea (Maiusc: dieci campioni), [ e ] scelgono la linea, + - 0 lo zoom.
 interval-calipers-reading = Calibri: { $ms } ms
 interval-your-value = La tua misura
 interval-correct = Corretto: hai misurato { $entry } ms, il riferimento è { $truth } ms (tolleranza ±{ $tolerance } ms).
@@ -942,3 +942,14 @@ echo-narrow-3d = Torace 3-D
 echo-measure-live = Dal vivo
 echo-measure-state-frozen = Fermo
 echo-measure-state-live = Dal vivo
+
+## Interval drill: zoom e scorrimento (B39)
+interval-zoom-out = Riduci
+interval-zoom-out-hint = Carta più lenta: più tempo sulla striscia. Anche Ctrl o ⌘ + rotella, un pizzico con due dita, o il tasto - con la striscia selezionata.
+interval-zoom-in = Ingrandisci
+interval-zoom-in-hint = Carta più veloce: allarga il tempo per posizionare una linea con precisione. Anche Ctrl o ⌘ + rotella, un pizzico con due dita, o il tasto + con la striscia selezionata.
+interval-zoom-fit = Adatta
+interval-zoom-fit-hint = Torna alla velocità della carta della domanda, dall'inizio della striscia (il tasto 0).
+interval-zoom-limit = La striscia è già al limite (da 25 a 400 mm/s).
+interval-scale = 1 mm = { $ms } ms · { $speed } mm/s
+interval-pan-hint = Quale parte della registrazione è visibile; trascina per spostarti.

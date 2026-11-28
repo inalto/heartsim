@@ -159,7 +159,7 @@ read-out all follow the cursor, up to 60 s back. *Run* continues from where the 
 
 **Calipers.** Shift-click a strip to add a pair of vertical cursors: the strip shows the interval in ms and the rate it
 corresponds to. Drag a line or the band between a pair to move it (it snaps to the nearby wave when released), click a line to
-select it and use the arrow keys to nudge it by one sample (with shift, ten). *Clear calipers* or Esc removes them all.
+select it and use the arrow keys to nudge it by one sample (with shift, ten); `[` and `]` select the previous and the next line. Every line has a tab at its top and bottom edge, and a pair has a grip on its read-out bar to move both lines together; the pointer changes over them (arrows, open hand, closed hand), and on a touch screen the grab area grows to 44 points. While two fingers pinch the strip no line is dragged. *Clear calipers* or Esc removes them all. The [Interval Drill](quizzes.md#interval-drill) adds a zoom and a pan to the same calipers.
 
 ![LBBB with the heart-vector arrow, scrubbed to the middle of the QRS](../images/simulator-lbbb-vector.png)
 

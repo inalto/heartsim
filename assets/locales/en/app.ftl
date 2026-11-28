@@ -388,7 +388,7 @@ interval-def-qt = QT interval: from the start of the QRS complex to the end of t
 interval-calipers-place = Place calipers
 interval-calipers-clear = Clear calipers
 interval-calipers-use = Use caliper reading
-interval-calipers-hint = Drag the two lines to the start and the end of the interval; shift-click on the strip adds another pair.
+interval-calipers-hint = Drag a line by its tab, or the band by its grip, to the start and the end of the interval; shift-click on the strip adds another pair. Zoom in to place a line precisely, and drag the paper to move along. Keys: Left and Right arrows nudge a line (shift: ten samples), [ and ] pick the line, + - 0 zoom.
 interval-calipers-reading = Calipers: { $ms } ms
 interval-your-value = Your measurement
 interval-correct = Correct: you measured { $entry } ms, the reference is { $truth } ms (tolerance ±{ $tolerance } ms).
@@ -941,3 +941,14 @@ echo-narrow-3d = 3-D chest
 echo-measure-live = Live
 echo-measure-state-frozen = Frozen
 echo-measure-state-live = Live
+
+## Interval drill: zoom and pan (B39)
+interval-zoom-out = Zoom out
+interval-zoom-out-hint = Slower paper: more time across the strip. Also Ctrl or ⌘ + wheel, a pinch, or the - key with the strip selected.
+interval-zoom-in = Zoom in
+interval-zoom-in-hint = Faster paper: spread the time out to place a line precisely. Also Ctrl or ⌘ + wheel, a pinch, or the + key with the strip selected.
+interval-zoom-fit = Fit
+interval-zoom-fit-hint = Back to the question's paper speed, from the start of the strip (the 0 key).
+interval-zoom-limit = The strip is already at its limit (25 to 400 mm/s).
+interval-scale = 1 mm = { $ms } ms · { $speed } mm/s
+interval-pan-hint = Which part of the recording is in view; drag to move along it.

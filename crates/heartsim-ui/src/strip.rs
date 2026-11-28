@@ -319,6 +319,29 @@ impl StripWindow {
     pub fn x_from_left_ms(&self, ms: f32) -> f32 {
         self.rect.left() + ms * self.px_per_ms()
     }
+
+    /// Time, ms, of the sample at the left edge counted from the start of the record: 0 for live
+    /// paper, `first / fs` for a recording panned to sample `first`.
+    #[must_use]
+    pub fn record_origin_ms(&self) -> f32 {
+        self.record_from
+            .map_or(0.0, |f| f as f32 * 1000.0 / self.sample_rate_hz)
+    }
+
+    /// Caliper coordinate of screen x: ms from the strip's left edge on live paper, ms from the
+    /// **start of the record** on a recorded strip, so a caliper line keeps its sample while the
+    /// recording is zoomed or panned.
+    #[must_use]
+    pub fn caliper_ms_at_x(&self, x: f32) -> f32 {
+        self.ms_from_left(x) + self.record_origin_ms()
+    }
+
+    /// Screen x of the caliper coordinate `ms` (see [`Self::caliper_ms_at_x`]); outside the strip
+    /// when that time is panned out of view.
+    #[must_use]
+    pub fn x_of_caliper_ms(&self, ms: f32) -> f32 {
+        self.x_from_left_ms(ms - self.record_origin_ms())
+    }
 }
 
 /// What to draw on one strip besides the paper.
